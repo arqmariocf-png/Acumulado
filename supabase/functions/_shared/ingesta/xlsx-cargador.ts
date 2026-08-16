@@ -1,20 +1,23 @@
-// Carga SheetJS (xlsx) desde el CDN oficial, no desde npm.
+// Carga SheetJS (xlsx) para parsear archivos Excel.
 //
-// El paquete `xlsx` publicado en el registro de npm quedó congelado en la
-// versión 0.18.5, que tiene CVEs conocidos sin parchear ahí (prototype
-// pollution al leer un archivo .xlsx malicioso -- CVE-2023-30533, entre
-// otros). SheetJS dejó de publicar versiones nuevas en npm; la distribución
-// parchada (0.20.3 al momento de escribir esto) solo vive en su propio CDN.
-// Este es el patrón de importación oficial para Deno según la documentación
-// de SheetJS (docs.sheetjs.com/docs/getting-started/installation/deno).
+// INTENTO 1 (revertido): importar la distribución parchada 0.20.3 desde el
+// CDN oficial de SheetJS (cdn.sheetjs.com), documentado como el patrón
+// correcto para Deno. Falló al desplegar: el bundler de edge functions de
+// Supabase rechaza imports desde hosts HTTPS arbitrarios --
+// "Cannot import from cdn.sheetjs.com:443" -- solo acepta especificadores
+// npm:/jsr:. Confirmado con un intento de deploy real, no es una suposición.
 //
-// No se pudo verificar la conectividad a cdn.sheetjs.com desde este entorno
-// de desarrollo (la política de red del sandbox la bloquea, igual que
-// bloqueó Dropbox) -- confirmar que resuelve correctamente en el primer
-// deploy real a Supabase.
-//
-// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
-import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
+// Por eso este archivo usa `npm:xlsx@0.18.5`, que SÍ es un especificador
+// permitido, pero es la última versión publicada en el registro de npm y
+// tiene CVEs conocidos sin parchear ahí (prototype pollution, CVE-2023-
+// 30533, entre otros) -- SheetJS solo distribuye las versiones parchadas
+// vía su propio CDN, no vía npm. Mitigación mientras tanto: límite de
+// tamaño de archivo en cada función de ingesta (10 MB). Antes de aceptar
+// archivos de usuarios no confiables en producción, evaluar: (a) vendorizar
+// una copia local de la versión parchada dentro de _shared/ e importarla
+// por ruta relativa (el bundler sí acepta imports relativos), o (b) migrar
+// a otra librería de parseo de xlsx sin este historial de CVEs.
+import * as XLSX from "npm:xlsx@0.18.5";
 
 export { XLSX };
 

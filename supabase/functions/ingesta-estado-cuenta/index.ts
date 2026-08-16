@@ -9,10 +9,10 @@
 //
 // POST multipart/form-data: file, empresaId, cuentaId
 //
-// El parser de Excel usa la distribución parchada de SheetJS desde su CDN
-// oficial (ver _shared/ingesta/xlsx-cargador.ts), no el paquete `xlsx` de
-// npm (congelado en una versión con CVEs conocidos sin parchear). Además se
-// limita el tamaño máximo del archivo como mitigación adicional.
+// El parser de Excel usa xlsx@0.18.5 de npm -- ver _shared/ingesta/
+// xlsx-cargador.ts para por qué no se pudo usar la distribución parchada
+// del CDN de SheetJS (el bundler de edge functions de Supabase la rechaza)
+// y qué mitigación queda mientras tanto (límite de tamaño de archivo).
 
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
