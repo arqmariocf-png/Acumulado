@@ -9,19 +9,15 @@
 //
 // POST multipart/form-data: file, empresaId, cuentaId
 //
-// ADVERTENCIA DE SEGURIDAD (pendiente antes de producción): el parser de
-// Excel usa el paquete `xlsx` de npm, cuya última versión publicada en el
-// registro de npm (0.18.5) tiene vulnerabilidades conocidas de ReDoS y
-// prototype pollution al parsear archivos .xlsx maliciosos (ver GHSA-4r6h-
-// 8v6p-xvw6, GHSA-5pgg-2g8v-p4x9). SheetJS dejó de publicar versiones
-// parchadas en npm; la distribución oficial parchada vive en su propio CDN
-// (cdn.sheetjs.com). Mientras tanto, este archivo limita el tamaño máximo
-// aceptado como mitigación parcial -- hay que migrar a la versión parchada
-// antes de aceptar archivos de usuarios no confiables en producción.
+// El parser de Excel usa la distribución parchada de SheetJS desde su CDN
+// oficial (ver _shared/ingesta/xlsx-cargador.ts), no el paquete `xlsx` de
+// npm (congelado en una versión con CVEs conocidos sin parchear). Además se
+// limita el tamaño máximo del archivo como mitigación adicional.
 
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
+import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
@@ -77,16 +73,9 @@ Deno.serve(async (req) => {
     if (errArchivo) return jsonResponse({ error: errArchivo.message }, 500);
     const archivoId = archivoRow.id;
 
-    let filas: string[][];
-    if (archivo.name.toLowerCase().endsWith(".csv")) {
-      filas = parseCsv(new TextDecoder("utf-8").decode(bytes));
-    } else {
-      // @ts-ignore -- import npm en Deno; ver advertencia de seguridad arriba.
-      const XLSX = await import("npm:xlsx@0.18.5");
-      const libro = XLSX.read(bytes, { type: "array" });
-      const hoja = libro.Sheets[libro.SheetNames[0]];
-      filas = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: "" }) as string[][];
-    }
+    const filas = archivo.name.toLowerCase().endsWith(".csv")
+      ? parseCsv(new TextDecoder("utf-8").decode(bytes))
+      : hojaAFilas(bytes);
 
     const objetos = filasAObjetos(filas, normalizarEncabezadoEstadoCuenta);
     if (objetos.length === 0) {

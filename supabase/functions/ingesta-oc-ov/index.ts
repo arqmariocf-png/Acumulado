@@ -7,6 +7,7 @@
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
+import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
 import { mapearFilaOrdenCompraExcel, mapearFilaOrdenVentaExcel, normalizarEncabezadoOcOv } from "../_shared/ingesta/oc-ov.ts";
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
@@ -54,16 +55,9 @@ Deno.serve(async (req) => {
     if (errArchivo) return jsonResponse({ error: errArchivo.message }, 500);
     const archivoId = archivoRow.id;
 
-    let filas: string[][];
-    if (archivo.name.toLowerCase().endsWith(".csv")) {
-      filas = parseCsv(new TextDecoder("utf-8").decode(bytes));
-    } else {
-      // @ts-ignore -- ver advertencia de seguridad en ingesta-estado-cuenta/index.ts
-      const XLSX = await import("npm:xlsx@0.18.5");
-      const libro = XLSX.read(bytes, { type: "array" });
-      const hoja = libro.Sheets[libro.SheetNames[0]];
-      filas = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: "" }) as string[][];
-    }
+    const filas = archivo.name.toLowerCase().endsWith(".csv")
+      ? parseCsv(new TextDecoder("utf-8").decode(bytes))
+      : hojaAFilas(bytes);
 
     const objetos = filasAObjetos(filas, normalizarEncabezadoOcOv);
     const filasProcesadas: any[] = [];
