@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test --experimental-test-coverage=false supabase/functions/_shared/**/*.test.ts",
     "test:motor": "node --test supabase/functions/_shared/motor/*.test.ts"
   }
 }
