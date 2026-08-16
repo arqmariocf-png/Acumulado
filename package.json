@@ -1,0 +1,8 @@
+{
+  "name": "acumulado",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:motor": "node --test supabase/functions/_shared/motor/*.test.ts"
+  }
+}
