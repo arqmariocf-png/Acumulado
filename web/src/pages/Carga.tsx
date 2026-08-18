@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 
@@ -34,6 +34,48 @@ function useCuentas(empresaId: string) {
   });
 }
 
+/** Lee de vuelta lo que ya quedó guardado para la pestaña activa, filtrado a
+ * la empresa seleccionada -- así se ve directamente en la página que el
+ * archivo cargado sí llegó a la tabla, sin depender de ir a otra pantalla
+ * (Dashboard/Movimientos solo reflejan `movimientos`, que se llenan al cargar
+ * un estado de cuenta -- CFDI y el catálogo OC/OV son datos de referencia
+ * para el motor de conciliación, no aparecen ahí por separado). */
+function useDatosRecientes(pestana: Pestana, empresaId: string) {
+  return useQuery({
+    queryKey: ["carga-recientes", pestana, empresaId],
+    enabled: !!empresaId,
+    queryFn: async () => {
+      if (pestana === "estado_cuenta") {
+        const { data, error } = await supabase
+          .from("movimientos")
+          .select("id, fecha_pago, nombre_razon_social, cargo_total, abono_total, saldo, estado_clasificacion")
+          .eq("empresa_id", empresaId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (error) throw error;
+        return data;
+      }
+      if (pestana === "cfdi") {
+        const { data, error } = await supabase
+          .from("cfdi")
+          .select("id, tipo, folio, total, periodo, contraparte, fecha")
+          .eq("empresa_id", empresaId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (error) throw error;
+        return data;
+      }
+      const [{ data: oc, error: errOc }, { data: ov, error: errOv }] = await Promise.all([
+        supabase.from("ordenes_compra").select("id, id_orden, tipo, proveedor, total, fecha_creacion").eq("empresa_id", empresaId).order("id_orden", { ascending: false }).limit(5),
+        supabase.from("ordenes_venta").select("id, id_ov, cliente, total, fecha_ov").eq("empresa_id", empresaId).order("id_ov", { ascending: false }).limit(5),
+      ]);
+      if (errOc) throw errOc;
+      if (errOv) throw errOv;
+      return { oc, ov };
+    },
+  });
+}
+
 async function llamarFuncion(nombre: string, formData: FormData) {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -57,6 +99,8 @@ export function Carga() {
   const [enviando, setEnviando] = useState(false);
 
   const { data: cuentas } = useCuentas(empresaId);
+  const queryClient = useQueryClient();
+  const { data: recientes, isLoading: cargandoRecientes } = useDatosRecientes(pestana, empresaId);
 
   async function onSubmitEstadoCuenta(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -76,6 +120,10 @@ export function Carga() {
           body: JSON.stringify({ empresaId, archivoId: json.archivoId }),
         });
       }
+      queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
+      queryClient.invalidateQueries({ queryKey: ["movimientos"] });
+      queryClient.invalidateQueries({ queryKey: ["kpis-mensuales"] });
+      queryClient.invalidateQueries({ queryKey: ["kpis-por-empresa"] });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -93,6 +141,7 @@ export function Carga() {
         const form = new FormData(e.currentTarget);
         const json = await llamarFuncion(nombreFuncion, form);
         setResultado(json);
+        queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -240,6 +289,146 @@ export function Carga() {
               {JSON.stringify(resultado, null, 2)}
             </pre>
           </details>
+        </div>
+      )}
+
+      {empresaId && (
+        <div className="mt-6 max-w-3xl">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Lo último guardado en esta empresa</h2>
+          {pestana !== "estado_cuenta" && (
+            <p className="mb-2 text-xs text-slate-500">
+              Esto es un catálogo de referencia para el motor de conciliación -- no aparece en Dashboard/Movimientos por
+              sí solo. Solo un estado de cuenta genera movimientos, que es lo que alimenta esas pantallas.
+            </p>
+          )}
+          {cargandoRecientes && <p className="text-sm text-slate-400">Cargando…</p>}
+
+          {pestana === "estado_cuenta" && Array.isArray(recientes) && (
+            <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Fecha</th>
+                    <th className="px-3 py-2">Nombre / Razón social</th>
+                    <th className="px-3 py-2 text-right">Cargo</th>
+                    <th className="px-3 py-2 text-right">Abono</th>
+                    <th className="px-3 py-2">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recientes.map((m: any) => (
+                    <tr key={m.id} className="border-t border-slate-100">
+                      <td className="whitespace-nowrap px-3 py-2">{m.fecha_pago}</td>
+                      <td className="px-3 py-2">{m.nombre_razon_social ?? "—"}</td>
+                      <td className="px-3 py-2 text-right">{m.cargo_total ?? "—"}</td>
+                      <td className="px-3 py-2 text-right">{m.abono_total ?? "—"}</td>
+                      <td className="px-3 py-2">{m.estado_clasificacion}</td>
+                    </tr>
+                  ))}
+                  {recientes.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
+                        Todavía no hay movimientos cargados para esta empresa.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {pestana === "cfdi" && Array.isArray(recientes) && (
+            <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Tipo</th>
+                    <th className="px-3 py-2">UUID (folio)</th>
+                    <th className="px-3 py-2">Contraparte</th>
+                    <th className="px-3 py-2 text-right">Total</th>
+                    <th className="px-3 py-2">Periodo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recientes.map((c: any) => (
+                    <tr key={c.id} className="border-t border-slate-100">
+                      <td className="px-3 py-2">{c.tipo}</td>
+                      <td className="max-w-xs truncate px-3 py-2" title={c.folio}>{c.folio}</td>
+                      <td className="px-3 py-2">{c.contraparte ?? "—"}</td>
+                      <td className="px-3 py-2 text-right">{c.total}</td>
+                      <td className="px-3 py-2">{c.periodo}</td>
+                    </tr>
+                  ))}
+                  {recientes.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
+                        Todavía no hay CFDI cargados para esta empresa.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {pestana === "oc_ov" && recientes && !Array.isArray(recientes) && (
+            <div className="space-y-4">
+              <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">OC/OS</th>
+                      <th className="px-3 py-2">Proveedor</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recientes.oc?.map((o: any) => (
+                      <tr key={o.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2">{o.id_orden} ({o.tipo})</td>
+                        <td className="px-3 py-2">{o.proveedor ?? "—"}</td>
+                        <td className="px-3 py-2 text-right">{o.total ?? "—"}</td>
+                      </tr>
+                    ))}
+                    {(!recientes.oc || recientes.oc.length === 0) && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
+                          Todavía no hay Órdenes de Compra/Servicio cargadas.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">OV</th>
+                      <th className="px-3 py-2">Cliente</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recientes.ov?.map((o: any) => (
+                      <tr key={o.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2">{o.id_ov}</td>
+                        <td className="px-3 py-2">{o.cliente ?? "—"}</td>
+                        <td className="px-3 py-2 text-right">{o.total ?? "—"}</td>
+                      </tr>
+                    ))}
+                    {(!recientes.ov || recientes.ov.length === 0) && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-6 text-center text-slate-400">
+                          Todavía no hay Órdenes de Venta cargadas.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
