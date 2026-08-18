@@ -21,8 +21,22 @@ import * as XLSX from "npm:xlsx@0.18.5";
 
 export { XLSX };
 
+/** Primera hoja únicamente -- usar cuando el archivo solo trae una hoja
+ * relevante (estados de cuenta, catálogo OC/OV). */
 export function hojaAFilas(bytes: Uint8Array): string[][] {
   const libro = XLSX.read(bytes, { type: "array" });
   const hoja = libro.Sheets[libro.SheetNames[0]];
   return XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: "" }) as string[][];
+}
+
+/** Todas las hojas del libro. Necesario para CFDI: un export real de Compac
+ * trae la hoja de CFDI normales y una hoja aparte de complementos de pago
+ * (RecibosDePago), con columnas distintas -- si solo se lee la primera se
+ * pierden todos los complementos de pago. */
+export function todasLasHojas(bytes: Uint8Array): { nombre: string; filas: string[][] }[] {
+  const libro = XLSX.read(bytes, { type: "array" });
+  return libro.SheetNames.map((nombre) => ({
+    nombre,
+    filas: XLSX.utils.sheet_to_json(libro.Sheets[nombre], { header: 1, raw: false, defval: "" }) as string[][],
+  }));
 }

@@ -6,7 +6,7 @@
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
-import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
+import { todasLasHojas } from "../_shared/ingesta/xlsx-cargador.ts";
 import { construirIndiceCamposCfdi, encabezadosFaltantesCfdi, mapearFilaCfdi, normalizarEncabezadoCfdi } from "../_shared/ingesta/cfdi.ts";
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
@@ -58,45 +58,63 @@ Deno.serve(async (req) => {
     if (errArchivo) return jsonResponse({ error: errArchivo.message }, 500);
     const archivoId = archivoRow.id;
 
-    const filas = archivo.name.toLowerCase().endsWith(".csv")
-      ? parseCsv(new TextDecoder("utf-8").decode(bytes))
-      : hojaAFilas(bytes);
+    // Un export real de Compac (RecibidosAEL131023CS1202607.xls) trae DOS
+    // hojas con estructura distinta: la de CFDI normales y "RecibosDePago"
+    // (complementos de pago) -- hay que leerlas todas o se pierden en
+    // silencio los complementos de pago completos, no solo algunas filas.
+    const hojas = archivo.name.toLowerCase().endsWith(".csv")
+      ? [{ nombre: archivo.name, filas: parseCsv(new TextDecoder("utf-8").decode(bytes)) }]
+      : todasLasHojas(bytes);
 
-    const objetos = filasAObjetos(filas, normalizarEncabezadoCfdi);
-    if (objetos.length === 0) {
-      await marcarError(dbServicio, archivoId, "El archivo no tiene filas de datos");
-      return jsonResponse({ error: "El archivo no tiene filas de datos", archivoId }, 400);
+    const filasProcesadas: any[] = [];
+    const erroresPorFila: { hoja: string; fila: number; errores: string[] }[] = [];
+    let totalFilasDatos = 0;
+
+    for (const hoja of hojas) {
+      const objetos = filasAObjetos(hoja.filas, normalizarEncabezadoCfdi);
+      if (objetos.length === 0) continue; // hoja vacía (p.ej. una hoja de notas)
+
+      const indice = construirIndiceCamposCfdi(Object.keys(objetos[0]));
+      const faltantes = encabezadosFaltantesCfdi(indice);
+      if (faltantes.length > 0) {
+        // No tumba el archivo completo: una hoja sin las columnas de CFDI
+        // (resumen, notas) no debe impedir procesar las demás hojas que sí
+        // las traen.
+        erroresPorFila.push({ hoja: hoja.nombre, fila: 0, errores: [`Faltan columnas requeridas: ${faltantes.join(", ")}`] });
+        continue;
+      }
+
+      totalFilasDatos += objetos.length;
+
+      objetos.forEach((obj, i) => {
+        const resultado = mapearFilaCfdi(obj, indice, tipo as "recibido" | "emitido", i + 1);
+        if (resultado.registro) {
+          filasProcesadas.push({
+            tipo,
+            empresa_id: empresaId,
+            rfc: resultado.registro.rfcContraparte ?? rfc,
+            folio: resultado.registro.folio,
+            total: resultado.registro.total,
+            periodo,
+            contraparte: resultado.registro.nombreContraparte,
+            fecha: resultado.registro.fecha,
+            archivo_id: archivoId,
+          });
+        } else if (!resultado.omitida) {
+          // Filas sin UUID (relleno del Excel) se descartan en silencio --
+          // solo se reportan errores reales (UUID presente pero sin monto).
+          erroresPorFila.push({ hoja: hoja.nombre, fila: resultado.fila, errores: resultado.errores });
+        }
+      });
     }
 
-    const indice = construirIndiceCamposCfdi(Object.keys(objetos[0]));
-    const faltantes = encabezadosFaltantesCfdi(indice);
-    if (faltantes.length > 0) {
-      const msg = `Faltan columnas requeridas: ${faltantes.join(", ")}`;
+    if (totalFilasDatos === 0 && filasProcesadas.length === 0) {
+      const msg = erroresPorFila.length > 0
+        ? erroresPorFila.map((e) => `[${e.hoja}] ${e.errores.join("; ")}`).join(" | ")
+        : "El archivo no tiene filas de datos";
       await marcarError(dbServicio, archivoId, msg);
       return jsonResponse({ error: msg, archivoId }, 400);
     }
-
-    const filasProcesadas: any[] = [];
-    const erroresPorFila: { fila: number; errores: string[] }[] = [];
-
-    objetos.forEach((obj, i) => {
-      const resultado = mapearFilaCfdi(obj, indice, tipo as "recibido" | "emitido", i + 1);
-      if (resultado.registro) {
-        filasProcesadas.push({
-          tipo,
-          empresa_id: empresaId,
-          rfc: resultado.registro.rfcContraparte ?? rfc,
-          folio: resultado.registro.folio,
-          total: resultado.registro.total,
-          periodo,
-          contraparte: resultado.registro.nombreContraparte,
-          fecha: resultado.registro.fecha,
-          archivo_id: archivoId,
-        });
-      } else {
-        erroresPorFila.push({ fila: resultado.fila, errores: resultado.errores });
-      }
-    });
 
     if (filasProcesadas.length > 0) {
       // Idempotencia: si el mismo archivo se vuelve a cargar, upsert por la
