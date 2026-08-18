@@ -141,8 +141,14 @@ Deno.serve(async (req) => {
       })
       .eq("id", archivoId);
 
+    const mensaje = erroresPorFila.length > 0
+      ? `Archivo cargado. ${filasProcesadas.length} movimiento(s) guardados, ${erroresPorFila.length} fila(s) pendientes de revisar -- no bloquean la carga.`
+      : `Archivo cargado. ${filasProcesadas.length} movimiento(s) guardados sin pendientes.`;
+
     return jsonResponse({
       archivoId,
+      archivoCargado: true,
+      mensaje,
       filasProcesadas: filasProcesadas.length,
       filasConError: erroresPorFila.length,
       erroresPorFila: erroresPorFila.slice(0, 50),

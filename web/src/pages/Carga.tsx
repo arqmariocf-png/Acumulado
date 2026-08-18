@@ -213,11 +213,34 @@ export function Carga() {
 
       {!empresaId && <p className="text-sm text-slate-500">Selecciona una empresa para continuar.</p>}
 
-      {error && <p className="mt-4 text-sm text-red-600">Error: {error}</p>}
-      {resultado && (
-        <pre className="mt-4 max-w-2xl overflow-x-auto rounded border border-slate-200 bg-white p-3 text-xs text-slate-700">
-          {JSON.stringify(resultado, null, 2)}
-        </pre>
+      {error && (
+        <p className="mt-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          ❌ No se pudo cargar el archivo: {error}
+        </p>
+      )}
+
+      {resultado && !error && (
+        <div className="mt-4 max-w-2xl space-y-2">
+          <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-800">
+            ✅ Archivo cargado{typeof resultado.filasProcesadas === "number" ? ` — ${resultado.filasProcesadas} fila(s) guardadas` : ""}
+            {typeof resultado.filasConError === "number" && resultado.filasConError > 0
+              ? `, ${resultado.filasConError} pendiente(s) de revisar (no bloquean la carga)`
+              : "."}
+          </p>
+          {resultado.mensaje && <p className="text-sm text-slate-600">{resultado.mensaje}</p>}
+          {Array.isArray(resultado.erroresPorFila) && resultado.erroresPorFila.length > 0 && (
+            <details className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+              <summary className="cursor-pointer font-medium">Ver filas pendientes de revisar</summary>
+              <pre className="mt-2 overflow-x-auto">{JSON.stringify(resultado.erroresPorFila, null, 2)}</pre>
+            </details>
+          )}
+          <details className="text-xs text-slate-400">
+            <summary className="cursor-pointer">Respuesta completa</summary>
+            <pre className="mt-2 max-w-2xl overflow-x-auto rounded border border-slate-200 bg-white p-3 text-slate-700">
+              {JSON.stringify(resultado, null, 2)}
+            </pre>
+          </details>
+        </div>
       )}
     </div>
   );

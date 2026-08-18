@@ -68,7 +68,6 @@ Deno.serve(async (req) => {
 
     const filasProcesadas: any[] = [];
     const erroresPorFila: { hoja: string; fila: number; errores: string[] }[] = [];
-    let totalFilasDatos = 0;
 
     for (const hoja of hojas) {
       const objetos = filasAObjetos(hoja.filas, normalizarEncabezadoCfdi);
@@ -83,8 +82,6 @@ Deno.serve(async (req) => {
         erroresPorFila.push({ hoja: hoja.nombre, fila: 0, errores: [`Faltan columnas requeridas: ${faltantes.join(", ")}`] });
         continue;
       }
-
-      totalFilasDatos += objetos.length;
 
       objetos.forEach((obj, i) => {
         const resultado = mapearFilaCfdi(obj, indice, tipo as "recibido" | "emitido", i + 1);
@@ -108,14 +105,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (totalFilasDatos === 0 && filasProcesadas.length === 0) {
-      const msg = erroresPorFila.length > 0
-        ? erroresPorFila.map((e) => `[${e.hoja}] ${e.errores.join("; ")}`).join(" | ")
-        : "El archivo no tiene filas de datos";
-      await marcarError(dbServicio, archivoId, msg);
-      return jsonResponse({ error: msg, archivoId }, 400);
-    }
-
+    // A propósito NO se bloquea la carga completa por filas con UUID faltante
+    // (sin datos) o sin Total/ImpPagado: se insertan las filas que sí se
+    // pudieron mapear y las demás quedan listadas en detalle_error para
+    // resolverlas después -- el archivo siempre llega a 'completado', nunca
+    // a 'error', por un problema de datos en algunas filas.
     if (filasProcesadas.length > 0) {
       // Idempotencia: si el mismo archivo se vuelve a cargar, upsert por la
       // unique (tipo, rfc, folio, periodo) en vez de duplicar filas.
@@ -137,7 +131,18 @@ Deno.serve(async (req) => {
       })
       .eq("id", archivoId);
 
-    return jsonResponse({ archivoId, filasProcesadas: filasProcesadas.length, filasConError: erroresPorFila.length, erroresPorFila: erroresPorFila.slice(0, 50) });
+    const mensaje = erroresPorFila.length > 0
+      ? `Archivo cargado. ${filasProcesadas.length} CFDI guardados, ${erroresPorFila.length} fila(s) pendientes de revisar (sin UUID legible o sin Total/ImpPagado) -- no bloquean la carga, corrígelas cuando tengas el dato.`
+      : `Archivo cargado. ${filasProcesadas.length} CFDI guardados sin pendientes.`;
+
+    return jsonResponse({
+      archivoId,
+      archivoCargado: true,
+      mensaje,
+      filasProcesadas: filasProcesadas.length,
+      filasConError: erroresPorFila.length,
+      erroresPorFila: erroresPorFila.slice(0, 50),
+    });
   } catch (e) {
     return jsonResponse({ error: String(e) }, 500);
   }

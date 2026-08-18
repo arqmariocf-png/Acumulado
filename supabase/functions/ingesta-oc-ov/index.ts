@@ -121,7 +121,11 @@ Deno.serve(async (req) => {
       .update({ estado: "completado", filas_procesadas: filasProcesadas.length, filas_error: descartadas, completed_at: new Date().toISOString() })
       .eq("id", archivoId);
 
-    return jsonResponse({ archivoId, filasProcesadas: filasProcesadas.length, filasDescartadas: descartadas });
+    const mensaje = descartadas > 0
+      ? `Archivo cargado. ${filasProcesadas.length} registro(s) guardados, ${descartadas} fila(s) descartadas por datos incompletos.`
+      : `Archivo cargado. ${filasProcesadas.length} registro(s) guardados sin pendientes.`;
+
+    return jsonResponse({ archivoId, archivoCargado: true, mensaje, filasProcesadas: filasProcesadas.length, filasDescartadas: descartadas });
   } catch (e) {
     return jsonResponse({ error: String(e) }, 500);
   }

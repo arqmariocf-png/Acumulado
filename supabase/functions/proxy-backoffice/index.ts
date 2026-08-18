@@ -107,7 +107,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    return jsonResponse({ insertados, totalRecibido: items.length, errores });
+    const mensaje = errores.length > 0
+      ? `Catálogo cargado. ${insertados} de ${items.length} registro(s) guardados, ${errores.length} con problema -- no bloquean la carga.`
+      : `Catálogo cargado. ${insertados} registro(s) guardados sin pendientes.`;
+
+    return jsonResponse({ archivoCargado: true, mensaje, insertados, totalRecibido: items.length, errores });
   } catch (e) {
     return jsonResponse({ error: String(e) }, 500);
   }
