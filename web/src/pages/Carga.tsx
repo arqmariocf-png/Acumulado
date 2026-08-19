@@ -200,8 +200,10 @@ export function Carga() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Archivo (CSV o Excel, formato canónico)</label>
-            <input type="file" name="file" accept=".csv,.xlsx,.xls" required className="w-full text-sm" />
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Archivo (CSV o Excel, formato canónico -- o PDF si es un estado de cuenta de BanBajío)
+            </label>
+            <input type="file" name="file" accept=".csv,.xlsx,.xls,.pdf" required className="w-full text-sm" />
           </div>
           <button disabled={enviando} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
             {enviando ? "Cargando…" : "Cargar y clasificar"}

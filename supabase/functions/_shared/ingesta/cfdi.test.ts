@@ -82,3 +82,50 @@ test("encabezadosFaltantesCfdi acepta ImpPagado solo, sin exigir también Total"
   const indice = construirIndiceCamposCfdi(Object.keys(objetos[0]));
   assert.deepEqual(encabezadosFaltantesCfdi(indice), []);
 });
+
+// Encabezados reales tomados de la hoja "Pago20" de un archivo real de
+// EMITIDOS (AEL131023CS1EMITIDAS202607185642.xlsx): esta hoja NO tiene
+// columnas "Total"/"ImpPagado" -- usa "Monto Total" e "Imp Pagado DR".
+test('un complemento de pago EMITIDO (hoja "Pago20") usa "Imp Pagado DR", no "Monto Total"', () => {
+  const csv = "UUID,Monto Total,Imp Pagado DR,RFC Receptor,Nombre Receptor\nD45AAC21-CBA2-49C1-82B3-32E0958975F9,35627.43,35627.43,ERG080519940,ERGODINOVA";
+  const [r] = procesar(csv, "emitido");
+  assert.deepEqual(r.errores, []);
+  assert.equal(r.registro!.total, 35627.43);
+});
+
+test('"Imp Pagado DR" manda sobre "Monto Total" igual que ImpPagado manda sobre Total', () => {
+  const csv = "UUID,Monto Total,Imp Pagado DR\nAAA,0,1690.00";
+  const [r] = procesar(csv, "recibido");
+  assert.equal(r.registro!.total, 1690);
+});
+
+test("encabezadosFaltantesCfdi reconoce Monto Total / Imp Pagado DR como columnas de monto válidas", () => {
+  const objetos = filasAObjetos(parseCsv("UUID,Imp Pagado DR\nA,1"), normalizarEncabezadoCfdi);
+  const indice = construirIndiceCamposCfdi(Object.keys(objetos[0]));
+  assert.deepEqual(encabezadosFaltantesCfdi(indice), []);
+});
+
+// Encabezados reales de las hojas "General"/"Cancelados" del mismo archivo
+// de EMITIDOS: ambas tienen la misma estructura, solo se distinguen por la
+// columna "Estatus" ("Vigente" vs "Cancelado").
+test('un CFDI con Estatus "Cancelado" se omite en silencio -- no participa en la conciliación', () => {
+  const csv = "UUID,Total,Estatus,RFC Receptor\n2AA346CB-DD0F-4DA9-A816-3ED9675387F4,2335.31,Cancelado,VAR170831QZ0";
+  const [r] = procesar(csv, "emitido");
+  assert.equal(r.registro, null);
+  assert.equal(r.omitida, true);
+  assert.deepEqual(r.errores, []);
+});
+
+test('un CFDI con Estatus "Vigente" se procesa normalmente', () => {
+  const csv = "UUID,Total,Estatus,RFC Receptor\nA39CFC19-7D51-4F84-BB29-A35B736376FE,35627.43,Vigente,ERG080519940";
+  const [r] = procesar(csv, "emitido");
+  assert.deepEqual(r.errores, []);
+  assert.equal(r.registro!.total, 35627.43);
+});
+
+test('un archivo sin columna "Estatus" (ej. Recibidos) sigue funcionando igual -- la columna es opcional', () => {
+  const csv = "UUID,Total\nAAA,100";
+  const [r] = procesar(csv, "recibido");
+  assert.deepEqual(r.errores, []);
+  assert.equal(r.registro!.total, 100);
+});

@@ -25,6 +25,24 @@
 // vacías, pero con 0.0 en las numéricas) al final de la hoja de recibos de
 // pago -- se descartan en silencio por falta de UUID, no se reportan como
 // error de fila.
+//
+// Confirmado también contra un archivo real de EMITIDOS (export de Compac,
+// AEL131023CS1EMITIDAS202607185642.xlsx, agosto 2026), con TRES hojas:
+//
+//   General    -> CFDI normales, mismas columnas que Sheet1 del archivo de
+//                 recibidos (RFC/Nombre Emisor y Receptor, Total, UUID).
+//   Cancelados -> CFDI con Estatus = Cancelado. Un CFDI cancelado no
+//                 representa una obligación de pago real -- se excluyen
+//                 siempre del catálogo que usa el motor de conciliación
+//                 (confirmado con el usuario), sin importar el nombre de la
+//                 hoja: el criterio real es la columna "Estatus".
+//   Pago20     -> Complementos de pago del lado emitidos (equivalente a
+//                 RecibosDePago, pero con nombres de columna DISTINTOS: el
+//                 monto real está en "Imp Pagado DR", no "ImpPagado", y su
+//                 columna de total propio se llama "Monto Total", no
+//                 "Total" -- ninguno de los dos hacía match con los alias
+//                 anteriores, por eso toda la hoja se reportaba como
+//                 "faltan columnas: total" en vez de procesarse.
 
 import { normalizarTexto } from "../motor/normalizar.ts";
 
@@ -41,7 +59,8 @@ export interface ResultadoMapeoCfdi {
   registro: FilaCfdiMapeada | null;
   errores: string[];
   /** true si la fila se descartó en silencio por no tener UUID (fila de
-   * relleno del Excel), no porque haya un dato inválido que reportar. */
+   * relleno del Excel) o por ser un CFDI cancelado -- en ninguno de los dos
+   * casos hay un dato inválido que reportar como error. */
   omitida?: boolean;
 }
 
@@ -54,13 +73,16 @@ export type CampoCfdi =
   | "rfcEmisor"
   | "nombreEmisor"
   | "rfcReceptor"
-  | "nombreReceptor";
+  | "nombreReceptor"
+  | "estatus";
 
 const ALIAS_ENCABEZADO_CFDI: Record<string, CampoCfdi> = {
   UUID: "uuid",
   "FOLIO FISCAL": "uuid",
   TOTAL: "total",
   IMPPAGADO: "impPagado",
+  "MONTO TOTAL": "total", // hoja Pago20 (complementos de pago, lado emitidos)
+  "IMP PAGADO DR": "impPagado", // hoja Pago20
   FECHA: "fecha",
   "FECHA EMISION": "fecha",
   "FECHA DE EMISION": "fecha",
@@ -70,6 +92,7 @@ const ALIAS_ENCABEZADO_CFDI: Record<string, CampoCfdi> = {
   "NOMBRE EMISOR": "nombreEmisor",
   "RFC RECEPTOR": "rfcReceptor",
   "NOMBRE RECEPTOR": "nombreReceptor",
+  ESTATUS: "estatus",
 };
 
 export function normalizarEncabezadoCfdi(h: string): string {
@@ -136,6 +159,15 @@ export function mapearFilaCfdi(
   if (!uuid) {
     // Fila de relleno del Excel (sin UUID no hay CFDI real que registrar),
     // no un error del archivo -- se omite en silencio.
+    return { fila: numeroFila, registro: null, errores: [], omitida: true };
+  }
+
+  // Un CFDI cancelado no representa una obligación de pago real -- se
+  // excluye siempre del catálogo que usa el motor de conciliación
+  // (confirmado con el usuario), sin importar el nombre de la hoja de
+  // origen ("Cancelados" en el archivo real de EMITIDOS): el criterio es la
+  // columna "Estatus" de la propia fila.
+  if (normalizarTexto(get("estatus")) === "CANCELADO") {
     return { fila: numeroFila, registro: null, errores: [], omitida: true };
   }
 

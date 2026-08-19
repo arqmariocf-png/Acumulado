@@ -8,12 +8,39 @@
 // separa por comas de forma posicional: una celda vacía entre dos comas
 // produce un string vacío en esa posición, nunca desaparece.
 
-export function parseCsv(contenido: string): string[][] {
+/** Excel en configuración regional es-MX/es-ES exporta CSV con ";" como
+ * separador de columnas (porque usa "," como separador decimal) en vez del
+ * "," estándar de RFC 4180 -- si el archivo real usa ";", separar solo por
+ * "," deja cada fila como una sola columna gigante y ninguna cabecera hace
+ * match (visto en producción: "Faltan columnas requeridas: cuenta,
+ * fechaPago, saldo" con las tres presentes en el archivo, solo que unidas
+ * por ";"). Se detecta con la primera línea, fuera de comillas: el que
+ * aparezca más veces gana; ante empate o ambos en cero, "," por default.
+ */
+function detectarDelimitador(contenido: string): "," | ";" {
+  const primeraLinea = contenido.split(/\r\n|\r|\n/, 1)[0] ?? "";
+  let comas = 0;
+  let puntoYComas = 0;
+  let dentroDeComillas = false;
+  for (const c of primeraLinea) {
+    if (c === '"') {
+      dentroDeComillas = !dentroDeComillas;
+      continue;
+    }
+    if (dentroDeComillas) continue;
+    if (c === ",") comas++;
+    else if (c === ";") puntoYComas++;
+  }
+  return puntoYComas > comas ? ";" : ",";
+}
+
+export function parseCsv(contenido: string, delimitador?: "," | ";"): string[][] {
   const filas: string[][] = [];
   let fila: string[] = [];
   let campo = "";
   let dentroDeComillas = false;
   let i = 0;
+  const sep = delimitador ?? detectarDelimitador(contenido);
 
   // Normaliza saltos de línea de Windows/Mac a \n para no duplicar filas.
   const texto = contenido.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -42,7 +69,7 @@ export function parseCsv(contenido: string): string[][] {
       i++;
       continue;
     }
-    if (c === ",") {
+    if (c === sep) {
       fila.push(campo);
       campo = "";
       i++;

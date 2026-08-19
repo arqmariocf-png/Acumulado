@@ -1,6 +1,7 @@
-// Edge function: recibe un estado de cuenta (CSV o Excel, formato canónico
-// de SPEC.md sección 2 -- ver _shared/ingesta/estado-cuenta.ts), lo parsea,
-// y deja los movimientos insertados con estado_clasificacion='pendiente_revision'
+// Edge function: recibe un estado de cuenta (CSV, Excel con el formato
+// canónico de SPEC.md sección 2, o PDF de BanBajío -- ver _shared/ingesta/
+// estado-cuenta.ts y pdf-estado-cuenta.ts), lo parsea, y deja los
+// movimientos insertados con estado_clasificacion='pendiente_revision'
 // (el default de la tabla). NO corre el motor de conciliación -- eso es un
 // paso aparte (llamar a motor-conciliacion con el archivoId que devuelve
 // esta función), a propósito: separa "¿el archivo se pudo leer?" de
@@ -13,16 +14,25 @@
 // xlsx-cargador.ts para por qué no se pudo usar la distribución parchada
 // del CDN de SheetJS (el bundler de edge functions de Supabase la rechaza)
 // y qué mitigación queda mientras tanto (límite de tamaño de archivo).
+//
+// PDF: BanBajío es el único banco de Grupo Loma confirmado hasta ahora que
+// solo permite descargar el estado de cuenta en PDF/XML (no Excel/CSV) --
+// ver pdf-estado-cuenta.ts para el detalle del parser, validado contra un
+// PDF real. Si más adelante llega un PDF de otro banco con layout distinto,
+// esto necesita su propio parser -- no asumir que el mismo regex sirve.
 
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
+import { pdfATexto } from "../_shared/ingesta/pdf-cargador.ts";
+import { parsearPdfEstadoCuentaBanBajio } from "../_shared/ingesta/pdf-estado-cuenta.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
   mapearFilaEstadoCuenta,
   normalizarEncabezadoEstadoCuenta,
+  type FilaEstadoCuentaMapeada,
 } from "../_shared/ingesta/estado-cuenta.ts";
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -73,54 +83,49 @@ Deno.serve(async (req) => {
     if (errArchivo) return jsonResponse({ error: errArchivo.message }, 500);
     const archivoId = archivoRow.id;
 
-    const filas = archivo.name.toLowerCase().endsWith(".csv")
-      ? parseCsv(new TextDecoder("utf-8").decode(bytes))
-      : hojaAFilas(bytes);
-
-    const objetos = filasAObjetos(filas, normalizarEncabezadoEstadoCuenta);
-    if (objetos.length === 0) {
-      await marcarArchivoError(dbServicio, archivoId, "El archivo no tiene filas de datos");
-      return jsonResponse({ error: "El archivo no tiene filas de datos", archivoId }, 400);
-    }
-
-    const indice = construirIndiceCampos(Object.keys(objetos[0]));
-    const faltantes = encabezadosFaltantes(indice);
-    if (faltantes.length > 0) {
-      const msg = `Faltan columnas requeridas: ${faltantes.join(", ")}`;
-      await marcarArchivoError(dbServicio, archivoId, msg);
-      return jsonResponse({ error: msg, archivoId }, 400);
-    }
-
+    const esPdf = archivo.name.toLowerCase().endsWith(".pdf");
     const filasProcesadas: any[] = [];
     const erroresPorFila: { fila: number; errores: string[] }[] = [];
 
-    objetos.forEach((obj, i) => {
-      const resultado = mapearFilaEstadoCuenta(obj, indice, i + 1);
-      if (resultado.movimiento) {
-        const m = resultado.movimiento;
-        filasProcesadas.push({
-          empresa_id: empresaId,
-          cuenta_id: cuentaId,
-          archivo_id: archivoId,
-          folio: m.folio,
-          fecha_pago: m.fechaPago,
-          fecha_orden: m.fechaOrden,
-          proyecto: m.proyecto,
-          nombre_razon_social: m.nombreRazonSocial,
-          cargo_total: m.cargoTotal,
-          abono_total: m.abonoTotal,
-          saldo: m.saldo,
-          referencia_tipo: m.referenciaTipo,
-          referencia_numero: m.referenciaNumero,
-          factura: m.factura,
-          comentarios: m.comentarios,
-          observacion: m.observacion,
-          created_by: perfil.id,
-        });
-      } else {
-        erroresPorFila.push({ fila: resultado.fila, errores: resultado.errores });
+    if (esPdf) {
+      const texto = await pdfATexto(bytes);
+      const resultado = parsearPdfEstadoCuentaBanBajio(texto);
+      if (resultado.errorDocumento) {
+        await marcarArchivoError(dbServicio, archivoId, resultado.errorDocumento);
+        return jsonResponse({ error: resultado.errorDocumento, archivoId }, 400);
       }
-    });
+      erroresPorFila.push(...resultado.erroresPorFila);
+      for (const m of resultado.movimientos) {
+        filasProcesadas.push(filaAMovimiento(m, empresaId, cuentaId, archivoId, perfil.id));
+      }
+    } else {
+      const filas = archivo.name.toLowerCase().endsWith(".csv")
+        ? parseCsv(new TextDecoder("utf-8").decode(bytes))
+        : hojaAFilas(bytes);
+
+      const objetos = filasAObjetos(filas, normalizarEncabezadoEstadoCuenta);
+      if (objetos.length === 0) {
+        await marcarArchivoError(dbServicio, archivoId, "El archivo no tiene filas de datos");
+        return jsonResponse({ error: "El archivo no tiene filas de datos", archivoId }, 400);
+      }
+
+      const indice = construirIndiceCampos(Object.keys(objetos[0]));
+      const faltantes = encabezadosFaltantes(indice);
+      if (faltantes.length > 0) {
+        const msg = `Faltan columnas requeridas: ${faltantes.join(", ")}`;
+        await marcarArchivoError(dbServicio, archivoId, msg);
+        return jsonResponse({ error: msg, archivoId }, 400);
+      }
+
+      objetos.forEach((obj, i) => {
+        const resultado = mapearFilaEstadoCuenta(obj, indice, i + 1);
+        if (resultado.movimiento) {
+          filasProcesadas.push(filaAMovimiento(resultado.movimiento, empresaId, cuentaId, archivoId, perfil.id));
+        } else {
+          erroresPorFila.push({ fila: resultado.fila, errores: resultado.errores });
+        }
+      });
+    }
 
     if (filasProcesadas.length > 0) {
       const { error: errInsert } = await dbServicio.from("movimientos").insert(filasProcesadas);
@@ -161,4 +166,26 @@ Deno.serve(async (req) => {
 
 async function marcarArchivoError(dbServicio: ReturnType<typeof clienteServicio>, archivoId: string, mensaje: string) {
   await dbServicio.from("archivos_cargados").update({ estado: "error", detalle_error: mensaje }).eq("id", archivoId);
+}
+
+function filaAMovimiento(m: FilaEstadoCuentaMapeada, empresaId: string, cuentaId: string, archivoId: string, creadoPor: string) {
+  return {
+    empresa_id: empresaId,
+    cuenta_id: cuentaId,
+    archivo_id: archivoId,
+    folio: m.folio,
+    fecha_pago: m.fechaPago,
+    fecha_orden: m.fechaOrden,
+    proyecto: m.proyecto,
+    nombre_razon_social: m.nombreRazonSocial,
+    cargo_total: m.cargoTotal,
+    abono_total: m.abonoTotal,
+    saldo: m.saldo,
+    referencia_tipo: m.referenciaTipo,
+    referencia_numero: m.referenciaNumero,
+    factura: m.factura,
+    comentarios: m.comentarios,
+    observacion: m.observacion,
+    created_by: creadoPor,
+  };
 }
