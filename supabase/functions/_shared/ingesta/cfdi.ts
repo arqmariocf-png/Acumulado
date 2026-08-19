@@ -140,6 +140,27 @@ function aFechaIso(texto: string): string | null {
   return null;
 }
 
+export interface FilaCfdiParaInsertar {
+  tipo: string;
+  rfc: string;
+  folio: string;
+  periodo: string;
+}
+
+/** Postgres rechaza un upsert cuyo batch trae 2+ filas con la misma llave de
+ * conflicto: "ON CONFLICT DO UPDATE command cannot affect row a second
+ * time" -- visto en producción con un archivo real de emitidos (177 CFDI,
+ * varias hojas). Se deduplica por (tipo, rfc, folio, periodo), la misma
+ * llave de la unique de la tabla, quedándose con la última ocurrencia --
+ * así una fila repetida entre hojas no tumba el upsert completo. */
+export function deduplicarFilasCfdi<T extends FilaCfdiParaInsertar>(filas: T[]): T[] {
+  const porClave = new Map<string, T>();
+  for (const fila of filas) {
+    porClave.set(`${fila.tipo}|${fila.rfc}|${fila.folio}|${fila.periodo}`, fila);
+  }
+  return [...porClave.values()];
+}
+
 /**
  * @param tipo 'recibido' -> la contraparte es el Emisor (compramos de él);
  *             'emitido' -> la contraparte es el Receptor (le vendimos a él).

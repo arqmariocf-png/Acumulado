@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCsv, filasAObjetos } from "./csv.ts";
-import { construirIndiceCamposCfdi, encabezadosFaltantesCfdi, mapearFilaCfdi, normalizarEncabezadoCfdi } from "./cfdi.ts";
+import { construirIndiceCamposCfdi, deduplicarFilasCfdi, encabezadosFaltantesCfdi, mapearFilaCfdi, normalizarEncabezadoCfdi } from "./cfdi.ts";
 
 function procesar(csv: string, tipo: "recibido" | "emitido") {
   const objetos = filasAObjetos(parseCsv(csv), normalizarEncabezadoCfdi);
@@ -128,4 +128,28 @@ test('un archivo sin columna "Estatus" (ej. Recibidos) sigue funcionando igual -
   const [r] = procesar(csv, "recibido");
   assert.deepEqual(r.errores, []);
   assert.equal(r.registro!.total, 100);
+});
+
+test("deduplicarFilasCfdi se queda con la última fila cuando dos filas comparten tipo+rfc+folio+periodo", () => {
+  // Caso real: un upsert con filas duplicadas en el mismo batch revienta en
+  // Postgres con "ON CONFLICT DO UPDATE command cannot affect row a second
+  // time" -- hay que deduplicar antes de mandarlo, no dejar que la BD lo
+  // rechace.
+  const filas = [
+    { tipo: "emitido", rfc: "AAA", folio: "F1", periodo: "202607", total: 100 },
+    { tipo: "emitido", rfc: "AAA", folio: "F2", periodo: "202607", total: 200 },
+    { tipo: "emitido", rfc: "AAA", folio: "F1", periodo: "202607", total: 999 },
+  ];
+  const resultado = deduplicarFilasCfdi(filas);
+  assert.equal(resultado.length, 2);
+  assert.equal(resultado.find((f) => f.folio === "F1")!.total, 999);
+});
+
+test("deduplicarFilasCfdi no toca filas con la misma llave si son de tipos distintos (recibido vs emitido)", () => {
+  const filas = [
+    { tipo: "recibido", rfc: "AAA", folio: "F1", periodo: "202607", total: 100 },
+    { tipo: "emitido", rfc: "AAA", folio: "F1", periodo: "202607", total: 200 },
+  ];
+  const resultado = deduplicarFilasCfdi(filas);
+  assert.equal(resultado.length, 2);
 });

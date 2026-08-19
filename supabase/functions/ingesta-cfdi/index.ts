@@ -7,7 +7,7 @@ import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } fro
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { todasLasHojas } from "../_shared/ingesta/xlsx-cargador.ts";
-import { construirIndiceCamposCfdi, encabezadosFaltantesCfdi, mapearFilaCfdi, normalizarEncabezadoCfdi } from "../_shared/ingesta/cfdi.ts";
+import { construirIndiceCamposCfdi, deduplicarFilasCfdi, encabezadosFaltantesCfdi, mapearFilaCfdi, normalizarEncabezadoCfdi } from "../_shared/ingesta/cfdi.ts";
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
 
@@ -110,21 +110,29 @@ Deno.serve(async (req) => {
     // pudieron mapear y las demás quedan listadas en detalle_error para
     // resolverlas después -- el archivo siempre llega a 'completado', nunca
     // a 'error', por un problema de datos en algunas filas.
-    if (filasProcesadas.length > 0) {
+    //
+    // Deduplicar ANTES de mandar el batch a upsert: visto en producción con
+    // un archivo real de emitidos, si dos filas del mismo batch comparten
+    // tipo+rfc+folio+periodo Postgres rechaza el upsert completo con "ON
+    // CONFLICT DO UPDATE command cannot affect row a second time".
+    const filasParaInsertar = deduplicarFilasCfdi(filasProcesadas);
+    if (filasParaInsertar.length > 0) {
       // Idempotencia: si el mismo archivo se vuelve a cargar, upsert por la
       // unique (tipo, rfc, folio, periodo) en vez de duplicar filas.
-      const { error: errInsert } = await dbServicio.from("cfdi").upsert(filasProcesadas, { onConflict: "tipo,rfc,folio,periodo" });
+      const { error: errInsert } = await dbServicio.from("cfdi").upsert(filasParaInsertar, { onConflict: "tipo,rfc,folio,periodo" });
       if (errInsert) {
         await marcarError(dbServicio, archivoId, errInsert.message);
         return jsonResponse({ error: errInsert.message, archivoId }, 500);
       }
     }
 
+    const duplicadosDescartados = filasProcesadas.length - filasParaInsertar.length;
+
     await dbServicio
       .from("archivos_cargados")
       .update({
         estado: "completado",
-        filas_procesadas: filasProcesadas.length,
+        filas_procesadas: filasParaInsertar.length,
         filas_error: erroresPorFila.length,
         detalle_error: erroresPorFila.length > 0 ? JSON.stringify(erroresPorFila.slice(0, 50)) : null,
         completed_at: new Date().toISOString(),
@@ -132,15 +140,16 @@ Deno.serve(async (req) => {
       .eq("id", archivoId);
 
     const mensaje = erroresPorFila.length > 0
-      ? `Archivo cargado. ${filasProcesadas.length} CFDI guardados, ${erroresPorFila.length} fila(s) pendientes de revisar (sin UUID legible o sin Total/ImpPagado) -- no bloquean la carga, corrígelas cuando tengas el dato.`
-      : `Archivo cargado. ${filasProcesadas.length} CFDI guardados sin pendientes.`;
+      ? `Archivo cargado. ${filasParaInsertar.length} CFDI guardados, ${erroresPorFila.length} fila(s) pendientes de revisar (sin UUID legible o sin Total/ImpPagado) -- no bloquean la carga, corrígelas cuando tengas el dato.`
+      : `Archivo cargado. ${filasParaInsertar.length} CFDI guardados sin pendientes.`;
 
     return jsonResponse({
       archivoId,
       archivoCargado: true,
       mensaje,
-      filasProcesadas: filasProcesadas.length,
+      filasProcesadas: filasParaInsertar.length,
       filasConError: erroresPorFila.length,
+      duplicadosDescartados,
       erroresPorFila: erroresPorFila.slice(0, 50),
     });
   } catch (e) {
