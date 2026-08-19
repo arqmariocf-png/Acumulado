@@ -272,12 +272,18 @@ export function Carga() {
 
       {resultado && !error && (
         <div className="mt-4 max-w-2xl space-y-2">
-          <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-800">
-            ✅ Archivo cargado{typeof resultado.filasProcesadas === "number" ? ` — ${resultado.filasProcesadas} fila(s) guardadas` : ""}
-            {typeof resultado.filasConError === "number" && resultado.filasConError > 0
-              ? `, ${resultado.filasConError} pendiente(s) de revisar (no bloquean la carga)`
-              : "."}
-          </p>
+          <div className="flex items-center gap-2">
+            <span
+              className={`h-3 w-3 shrink-0 rounded-full ${
+                typeof resultado.filasConError === "number" && resultado.filasConError > 0 ? "bg-amber-500" : "bg-green-500"
+              }`}
+              title="Listo"
+            />
+            <span className="text-sm font-medium text-slate-800">
+              Listo{typeof resultado.filasProcesadas === "number" ? ` — ${resultado.filasProcesadas} fila(s) guardadas` : ""}
+              {typeof resultado.filasConError === "number" && resultado.filasConError > 0 ? `, ${resultado.filasConError} pendiente(s)` : ""}
+            </span>
+          </div>
           {resultado.mensaje && <p className="text-sm text-slate-600">{resultado.mensaje}</p>}
           {Array.isArray(resultado.erroresPorFila) && resultado.erroresPorFila.length > 0 && (
             <details className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
