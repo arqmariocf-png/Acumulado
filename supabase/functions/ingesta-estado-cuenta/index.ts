@@ -30,6 +30,7 @@ import { parsearPdfEstadoCuentaBanBajio } from "../_shared/ingesta/pdf-estado-cu
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
+  filtrarMovimientosNuevos,
   mapearFilaEstadoCuenta,
   normalizarEncabezadoEstadoCuenta,
   type FilaEstadoCuentaMapeada,
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
     const archivoId = archivoRow.id;
 
     const esPdf = archivo.name.toLowerCase().endsWith(".pdf");
-    const filasProcesadas: any[] = [];
+    const movimientosMapeados: FilaEstadoCuentaMapeada[] = [];
     const erroresPorFila: { fila: number; errores: string[] }[] = [];
 
     if (esPdf) {
@@ -95,9 +96,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: resultado.errorDocumento, archivoId }, 400);
       }
       erroresPorFila.push(...resultado.erroresPorFila);
-      for (const m of resultado.movimientos) {
-        filasProcesadas.push(filaAMovimiento(m, empresaId, cuentaId, archivoId, perfil.id));
-      }
+      movimientosMapeados.push(...resultado.movimientos);
     } else {
       const filas = archivo.name.toLowerCase().endsWith(".csv")
         ? parseCsv(new TextDecoder("utf-8").decode(bytes))
@@ -120,12 +119,32 @@ Deno.serve(async (req) => {
       objetos.forEach((obj, i) => {
         const resultado = mapearFilaEstadoCuenta(obj, indice, i + 1);
         if (resultado.movimiento) {
-          filasProcesadas.push(filaAMovimiento(resultado.movimiento, empresaId, cuentaId, archivoId, perfil.id));
+          movimientosMapeados.push(resultado.movimiento);
         } else {
           erroresPorFila.push({ fila: resultado.fila, errores: resultado.errores });
         }
       });
     }
+
+    // Evita duplicar movimientos cuando el archivo se traslapa con uno ya
+    // cargado antes para esta cuenta (ej. tesorería sube la actualización
+    // del mes todos los días, y cada archivo repite los movimientos de días
+    // anteriores) -- ver filtrarMovimientosNuevos en estado-cuenta.ts para
+    // la llave que se usa (Fecha + Monto + Referencia).
+    const { data: existentesDb, error: errExistentes } = await dbServicio
+      .from("movimientos")
+      .select("fecha_pago, cargo_total, abono_total, referencia_numero")
+      .eq("cuenta_id", cuentaId);
+    if (errExistentes) {
+      await marcarArchivoError(dbServicio, archivoId, errExistentes.message);
+      return jsonResponse({ error: errExistentes.message, archivoId }, 500);
+    }
+    const existentes = (existentesDb ?? [])
+      .map((e) => ({ fechaPago: e.fecha_pago as string, monto: (e.cargo_total ?? e.abono_total) as number | null, referenciaNumero: e.referencia_numero as string | null }))
+      .filter((e): e is { fechaPago: string; monto: number; referenciaNumero: string | null } => e.monto != null);
+
+    const { nuevos, omitidosPorExistentes } = filtrarMovimientosNuevos(movimientosMapeados, existentes);
+    const filasProcesadas = nuevos.map((m) => filaAMovimiento(m, empresaId, cuentaId, archivoId, perfil.id));
 
     if (filasProcesadas.length > 0) {
       const { error: errInsert } = await dbServicio.from("movimientos").insert(filasProcesadas);
@@ -146,9 +165,10 @@ Deno.serve(async (req) => {
       })
       .eq("id", archivoId);
 
-    const mensaje = erroresPorFila.length > 0
-      ? `Archivo cargado. ${filasProcesadas.length} movimiento(s) guardados, ${erroresPorFila.length} fila(s) pendientes de revisar -- no bloquean la carga.`
-      : `Archivo cargado. ${filasProcesadas.length} movimiento(s) guardados sin pendientes.`;
+    const partes = [`${filasProcesadas.length} movimiento(s) nuevo(s) guardados`];
+    if (omitidosPorExistentes > 0) partes.push(`${omitidosPorExistentes} ya existían y no se duplicaron`);
+    if (erroresPorFila.length > 0) partes.push(`${erroresPorFila.length} pendiente(s) de revisar (no bloquean la carga)`);
+    const mensaje = `Archivo cargado. ${partes.join(", ")}.`;
 
     return jsonResponse({
       archivoId,
@@ -156,6 +176,7 @@ Deno.serve(async (req) => {
       mensaje,
       filasProcesadas: filasProcesadas.length,
       filasConError: erroresPorFila.length,
+      omitidosPorExistentes,
       erroresPorFila: erroresPorFila.slice(0, 50),
       siguientePaso: "Llamar a motor-conciliacion con { empresaId, archivoId } para clasificar estos movimientos.",
     });

@@ -1,13 +1,21 @@
 // Edge function: recibe un archivo de CFDI Recibidos/Emitidos (sección 3 de
 // SPEC.md) y lo inserta en public.cfdi. Mismo patrón que ingesta-estado-cuenta.
 //
-// POST multipart/form-data: file, empresaId, tipo ('recibido'|'emitido'), rfc, periodo (AAAAMM)
+// POST multipart/form-data: file, empresaId, tipo ('recibido'|'emitido')
+//
+// El periodo (AAAAMM) y el RFC de cada CFDI ya NO se piden en el formulario:
+// se derivan de los propios datos del archivo, fila por fila (el periodo de
+// la Fecha/FechaPago del CFDI, el RFC del Emisor/Receptor según tipo) -- un
+// mismo archivo puede traer documentos de más de un mes, y pedir un periodo
+// fijo para todo el archivo era, en el mejor caso, redundante con lo que ya
+// trae cada fila, y en el peor, una fuente de error si no coincidía.
 
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { todasLasHojas } from "../_shared/ingesta/xlsx-cargador.ts";
 import { construirIndiceCamposCfdi, deduplicarFilasCfdi, encabezadosFaltantesCfdi, mapearFilaCfdi, normalizarEncabezadoCfdi } from "../_shared/ingesta/cfdi.ts";
+import { periodoDeFecha } from "../_shared/motor/normalizar.ts";
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
 
@@ -21,12 +29,10 @@ Deno.serve(async (req) => {
     const form = await req.formData();
     const empresaId = String(form.get("empresaId") ?? "");
     const tipo = String(form.get("tipo") ?? "");
-    const rfc = String(form.get("rfc") ?? "");
-    const periodo = String(form.get("periodo") ?? "");
     const archivo = form.get("file") as File | null;
 
-    if (!empresaId || !archivo || (tipo !== "recibido" && tipo !== "emitido") || !/^\d{6}$/.test(periodo)) {
-      return jsonResponse({ error: "empresaId, file, tipo ('recibido'|'emitido') y periodo (AAAAMM) son requeridos" }, 400);
+    if (!empresaId || !archivo || (tipo !== "recibido" && tipo !== "emitido")) {
+      return jsonResponse({ error: "empresaId, file y tipo ('recibido'|'emitido') son requeridos" }, 400);
     }
     if (!puedeEscribirEnEmpresa(perfil, empresaId)) {
       return jsonResponse({ error: "Sin permiso para cargar archivos de esta empresa" }, 403);
@@ -36,7 +42,7 @@ Deno.serve(async (req) => {
     }
 
     const dbServicio = clienteServicio();
-    const rutaStorage = `cfdi/${empresaId}/${tipo}/${periodo}/${Date.now()}-${archivo.name}`;
+    const rutaStorage = `cfdi/${empresaId}/${tipo}/${Date.now()}-${archivo.name}`;
     const bytes = new Uint8Array(await archivo.arrayBuffer());
     const { error: errUpload } = await dbServicio.storage.from("cargas").upload(rutaStorage, bytes, {
       contentType: archivo.type || "application/octet-stream",
@@ -86,13 +92,26 @@ Deno.serve(async (req) => {
       objetos.forEach((obj, i) => {
         const resultado = mapearFilaCfdi(obj, indice, tipo as "recibido" | "emitido", i + 1);
         if (resultado.registro) {
+          // El periodo y el RFC ya no vienen del formulario -- se derivan de
+          // la propia fila. Sin fecha no hay periodo que calcular, y sin RFC
+          // de la contraparte no se puede satisfacer la columna rfc (NOT
+          // NULL) con un valor real -- en ambos casos es un dato genuino
+          // faltante en el archivo, se reporta como pendiente, no se inventa.
+          if (!resultado.registro.fecha) {
+            erroresPorFila.push({ hoja: hoja.nombre, fila: resultado.fila, errores: ["Fecha inválida o vacía -- no se puede determinar el periodo (AAAAMM)"] });
+            return;
+          }
+          if (!resultado.registro.rfcContraparte) {
+            erroresPorFila.push({ hoja: hoja.nombre, fila: resultado.fila, errores: ["RFC de la contraparte vacío"] });
+            return;
+          }
           filasProcesadas.push({
             tipo,
             empresa_id: empresaId,
-            rfc: resultado.registro.rfcContraparte ?? rfc,
+            rfc: resultado.registro.rfcContraparte,
             folio: resultado.registro.folio,
             total: resultado.registro.total,
-            periodo,
+            periodo: periodoDeFecha(resultado.registro.fecha),
             contraparte: resultado.registro.nombreContraparte,
             fecha: resultado.registro.fecha,
             archivo_id: archivoId,

@@ -222,16 +222,9 @@ export function Carga() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">RFC de la empresa</label>
-            <input name="rfc" required className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Periodo (AAAAMM)</label>
-            <input name="periodo" required pattern="\d{6}" placeholder="202607" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Archivo</label>
             <input type="file" name="file" accept=".csv,.xlsx,.xls" required className="w-full text-sm" />
+            <p className="mt-1 text-xs text-slate-500">El RFC de la contraparte y el periodo se toman directo de cada fila del archivo.</p>
           </div>
           <button disabled={enviando} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
             {enviando ? "Cargando…" : "Cargar CFDI"}

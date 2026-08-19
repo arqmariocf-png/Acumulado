@@ -34,6 +34,51 @@ export interface ResultadoMapeoFila {
   errores: string[];
 }
 
+export interface ClaveMovimientoExistente {
+  fechaPago: string;
+  monto: number;
+  referenciaNumero: string | null;
+}
+
+export interface ResultadoFiltrado {
+  nuevos: FilaEstadoCuentaMapeada[];
+  omitidosPorExistentes: number;
+}
+
+const TOLERANCIA_CENTAVOS = 0.01;
+
+/** Evita duplicar movimientos cuando el mismo estado de cuenta se recarga
+ * traslapado con uno ya cargado antes (ej. tesorería sube la actualización
+ * del mes todos los días, y cada archivo nuevo repite los movimientos de
+ * días anteriores) -- compara contra lo que ya existe en esa cuenta usando
+ * la misma llave que ya usa el motor de conciliación para el flag
+ * posible_duplicado (Fecha + Monto + Referencia, ver motor.ts fase 4.6),
+ * pero aquí se usa para NO insertar la fila de nuevo, no solo para marcarla.
+ * Es la misma tolerancia a falsos positivos que ya acepta esa fase del
+ * motor (dos movimientos genuinamente distintos con exactamente la misma
+ * fecha/monto/referencia son indistinguibles con los datos que trae un
+ * estado de cuenta). */
+export function filtrarMovimientosNuevos(filas: FilaEstadoCuentaMapeada[], existentes: ClaveMovimientoExistente[]): ResultadoFiltrado {
+  const nuevos: FilaEstadoCuentaMapeada[] = [];
+  let omitidosPorExistentes = 0;
+
+  for (const fila of filas) {
+    const monto = fila.cargoTotal ?? fila.abonoTotal;
+    const yaExiste =
+      monto != null &&
+      existentes.some(
+        (e) => e.fechaPago === fila.fechaPago && Math.abs(e.monto - monto) <= TOLERANCIA_CENTAVOS && e.referenciaNumero === fila.referenciaNumero,
+      );
+    if (yaExiste) {
+      omitidosPorExistentes++;
+    } else {
+      nuevos.push(fila);
+    }
+  }
+
+  return { nuevos, omitidosPorExistentes };
+}
+
 export type CampoCanonico =
   | "cuenta"
   | "folio"

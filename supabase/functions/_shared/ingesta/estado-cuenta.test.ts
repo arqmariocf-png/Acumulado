@@ -4,8 +4,10 @@ import { parseCsv, filasAObjetos } from "./csv.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
+  filtrarMovimientosNuevos,
   mapearFilaEstadoCuenta,
   normalizarEncabezadoEstadoCuenta,
+  type FilaEstadoCuentaMapeada,
 } from "./estado-cuenta.ts";
 
 const ENCABEZADO =
@@ -84,4 +86,47 @@ test("reconoce encabezado alterno 'OC OS OV OF' sin las diagonales", () => {
   const csv = `${encabezadoAlterno}\nBancos,1226,,7/3/26,2026,Julio,Aceros,,,5233.33,,120291.61,OC 39466,,,,`;
   const [resultado] = procesarCsv(csv);
   assert.equal(resultado.movimiento!.referenciaTipo, "OC");
+});
+
+function mov(overrides: Partial<FilaEstadoCuentaMapeada>): FilaEstadoCuentaMapeada {
+  return {
+    fechaPago: "2026-07-01",
+    fechaOrden: null,
+    folio: null,
+    proyecto: null,
+    nombreRazonSocial: null,
+    cargoTotal: 500,
+    abonoTotal: null,
+    saldo: 100,
+    referenciaTipo: null,
+    referenciaNumero: null,
+    comentarios: null,
+    observacion: null,
+    factura: null,
+    ...overrides,
+  };
+}
+
+test("filtrarMovimientosNuevos omite una fila que ya existe (misma fecha/monto/referencia) -- caso real de recarga diaria del estado de cuenta", () => {
+  const filas = [mov({ referenciaNumero: "8700417" })];
+  const existentes = [{ fechaPago: "2026-07-01", monto: 500, referenciaNumero: "8700417" }];
+  const { nuevos, omitidosPorExistentes } = filtrarMovimientosNuevos(filas, existentes);
+  assert.equal(nuevos.length, 0);
+  assert.equal(omitidosPorExistentes, 1);
+});
+
+test("filtrarMovimientosNuevos conserva las filas que sí son nuevas dentro de la misma recarga", () => {
+  const filas = [mov({ referenciaNumero: "8700417" }), mov({ fechaPago: "2026-07-31", cargoTotal: 32000, referenciaNumero: "8739782" })];
+  const existentes = [{ fechaPago: "2026-07-01", monto: 500, referenciaNumero: "8700417" }];
+  const { nuevos, omitidosPorExistentes } = filtrarMovimientosNuevos(filas, existentes);
+  assert.equal(nuevos.length, 1);
+  assert.equal(nuevos[0].referenciaNumero, "8739782");
+  assert.equal(omitidosPorExistentes, 1);
+});
+
+test("filtrarMovimientosNuevos compara por Abono cuando la fila no trae Cargo", () => {
+  const filas = [mov({ cargoTotal: null, abonoTotal: 32000, referenciaNumero: "8739782" })];
+  const existentes = [{ fechaPago: "2026-07-01", monto: 32000, referenciaNumero: "8739782" }];
+  const { nuevos } = filtrarMovimientosNuevos(filas, existentes);
+  assert.equal(nuevos.length, 0);
 });
