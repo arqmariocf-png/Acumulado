@@ -51,6 +51,22 @@ export function Dashboard() {
     enabled: veTodasLasEmpresas,
   });
 
+  // Saldo del movimiento más reciente de cada cuenta -- a diferencia de
+  // Neto (que es solo el flujo del periodo, entradas menos salidas), esto sí
+  // es el mismo número que aparece como "Saldo Actual" en el estado de
+  // cuenta real del banco.
+  const { data: saldosPorCuenta } = useQuery({
+    queryKey: ["saldo-cierre-cuenta"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_saldo_cierre_cuenta")
+        .select("*, cuentas_bancarias(banco, ultimos_4), empresas(nombre)")
+        .order("fecha_ultimo_movimiento", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
 
   const ytd = kpis?.reduce(
@@ -73,7 +89,7 @@ export function Dashboard() {
         <Tarjeta titulo="Movimientos YTD" valor={String(ytd.movimientos)} />
         <Tarjeta titulo="Cargo total YTD" valor={formatoMoneda(ytd.cargo)} />
         <Tarjeta titulo="Abono total YTD" valor={formatoMoneda(ytd.abono)} />
-        <Tarjeta titulo="Neto YTD" valor={formatoMoneda(ytd.abono - ytd.cargo)} />
+        <Tarjeta titulo="Neto YTD (depósitos − cargos del periodo, no es el saldo del banco)" valor={formatoMoneda(ytd.abono - ytd.cargo)} />
       </div>
 
       <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
@@ -115,7 +131,7 @@ export function Dashboard() {
       </div>
 
       {veTodasLasEmpresas && porEmpresa && (
-        <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+        <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -134,6 +150,33 @@ export function Dashboard() {
                   <td className="px-3 py-2 text-right">{formatoMoneda(Number(e.total_cargo))}</td>
                   <td className="px-3 py-2 text-right">{formatoMoneda(Number(e.total_abono))}</td>
                   <td className="px-3 py-2 text-right">{formatoMoneda(Number(e.neto))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {saldosPorCuenta && saldosPorCuenta.length > 0 && (
+        <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Cuenta</th>
+                {veTodasLasEmpresas && <th className="px-3 py-2">Empresa</th>}
+                <th className="px-3 py-2">Último movimiento</th>
+                <th className="px-3 py-2 text-right">Saldo (según el banco)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {saldosPorCuenta.map((s) => (
+                <tr key={s.cuenta_id} className="border-t border-slate-100">
+                  <td className="px-3 py-2">
+                    {s.cuentas_bancarias?.banco} ····{s.cuentas_bancarias?.ultimos_4}
+                  </td>
+                  {veTodasLasEmpresas && <td className="px-3 py-2">{s.empresas?.nombre}</td>}
+                  <td className="px-3 py-2">{s.fecha_ultimo_movimiento}</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatoMoneda(Number(s.saldo_cierre))}</td>
                 </tr>
               ))}
             </tbody>
