@@ -89,6 +89,19 @@ async function llamarFuncion(nombre: string, formData: FormData) {
   return json;
 }
 
+async function llamarFuncionJson(nombre: string, body: Record<string, unknown>) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  const respuesta = await fetch(urlFuncion(nombre), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await respuesta.json();
+  if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+  return json;
+}
+
 export function Carga() {
   const { veTodasLasEmpresas, perfil } = useAuth();
   const { data: empresas } = useEmpresas();
@@ -124,6 +137,20 @@ export function Carga() {
       queryClient.invalidateQueries({ queryKey: ["movimientos"] });
       queryClient.invalidateQueries({ queryKey: ["kpis-mensuales"] });
       queryClient.invalidateQueries({ queryKey: ["kpis-por-empresa"] });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function onDiagnosticoBackoffice(recurso: "oc" | "ov") {
+    setError(null);
+    setResultado(null);
+    setEnviando(true);
+    try {
+      const json = await llamarFuncionJson("proxy-backoffice", { recurso, empresaId, modo: "diagnostico" });
+      setResultado(json);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -255,6 +282,34 @@ export function Carga() {
         </form>
       )}
 
+      {pestana === "oc_ov" && empresaId && (
+        <div className="mt-4 max-w-md space-y-2 rounded border border-dashed border-slate-300 bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">API del backoffice (en construcción)</p>
+          <p className="text-xs text-slate-500">
+            Todavía no se confirma el formato exacto de la respuesta de la API real. Este botón no guarda nada — solo
+            hace la llamada real y muestra la respuesta cruda, para poder ajustar el mapeo con datos reales.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={enviando}
+              onClick={() => onDiagnosticoBackoffice("oc")}
+              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Probar API — OC/OS
+            </button>
+            <button
+              type="button"
+              disabled={enviando}
+              onClick={() => onDiagnosticoBackoffice("ov")}
+              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Probar API — OV
+            </button>
+          </div>
+        </div>
+      )}
+
       {!empresaId && <p className="text-sm text-slate-500">Selecciona una empresa para continuar.</p>}
 
       {error && (
@@ -263,7 +318,25 @@ export function Carga() {
         </p>
       )}
 
-      {resultado && !error && (
+      {resultado && !error && resultado.diagnostico && (
+        <div className="mt-4 max-w-2xl space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
+          <p className="text-sm font-medium text-blue-900">
+            Diagnóstico: la API respondió {resultado.statusHttp} {resultado.pareceJson ? `(JSON, ${resultado.cantidadDeRegistros ?? "?"} registro(s))` : "(no parece JSON)"}
+          </p>
+          <p className="text-xs text-blue-800">URL llamada: {resultado.urlLlamada}</p>
+          {resultado.camposDelPrimerRegistro && (
+            <p className="text-xs text-blue-800">Campos detectados: {resultado.camposDelPrimerRegistro.join(", ")}</p>
+          )}
+          <details className="text-xs text-blue-700">
+            <summary className="cursor-pointer">Ver respuesta cruda</summary>
+            <pre className="mt-2 max-w-2xl overflow-x-auto rounded border border-blue-200 bg-white p-3 text-slate-700">
+              {JSON.stringify(resultado, null, 2)}
+            </pre>
+          </details>
+        </div>
+      )}
+
+      {resultado && !error && !resultado.diagnostico && (
         <div className="mt-4 max-w-2xl space-y-2">
           <div className="flex items-center gap-2">
             <span

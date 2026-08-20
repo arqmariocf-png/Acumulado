@@ -13,12 +13,20 @@
 // paginación, endpoints exactos más allá de los nombres api_ocs_aut /
 // api_ocs_det_aut / api_ov_aut / api_ov_det_aut, ni cómo distingue OC de OS
 // en la respuesta). Esta función asume un contrato razonable (GET con
-// query params empresa/periodo, respuesta JSON array) marcado con TODO
+// query param empresa=<codigo>, respuesta JSON array) marcado con TODO
 // donde hace falta confirmar contra la API real antes de usarse.
 //
-// POST body: { recurso: 'oc' | 'ov', empresaId: string }
+// MODO DIAGNÓSTICO: para no tener que adivinar el mapeo a ciegas (como pasó
+// con los PDF de banco, donde primero se validó contra un archivo real antes
+// de escribir el parser final), este endpoint acepta `modo: 'diagnostico'`.
+// En ese modo NO mapea ni inserta nada -- solo hace la llamada real a la API
+// del backoffice y regresa la respuesta cruda (status, headers, texto, y si
+// parece JSON, las claves del primer registro) para poder ver el contrato
+// real y ajustar oc-ov.ts con datos reales, no supuestos.
+//
+// POST body: { recurso: 'oc' | 'ov', empresaId: string, modo?: 'diagnostico' }
 
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { mapearOrdenCompraDesdeApi, mapearOrdenVentaDesdeApi } from "../_shared/ingesta/oc-ov.ts";
 
@@ -26,7 +34,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return respuestaCors();
 
   try {
-    const { recurso, empresaId } = await req.json();
+    const { recurso, empresaId, modo } = await req.json();
     if (recurso !== "oc" && recurso !== "ov") return jsonResponse({ error: "recurso debe ser 'oc' u 'ov'" }, 400);
     if (!empresaId) return jsonResponse({ error: "empresaId es requerido" }, 400);
 
@@ -38,21 +46,59 @@ Deno.serve(async (req) => {
     const token = Deno.env.get("BACKOFFICE_API_TOKEN"); // Vacío mientras el backoffice no exija auth (inseguro, ver sección 7.1)
     if (!baseUrl) return jsonResponse({ error: "BACKOFFICE_API_BASE_URL no está configurado" }, 500);
 
+    const dbServicio = clienteServicio();
+
+    // El backoffice no conoce los UUID internos de Supabase -- usa el
+    // "codigo" corto de la empresa (mismo campo que ya se usa para casar la
+    // columna "Empresa" de las cargas manuales). TODO: confirmar que la API
+    // real espera justo este valor y no el RFC u otro identificador.
+    const { data: empresaRow, error: errEmpresa } = await dbServicio.from("empresas").select("codigo, rfc, nombre").eq("id", empresaId).single();
+    if (errEmpresa || !empresaRow) return jsonResponse({ error: "No se encontró la empresa" }, 400);
+
     // TODO: confirmar el endpoint y los query params reales contra la API.
     const endpoint = recurso === "oc" ? "api_ocs_det_aut" : "api_ov_det_aut";
-    const url = `${baseUrl.replace(/\/$/, "")}/${endpoint}?empresa=${encodeURIComponent(empresaId)}`;
+    const url = `${baseUrl.replace(/\/$/, "")}/${endpoint}?empresa=${encodeURIComponent(empresaRow.codigo)}`;
 
     const headers: Record<string, string> = { Accept: "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
 
     const respuesta = await fetch(url, { headers });
+    const textoCrudo = await respuesta.text();
+
+    if (modo === "diagnostico") {
+      let parseable = false;
+      let camposDelPrimerRegistro: string[] | null = null;
+      let cantidadDeRegistros: number | null = null;
+      try {
+        const parsed = JSON.parse(textoCrudo);
+        parseable = true;
+        const items = Array.isArray(parsed) ? parsed : (parsed.data ?? parsed.results ?? null);
+        if (Array.isArray(items)) {
+          cantidadDeRegistros = items.length;
+          if (items.length > 0) camposDelPrimerRegistro = Object.keys(items[0]);
+        }
+      } catch {
+        // No es JSON -- se regresa el texto crudo tal cual para inspección.
+      }
+      return jsonResponse({
+        diagnostico: true,
+        urlLlamada: url,
+        empresaEnviada: { codigo: empresaRow.codigo, rfc: empresaRow.rfc, nombre: empresaRow.nombre },
+        statusHttp: respuesta.status,
+        contentType: respuesta.headers.get("content-type"),
+        pareceJson: parseable,
+        cantidadDeRegistros,
+        camposDelPrimerRegistro,
+        textoCrudo: textoCrudo.slice(0, 5000),
+      });
+    }
+
     if (!respuesta.ok) {
       return jsonResponse({ error: `La API del backoffice respondió ${respuesta.status}` }, 502);
     }
-    const payload = await respuesta.json();
+    const payload = JSON.parse(textoCrudo);
     const items: Record<string, unknown>[] = Array.isArray(payload) ? payload : (payload.data ?? payload.results ?? []);
 
-    const dbServicio = clienteServicio();
     let insertados = 0;
     const errores: string[] = [];
 
