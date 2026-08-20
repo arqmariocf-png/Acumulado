@@ -9,12 +9,16 @@
 // 2. Permite mapear la respuesta al modelo de la app (oc-ov.ts) y hacer
 //    upsert directo, sin exponerle al cliente los detalles del backoffice.
 //
-// ESTADO: el spec no documenta el contrato exacto de la API (parámetros,
-// paginación, endpoints exactos más allá de los nombres api_ocs_aut /
-// api_ocs_det_aut / api_ov_aut / api_ov_det_aut, ni cómo distingue OC de OS
-// en la respuesta). Esta función asume un contrato razonable (GET con
-// query param empresa=<codigo>, respuesta JSON array) marcado con TODO
-// donde hace falta confirmar contra la API real antes de usarse.
+// ESTADO: las rutas exactas ya se confirmaron con el usuario (2026-08-20):
+//   https://reports.grupoloma.mx/dash/api_ov_aut
+//   https://reports.grupoloma.mx/dash/api_ov_det_aut
+//   https://reports.grupoloma.mx/dash/api_ocs_aut
+//   https://reports.grupoloma.mx/dash/api_ocs_det_aut
+// (BACKOFFICE_API_BASE_URL debe ser "https://reports.grupoloma.mx/dash").
+// Lo que SIGUE sin confirmar contra una respuesta real: si hace falta un
+// query param para filtrar por empresa (o si el endpoint regresa el
+// catálogo completo de todas las empresas de una vez), paginación, y cómo
+// distingue OC de OS en la respuesta -- de ahí el modo diagnóstico de abajo.
 //
 // MODO DIAGNÓSTICO: para no tener que adivinar el mapeo a ciegas (como pasó
 // con los PDF de banco, donde primero se validó contra un archivo real antes
