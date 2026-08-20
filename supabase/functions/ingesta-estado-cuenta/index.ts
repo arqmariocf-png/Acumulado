@@ -15,11 +15,13 @@
 // del CDN de SheetJS (el bundler de edge functions de Supabase la rechaza)
 // y qué mitigación queda mientras tanto (límite de tamaño de archivo).
 //
-// PDF: BanBajío es el único banco de Grupo Loma confirmado hasta ahora que
-// solo permite descargar el estado de cuenta en PDF/XML (no Excel/CSV) --
-// ver pdf-estado-cuenta.ts para el detalle del parser, validado contra un
-// PDF real. Si más adelante llega un PDF de otro banco con layout distinto,
-// esto necesita su propio parser -- no asumir que el mismo regex sirve.
+// PDF: BanBajío y BBVA son, hasta ahora, los bancos de Grupo Loma con un
+// parser de PDF real -- cada uno tiene su propio layout (ver
+// pdf-estado-cuenta.ts y pdf-estado-cuenta-bbva.ts respectivamente,
+// validados cada uno contra un PDF real distinto). Qué parser usar se
+// decide consultando el banco de la cuenta (cuentas_bancarias.banco), NO el
+// contenido del archivo -- Banorte/Santander en PDF todavía no tienen
+// parser, y NO se debe intentar adivinar con el mismo regex de otro banco.
 
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
@@ -27,6 +29,7 @@ import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
 import { pdfATexto } from "../_shared/ingesta/pdf-cargador.ts";
 import { parsearPdfEstadoCuentaBanBajio } from "../_shared/ingesta/pdf-estado-cuenta.ts";
+import { parsearPdfEstadoCuentaBBVA } from "../_shared/ingesta/pdf-estado-cuenta-bbva.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
@@ -89,8 +92,25 @@ Deno.serve(async (req) => {
     const erroresPorFila: { fila: number; errores: string[] }[] = [];
 
     if (esPdf) {
+      const { data: cuentaRow, error: errCuenta } = await dbServicio.from("cuentas_bancarias").select("banco").eq("id", cuentaId).single();
+      if (errCuenta || !cuentaRow) {
+        await marcarArchivoError(dbServicio, archivoId, "No se encontró la cuenta bancaria seleccionada");
+        return jsonResponse({ error: "No se encontró la cuenta bancaria seleccionada", archivoId }, 400);
+      }
+
       const texto = await pdfATexto(bytes);
-      const resultado = parsearPdfEstadoCuentaBanBajio(texto);
+      const parserPorBanco: Record<string, (t: string) => ReturnType<typeof parsearPdfEstadoCuentaBanBajio>> = {
+        BanBajio: parsearPdfEstadoCuentaBanBajio,
+        BBVA: parsearPdfEstadoCuentaBBVA,
+      };
+      const parser = parserPorBanco[cuentaRow.banco];
+      if (!parser) {
+        const msg = `Carga de PDF todavía no soportada para ${cuentaRow.banco} -- sube el CSV/Excel con el formato canónico mientras tanto, o comparte un PDF real de este banco para agregar soporte.`;
+        await marcarArchivoError(dbServicio, archivoId, msg);
+        return jsonResponse({ error: msg, archivoId }, 400);
+      }
+
+      const resultado = parser(texto);
       if (resultado.errorDocumento) {
         await marcarArchivoError(dbServicio, archivoId, resultado.errorDocumento);
         return jsonResponse({ error: resultado.errorDocumento, archivoId }, 400);
