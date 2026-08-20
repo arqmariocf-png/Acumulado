@@ -1,140 +1,216 @@
-// Parsea el texto ya extraído (con unpdf, ver pdf-cargador.ts) de un estado
-// de cuenta en PDF de BBVA al mismo modelo que usa estado-cuenta.ts para
-// Excel/CSV, y que usa pdf-estado-cuenta.ts para BanBajío.
+// Parsea el estado de cuenta de BBVA en PDF, formato oficial "MAESTRA PYME
+// BBVA" (confirmado por el usuario como el modelo general que va a subir --
+// PDF_ACEROS_5859_JULIO_2026.pdf, cuenta BBVA 5859 de Aceros y Envasados de
+// Puebla, julio 2026).
 //
-// Confirmado contra un archivo real (ESTADO_DE_CUENTA_AL_31_DE_JULIO1.pdf,
-// cuenta BBVA 5859 de Aceros y Envasados de Puebla, julio 2026). El layout
-// es MUY distinto al de BanBajío -- NO se puede reusar el mismo parser:
+// Este formato es una TABLA real (columnas Cargos/Abonos/Saldo Operación/
+// Saldo Liquidación), pero pdf.js aplana el texto en el orden del stream del
+// PDF, no en el orden visual por columna -- un monto de $3,209.80 en la
+// columna "Cargos" y uno de $25,998.35 en la columna "Abonos" son
+// indistinguibles como texto plano. Por eso este parser usa pdfAPosiciones
+// (ver pdf-cargador.ts) en vez de pdfATexto: cada monto se clasifica por su
+// posición horizontal (x1, el borde DERECHO -- los montos están alineados a
+// la derecha, así que x1 es constante por columna sin importar cuántos
+// dígitos tenga el número, a diferencia de x0). Confirmado contra el PDF
+// real con dos extractores de texto independientes (unpdf/pdf.js y
+// PyMuPDF): las 4 columnas de montos caen en clusters de x1 nítidos y sin
+// traslape (Cargos ≈407.9, Abonos ≈468.9, Saldo Operación ≈534.1, Saldo
+// Liquidación ≈602.2 puntos), así que NO hace falta inferir cargo/abono por
+// delta de saldo (a diferencia de BanBajío y del formato BBVA anterior) --
+// el documento ya lo dice directamente por columna, lo cual es más
+// confiable que adivinar por delta.
 //
-//   - Las filas vienen en orden DESCENDENTE por fecha (la más reciente
-//     primero), no ascendente.
-//   - Cada fila trae su propia fecha completa "DD-MM-AAAA" -- a diferencia
-//     de BanBajío, no hace falta leer un encabezado de periodo aparte.
-//   - No hay una columna "Cargo"/"Abono" separable de forma confiable por
-//     posición de texto en la extracción -- se resuelve igual que en
-//     BanBajío, con el delta de saldo contra la fila cronológicamente
-//     anterior (aquí, la SIGUIENTE en el orden del archivo, por venir
-//     descendente).
-//   - La descripción de cada movimiento frecuentemente trae un desglose de
-//     IVA embebido en el mismo texto (ej. "RFC:VPU860913EB0  IVA:827.59
-//     6,000.00") -- el número junto a "IVA:" NO es el monto del movimiento,
-//     es solo informativo, y hay que excluirlo explícitamente o se cuenta
-//     como si fuera un tercer monto en la fila (confirmado contando los
-//     montos reales del archivo real: 139 filas × 2 montos esperados = 278,
-//     y el archivo trae exactamente 278 montos con importe real una vez
-//     excluidos los 48 "IVA:X.XX").
-//
-// A diferencia de BanBajío, este documento (al menos el que se compartió)
-// NO trae un total de movimientos ni un saldo final declarado en ningún
-// lado para autovalidar la extracción completa -- por eso la fila
-// cronológicamente más antigua del archivo (la última en el orden
-// descendente) no se puede clasificar como cargo/abono (no hay una fila
-// "anterior" contra la cual comparar el delta de saldo) y queda reportada
-// como pendiente en vez de adivinada.
+// AUTOVALIDACIÓN: el documento declara sus propios totales ("TOTAL IMPORTE
+// CARGOS", "TOTAL MOVIMIENTOS CARGOS", "TOTAL IMPORTE ABONOS", "TOTAL
+// MOVIMIENTOS ABONOS"). Contra el PDF real (139 movimientos: 116 cargos por
+// $1,260,239.17 + 23 abonos por $902,140.22) cuadran exactamente -- pero se
+// dejó la comparación explícita en vez de confiar ciegamente en la
+// extracción, por el mismo motivo que BanBajío:
+//   - Si lo extraído es MÁS de lo declarado (en cantidad o en suma), algo se
+//     clasificó mal -- se bloquea todo el documento (errorDocumento).
+//   - Si lo extraído es MENOS (subconjunto limpio), no se bloquea todo el
+//     documento -- se insertan los movimientos que sí se pudieron leer con
+//     confianza (clasificados por columna, no adivinados) y se agrega una
+//     advertencia de fila 0 (documento completo) pidiendo captura manual del
+//     faltante. Nota de depuración: al prototipar esto se detectó que
+//     pdf.js/unpdf puede "perder" un par de montos si la extracción de texto
+//     arranca en una página intermedia en vez de la página 1 del documento
+//     (aparente efecto de orden de carga de fuentes) -- por eso
+//     pdfAPosiciones (pdf-cargador.ts) SIEMPRE extrae desde la página 1,
+//     aunque el parser solo use del resumen esa página. Este camino de
+//     "subconjunto limpio" queda como red de seguridad para un PDF real
+//     futuro que sí tenga una limitación genuina, no porque se haya
+//     confirmado en este archivo.
 
 import type { ResultadoParseoPdf } from "./pdf-estado-cuenta.ts";
 import type { FilaEstadoCuentaMapeada } from "./estado-cuenta.ts";
 import type { ReferenciaTipo } from "../motor/types.ts";
+import type { ItemPdfPosicionado } from "./pdf-tipos.ts";
 
-const RE_FECHA = /(\d{2})-(\d{2})-(\d{4})/g;
-const RE_IVA = /IVA:[0-9,]+\.[0-9]{2}/g;
-const RE_MONTO = /-?[0-9][0-9,]*\.[0-9]{2}/g;
+const MESES: Record<string, number> = {
+  ENE: 1,
+  FEB: 2,
+  MAR: 3,
+  ABR: 4,
+  MAY: 5,
+  JUN: 6,
+  JUL: 7,
+  AGO: 8,
+  SEP: 9,
+  OCT: 10,
+  NOV: 11,
+  DIC: 12,
+};
+
+const RE_FECHA_CORTA = /^(\d{1,2})\/([A-ZÑ]{3})$/;
+const RE_MONTO = /^-?[\d,]+\.\d{2}$/;
+const RE_CODIGO_AL_INICIO = /^[A-Z]\d{2}\s+/;
+
+// Posiciones (x1, borde derecho) de cada columna de montos, confirmadas
+// contra el PDF real -- ver comentario del encabezado. Tolerancia de ±1.5pt
+// por redondeo de fuente.
+const X1_CARGO = 407.9;
+const X1_ABONO = 468.9;
+const TOLERANCIA_X = 1.5;
 
 function aNumero(texto: string): number {
   return Number(texto.replace(/,/g, ""));
 }
 
-interface FilaCruda {
-  idx: number;
-  fechaIso: string;
-  descripcion: string;
-  monto: number | null;
-  saldo: number | null;
+function extraerAnio(paginaUno: ItemPdfPosicionado[]): number | null {
+  const texto = paginaUno.map((i) => i.texto).join(" ");
+  const m = texto.match(/DEL\s+\d{2}\/\d{2}\/(\d{4})\s+AL/) ?? texto.match(/Fecha de Corte\s+\d{2}\/\d{2}\/(\d{4})/);
+  return m ? Number(m[1]) : null;
 }
 
-export function parsearPdfEstadoCuentaBBVA(textoCompleto: string): ResultadoParseoPdf {
-  const posiciones: { idx: number; fechaIso: string }[] = [];
-  let m: RegExpExecArray | null;
-  RE_FECHA.lastIndex = 0;
-  while ((m = RE_FECHA.exec(textoCompleto))) {
-    const [, dia, mes, anio] = m;
-    posiciones.push({ idx: m.index, fechaIso: `${anio}-${mes}-${dia}` });
+interface TotalDeclarado {
+  cantidadCargos: number | null;
+  sumaCargos: number | null;
+  cantidadAbonos: number | null;
+  sumaAbonos: number | null;
+}
+
+function extraerTotalesDeclarados(paginas: ItemPdfPosicionado[][]): TotalDeclarado {
+  const texto = paginas.map((p) => p.map((i) => i.texto).join(" ")).join(" ");
+  const mCantCargos = texto.match(/TOTAL MOVIMIENTOS CARGOS\s+(\d+)/i);
+  const mSumaCargos = texto.match(/TOTAL IMPORTE CARGOS\s+([\d,]+\.\d{2})/i);
+  const mCantAbonos = texto.match(/TOTAL MOVIMIENTOS ABONOS\s+(\d+)/i);
+  const mSumaAbonos = texto.match(/TOTAL IMPORTE ABONOS\s+([\d,]+\.\d{2})/i);
+  return {
+    cantidadCargos: mCantCargos ? Number(mCantCargos[1]) : null,
+    sumaCargos: mSumaCargos ? aNumero(mSumaCargos[1]) : null,
+    cantidadAbonos: mCantAbonos ? Number(mCantAbonos[1]) : null,
+    sumaAbonos: mSumaAbonos ? aNumero(mSumaAbonos[1]) : null,
+  };
+}
+
+/** Lógica pura de parseo, ya con los items posicionados en mano -- separada
+ * de la extracción (pdfAPosiciones, que hace IO) para poder probarla con un
+ * fixture de datos reales sin tener que re-parsear el PDF en cada test. */
+export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoParseoPdf {
+  if (paginas.length === 0 || paginas.every((p) => p.length === 0)) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "El PDF no tiene contenido de texto extraíble" };
   }
 
-  if (posiciones.length === 0) {
-    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontraron filas con fecha (DD-MM-AAAA) en el PDF" };
-  }
-
-  const filas: FilaCruda[] = [];
-  const erroresPorFila: { fila: number; errores: string[] }[] = [];
-
-  for (let i = 0; i < posiciones.length; i++) {
-    const inicio = posiciones[i].idx + 10; // longitud de "DD-MM-AAAA"
-    const fin = i + 1 < posiciones.length ? posiciones[i + 1].idx : textoCompleto.length;
-    const chunkOriginal = textoCompleto.slice(inicio, fin);
-    const chunkSinIva = chunkOriginal.replace(RE_IVA, "");
-    const tokens = chunkSinIva.match(RE_MONTO) ?? [];
-
-    if (tokens.length !== 2) {
-      erroresPorFila.push({
-        fila: i + 1,
-        errores: [`Se esperaban 2 montos (movimiento y saldo) y se encontraron ${tokens.length} -- posible línea mal extraída: "${chunkOriginal.slice(0, 120).trim()}"`],
-      });
-      filas.push({ idx: i, fechaIso: posiciones[i].fechaIso, descripcion: chunkOriginal.replace(RE_MONTO, "").replace(/\s+/g, " ").trim(), monto: null, saldo: null });
-      continue;
-    }
-
-    filas.push({
-      idx: i,
-      fechaIso: posiciones[i].fechaIso,
-      descripcion: chunkSinIva.replace(RE_MONTO, "").replace(/\s+/g, " ").trim(),
-      monto: aNumero(tokens[0]),
-      saldo: aNumero(tokens[1]),
-    });
+  const anio = extraerAnio(paginas[0] ?? []);
+  if (!anio) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo determinar el año del periodo en el PDF" };
   }
 
   const movimientos: FilaEstadoCuentaMapeada[] = [];
+  const erroresPorFila: { fila: number; errores: string[] }[] = [];
+  let filaNum = 0;
 
-  for (let i = 0; i < filas.length; i++) {
-    const fila = filas[i];
-    if (fila.monto === null || fila.saldo === null) continue; // ya reportada arriba
-
-    const siguiente = filas[i + 1]; // el archivo viene descendente: la siguiente fila es cronológicamente anterior
-    if (!siguiente || siguiente.saldo === null) {
-      erroresPorFila.push({
-        fila: i + 1,
-        errores: ["No se puede determinar cargo/abono para esta fila -- es la transacción más antigua visible en el archivo y no hay una fila anterior contra la cual comparar el saldo"],
-      });
-      continue;
+  for (const itemsPagina of paginas) {
+    const porFila = new Map<number, ItemPdfPosicionado[]>();
+    for (const item of itemsPagina) {
+      const clave = Math.round(item.y * 10) / 10;
+      const lista = porFila.get(clave);
+      if (lista) lista.push(item);
+      else porFila.set(clave, [item]);
     }
+    // De arriba hacia abajo de la página (y descendente en el sistema de
+    // pdf.js, que tiene el origen abajo-izquierda).
+    const filasOrdenadas = [...porFila.entries()].sort((a, b) => b[0] - a[0]);
 
-    const delta = Math.round((fila.saldo - siguiente.saldo) * 100) / 100;
-    const esAbono = Math.abs(delta - fila.monto) < 0.01;
-    const esCargo = Math.abs(delta + fila.monto) < 0.01;
+    for (const [, itemsFila] of filasOrdenadas) {
+      const itemFecha = itemsFila.find((i) => i.x0 < 15 && RE_FECHA_CORTA.test(i.texto));
+      if (!itemFecha) continue; // no es una fila de movimiento (encabezado, metadata, etc.)
+      filaNum++;
 
-    if (!esAbono && !esCargo) {
-      erroresPorFila.push({
-        fila: i + 1,
-        errores: [`El saldo (${fila.saldo}) no cuadra con el saldo de la fila anterior (${siguiente.saldo}) +/- el monto (${fila.monto}) -- posible línea mal extraída`],
+      const m = itemFecha.texto.match(RE_FECHA_CORTA)!;
+      const mes = MESES[m[2]];
+      if (!mes) {
+        erroresPorFila.push({ fila: filaNum, errores: [`Mes no reconocido: "${itemFecha.texto}"`] });
+        continue;
+      }
+
+      const itemDescripcion = itemsFila.find((i) => Math.abs(i.x0 - 85.7) < 2);
+      const itemCargo = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - X1_CARGO) < TOLERANCIA_X);
+      const itemAbono = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - X1_ABONO) < TOLERANCIA_X);
+
+      if (itemCargo && itemAbono) {
+        erroresPorFila.push({
+          fila: filaNum,
+          errores: [`La fila trae un monto en Cargos (${itemCargo.texto}) Y en Abonos (${itemAbono.texto}) a la vez -- posible columna mal identificada`],
+        });
+        continue;
+      }
+      if (!itemCargo && !itemAbono) {
+        erroresPorFila.push({ fila: filaNum, errores: [`No se encontró un monto de Cargo ni de Abono para la fecha ${itemFecha.texto}`] });
+        continue;
+      }
+
+      const descripcion = (itemDescripcion?.texto ?? "").replace(RE_CODIGO_AL_INICIO, "").trim();
+
+      movimientos.push({
+        fechaPago: `${anio}-${String(mes).padStart(2, "0")}-${m[1].padStart(2, "0")}`,
+        fechaOrden: null,
+        folio: null,
+        proyecto: null,
+        nombreRazonSocial: descripcion || null,
+        cargoTotal: itemCargo ? aNumero(itemCargo.texto) : null,
+        abonoTotal: itemAbono ? aNumero(itemAbono.texto) : null,
+        saldo: null,
+        referenciaTipo: null as ReferenciaTipo | null,
+        referenciaNumero: null,
+        factura: null,
+        comentarios: null,
+        observacion: 'Extraído automáticamente de un PDF de BBVA (formato "MAESTRA PYME BBVA")',
       });
-      continue;
     }
+  }
 
-    movimientos.push({
-      fechaPago: fila.fechaIso,
-      fechaOrden: null,
-      folio: null,
-      proyecto: null,
-      nombreRazonSocial: fila.descripcion || null,
-      cargoTotal: esCargo ? fila.monto : null,
-      abonoTotal: esAbono ? fila.monto : null,
-      saldo: fila.saldo,
-      referenciaTipo: null as ReferenciaTipo | null,
-      referenciaNumero: null,
-      factura: null,
-      comentarios: null,
-      observacion: "Extraído automáticamente de un PDF de BBVA",
-    });
+  // Autovalidación contra los totales que el propio documento declara.
+  const declarado = extraerTotalesDeclarados(paginas);
+  const cargosExtraidos = movimientos.filter((m) => m.cargoTotal != null);
+  const abonosExtraidos = movimientos.filter((m) => m.abonoTotal != null);
+  const sumaCargosExtraidos = Math.round(cargosExtraidos.reduce((a, m) => a + (m.cargoTotal ?? 0), 0) * 100) / 100;
+  const sumaAbonosExtraidos = Math.round(abonosExtraidos.reduce((a, m) => a + (m.abonoTotal ?? 0), 0) * 100) / 100;
+
+  function validarColumna(nombre: string, cantidadExtraida: number, sumaExtraida: number, cantidadDeclarada: number | null, sumaDeclarada: number | null): string | null {
+    if (cantidadDeclarada == null || sumaDeclarada == null) return null; // no se pudo leer el total -- no se puede validar, se deja pasar
+    if (cantidadExtraida > cantidadDeclarada || sumaExtraida > sumaDeclarada + 0.01) {
+      throw new Error(
+        `El PDF declara ${cantidadDeclarada} movimiento(s) de ${nombre} por $${sumaDeclarada} pero se extrajeron ${cantidadExtraida} por $${sumaExtraida} -- MÁS de lo declarado, algo se clasificó mal`,
+      );
+    }
+    if (cantidadExtraida < cantidadDeclarada || Math.abs(sumaExtraida - sumaDeclarada) > 0.01) {
+      const faltante = Math.round((sumaDeclarada - sumaExtraida) * 100) / 100;
+      return `El PDF declara ${cantidadDeclarada} movimiento(s) de ${nombre} por $${sumaDeclarada} pero solo se pudieron extraer ${cantidadExtraida} por $${sumaExtraida} como texto -- ${cantidadDeclarada - cantidadExtraida} movimiento(s) por $${faltante} no se pudieron leer (limitación de extracción de texto del PDF, no de este parser) y deben capturarse manualmente.`;
+    }
+    return null;
+  }
+
+  try {
+    const advertenciaCargos = validarColumna("Cargos", cargosExtraidos.length, sumaCargosExtraidos, declarado.cantidadCargos, declarado.sumaCargos);
+    const advertenciaAbonos = validarColumna("Abonos", abonosExtraidos.length, sumaAbonosExtraidos, declarado.cantidadAbonos, declarado.sumaAbonos);
+    const advertencias = [advertenciaCargos, advertenciaAbonos].filter((a): a is string => a !== null);
+    if (advertencias.length > 0) {
+      erroresPorFila.unshift({ fila: 0, errores: advertencias });
+    }
+  } catch (e) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: (e as Error).message };
   }
 
   return { movimientos, erroresPorFila, errorDocumento: null };

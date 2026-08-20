@@ -228,7 +228,7 @@ export function Carga() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Archivo (CSV o Excel, formato canónico -- o PDF si es un estado de cuenta de BanBajío)
+              Archivo (CSV o Excel, formato canónico -- o PDF si es un estado de cuenta de BanBajío o BBVA)
             </label>
             <input type="file" name="file" accept=".csv,.xlsx,.xls,.pdf" required className="w-full text-sm" />
           </div>

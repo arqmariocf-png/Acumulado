@@ -27,9 +27,9 @@ import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } fro
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
-import { pdfATexto } from "../_shared/ingesta/pdf-cargador.ts";
-import { parsearPdfEstadoCuentaBanBajio } from "../_shared/ingesta/pdf-estado-cuenta.ts";
-import { parsearPdfEstadoCuentaBBVA } from "../_shared/ingesta/pdf-estado-cuenta-bbva.ts";
+import { pdfAPosiciones, pdfATexto } from "../_shared/ingesta/pdf-cargador.ts";
+import { parsearPdfEstadoCuentaBanBajio, type ResultadoParseoPdf } from "../_shared/ingesta/pdf-estado-cuenta.ts";
+import { parsearPaginasBBVA } from "../_shared/ingesta/pdf-estado-cuenta-bbva.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
@@ -98,10 +98,9 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "No se encontró la cuenta bancaria seleccionada", archivoId }, 400);
       }
 
-      const texto = await pdfATexto(bytes);
-      const parserPorBanco: Record<string, (t: string) => ReturnType<typeof parsearPdfEstadoCuentaBanBajio>> = {
-        BanBajio: parsearPdfEstadoCuentaBanBajio,
-        BBVA: parsearPdfEstadoCuentaBBVA,
+      const parserPorBanco: Record<string, (bytes: Uint8Array) => Promise<ResultadoParseoPdf>> = {
+        BanBajio: async (b) => parsearPdfEstadoCuentaBanBajio(await pdfATexto(b)),
+        BBVA: async (b) => parsearPaginasBBVA(await pdfAPosiciones(b)),
       };
       const parser = parserPorBanco[cuentaRow.banco];
       if (!parser) {
@@ -110,7 +109,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: msg, archivoId }, 400);
       }
 
-      const resultado = parser(texto);
+      const resultado = await parser(bytes);
       if (resultado.errorDocumento) {
         await marcarArchivoError(dbServicio, archivoId, resultado.errorDocumento);
         return jsonResponse({ error: resultado.errorDocumento, archivoId }, 400);
