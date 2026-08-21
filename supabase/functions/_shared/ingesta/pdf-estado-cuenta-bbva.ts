@@ -11,14 +11,26 @@
 // (ver pdf-cargador.ts) en vez de pdfATexto: cada monto se clasifica por su
 // posición horizontal (x1, el borde DERECHO -- los montos están alineados a
 // la derecha, así que x1 es constante por columna sin importar cuántos
-// dígitos tenga el número, a diferencia de x0). Confirmado contra el PDF
-// real con dos extractores de texto independientes (unpdf/pdf.js y
-// PyMuPDF): las 4 columnas de montos caen en clusters de x1 nítidos y sin
-// traslape (Cargos ≈407.9, Abonos ≈468.9, Saldo Operación ≈534.1, Saldo
-// Liquidación ≈602.2 puntos), así que NO hace falta inferir cargo/abono por
-// delta de saldo (a diferencia de BanBajío y del formato BBVA anterior) --
-// el documento ya lo dice directamente por columna, lo cual es más
-// confiable que adivinar por delta.
+// dígitos tenga el número, a diferencia de x0), así que NO hace falta
+// inferir cargo/abono por delta de saldo (a diferencia de BanBajío y del
+// formato BBVA anterior) -- el documento ya lo dice directamente por
+// columna, lo cual es más confiable que adivinar por delta.
+//
+// POSICIONES DINÁMICAS POR DOCUMENTO: la primera versión de este parser
+// usaba constantes fijas de x1 (Cargos≈407.9, Abonos≈468.9, etc.),
+// confirmadas contra UN solo PDF real (Aceros, cuenta 5859). Al probar un
+// segundo PDF real de otra cuenta (Mario Contreras, cuenta 2047) se
+// descubrió que esas posiciones NO son constantes entre cuentas/documentos
+// -- en ese archivo Cargos cae en x1≈416 (no 407.9) y hasta varía unos
+// puntos entre páginas del MISMO documento. Lo que SÍ es estable es que el
+// propio PDF imprime el encabezado de columna ("CARGOS ABONOS OPERACIÓN
+// LIQUIDACIÓN") en cada página de movimientos, con esos labels alineados
+// (mismo x1 que los montos, ±unos puntos) -- así que las posiciones se leen
+// del encabezado real de CADA documento (extraerAnclasColumnas) en vez de
+// asumir constantes globales, y la tolerancia se ensancha lo suficiente
+// para absorber el corrimiento de unos puntos entre el label y los montos
+// sin poner en riesgo confundir columnas distintas (que están separadas por
+// ~50-60pt entre sí).
 //
 // SALDO POR MOVIMIENTO: a diferencia de Cargos/Abonos, la columna Saldo
 // Operación NO aparece en cada línea de movimiento -- el PDF real solo la
@@ -79,23 +91,20 @@ const MESES: Record<string, number> = {
   DIC: 12,
 };
 
-const RE_FECHA_CORTA = /^(\d{1,2})\/([A-ZÑ]{3})$/;
+// Prefijo, no match exacto -- ver comentario en el bucle principal sobre
+// por qué la fecha puede venir fusionada con el inicio de la descripción
+// en el mismo item de texto.
+const RE_FECHA_PREFIJO = /^(\d{1,2})\/([A-ZÑ]{3})\b/;
+const RE_FECHA_GLOBAL = /\b\d{1,2}\/[A-ZÑ]{3}\b/g;
 const RE_MONTO = /^-?[\d,]+\.\d{2}$/;
 const RE_CODIGO_AL_INICIO = /^[A-Z]\d{2}\s+/;
 
-// Posiciones (x1, borde derecho) de cada columna de montos, confirmadas
-// contra el PDF real -- ver comentario del encabezado. Tolerancia de ±1.5pt
-// por redondeo de fuente.
-const X1_CARGO = 407.9;
-const X1_ABONO = 468.9;
-// Saldo Operación (no Saldo Liquidación) -- es el saldo que queda tras
-// aplicar el movimiento en el orden en que aparece en el estado de cuenta,
-// que es lo que SPEC.md sección 2 pide ("saldo real... tras el movimiento")
-// y lo que necesita 5.3 (saldo de cierre = saldo inicial del mes siguiente)
-// para encadenar meses consecutivos. Saldo Liquidación puede diferir por
-// fecha valor y rompería ese encadenamiento secuencial.
-const X1_SALDO = 534.1;
-const TOLERANCIA_X = 1.5;
+// Tolerancia entre la posición del label de encabezado y la posición real
+// de los montos de esa columna -- ver comentario del encabezado (se
+// observó hasta ~8pt de corrimiento en Cargos en un PDF real). Los huecos
+// entre columnas son de ~50-60pt, así que esto no arriesga confundir
+// columnas distintas.
+const TOLERANCIA_X = 15;
 
 function aNumero(texto: string): number {
   return Number(texto.replace(/,/g, ""));
@@ -131,15 +140,62 @@ function extraerTotalesDeclarados(paginas: ItemPdfPosicionado[][]): TotalDeclara
 /** "Saldo de Operación Inicial"/"Saldo de Operación Final" del resumen de la
  * página 1 -- ancla y cierre para el cálculo de saldo acumulado por
  * movimiento (ver comentario del encabezado). Se usa "Operación", no
- * "Liquidación", por la misma razón que la columna por movimiento. */
+ * "Liquidación", por la misma razón que la columna por movimiento.
+ *
+ * No todas las cuentas BBVA imprimen esas etiquetas exactas -- confirmado
+ * contra un segundo PDF real (Mario Contreras, cuenta 2047) que en vez de
+ * eso usa "Saldo Anterior" / "Saldo Final (+)" en el mismo resumen
+ * "Comportamiento" (mismo valor, el saldo antes/después del periodo
+ * completo -- confirmado que coinciden con "Saldo de Operación
+ * Inicial/Final" en el PDF de Aceros, donde el documento trae AMBAS
+ * etiquetas). Se intenta primero la etiqueta "de Operación" (más precisa,
+ * evita cualquier ambigüedad con Liquidación) y se cae a la genérica solo
+ * si la primera no aparece. */
 function extraerSaldosResumen(paginas: ItemPdfPosicionado[][]): { saldoInicial: number | null; saldoFinal: number | null } {
   const texto = paginas.map((p) => p.map((i) => i.texto).join(" ")).join(" ");
-  const mInicial = texto.match(/Saldo de Operaci[oó]n Inicial\s+([\d,]+\.\d{2})/i);
-  const mFinal = texto.match(/Saldo de Operaci[oó]n Final\s+([\d,]+\.\d{2})/i);
+  const mInicial =
+    texto.match(/Saldo de Operaci[oó]n Inicial\s+([\d,]+\.\d{2})/i) ?? texto.match(/Saldo Anterior\s+([\d,]+\.\d{2})/i);
+  const mFinal =
+    texto.match(/Saldo de Operaci[oó]n Final\s+([\d,]+\.\d{2})/i) ?? texto.match(/Saldo Final\s*\(\+\)\s+([\d,]+\.\d{2})/i);
   return {
     saldoInicial: mInicial ? aNumero(mInicial[1]) : null,
     saldoFinal: mFinal ? aNumero(mFinal[1]) : null,
   };
+}
+
+interface AnclasColumnas {
+  cargo: number;
+  abono: number;
+  saldoOperacion: number;
+}
+
+/** Lee del propio PDF dónde caen (x1) las columnas Cargos/Abonos/Operación
+ * de ESE documento en particular -- ver comentario del encabezado para por
+ * qué no se puede usar una constante fija entre documentos. Busca una fila
+ * (mismo y redondeado) que traiga los 4 labels de encabezado juntos, para
+ * no confundirla con la tabla de "Otros productos (inversiones)" del
+ * resumen, que reusa palabras parecidas ("OPERACION"/"LIQUIDACION", sin
+ * acento, en posiciones totalmente distintas) para una tabla más angosta. */
+function extraerAnclasColumnas(paginas: ItemPdfPosicionado[][]): AnclasColumnas | null {
+  for (const itemsPagina of paginas) {
+    const porFila = new Map<number, ItemPdfPosicionado[]>();
+    for (const item of itemsPagina) {
+      const clave = Math.round(item.y * 10) / 10;
+      const lista = porFila.get(clave);
+      if (lista) lista.push(item);
+      else porFila.set(clave, [item]);
+    }
+    for (const itemsFila of porFila.values()) {
+      const cargo = itemsFila.find((i) => i.texto === "CARGOS");
+      const abono = itemsFila.find((i) => i.texto === "ABONOS");
+      const saldoOp = itemsFila.find((i) => i.texto === "OPERACIÓN");
+      const saldoLiq = itemsFila.find((i) => i.texto === "LIQUIDACIÓN");
+      if (cargo && abono && saldoOp && saldoLiq) {
+        return { cargo: cargo.x1, abono: abono.x1, saldoOperacion: saldoOp.x1 };
+      }
+    }
+  }
+  return null;
 }
 
 /** Lógica pura de parseo, ya con los items posicionados en mano -- separada
@@ -153,6 +209,11 @@ export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoPa
   const anio = extraerAnio(paginas[0] ?? []);
   if (!anio) {
     return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo determinar el año del periodo en el PDF" };
+  }
+
+  const anclas = extraerAnclasColumnas(paginas);
+  if (!anclas) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo ubicar el encabezado de columnas (CARGOS/ABONOS/OPERACIÓN/LIQUIDACIÓN) en el PDF" };
   }
 
   const movimientos: FilaEstadoCuentaMapeada[] = [];
@@ -176,22 +237,31 @@ export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoPa
     // pdf.js, que tiene el origen abajo-izquierda).
     const filasOrdenadas = [...porFila.entries()].sort((a, b) => b[0] - a[0]);
 
-    for (const [, itemsFila] of filasOrdenadas) {
-      const itemFecha = itemsFila.find((i) => i.x0 < 15 && RE_FECHA_CORTA.test(i.texto));
+    for (const [, itemsFilaSinOrden] of filasOrdenadas) {
+      // Ordenados de izquierda a derecha -- necesario porque pdf.js no
+      // siempre parte la fecha OPER, la fecha LIQ y la descripción en items
+      // separados (ver comentario del encabezado): en un PDF real la fecha
+      // LIQ vino fusionada con el inicio de la descripción en un solo item
+      // ("01/JUL PAGO CUENTA DE TERCERO"). Por eso la fecha del movimiento
+      // se busca por PREFIJO (no por posición x0 exacta) en el item más a
+      // la izquierda que empiece con un patrón de fecha, y la descripción
+      // se arma con TODO el texto de la fila que no sea un monto, quitando
+      // después cualquier fecha que haya quedado embebida.
+      const itemsFila = [...itemsFilaSinOrden].sort((a, b) => a.x0 - b.x0);
+      const itemFecha = itemsFila.find((i) => RE_FECHA_PREFIJO.test(i.texto));
       if (!itemFecha) continue; // no es una fila de movimiento (encabezado, metadata, etc.)
       filaNum++;
 
-      const m = itemFecha.texto.match(RE_FECHA_CORTA)!;
+      const m = itemFecha.texto.match(RE_FECHA_PREFIJO)!;
       const mes = MESES[m[2]];
       if (!mes) {
         erroresPorFila.push({ fila: filaNum, errores: [`Mes no reconocido: "${itemFecha.texto}"`] });
         continue;
       }
 
-      const itemDescripcion = itemsFila.find((i) => Math.abs(i.x0 - 85.7) < 2);
-      const itemCargo = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - X1_CARGO) < TOLERANCIA_X);
-      const itemAbono = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - X1_ABONO) < TOLERANCIA_X);
-      const itemSaldo = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - X1_SALDO) < TOLERANCIA_X);
+      const itemCargo = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - anclas.cargo) < TOLERANCIA_X);
+      const itemAbono = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - anclas.abono) < TOLERANCIA_X);
+      const itemSaldo = itemsFila.find((i) => RE_MONTO.test(i.texto) && Math.abs(i.x1 - anclas.saldoOperacion) < TOLERANCIA_X);
 
       if (itemCargo && itemAbono) {
         erroresPorFila.push({
@@ -205,7 +275,15 @@ export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoPa
         continue;
       }
 
-      const descripcion = (itemDescripcion?.texto ?? "").replace(RE_CODIGO_AL_INICIO, "").trim();
+      const descripcion = itemsFila
+        .filter((i) => !RE_MONTO.test(i.texto))
+        .map((i) => i.texto)
+        .join(" ")
+        .replace(RE_FECHA_GLOBAL, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(RE_CODIGO_AL_INICIO, "")
+        .trim();
 
       movimientos.push({
         fechaPago: `${anio}-${String(mes).padStart(2, "0")}-${m[1].padStart(2, "0")}`,
