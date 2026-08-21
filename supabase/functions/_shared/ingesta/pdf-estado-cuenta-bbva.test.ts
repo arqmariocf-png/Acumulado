@@ -26,6 +26,8 @@ test("si lo extraído queda por debajo de lo que el PDF declara, no bloquea el d
   // real de extracción sin depender de que el PDF real algún día la tenga.
   const paginaResumen: Parameters<typeof parsearPaginasBBVA>[0][number] = [
     { texto: "DEL 01/07/2026 AL 31/07/2026", x0: 480, x1: 595, y: 725 },
+    { texto: "Saldo de Operación Inicial", x0: 316.17, x1: 411.89, y: 507.68 },
+    { texto: "100,000.00", x0: 558.96, x1: 600, y: 507.68 },
   ];
   const paginaMovimientos: Parameters<typeof parsearPaginasBBVA>[0][number] = [
     { texto: "02/JUL", x0: 9.8, x1: 35.7, y: 600 },
@@ -47,6 +49,8 @@ test("si lo extraído queda por debajo de lo que el PDF declara, no bloquea el d
 test("si lo extraído queda por ENCIMA de lo que el PDF declara, bloquea todo el documento -- algo se clasificó mal", () => {
   const paginaResumen: Parameters<typeof parsearPaginasBBVA>[0][number] = [
     { texto: "DEL 01/07/2026 AL 31/07/2026", x0: 480, x1: 595, y: 725 },
+    { texto: "Saldo de Operación Inicial", x0: 316.17, x1: 411.89, y: 507.68 },
+    { texto: "100,000.00", x0: 558.96, x1: 600, y: 507.68 },
   ];
   const paginaMovimientos: Parameters<typeof parsearPaginasBBVA>[0][number] = [
     { texto: "02/JUL", x0: 9.8, x1: 35.7, y: 600 },
@@ -96,4 +100,19 @@ test("un PDF sin páginas de texto reporta errorDocumento en vez de reventar", (
 test("un PDF sin el Periodo en el encabezado reporta errorDocumento", () => {
   const r = parsearPaginasBBVA([[{ texto: "cualquier otro texto", x0: 0, x1: 10, y: 0 }]]);
   assert.match(r.errorDocumento ?? "", /No se pudo determinar el año/);
+});
+
+test("todo movimiento trae un saldo (columna 5859 requiere NOT NULL) calculado acumulando desde el Saldo de Operación Inicial, anclado a los saldos de corte reales que imprime el PDF", () => {
+  const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026);
+  assert.ok(r.movimientos.every((m) => typeof m.saldo === "number" && Number.isFinite(m.saldo)));
+
+  // Saldo de corte real que el PDF imprime tras el último movimiento del 06/JUL.
+  const finDia06 = r.movimientos.find((m) => m.fechaPago === "2026-07-06" && m.cargoTotal === 8000)!;
+  assert.ok(finDia06, "debe existir el movimiento del 06/JUL con cargo 8,000.00");
+  assert.equal(finDia06.saldo, 136573.81);
+
+  // El saldo del último movimiento del documento debe cuadrar con el Saldo
+  // de Operación Final que el PDF declara en el resumen.
+  const ultimo = r.movimientos[r.movimientos.length - 1];
+  assert.equal(ultimo.saldo, 15841.31);
 });
