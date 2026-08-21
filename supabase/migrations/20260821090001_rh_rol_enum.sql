@@ -1,0 +1,13 @@
+-- Nuevo rol para el módulo de Recursos Humanos (personal, asignaciones
+-- diarias inter-empresa, y más adelante expedientes/contratos). Va en su
+-- propia migración porque Postgres no permite usar un valor de enum recién
+-- agregado (ALTER TYPE ... ADD VALUE) dentro de la misma transacción en la
+-- que se agregó -- separar en un archivo propio evita ese error si el
+-- runner de migraciones envuelve cada archivo en una transacción.
+--
+-- 'rh' es deliberadamente un rol NUEVO y no una bandera sobre 'empresa' o
+-- 'direccion': el área de RH no debe ver movimientos bancarios, CFDI, ni
+-- órdenes de compra/venta de ninguna empresa -- solo lo que more adelante
+-- viva en las tablas de personal. Ver 20260821090002_rh_rol_rls.sql para
+-- cómo se excluye explícitamente de los datos financieros existentes.
+alter type public.app_rol add value 'rh';
