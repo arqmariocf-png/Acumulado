@@ -15,14 +15,14 @@
 // del CDN de SheetJS (el bundler de edge functions de Supabase la rechaza)
 // y qué mitigación queda mientras tanto (límite de tamaño de archivo).
 //
-// PDF: BanBajío, BBVA y Banorte son, hasta ahora, los bancos de Grupo Loma
-// con un parser de PDF real -- cada uno tiene su propio layout (ver
-// pdf-estado-cuenta.ts, pdf-estado-cuenta-bbva.ts y
-// pdf-estado-cuenta-banorte.ts respectivamente, validados cada uno contra
-// un PDF real distinto). Qué parser usar se decide consultando el banco de
-// la cuenta (cuentas_bancarias.banco), NO el contenido del archivo --
-// Santander en PDF todavía no tiene parser, y NO se debe intentar adivinar
-// con el mismo regex de otro banco.
+// PDF: BanBajío, BBVA, Banorte y Santander son, hasta ahora, los bancos de
+// Grupo Loma con un parser de PDF real -- cada uno tiene su propio layout
+// (ver pdf-estado-cuenta.ts, pdf-estado-cuenta-bbva.ts,
+// pdf-estado-cuenta-banorte.ts y pdf-estado-cuenta-santander.ts
+// respectivamente, validados cada uno contra un PDF real distinto). Qué
+// parser usar se decide consultando el banco de la cuenta
+// (cuentas_bancarias.banco), NO el contenido del archivo -- un banco sin
+// parser NO se debe intentar adivinar con el mismo regex de otro banco.
 
 import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
@@ -32,6 +32,7 @@ import { pdfAPosiciones, pdfATexto } from "../_shared/ingesta/pdf-cargador.ts";
 import { parsearPdfEstadoCuentaBanBajio, type ResultadoParseoPdf } from "../_shared/ingesta/pdf-estado-cuenta.ts";
 import { parsearPaginasBBVA } from "../_shared/ingesta/pdf-estado-cuenta-bbva.ts";
 import { parsearPdfEstadoCuentaBanorte } from "../_shared/ingesta/pdf-estado-cuenta-banorte.ts";
+import { parsearPdfEstadoCuentaSantander } from "../_shared/ingesta/pdf-estado-cuenta-santander.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
@@ -104,6 +105,7 @@ Deno.serve(async (req) => {
         BanBajio: async (b) => parsearPdfEstadoCuentaBanBajio(await pdfATexto(b)),
         BBVA: async (b) => parsearPaginasBBVA(await pdfAPosiciones(b)),
         Banorte: async (b) => parsearPdfEstadoCuentaBanorte(await pdfATexto(b)),
+        Santander: async (b) => parsearPdfEstadoCuentaSantander(await pdfATexto(b)),
       };
       const parser = parserPorBanco[cuentaRow.banco];
       if (!parser) {
