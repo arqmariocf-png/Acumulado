@@ -12,6 +12,7 @@ const ENLACES = [
 export function Layout() {
   const { perfil, cerrarSesion } = useAuth();
   const esAdmin = perfil?.rol === "admin";
+  const veRH = perfil?.rol === "rh" || esAdmin;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -32,6 +33,16 @@ export function Layout() {
                   {e.etiqueta}
                 </NavLink>
               ))}
+              {veRH && (
+                <NavLink
+                  to="/rh"
+                  className={({ isActive }) =>
+                    `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
+                  }
+                >
+                  RH
+                </NavLink>
+              )}
               {esAdmin && (
                 <NavLink
                   to="/admin"

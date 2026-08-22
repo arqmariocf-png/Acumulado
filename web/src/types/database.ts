@@ -4,7 +4,7 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin";
+export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
@@ -86,4 +86,82 @@ export interface ArchivoCargado {
   filas_error: number;
   detalle_error: string | null;
   created_at: string;
+}
+
+// Módulo de Recursos Humanos (ver supabase/migrations/20260821090003-5_rh_*.sql).
+
+export interface Personal {
+  id: string;
+  nombre: string;
+  puesto: string | null;
+  fecha_nacimiento: string | null;
+  sexo: "M" | "F" | null;
+  estado_civil: string | null;
+  nacionalidad: string;
+  telefono: string | null;
+  correo: string | null;
+  curp: string | null;
+  rfc: string | null;
+  domicilio_particular: string | null;
+  domicilio_notificaciones: string | null;
+  ine_numero_identificacion: string | null;
+  ine_clave_elector: string | null;
+  infonavit_tiene_credito: boolean;
+  infonavit_numero_credito: string | null;
+  contacto_emergencia_nombre: string | null;
+  contacto_emergencia_telefono: string | null;
+  contacto_emergencia_parentesco: string | null;
+  beneficiario_nombre: string | null;
+  beneficiario_parentesco: string | null;
+  fecha_ingreso: string;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface AsignacionDiaria {
+  id: string;
+  personal_id: string;
+  empresa_id: string;
+  proyecto: string | null;
+  fecha: string;
+}
+
+export interface Contratacion {
+  id: string;
+  personal_id: string;
+  empresa_id: string;
+  puesto: string;
+  sueldo_semanal: number;
+  fecha_inicio: string;
+  duracion_dias: number;
+  fecha_fin: string;
+  estatus: "vigente" | "vencido" | "rescindido" | "renovado";
+  contrato_storage_path: string | null;
+  contrato_generado_at: string | null;
+}
+
+export interface TipoDocumentoPersonal {
+  id: string;
+  nombre: string;
+  vigencia_meses: number | null;
+  aplica_a: "todos" | "chofer";
+  orden: number;
+  activo: boolean;
+}
+
+export interface DocumentoPersonal {
+  id: string;
+  personal_id: string;
+  tipo_documento_id: string;
+  fecha_entrega: string;
+  fecha_vigencia: string | null;
+  storage_path: string | null;
+  verificado: boolean;
+}
+
+export interface DocumentoFaltante {
+  personal_id: string;
+  personal_nombre: string;
+  tipo_documento_id: string;
+  tipo_documento_nombre: string;
 }

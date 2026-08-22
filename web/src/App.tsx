@@ -17,6 +17,7 @@ const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => (
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
+const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,10 @@ export default function App() {
                   <Route path="/carga" element={<Carga />} />
                   <Route path="/reportes" element={<ReportesEspeciales />} />
                   <Route path="/pendientes" element={<Pendientes />} />
+
+                  <Route element={<ProtectedRoute roles={["rh"]} />}>
+                    <Route path="/rh" element={<RH />} />
+                  </Route>
 
                   <Route element={<ProtectedRoute soloAdmin />}>
                     <Route path="/admin" element={<AdminLayout />}>
