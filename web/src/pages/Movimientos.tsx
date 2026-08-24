@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "../lib/supabase";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase, urlFuncion } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { Semaforo } from "../components/Semaforo";
 import type { EstadoClasificacion, Movimiento } from "../types/database";
@@ -32,10 +32,12 @@ function formatoMoneda(valor: number | null): string {
 export function Movimientos() {
   const { veTodasLasEmpresas, perfil } = useAuth();
   const { data: empresas } = useEmpresas();
+  const queryClient = useQueryClient();
 
   const [empresaId, setEmpresaId] = useState<string>("");
   const [estado, setEstado] = useState<EstadoClasificacion | "todos">("todos");
   const [soloDuplicados, setSoloDuplicados] = useState(false);
+  const [cuentaReclasificando, setCuentaReclasificando] = useState<string | null>(null);
 
   const empresaFiltro = veTodasLasEmpresas ? empresaId : (perfil?.empresa_id ?? "");
 
@@ -49,6 +51,33 @@ export function Movimientos() {
       const { data, error } = await query;
       if (error) throw error;
       return data as Movimiento[];
+    },
+  });
+
+  // Reclasifica TODOS los movimientos de la cuenta bancaria de la fila en la
+  // que se dio clic (no solo esa fila) contra el catálogo actual (CFDI,
+  // OC/OV, reglas) -- necesario cuando se sube CFDI/OC/OV después de haber
+  // cargado el estado de cuenta, caso en el que esos movimientos no se
+  // reclasifican solos (el motor solo corre automático justo después de
+  // cargar un estado de cuenta).
+  const reclasificar = useMutation({
+    mutationFn: async ({ empresaId, cuentaId }: { empresaId: string; cuentaId: string }) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const respuesta = await fetch(urlFuncion("motor-conciliacion"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ empresaId, cuentaId }),
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      return json;
+    },
+    onSettled: () => {
+      setCuentaReclasificando(null);
+      queryClient.invalidateQueries({ queryKey: ["movimientos"] });
+      queryClient.invalidateQueries({ queryKey: ["kpis-mensuales"] });
+      queryClient.invalidateQueries({ queryKey: ["kpis-por-empresa"] });
+      queryClient.invalidateQueries({ queryKey: ["concentrado-pendientes"] });
     },
   });
 
@@ -113,7 +142,15 @@ export function Movimientos() {
                     {m.factura ?? <span className="text-slate-400">—</span>}
                   </td>
                   <td className="px-3 py-2">
-                    <Semaforo estado={m.estado_clasificacion} />
+                    <Semaforo
+                      estado={m.estado_clasificacion}
+                      cargando={cuentaReclasificando === m.cuenta_id}
+                      titulo="Reclasificar todos los movimientos de esta cuenta contra el catálogo actual (CFDI, OC/OV, reglas)"
+                      onClick={() => {
+                        setCuentaReclasificando(m.cuenta_id);
+                        reclasificar.mutate({ empresaId: m.empresa_id, cuentaId: m.cuenta_id });
+                      }}
+                    />
                     {m.posible_duplicado && <span className="ml-1 text-xs text-orange-600">dup.</span>}
                   </td>
                 </tr>

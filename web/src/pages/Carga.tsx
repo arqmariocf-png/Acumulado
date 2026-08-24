@@ -144,24 +144,6 @@ export function Carga() {
     }
   }
 
-  async function onReclasificar() {
-    setError(null);
-    setResultado(null);
-    setEnviando(true);
-    try {
-      const json = await llamarFuncionJson("motor-conciliacion", { empresaId });
-      setResultado(json);
-      queryClient.invalidateQueries({ queryKey: ["movimientos"] });
-      queryClient.invalidateQueries({ queryKey: ["kpis-mensuales"] });
-      queryClient.invalidateQueries({ queryKey: ["kpis-por-empresa"] });
-      queryClient.invalidateQueries({ queryKey: ["concentrado-pendientes"] });
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setEnviando(false);
-    }
-  }
-
   async function onDiagnosticoBackoffice(recurso: "oc" | "ov") {
     setError(null);
     setResultado(null);
@@ -229,24 +211,6 @@ export function Carga() {
           <p className="text-sm text-slate-500">Empresa: la asignada a tu usuario.</p>
         )}
       </div>
-
-      {empresaId && (
-        <div className="mb-4 flex items-center gap-2 rounded border border-dashed border-slate-300 bg-slate-50 p-3">
-          <button
-            type="button"
-            disabled={enviando}
-            onClick={onReclasificar}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            {enviando ? "Reclasificando…" : "Reclasificar movimientos de esta empresa"}
-          </button>
-          <p className="text-xs text-slate-500">
-            Vuelve a correr la clasificación sobre TODOS los movimientos ya cargados de esta empresa contra el
-            catálogo actual (CFDI, OC/OV, reglas). Útil cuando subes CFDI/OC/OV después de haber cargado el estado de
-            cuenta -- ese caso no se reclasifica solo.
-          </p>
-        </div>
-      )}
 
       {pestana === "estado_cuenta" && empresaId && (
         <form onSubmit={onSubmitEstadoCuenta} className="max-w-md space-y-3 rounded border border-slate-200 bg-white p-4">

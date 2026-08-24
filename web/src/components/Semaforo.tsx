@@ -8,7 +8,32 @@ const ESTILOS: Record<EstadoClasificacion, { color: string; etiqueta: string }> 
   ambiguo: { color: "bg-purple-100 text-purple-800", etiqueta: "Ambiguo" },
 };
 
-export function Semaforo({ estado }: { estado: EstadoClasificacion }) {
+export function Semaforo({
+  estado,
+  onClick,
+  cargando,
+  titulo,
+}: {
+  estado: EstadoClasificacion;
+  /** Si se pasa, el semáforo se vuelve clickeable (ej. para reclasificar) en vez de solo mostrar el estado. */
+  onClick?: () => void;
+  cargando?: boolean;
+  titulo?: string;
+}) {
   const { color, etiqueta } = ESTILOS[estado];
-  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${color}`}>{etiqueta}</span>;
+  const clases = `inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${color}`;
+
+  if (!onClick) return <span className={clases}>{etiqueta}</span>;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={cargando}
+      title={titulo}
+      className={`${clases} cursor-pointer hover:opacity-75 disabled:cursor-wait disabled:opacity-50`}
+    >
+      {cargando ? "…" : etiqueta}
+    </button>
+  );
 }
