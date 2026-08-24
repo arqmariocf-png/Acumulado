@@ -69,6 +69,21 @@ export function Dashboard() {
 
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
 
+  // Agrupado por empresa (en vez de una tabla plana ordenada solo por fecha)
+  // para poder identificar de un vistazo a qué empresa pertenece cada
+  // cuenta, sobre todo cuando el usuario ve el consolidado de las 8.
+  const gruposPorEmpresa = (() => {
+    if (!saldosPorCuenta) return [];
+    const mapa = new Map<string, { empresaNombre: string; cuentas: typeof saldosPorCuenta }>();
+    for (const s of saldosPorCuenta) {
+      const empresaId = s.empresa_id ?? "sin-empresa";
+      const empresaNombre = s.empresas?.nombre ?? "Empresa desconocida";
+      if (!mapa.has(empresaId)) mapa.set(empresaId, { empresaNombre, cuentas: [] });
+      mapa.get(empresaId)!.cuentas.push(s);
+    }
+    return [...mapa.values()].sort((a, b) => a.empresaNombre.localeCompare(b.empresaNombre, "es"));
+  })();
+
   const ytd = kpis?.reduce(
     (acc, k) => ({
       movimientos: acc.movimientos + k.movimientos,
@@ -157,30 +172,38 @@ export function Dashboard() {
         </div>
       )}
 
-      {saldosPorCuenta && saldosPorCuenta.length > 0 && (
-        <div className="overflow-x-auto rounded border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Cuenta</th>
-                {veTodasLasEmpresas && <th className="px-3 py-2">Empresa</th>}
-                <th className="px-3 py-2">Último movimiento</th>
-                <th className="px-3 py-2 text-right">Saldo (según el banco)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {saldosPorCuenta.map((s) => (
-                <tr key={s.cuenta_id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">
-                    {s.cuentas_bancarias?.banco} ····{s.cuentas_bancarias?.ultimos_4}
-                  </td>
-                  {veTodasLasEmpresas && <td className="px-3 py-2">{s.empresas?.nombre}</td>}
-                  <td className="px-3 py-2">{s.fecha_ultimo_movimiento}</td>
-                  <td className="px-3 py-2 text-right font-medium">{formatoMoneda(Number(s.saldo_cierre))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {gruposPorEmpresa.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Saldo por cuenta</h2>
+          <div className="space-y-4">
+            {gruposPorEmpresa.map((grupo) => (
+              <div key={grupo.empresaNombre} className="overflow-x-auto rounded border border-slate-200 bg-white">
+                {veTodasLasEmpresas && (
+                  <p className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">{grupo.empresaNombre}</p>
+                )}
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Cuenta</th>
+                      <th className="px-3 py-2">Último movimiento</th>
+                      <th className="px-3 py-2 text-right">Saldo (según el banco)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grupo.cuentas.map((s) => (
+                      <tr key={s.cuenta_id} className="border-t border-slate-100">
+                        <td className="px-3 py-2">
+                          {s.cuentas_bancarias?.banco} ····{s.cuentas_bancarias?.ultimos_4}
+                        </td>
+                        <td className="px-3 py-2">{s.fecha_ultimo_movimiento}</td>
+                        <td className="px-3 py-2 text-right font-medium">{formatoMoneda(Number(s.saldo_cierre))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

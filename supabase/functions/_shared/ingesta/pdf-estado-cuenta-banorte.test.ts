@@ -72,6 +72,48 @@ test("un PDF con un segundo producto que también trae movimientos reales (no SI
   assert.match(r.errorDocumento ?? "", /más de un producto con movimientos/);
 });
 
+function textoConDosProductosConMovimientos(): string {
+  return [
+    "RESUMEN INTEGRAL",
+    "Producto No. de Cuenta CLABE Saldo anterior Saldo al corte",
+    "ENLACE NEGOCIOS BASICA 1155651273 072 650 01155651273 6 $100.00 $150.00",
+    "INVERSION ENLACE NEGOCIOS 1155652515 072 650 01155652515 0 $500.00 $530.00",
+    "TOTAL $600.00 $680.00",
+    "Enlace Negocios Basica",
+    "FECHA DESCRIPCIÓN / ESTABLECIMIENTO MONTO DEL DEPOSITO MONTO DEL RETIRO SALDO",
+    "30-JUN-26 SALDO ANTERIOR 100.00",
+    "01-JUL-26 DEPOSITO 50.00 150.00",
+    "INVERSION ENLACE NEGOCIOS",
+    "FECHA DESCRIPCIÓN / ESTABLECIMIENTO MONTO DEL DEPOSITO MONTO DEL RETIRO SALDO",
+    "30-JUN-26 SALDO ANTERIOR 500.00",
+    "01-JUL-26 RENDIMIENTO 30.00 530.00",
+    "OTROS▼",
+  ].join("\n");
+}
+
+test("con el número de cuenta de la cuenta principal, elige la tabla del primer producto e ignora la del segundo", () => {
+  const r = parsearPdfEstadoCuentaBanorte(textoConDosProductosConMovimientos(), "1273");
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos.length, 1);
+  assert.equal(r.movimientos[0].abonoTotal, 50);
+  assert.equal(r.movimientos[0].saldo, 150);
+});
+
+test("con el número de cuenta de la inversión, elige la tabla del segundo producto e ignora la del primero", () => {
+  const r = parsearPdfEstadoCuentaBanorte(textoConDosProductosConMovimientos(), "2515");
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos.length, 1);
+  assert.equal(r.movimientos[0].abonoTotal, 30);
+  assert.equal(r.movimientos[0].nombreRazonSocial, "RENDIMIENTO");
+  assert.equal(r.movimientos[0].saldo, 530);
+});
+
+test("si el número de cuenta no coincide con ningún producto del RESUMEN INTEGRAL, bloquea con un mensaje específico", () => {
+  const r = parsearPdfEstadoCuentaBanorte(textoConDosProductosConMovimientos(), "9999");
+  assert.equal(r.movimientos.length, 0);
+  assert.match(r.errorDocumento ?? "", /terminación 9999/);
+});
+
 test("un segundo producto SIN MOVIMIENTOS no bloquea el documento", () => {
   const texto = [
     "FECHA DESCRIPCIÓN / ESTABLECIMIENTO MONTO DEL DEPOSITO MONTO DEL RETIRO SALDO",
