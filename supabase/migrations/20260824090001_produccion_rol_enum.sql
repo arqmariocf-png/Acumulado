@@ -1,0 +1,14 @@
+-- Nuevo rol para el módulo de Producción y Costeo (planta de Mallas y
+-- Clavos Clavicón: malla armex y clavos de dos calibres). Va en su propia
+-- migración porque Postgres no permite usar un valor de enum recién
+-- agregado (ALTER TYPE ... ADD VALUE) dentro de la misma transacción en la
+-- que se agregó -- mismo motivo que 20260821090001_rh_rol_enum.sql.
+--
+-- 'produccion' es deliberadamente un rol NUEVO y no una bandera sobre
+-- 'empresa': el área de planta no debe ver movimientos bancarios ni CFDI
+-- de ninguna empresa -- solo lo que vive en las tablas de este módulo
+-- (materias primas, productos, recetas, inventario, órdenes de
+-- producción) y, de forma acotada, el catálogo de OC/OV de Clavicón para
+-- poder vincular sus compras/ventas reales (ver
+-- 20260824090005_produccion_integra_oc_ov.sql).
+alter type public.app_rol add value 'produccion';

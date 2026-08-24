@@ -18,6 +18,7 @@ const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ defa
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
+const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,10 @@ export default function App() {
 
                   <Route element={<ProtectedRoute roles={["rh"]} />}>
                     <Route path="/rh" element={<RH />} />
+                  </Route>
+
+                  <Route element={<ProtectedRoute roles={["produccion"]} />}>
+                    <Route path="/produccion" element={<Produccion />} />
                   </Route>
 
                   <Route element={<ProtectedRoute soloAdmin />}>

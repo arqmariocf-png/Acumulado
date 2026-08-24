@@ -29,8 +29,23 @@ function Tarjeta({ titulo, valor }: { titulo: string; valor: string }) {
   );
 }
 
+interface FilaCosteoMensual {
+  producto_id: string;
+  producto_nombre: string;
+  anio: number;
+  mes: number;
+  lotes: number;
+  cantidad_producida: number;
+  costo_total: number;
+  costo_unitario_promedio: number | null;
+}
+
 export function Dashboard() {
   const { veTodasLasEmpresas, perfil } = useAuth();
+  // El costeo de producción de Clavicón solo lo ve quien ya tiene acceso al
+  // módulo (rls de v_costeo_mensual_clavicon: produccion/admin/corporativo)
+  // -- se evita disparar la consulta para el resto de roles.
+  const veCosteoClavicon = perfil?.rol === "produccion" || perfil?.rol === "corporativo" || perfil?.rol === "admin";
 
   const { data: kpis, isLoading } = useQuery({
     queryKey: ["kpis-mensuales"],
@@ -65,6 +80,16 @@ export function Dashboard() {
       if (error) throw error;
       return data as any[];
     },
+  });
+
+  const { data: costeoClavicon } = useQuery({
+    queryKey: ["costeo-mensual-clavicon-dashboard"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_costeo_mensual_clavicon").select("*").order("anio").order("mes");
+      if (error) throw error;
+      return data as FilaCosteoMensual[];
+    },
+    enabled: veCosteoClavicon,
   });
 
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
@@ -181,6 +206,41 @@ export function Dashboard() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {veCosteoClavicon && costeoClavicon && costeoClavicon.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-1 text-lg font-semibold text-slate-900">Producción — Mallas y Clavos Clavicón</h2>
+          <p className="mb-3 text-sm text-slate-500">Costo real de los lotes terminados, por producto y mes.</p>
+          <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Producto</th>
+                  <th className="px-3 py-2">Periodo</th>
+                  <th className="px-3 py-2 text-right">Lotes</th>
+                  <th className="px-3 py-2 text-right">Cant. producida</th>
+                  <th className="px-3 py-2 text-right">Costo total</th>
+                  <th className="px-3 py-2 text-right">Costo unitario prom.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {costeoClavicon.map((c) => (
+                  <tr key={`${c.producto_id}-${c.anio}-${c.mes}`} className="border-t border-slate-100">
+                    <td className="px-3 py-2">{c.producto_nombre}</td>
+                    <td className="px-3 py-2">
+                      {c.mes}/{c.anio}
+                    </td>
+                    <td className="px-3 py-2 text-right">{c.lotes}</td>
+                    <td className="px-3 py-2 text-right">{c.cantidad_producida}</td>
+                    <td className="px-3 py-2 text-right">{formatoMoneda(Number(c.costo_total))}</td>
+                    <td className="px-3 py-2 text-right">{c.costo_unitario_promedio !== null ? formatoMoneda(Number(c.costo_unitario_promedio)) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

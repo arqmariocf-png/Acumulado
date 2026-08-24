@@ -4,7 +4,7 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh";
+export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "produccion";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
@@ -164,4 +164,139 @@ export interface DocumentoFaltante {
   personal_nombre: string;
   tipo_documento_id: string;
   tipo_documento_nombre: string;
+}
+
+// Módulo de Producción y Costeo (ver supabase/migrations/20260824090001-6_produccion_*.sql).
+// Planta de Mallas y Clavos Clavicón: malla armex y clavos de dos calibres.
+
+export interface MateriaPrima {
+  id: string;
+  nombre: string;
+  unidad_medida: string;
+  activo: boolean;
+}
+
+export type TipoProducto = "malla_armex" | "clavo";
+
+export interface Producto {
+  id: string;
+  tipo: TipoProducto;
+  nombre: string;
+  calibre: string | null;
+  presentacion: string | null;
+  unidad_medida: string;
+  activo: boolean;
+}
+
+export interface RecetaItem {
+  id: string;
+  producto_id: string;
+  materia_prima_id: string;
+  cantidad_por_unidad: number;
+}
+
+export type EstadoOrdenProduccion = "planeada" | "en_proceso" | "terminada" | "cancelada";
+
+export interface OrdenProduccion {
+  id: string;
+  folio: string;
+  producto_id: string;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  cantidad_planeada: number;
+  cantidad_producida: number;
+  cantidad_merma: number;
+  estado: EstadoOrdenProduccion;
+  notas: string | null;
+  created_at: string;
+}
+
+export interface ManoDeObraProduccion {
+  id: string;
+  orden_produccion_id: string;
+  personal_id: string | null;
+  descripcion: string | null;
+  horas: number;
+  costo_hora: number;
+  costo_total: number;
+}
+
+export interface CostoIndirectoProduccion {
+  id: string;
+  orden_produccion_id: string;
+  concepto: string;
+  monto: number;
+}
+
+export type TipoMovimientoInventario = "entrada" | "salida";
+
+export interface MovimientoMateriaPrima {
+  id: string;
+  materia_prima_id: string;
+  tipo: TipoMovimientoInventario;
+  cantidad: number;
+  costo_unitario: number;
+  fecha: string;
+  orden_compra_id: string | null;
+  orden_produccion_id: string | null;
+  motivo: string | null;
+}
+
+export interface MovimientoProductoTerminado {
+  id: string;
+  producto_id: string;
+  tipo: TipoMovimientoInventario;
+  cantidad: number;
+  costo_unitario: number;
+  fecha: string;
+  orden_produccion_id: string | null;
+  orden_venta_id: string | null;
+  motivo: string | null;
+}
+
+export interface StockMateriaPrima {
+  materia_prima_id: string;
+  nombre: string;
+  unidad_medida: string;
+  stock_actual: number;
+  costo_promedio_ponderado: number | null;
+}
+
+export interface StockProductoTerminado {
+  producto_id: string;
+  nombre: string;
+  tipo: TipoProducto;
+  calibre: string | null;
+  unidad_medida: string;
+  stock_actual: number;
+  costo_promedio_ponderado: number | null;
+}
+
+export interface CosteoOrdenProduccion {
+  orden_produccion_id: string;
+  folio: string;
+  producto_id: string;
+  estado: EstadoOrdenProduccion;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  cantidad_planeada: number;
+  cantidad_producida: number;
+  cantidad_merma: number;
+  costo_materia_prima: number;
+  costo_mano_obra: number;
+  costo_indirectos: number;
+  costo_total: number;
+  costo_unitario: number | null;
+}
+
+export interface CosteoMensualClavicon {
+  producto_id: string;
+  producto_nombre: string;
+  producto_tipo: TipoProducto;
+  anio: number;
+  mes: number;
+  lotes: number;
+  cantidad_producida: number;
+  costo_total: number;
+  costo_unitario_promedio: number | null;
 }
