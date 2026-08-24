@@ -4,6 +4,16 @@ import { useAuth } from "../lib/auth";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
+interface FilaEstadoCarga {
+  empresa_id: string;
+  empresa_nombre: string;
+  ultima_carga_estado_cuenta: string | null;
+  ultimo_periodo_cfdi_recibidos: string | null;
+  ultimo_periodo_cfdi_emitidos: string | null;
+  ultimo_periodo_oc: string | null;
+  ultimo_periodo_ov: string | null;
+}
+
 interface FilaKpi {
   empresa_id: string;
   anio: number;
@@ -29,6 +39,21 @@ function Tarjeta({ titulo, valor }: { titulo: string; valor: string }) {
   );
 }
 
+function formatoPeriodo(periodo: string): string {
+  const anio = periodo.slice(0, 4);
+  const mes = Number(periodo.slice(4, 6));
+  return `${MESES[mes - 1]} ${anio}`;
+}
+
+/** Chip verde con el último periodo/fecha cargado, o rojo "Sin cargar" si
+ * esa categoría nunca tuvo un archivo para esta empresa (valor null). */
+function ChipCarga({ valor, formato }: { valor: string | null; formato: (v: string) => string }) {
+  if (!valor) {
+    return <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Sin cargar</span>;
+  }
+  return <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">{formato(valor)}</span>;
+}
+
 export function Dashboard() {
   const { veTodasLasEmpresas, perfil } = useAuth();
 
@@ -49,6 +74,17 @@ export function Dashboard() {
       return data as any[];
     },
     enabled: veTodasLasEmpresas,
+  });
+
+  // Qué le falta cargar a cada empresa (RLS de v_estado_carga_empresa ya
+  // filtra a solo la(s) empresa(s) que el rol puede ver).
+  const { data: estadoCarga } = useQuery({
+    queryKey: ["estado-carga-empresa"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_estado_carga_empresa").select("*").order("empresa_nombre");
+      if (error) throw error;
+      return data as FilaEstadoCarga[];
+    },
   });
 
   // Saldo del movimiento más reciente de cada cuenta -- a diferencia de
@@ -99,6 +135,46 @@ export function Dashboard() {
       <p className="mb-6 text-sm text-slate-500">
         {veTodasLasEmpresas ? "Consolidado — las 8 empresas" : `Empresa asignada`} · {perfil?.rol}
       </p>
+
+      {estadoCarga && estadoCarga.length > 0 && (
+        <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
+          <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">Estado de carga por empresa</p>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Empresa</th>
+                <th className="px-3 py-2">Estado de cuenta</th>
+                <th className="px-3 py-2">CFDI recibidos</th>
+                <th className="px-3 py-2">CFDI emitidos</th>
+                <th className="px-3 py-2">Catálogo OC/OS</th>
+                <th className="px-3 py-2">Catálogo OV</th>
+              </tr>
+            </thead>
+            <tbody>
+              {estadoCarga.map((e) => (
+                <tr key={e.empresa_id} className="border-t border-slate-100">
+                  <td className="px-3 py-2 font-medium text-slate-800">{e.empresa_nombre}</td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultima_carga_estado_cuenta} formato={(v) => new Date(v).toLocaleDateString("es-MX")} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_cfdi_recibidos} formato={formatoPeriodo} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_cfdi_emitidos} formato={formatoPeriodo} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_oc} formato={formatoPeriodo} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_ov} formato={formatoPeriodo} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Tarjeta titulo="Movimientos YTD" valor={String(ytd.movimientos)} />
