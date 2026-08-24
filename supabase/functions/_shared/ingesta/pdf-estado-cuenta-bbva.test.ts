@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { parsearPaginasBBVA } from "./pdf-estado-cuenta-bbva.ts";
 import { PAGINAS_REALES_BBVA_ACEROS_JULIO_2026 } from "./pdf-estado-cuenta-bbva.fixture.ts";
 import { PAGINAS_REALES_BBVA_MARIO_JULIO_2026 } from "./pdf-estado-cuenta-bbva-mario.fixture.ts";
+import { POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026 } from "./pdf-estado-cuenta-bbva-web.fixture.ts";
 
 test("parsea el PDF real de BBVA (Aceros, julio 2026, formato MAESTRA PYME BBVA): 139 movimientos clasificados por columna, cuadra exacto con lo que el banco declara", () => {
   const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026);
@@ -150,4 +151,47 @@ test("parsea un segundo PDF real de BBVA con posiciones de columna DISTINTAS y e
   // La descripción no debe traer la fecha OPER/LIQ pegada al inicio (ver
   // comentario del encabezado sobre items de texto fusionados).
   assert.ok(r.movimientos.every((m) => !/^\d{1,2}\/[A-ZÑ]{3}\b/.test(m.nombreRazonSocial ?? "")));
+});
+
+test('parsea el segundo FORMATO de BBVA -- "Detalle de movimientos" de banca en línea (Aceros, agosto 2026): 108 movimientos, orden más reciente primero, sin totales declarados pero con saldo consistente en cada fila', () => {
+  const r = parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026);
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.erroresPorFila.length, 0);
+  assert.equal(r.movimientos.length, 108);
+
+  const cargos = r.movimientos.filter((m) => m.cargoTotal != null);
+  const abonos = r.movimientos.filter((m) => m.abonoTotal != null);
+  assert.equal(cargos.length, 84);
+  assert.equal(abonos.length, 24);
+
+  const sumaCargos = Math.round(cargos.reduce((a, m) => a + (m.cargoTotal ?? 0), 0) * 100) / 100;
+  const sumaAbonos = Math.round(abonos.reduce((a, m) => a + (m.abonoTotal ?? 0), 0) * 100) / 100;
+  assert.equal(sumaCargos, 815215.42);
+  assert.equal(sumaAbonos, 839324.55);
+
+  // El primer movimiento (más reciente) debe cuadrar con "Saldo disponible"
+  // declarado en la página 1.
+  assert.equal(r.movimientos[0].saldo, 39950.44);
+  assert.equal(r.movimientos[0].fechaPago, "2026-08-20");
+});
+
+test('en el formato "Detalle de movimientos", la línea de concepto (antes de la fecha) y la de detalle/RFC (después) se concatenan en el orden visual correcto, sin mezclarse con el movimiento vecino', () => {
+  const r = parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026);
+  const primero = r.movimientos[0];
+  assert.equal(primero.nombreRazonSocial, "PAGO CUENTA DE TERCERO/ 0094186039 RFC:CPM920930LL6 IVA:2173.75");
+});
+
+test('en el formato "Detalle de movimientos", un movimiento con descripción corta que cabe completa en la fila de la fecha (ej. una comisión) no le roba la fila de detalle a su vecino ni al revés', () => {
+  const r = parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026);
+  const conDetalleAjeno = r.movimientos.find((m) => m.nombreRazonSocial === "SPEI RECIBIDOBANORTE/0101484432 072 0060826PAGO ERGODINOVA");
+  assert.ok(conDetalleAjeno, "el movimiento SPEI debe conservar su propio detalle, no perderlo al vecino compacto");
+  const compacto = r.movimientos.find((m) => m.nombreRazonSocial === "IVA COM SERV BCA INTERNET/IVA COM SERV BC");
+  assert.ok(compacto, "el movimiento compacto no debe traer texto prestado del vecino");
+});
+
+test('en el formato "Detalle de movimientos", el aviso legal de pie de página no se cuela en la descripción del último movimiento', () => {
+  const r = parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026);
+  const ultimo = r.movimientos[r.movimientos.length - 1];
+  assert.equal(ultimo.nombreRazonSocial, "SPEI RECIBIDOSTP/0171440815 646 0375372");
+  assert.doesNotMatch(ultimo.nombreRazonSocial ?? "", /En cumplimiento|Cerrar|Imprimir/);
 });

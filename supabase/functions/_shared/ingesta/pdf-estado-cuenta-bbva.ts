@@ -70,6 +70,39 @@
 //     "subconjunto limpio" queda como red de seguridad para un PDF real
 //     futuro que sí tenga una limitación genuina, no porque se haya
 //     confirmado en este archivo.
+//
+// SEGUNDO FORMATO DE BBVA -- "Detalle de movimientos" (banca en línea):
+// además del PDF oficial MAESTRA PYME de arriba, BBVA también genera un PDF
+// distinto cuando alguien lo imprime/descarga desde el portal en línea
+// ("Cerrar Imprimir" al final del documento) -- confirmado contra un
+// archivo real (ESTADO_DE_CUENTA_AL_20_DE_AGOSTO.pdf, cuenta BBVA 5859 de
+// Aceros y Envasados de Puebla, agosto 2026). Ambos formatos comparten el
+// banco ("BBVA" en cuentas_bancarias), así que `parsearPaginasBBVA` intenta
+// ubicar las anclas de columna de CADA formato y usa el que encuentre --
+// nunca adivina el layout por el nombre del archivo.
+//
+// Diferencias clave de este segundo formato:
+//   - Encabezado de columnas: "Fecha Concepto / Referencia Cargo Abono
+//     Saldo" (3 columnas de monto, no 4) -- también hay que leer x1 del
+//     propio documento (extraerAnclasColumnasWeb), mismo motivo que arriba.
+//   - Fecha SIN año: "DD-MM" (ej. "20-08"), no "DD/MES". El año se toma de
+//     la fecha de generación del documento en la página 1 (ej.
+//     "20/08/2026"), válido porque el propio documento se limita a "Mes
+//     actual" -- no cruza años.
+//   - Saldo SÍ se imprime en TODAS las filas (a diferencia de MAESTRA PYME,
+//     que solo lo imprime en la última fila de cada día) -- no hace falta
+//     acumular Cargos/Abonos para rellenar filas intermedias, cada
+//     movimiento ya trae su propio saldo real declarado por el banco.
+//   - Los movimientos vienen en orden MÁS RECIENTE PRIMERO (descendente),
+//     al revés que MAESTRA PYME.
+//   - No hay tabla de "TOTAL IMPORTE CARGOS/ABONOS" para autovalidar contra
+//     un total declarado -- en su lugar se usa: (a) "Saldo disponible: $X"
+//     de la página 1, que debe coincidar con el saldo del movimiento más
+//     reciente, y (b) consistencia interna entre saldos consecutivos ya
+//     impresos (saldo[i] debe ser saldo[i-1] +/- el monto clasificado por
+//     columna en la fila i) -- si algo no cuadra, se bloquea todo el
+//     documento, mismo criterio de "no confiar" que el resto de los
+//     parsers.
 
 import type { ResultadoParseoPdf } from "./pdf-estado-cuenta.ts";
 import type { FilaEstadoCuentaMapeada } from "./estado-cuenta.ts";
@@ -200,20 +233,45 @@ function extraerAnclasColumnas(paginas: ItemPdfPosicionado[][]): AnclasColumnas 
 
 /** Lógica pura de parseo, ya con los items posicionados en mano -- separada
  * de la extracción (pdfAPosiciones, que hace IO) para poder probarla con un
- * fixture de datos reales sin tener que re-parsear el PDF en cada test. */
+ * fixture de datos reales sin tener que re-parsear el PDF en cada test.
+ *
+ * Intenta ubicar las anclas de columna de cada formato de BBVA conocido (ver
+ * comentario del encabezado) y usa el que encuentre -- nunca adivina el
+ * layout por el nombre del archivo ni por cuál banco es. */
 export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoParseoPdf {
   if (paginas.length === 0 || paginas.every((p) => p.length === 0)) {
     return { movimientos: [], erroresPorFila: [], errorDocumento: "El PDF no tiene contenido de texto extraíble" };
   }
 
+  const anclasMaestraPyme = extraerAnclasColumnas(paginas);
+  if (anclasMaestraPyme) {
+    return parsearComoMaestraPyme(paginas, anclasMaestraPyme);
+  }
+
+  const anclasWeb = extraerAnclasColumnasWeb(paginas);
+  if (anclasWeb) {
+    return parsearComoWeb(paginas, anclasWeb);
+  }
+
+  // Ninguno de los dos formatos conocidos -- el diagnóstico más útil casi
+  // siempre es que ni siquiera se pudo leer el periodo/año (mismo texto de
+  // error que antes de que existiera el segundo formato).
   const anio = extraerAnio(paginas[0] ?? []);
   if (!anio) {
     return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo determinar el año del periodo en el PDF" };
   }
+  return {
+    movimientos: [],
+    erroresPorFila: [],
+    errorDocumento:
+      "No se pudo ubicar el encabezado de columnas de ningún formato de BBVA conocido (ni CARGOS/ABONOS/OPERACIÓN/LIQUIDACIÓN del PDF oficial, ni Fecha/Cargo/Abono/Saldo del PDF de banca en línea) en el documento",
+  };
+}
 
-  const anclas = extraerAnclasColumnas(paginas);
-  if (!anclas) {
-    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo ubicar el encabezado de columnas (CARGOS/ABONOS/OPERACIÓN/LIQUIDACIÓN) en el PDF" };
+function parsearComoMaestraPyme(paginas: ItemPdfPosicionado[][], anclas: AnclasColumnas): ResultadoParseoPdf {
+  const anio = extraerAnio(paginas[0] ?? []);
+  if (!anio) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo determinar el año del periodo en el PDF" };
   }
 
   const movimientos: FilaEstadoCuentaMapeada[] = [];
@@ -371,6 +429,245 @@ export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoPa
     }
   } catch (e) {
     return { movimientos: [], erroresPorFila: [], errorDocumento: (e as Error).message };
+  }
+
+  return { movimientos, erroresPorFila, errorDocumento: null };
+}
+
+// ── Segundo formato: "Detalle de movimientos" (banca en línea) ───────────
+// Ver comentario del encabezado del archivo para el contraste completo con
+// MAESTRA PYME.
+
+interface AnclasColumnasWeb {
+  cargo: number;
+  abono: number;
+  saldo: number;
+}
+
+/** Igual idea que extraerAnclasColumnas (MAESTRA PYME) pero para las
+ * etiquetas de este formato ("Fecha Concepto / Referencia Cargo Abono
+ * Saldo") -- ese encabezado solo se imprime en la página 1, así que se
+ * busca en todas las páginas y se usa el primero que aparezca; las
+ * posiciones son las mismas en las páginas siguientes porque es la misma
+ * tabla continuando. */
+function extraerAnclasColumnasWeb(paginas: ItemPdfPosicionado[][]): AnclasColumnasWeb | null {
+  for (const itemsPagina of paginas) {
+    const porFila = new Map<number, ItemPdfPosicionado[]>();
+    for (const item of itemsPagina) {
+      const clave = Math.round(item.y * 10) / 10;
+      const lista = porFila.get(clave);
+      if (lista) lista.push(item);
+      else porFila.set(clave, [item]);
+    }
+    for (const itemsFila of porFila.values()) {
+      const fecha = itemsFila.find((i) => i.texto === "Fecha");
+      const cargo = itemsFila.find((i) => i.texto === "Cargo");
+      const abono = itemsFila.find((i) => i.texto === "Abono");
+      const saldo = itemsFila.find((i) => i.texto === "Saldo");
+      if (fecha && cargo && abono && saldo) {
+        return { cargo: cargo.x1, abono: abono.x1, saldo: saldo.x1 };
+      }
+    }
+  }
+  return null;
+}
+
+const RE_FECHA_CORTA_WEB = /^(\d{2})-(\d{2})$/;
+// Si el primer movimiento queda pegado al encabezado de la tabla (ver
+// comentario del bucle principal sobre el desplazamiento de una fila hacia
+// atrás), esto evita que "Fecha"/"Concepto / Referencia" se cuelen en la
+// descripción del primer movimiento.
+const ETIQUETAS_ENCABEZADO_WEB = new Set(["Fecha", "Concepto / Referencia", "Cargo", "Abono", "Saldo"]);
+// Los montos vienen como "$ 15,759.70" (con signo de pesos y espacio) en
+// vez de un número plano como en MAESTRA PYME.
+const RE_MONTO_WEB = /^\$\s*[\d,]+\.\d{2}$/;
+
+function aNumeroWeb(texto: string): number {
+  return Number(texto.replace(/[^0-9.]/g, ""));
+}
+
+/** El documento no trae "DEL...AL" ni "Fecha de Corte" -- el año se toma de
+ * la fecha de generación en la página 1 (ej. "20/08/2026 - 1:42:33 PM"),
+ * válido porque el documento se limita a "Mes actual" (no cruza años). */
+function extraerAnioWeb(paginaUno: ItemPdfPosicionado[]): number | null {
+  const texto = paginaUno.map((i) => i.texto).join(" ");
+  const m = texto.match(/\b\d{2}\/\d{2}\/(\d{4})\b/);
+  return m ? Number(m[1]) : null;
+}
+
+function extraerSaldoDisponible(paginas: ItemPdfPosicionado[][]): number | null {
+  const texto = paginas.map((p) => p.map((i) => i.texto).join(" ")).join(" ");
+  const m = texto.match(/Saldo disponible:\s*\$?\s*([\d,]+\.\d{2})/i);
+  return m ? aNumeroWeb(m[1]) : null;
+}
+
+function parsearComoWeb(paginas: ItemPdfPosicionado[][], anclas: AnclasColumnasWeb): ResultadoParseoPdf {
+  const anio = extraerAnioWeb(paginas[0] ?? []);
+  if (!anio) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo determinar el año del periodo en el PDF" };
+  }
+
+  // Aplana todas las filas (agrupadas por y real, no por orden de stream --
+  // ver comentario del encabezado) de todas las páginas, en orden visual:
+  // página tras página, de arriba hacia abajo dentro de cada una.
+  const filas: ItemPdfPosicionado[][] = [];
+  for (const itemsPagina of paginas) {
+    const porFila = new Map<number, ItemPdfPosicionado[]>();
+    for (const item of itemsPagina) {
+      const clave = Math.round(item.y * 10) / 10;
+      const lista = porFila.get(clave);
+      if (lista) lista.push(item);
+      else porFila.set(clave, [item]);
+    }
+    const filasOrdenadas = [...porFila.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([, items]) => [...items].sort((a, b) => a.x0 - b.x0));
+    filas.push(...filasOrdenadas);
+  }
+
+  // Cada movimiento ocupa varias filas reales (línea de concepto, línea de
+  // fecha+montos, línea de RFC/detalle) -- se ancla por la fila que trae la
+  // fecha corta "DD-MM" y se agrupa todo hasta la siguiente fecha ancla,
+  // mismo truco que Banorte/Santander pero con filas ya agrupadas por
+  // posición en vez de texto plano.
+  const indicesAncla: number[] = [];
+  for (let i = 0; i < filas.length; i++) {
+    if (filas[i].some((it) => RE_FECHA_CORTA_WEB.test(it.texto))) indicesAncla.push(i);
+  }
+  if (indicesAncla.length === 0) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontró ningún movimiento (fecha DD-MM) en la tabla del PDF" };
+  }
+
+  const movimientos: FilaEstadoCuentaMapeada[] = [];
+  const erroresPorFila: { fila: number; errores: string[] }[] = [];
+
+  // El layout NO es uniforme: la mayoría de los movimientos traen su
+  // "concepto" (ej. "PAGO CUENTA DE TERCERO/ 0094186039") en la fila justo
+  // ANTES de su fecha ancla, más una fila de detalle/RFC después -- pero
+  // movimientos con descripción corta (ej. comisiones "IVA COM SERV BCA
+  // INTERNET") vienen COMPLETOS en una sola fila junto con la fecha, sin
+  // fila de concepto separada ni de detalle. NO se puede distinguir por la
+  // distancia (en filas) a la fecha ancla vecina -- se probó y falla: la
+  // fila de detalle de UN movimiento (ej. "0060826PAGO ERGODINOVA") puede
+  // quedar a solo 1 fila de la fecha ancla del SIGUIENTE movimiento aunque
+  // ese siguiente movimiento sea compacto y no la necesite, robándole esa
+  // fila al movimiento anterior. En vez de eso, se revisa el CONTENIDO de la
+  // propia fila ancla: si ya trae texto de descripción además de la fecha y
+  // los montos, es compacta (no necesita fila prestada de ningún lado); si
+  // no, sí necesita una fila de concepto antes.
+  const esCompacta = (idx: number): boolean =>
+    filas[idx].some((it) => !RE_FECHA_CORTA_WEB.test(it.texto) && !RE_MONTO_WEB.test(it.texto) && !ETIQUETAS_ENCABEZADO_WEB.has(it.texto));
+
+  for (let a = 0; a < indicesAncla.length; a++) {
+    const inicioBloque = esCompacta(indicesAncla[a])
+      ? indicesAncla[a]
+      : Math.max(a > 0 ? indicesAncla[a - 1] + 1 : 0, indicesAncla[a] - 1);
+    const finBloqueCrudo =
+      a + 1 >= indicesAncla.length
+        ? filas.length
+        : esCompacta(indicesAncla[a + 1])
+          ? indicesAncla[a + 1]
+          : indicesAncla[a + 1] - 1;
+    // El ÚLTIMO movimiento del documento se extiende hasta el final de la
+    // página, arrastrando el aviso legal de pie de página ("En cumplimiento
+    // a la Ley...", "Cerrar", "Imprimir") a su descripción -- se recorta ahí
+    // si aparece, mismo criterio que Santander recortando su línea "TOTAL".
+    const idxAvisoLegal = filas.slice(inicioBloque, finBloqueCrudo).findIndex((fila) => fila.some((it) => it.texto.startsWith("En cumplimiento")));
+    const finBloque = idxAvisoLegal === -1 ? finBloqueCrudo : inicioBloque + idxAvisoLegal;
+    const bloque = filas.slice(inicioBloque, finBloque).flat();
+    const filaNum = a + 1;
+
+    const itemFecha = bloque.find((it) => RE_FECHA_CORTA_WEB.test(it.texto))!;
+    const [, dia, mes] = itemFecha.texto.match(RE_FECHA_CORTA_WEB)!;
+    if (Number(mes) < 1 || Number(mes) > 12) {
+      erroresPorFila.push({ fila: filaNum, errores: [`Mes no reconocido: "${itemFecha.texto}"`] });
+      continue;
+    }
+
+    const itemCargo = bloque.find((i) => RE_MONTO_WEB.test(i.texto) && Math.abs(i.x1 - anclas.cargo) < TOLERANCIA_X);
+    const itemAbono = bloque.find((i) => RE_MONTO_WEB.test(i.texto) && Math.abs(i.x1 - anclas.abono) < TOLERANCIA_X);
+    const itemSaldo = bloque.find((i) => RE_MONTO_WEB.test(i.texto) && Math.abs(i.x1 - anclas.saldo) < TOLERANCIA_X);
+
+    if (itemCargo && itemAbono) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `La fila del ${itemFecha.texto} trae un monto en Cargo (${itemCargo.texto}) Y en Abono (${itemAbono.texto}) a la vez -- posible columna mal identificada, no se insertó nada`,
+      };
+    }
+    if (!itemCargo && !itemAbono) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `No se encontró un monto de Cargo ni de Abono para el movimiento del ${itemFecha.texto} -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
+    if (!itemSaldo) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `No se encontró el Saldo del movimiento del ${itemFecha.texto} -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
+
+    const descripcion = bloque
+      .filter((i) => i !== itemFecha && !RE_MONTO_WEB.test(i.texto) && !ETIQUETAS_ENCABEZADO_WEB.has(i.texto))
+      .map((i) => i.texto)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    movimientos.push({
+      fechaPago: `${anio}-${mes}-${dia}`,
+      fechaOrden: null,
+      folio: null,
+      proyecto: null,
+      nombreRazonSocial: descripcion || null,
+      cargoTotal: itemCargo ? aNumeroWeb(itemCargo.texto) : null,
+      abonoTotal: itemAbono ? aNumeroWeb(itemAbono.texto) : null,
+      saldo: aNumeroWeb(itemSaldo.texto),
+      referenciaTipo: null as ReferenciaTipo | null,
+      referenciaNumero: null,
+      factura: null,
+      comentarios: null,
+      observacion: 'Extraído automáticamente de un PDF de BBVA (formato "Detalle de movimientos" de banca en línea)',
+    });
+  }
+
+  // Autovalidación: el documento no declara totales de Cargos/Abonos como
+  // MAESTRA PYME (ver comentario del encabezado), así que la confianza viene
+  // de otros dos lados:
+  //
+  // 1. Los movimientos vienen del más reciente al más antiguo -- el primero
+  //    de la lista debe cuadrar con "Saldo disponible" que declara la
+  //    página 1.
+  const saldoDisponible = extraerSaldoDisponible(paginas);
+  if (saldoDisponible != null && movimientos.length > 0 && Math.abs(movimientos[0].saldo - saldoDisponible) > 0.01) {
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: `El PDF declara un Saldo disponible de ${saldoDisponible} pero el movimiento más reciente extraído tiene saldo ${movimientos[0].saldo} -- no se insertó nada, revisa el archivo manualmente`,
+    };
+  }
+
+  // 2. Cada fila ya trae su propio saldo real impreso por el banco (a
+  //    diferencia de MAESTRA PYME, que solo lo imprime en checkpoints) --
+  //    se valida que, en orden cronológico, cada saldo cuadre exactamente
+  //    con el saldo anterior +/- el monto clasificado por columna. Si algo
+  //    no cuadra, la clasificación de esa fila (o de alguna entre medio) es
+  //    sospechosa y no se puede confiar en el lote completo.
+  const cronologico = [...movimientos].reverse();
+  for (let i = 1; i < cronologico.length; i++) {
+    const anterior = cronologico[i - 1];
+    const actual = cronologico[i];
+    const esperado = Math.round((anterior.saldo + (actual.abonoTotal ?? 0) - (actual.cargoTotal ?? 0)) * 100) / 100;
+    if (Math.abs(esperado - actual.saldo) > 0.01) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `El saldo del movimiento del ${actual.fechaPago} (${actual.saldo}) no cuadra con el saldo del movimiento anterior (${anterior.saldo}) +/- el monto clasificado -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
   }
 
   return { movimientos, erroresPorFila, errorDocumento: null };
