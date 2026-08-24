@@ -206,3 +206,85 @@ export interface DocumentoFaltante {
   tipo_documento_id: string;
   tipo_documento_nombre: string;
 }
+
+// Módulo de Inventario (ver supabase/migrations/20260824090001-5_inventario_*.sql).
+
+export type TipoMovimientoInventario = "entrada" | "salida";
+export type EstadoRecepcion = "sin_total" | "sin_recibir" | "parcial" | "completo";
+export type EstadoEmbarque = "sin_total" | "sin_embarcar" | "parcial" | "completo";
+
+export interface Almacen {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  activo: boolean;
+}
+
+export interface Producto {
+  id: string;
+  empresa_id: string;
+  sku: string;
+  codigo_barras: string | null;
+  nombre: string;
+  descripcion: string | null;
+  unidad_medida: string;
+  costo_referencia: number | null;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface MovimientoInventario {
+  id: string;
+  empresa_id: string;
+  almacen_id: string;
+  producto_id: string;
+  tipo: TipoMovimientoInventario;
+  cantidad: number;
+  costo_unitario: number | null;
+  fecha: string;
+  orden_compra_id: string | null;
+  orden_venta_id: string | null;
+  es_ajuste: boolean;
+  codigo_escaneado: string | null;
+  comentario: string | null;
+  registrado_por: string;
+  created_at: string;
+}
+
+export interface Existencia {
+  producto_id: string;
+  empresa_id: string;
+  sku: string;
+  producto_nombre: string;
+  unidad_medida: string;
+  almacen_id: string;
+  almacen_nombre: string;
+  existencia: number;
+}
+
+export interface AvanceRecepcionOc {
+  orden_compra_id: string;
+  id_orden: string;
+  tipo: "OC" | "OS";
+  empresa_id: string;
+  proyecto: string | null;
+  proveedor: string | null;
+  total_oc: number | null;
+  total_recibido: number;
+  movimientos_vinculados: number;
+  fecha_ultima_recepcion: string | null;
+  estado_recepcion: EstadoRecepcion;
+}
+
+export interface AvanceEmbarqueOv {
+  orden_venta_id: string;
+  id_ov: string;
+  empresa_id: string;
+  proyecto: string | null;
+  cliente: string | null;
+  total_ov: number | null;
+  total_embarcado: number;
+  movimientos_vinculados: number;
+  fecha_ultimo_embarque: string | null;
+  estado_embarque: EstadoEmbarque;
+}

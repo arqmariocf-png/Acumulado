@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 const ENLACES = [
   { a: "/", etiqueta: "Dashboard" },
   { a: "/movimientos", etiqueta: "Movimientos" },
+  { a: "/inventario", etiqueta: "Inventario" },
   { a: "/carga", etiqueta: "Carga" },
   { a: "/reportes", etiqueta: "Reportes especiales" },
   { a: "/prestamos-intercompania", etiqueta: "Préstamos entre empresas" },
