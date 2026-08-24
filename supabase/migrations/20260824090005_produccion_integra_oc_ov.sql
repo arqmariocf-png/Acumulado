@@ -8,7 +8,7 @@ alter table public.ordenes_compra
   add column materia_prima_id uuid references public.materias_primas (id);
 
 alter table public.ordenes_venta
-  add column producto_id uuid references public.productos (id);
+  add column producto_id uuid references public.productos_produccion (id);
 
 comment on column public.ordenes_compra.materia_prima_id is 'Solo aplica a la empresa Mallas y Clavos Clavicón (MCC) -- a qué materia prima corresponde esta compra, para poder registrar la entrada de inventario contra una OC real en vez de capturarla dos veces.';
 comment on column public.ordenes_venta.producto_id is 'Solo aplica a la empresa Mallas y Clavos Clavicón (MCC) -- a qué producto terminado corresponde esta venta, para poder registrar la salida de inventario contra una OV real en vez de capturarla dos veces.';

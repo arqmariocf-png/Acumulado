@@ -6,7 +6,7 @@
 create table public.ordenes_produccion (
   id uuid primary key default gen_random_uuid(),
   folio text not null unique,
-  producto_id uuid not null references public.productos (id),
+  producto_id uuid not null references public.productos_produccion (id),
   fecha_inicio date not null,
   fecha_fin date,
   cantidad_planeada numeric(14, 4) not null check (cantidad_planeada > 0),

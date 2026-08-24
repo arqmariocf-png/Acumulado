@@ -20,7 +20,7 @@ create trigger materias_primas_set_updated_at
   for each row
   execute function public.set_updated_at();
 
-create table public.productos (
+create table public.productos_produccion (
   id uuid primary key default gen_random_uuid(),
   tipo text not null check (tipo in ('malla_armex', 'clavo')),
   nombre text not null,
@@ -32,10 +32,10 @@ create table public.productos (
   updated_at timestamptz not null default now()
 );
 
-comment on table public.productos is 'Catálogo de producto terminado de la planta. calibre/presentacion son texto libre a propósito -- cubre malla armex y clavos de cualquier calibre sin modificar el esquema cuando la planta agregue una variante nueva.';
+comment on table public.productos_produccion is 'Catálogo de producto terminado de la planta. calibre/presentacion son texto libre a propósito -- cubre malla armex y clavos de cualquier calibre sin modificar el esquema cuando la planta agregue una variante nueva.';
 
-create trigger productos_set_updated_at
-  before update on public.productos
+create trigger productos_produccion_set_updated_at
+  before update on public.productos_produccion
   for each row
   execute function public.set_updated_at();
 
@@ -46,7 +46,7 @@ create trigger productos_set_updated_at
 -- alcance del primer corte, ver plan).
 create table public.receta_items (
   id uuid primary key default gen_random_uuid(),
-  producto_id uuid not null references public.productos (id) on delete cascade,
+  producto_id uuid not null references public.productos_produccion (id) on delete cascade,
   materia_prima_id uuid not null references public.materias_primas (id),
   cantidad_por_unidad numeric(14, 4) not null check (cantidad_por_unidad > 0),
   created_at timestamptz not null default now(),
@@ -64,7 +64,7 @@ create trigger receta_items_set_updated_at
 -- consolidado igual que ve el resto de reportes financieros). Escritura:
 -- produccion/admin. Mismo patrón de aislamiento que el módulo de RH.
 alter table public.materias_primas enable row level security;
-alter table public.productos enable row level security;
+alter table public.productos_produccion enable row level security;
 alter table public.receta_items enable row level security;
 
 create policy materias_primas_select on public.materias_primas
@@ -76,11 +76,11 @@ create policy materias_primas_write on public.materias_primas
   using (public.auth_rol() in ('produccion', 'admin'))
   with check (public.auth_rol() in ('produccion', 'admin'));
 
-create policy productos_select on public.productos
+create policy productos_produccion_select on public.productos_produccion
   for select
   using (public.auth_rol() in ('produccion', 'admin', 'corporativo'));
 
-create policy productos_write on public.productos
+create policy productos_produccion_write on public.productos_produccion
   for all
   using (public.auth_rol() in ('produccion', 'admin'))
   with check (public.auth_rol() in ('produccion', 'admin'));

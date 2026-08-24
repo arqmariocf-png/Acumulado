@@ -40,7 +40,7 @@ select
     / nullif(sum(m.cantidad) filter (where m.tipo = 'entrada'), 0),
     4
   ) as costo_promedio_ponderado
-from public.productos p
+from public.productos_produccion p
 left join public.movimientos_producto_terminado m on m.producto_id = p.id
 group by p.id, p.nombre, p.tipo, p.calibre, p.unidad_medida;
 
@@ -118,7 +118,7 @@ select
   sum(c.costo_total) as costo_total,
   round(sum(c.costo_total) / nullif(sum(o.cantidad_producida), 0), 4) as costo_unitario_promedio
 from public.ordenes_produccion o
-join public.productos p on p.id = o.producto_id
+join public.productos_produccion p on p.id = o.producto_id
 join public.v_costeo_orden_produccion c on c.orden_produccion_id = o.id
 where o.estado = 'terminada'
 group by p.id, p.nombre, p.tipo, extract(year from coalesce(o.fecha_fin, o.fecha_inicio)), extract(month from coalesce(o.fecha_fin, o.fecha_inicio));

@@ -40,7 +40,7 @@ create index movimientos_materia_prima_orden_idx on public.movimientos_materia_p
 
 create table public.movimientos_producto_terminado (
   id uuid primary key default gen_random_uuid(),
-  producto_id uuid not null references public.productos (id),
+  producto_id uuid not null references public.productos_produccion (id),
   tipo text not null check (tipo in ('entrada', 'salida')),
   cantidad numeric(14, 4) not null check (cantidad > 0),
   -- Entrada: costo_unitario_lote calculado en v_costeo_orden_produccion --

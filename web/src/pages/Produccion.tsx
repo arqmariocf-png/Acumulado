@@ -104,7 +104,7 @@ function useProductos() {
   return useQuery({
     queryKey: ["productos"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("productos").select("*").order("nombre");
+      const { data, error } = await supabase.from("productos_produccion").select("*").order("nombre");
       if (error) throw error;
       return data as Producto[];
     },
@@ -130,7 +130,7 @@ function PestanaCatalogo() {
 
   const crearProducto = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const { error } = await supabase.from("productos").insert(payload);
+      const { error } = await supabase.from("productos_produccion").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["productos"] }),
@@ -765,10 +765,10 @@ function useOrdenesProduccion() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_produccion")
-        .select("*, productos(nombre)")
+        .select("*, productos_produccion(nombre)")
         .order("fecha_inicio", { ascending: false });
       if (error) throw error;
-      return data as (OrdenProduccion & { productos: { nombre: string } })[];
+      return data as (OrdenProduccion & { productos_produccion: { nombre: string } })[];
     },
   });
 }
@@ -872,7 +872,7 @@ function PestanaOrdenes() {
             {ordenes?.map((o) => (
               <tr key={o.id} className="border-t border-slate-100">
                 <td className="px-3 py-2 font-medium">{o.folio}</td>
-                <td className="px-3 py-2">{o.productos?.nombre}</td>
+                <td className="px-3 py-2">{o.productos_produccion?.nombre}</td>
                 <td className="px-3 py-2">{o.fecha_inicio}</td>
                 <td className="px-3 py-2">
                   <span
@@ -928,7 +928,7 @@ function useCosteoOrden(ordenId: string) {
   });
 }
 
-function OrdenDetalle({ orden, onClose }: { orden: OrdenProduccion & { productos: { nombre: string } }; onClose: () => void }) {
+function OrdenDetalle({ orden, onClose }: { orden: OrdenProduccion & { productos_produccion: { nombre: string } }; onClose: () => void }) {
   const queryClient = useQueryClient();
   const { data: materias } = useMateriasPrimas();
   const { data: costeo } = useCosteoOrden(orden.id);
@@ -1069,7 +1069,7 @@ function OrdenDetalle({ orden, onClose }: { orden: OrdenProduccion & { productos
     <div className="mt-6 rounded border border-slate-300 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-800">
-          {orden.folio} — {orden.productos?.nombre}
+          {orden.folio} — {orden.productos_produccion?.nombre}
         </h2>
         <button onClick={onClose} className="text-xs text-slate-500 hover:underline">
           Cerrar panel
@@ -1284,10 +1284,10 @@ function PestanaCosteo() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("v_costeo_orden_produccion")
-        .select("*, ordenes_produccion(productos(nombre))")
+        .select("*, ordenes_produccion(productos_produccion(nombre))")
         .order("fecha_inicio", { ascending: false });
       if (error) throw error;
-      return data as (CosteoOrdenProduccion & { ordenes_produccion: { productos: { nombre: string } } })[];
+      return data as (CosteoOrdenProduccion & { ordenes_produccion: { productos_produccion: { nombre: string } } })[];
     },
   });
 
@@ -1355,7 +1355,7 @@ function PestanaCosteo() {
               {porOrden?.map((o) => (
                 <tr key={o.orden_produccion_id} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-medium">{o.folio}</td>
-                  <td className="px-3 py-2">{o.ordenes_produccion?.productos?.nombre}</td>
+                  <td className="px-3 py-2">{o.ordenes_produccion?.productos_produccion?.nombre}</td>
                   <td className="px-3 py-2">{o.estado}</td>
                   <td className="px-3 py-2 text-right">{formatoMoneda(o.costo_materia_prima)}</td>
                   <td className="px-3 py-2 text-right">{formatoMoneda(o.costo_mano_obra)}</td>
