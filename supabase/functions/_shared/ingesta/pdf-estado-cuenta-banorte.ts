@@ -31,12 +31,16 @@
 // CUENTA ÚNICA POR ARCHIVO: un estado de cuenta de Banorte puede traer más
 // de un producto (ej. "ENLACE NEGOCIOS BASICA" + "INVERSION ENLACE
 // NEGOCIOS" en el mismo PDF, cada uno con su propia tabla "FECHA
-// DESCRIPCIÓN..."). Este parser solo lee la PRIMERA tabla de movimientos
-// (el producto principal que se está cargando) -- si un producto posterior
-// también trae movimientos reales (no "SIN MOVIMIENTOS"), se bloquea todo
-// el documento en vez de mezclarlos o adivinar cuál cargar, porque hoy la
-// función de ingesta no recibe el número de cuenta del PDF para decidir con
-// certeza cuál tabla corresponde a la cuenta bancaria seleccionada.
+// DESCRIPCIÓN..."). Cuando esto pasa, se usa la tabla "RESUMEN INTEGRAL"
+// del encabezado del PDF (lista cada producto junto con su "No. de Cuenta"
+// completo) para ubicar cuál tabla de movimientos corresponde a la cuenta
+// bancaria seleccionada en la carga (cuentaUltimos4, los últimos 4 dígitos
+// de cuentas_bancarias.ultimos_4) -- así se soporta el PDF sin adivinar ni
+// mezclar productos. Si no se pasa cuentaUltimos4 (llamada sin ese dato) o
+// no se pudo ubicar el producto en el RESUMEN INTEGRAL, se cae al
+// comportamiento anterior: bloquear el documento si un producto posterior
+// también trae movimientos reales (no "SIN MOVIMIENTOS"), en vez de
+// adivinar cuál cargar.
 //
 // AUTOVALIDACIÓN: el documento declara su propio "Saldo actual" / "SALDO
 // FINAL" y "+ Total de depósitos". Se valida que el saldo acumulado
@@ -94,42 +98,101 @@ function extraerTotalesDeclarados(textoCompleto: string): TotalesDeclarados {
   };
 }
 
+interface ProductoResumenIntegral {
+  producto: string;
+  noCuenta: string;
+}
+
+// "RESUMEN INTEGRAL" lista cada producto del PDF junto con su número de
+// cuenta completo, ej.:
+//   Producto No. de Cuenta CLABE Saldo anterior Saldo al corte
+//   ENLACE NEGOCIOS BASICA 1155651273 072 650 01155651273 6 $4,237.85 $3,773.86
+//   INVERSION ENLACE NEGOCIOS 1155652515 072 650 01155652515 0 $0.00 $0.00
+// Solo se necesita el nombre del producto y su No. de Cuenta -- el resto de
+// la línea (CLABE y saldos) no se usa aquí.
+const RE_FILA_RESUMEN_INTEGRAL = /^([A-ZÁÉÍÓÚÑ0-9][A-ZÁÉÍÓÚÑ0-9 .]*?)\s(\d{6,})\s\d/gm;
+
+function extraerProductosResumenIntegral(textoCompleto: string): ProductoResumenIntegral[] {
+  const idxInicio = textoCompleto.indexOf("Producto No. de Cuenta CLABE Saldo anterior Saldo al corte");
+  if (idxInicio === -1) return [];
+  const idxFin = textoCompleto.indexOf("\nTOTAL", idxInicio);
+  const bloque = textoCompleto.slice(idxInicio, idxFin === -1 ? undefined : idxFin);
+  return [...bloque.matchAll(RE_FILA_RESUMEN_INTEGRAL)].map((m) => ({ producto: m[1].trim(), noCuenta: m[2] }));
+}
+
+function nombreProductoDeHeader(textoCompleto: string, idxHeader: number): string {
+  // idxHeader - 1 es el "\n" que termina la línea anterior (el nombre del
+  // producto) -- hay que buscar el "\n" ANTERIOR a ese para tomar esa línea
+  // completa, no el que ya la termina.
+  const idxFinLineaAnterior = idxHeader - 1;
+  const idxInicioLineaAnterior = textoCompleto.lastIndexOf("\n", idxFinLineaAnterior - 1) + 1;
+  return textoCompleto.slice(idxInicioLineaAnterior, idxFinLineaAnterior).trim();
+}
+
+function seccionDeHeader(textoCompleto: string, idxHeader: number, idxSiguienteHeader: number | null, idxOtros: number): string {
+  const idxFinLinea = textoCompleto.indexOf("\n", idxHeader);
+  const inicio = idxFinLinea === -1 ? idxHeader + RE_ENCABEZADO_TABLA.length : idxFinLinea + 1;
+  const candidatosFin = [idxSiguienteHeader, idxOtros !== -1 && idxOtros > idxHeader ? idxOtros : null].filter(
+    (i): i is number => i != null,
+  );
+  const fin = candidatosFin.length > 0 ? Math.min(...candidatosFin) : textoCompleto.length;
+  return textoCompleto.slice(inicio, fin);
+}
+
 /**
  * @param textoCompleto Texto de todas las páginas del PDF, concatenado (ver
  *   pdf-cargador.ts / pdfATexto).
+ * @param cuentaUltimos4 Últimos 4 dígitos de la cuenta bancaria seleccionada
+ *   en la carga (cuentas_bancarias.ultimos_4) -- se usa para elegir la tabla
+ *   de movimientos correcta cuando el PDF trae más de un producto. Si se
+ *   omite, o no se pudo ubicar el producto en el RESUMEN INTEGRAL, se cae al
+ *   comportamiento de bloquear el documento ante un segundo producto con
+ *   movimientos reales.
  */
-export function parsearPdfEstadoCuentaBanorte(textoCompleto: string): ResultadoParseoPdf {
-  const idxHeader1 = textoCompleto.indexOf(RE_ENCABEZADO_TABLA);
-  if (idxHeader1 === -1) {
+export function parsearPdfEstadoCuentaBanorte(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+  const posicionesHeader = [...textoCompleto.matchAll(new RegExp(RE_ENCABEZADO_TABLA, "g"))].map((m) => m.index!);
+  if (posicionesHeader.length === 0) {
     return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontró la tabla de movimientos (encabezado FECHA DESCRIPCIÓN / ESTABLECIMIENTO...) en el PDF" };
   }
-  const idxFinHeader1 = textoCompleto.indexOf("\n", idxHeader1);
-  const inicioSeccion = idxFinHeader1 === -1 ? idxHeader1 + RE_ENCABEZADO_TABLA.length : idxFinHeader1 + 1;
+  const idxOtros = textoCompleto.indexOf(RE_OTROS_MARCADOR);
 
-  const idxHeader2 = textoCompleto.indexOf(RE_ENCABEZADO_TABLA, idxHeader1 + 1);
-  const idxOtros = textoCompleto.indexOf(RE_OTROS_MARCADOR, idxHeader1 + 1);
-  const candidatosFin = [idxHeader2, idxOtros].filter((i) => i !== -1);
-  const finSeccion = candidatosFin.length > 0 ? Math.min(...candidatosFin) : textoCompleto.length;
+  let idxElegidoPos = 0;
 
-  // Si un segundo producto en el mismo PDF también trae movimientos reales
-  // (no "SIN MOVIMIENTOS"), no hay forma de saber con certeza cuál tabla
-  // corresponde a la cuenta bancaria seleccionada en la carga -- se bloquea
-  // en vez de adivinar.
-  if (idxHeader2 !== -1) {
-    const idxFinHeader2 = textoCompleto.indexOf("\n", idxHeader2);
-    const inicioSeccion2 = idxFinHeader2 === -1 ? idxHeader2 : idxFinHeader2 + 1;
-    const finSeccion2 = idxOtros !== -1 && idxOtros > idxHeader2 ? idxOtros : textoCompleto.length;
-    const seccion2 = textoCompleto.slice(inicioSeccion2, finSeccion2);
-    if (!/SIN MOVIMIENTOS/i.test(seccion2)) {
-      return {
-        movimientos: [],
-        erroresPorFila: [],
-        errorDocumento: "El PDF trae más de un producto con movimientos (ej. cuenta + inversión) -- carga de PDF con varios productos no soportada todavía, se necesita agregar el número de cuenta a la carga para saber cuál tabla corresponde.",
-      };
+  if (posicionesHeader.length > 1) {
+    if (cuentaUltimos4) {
+      const productos = extraerProductosResumenIntegral(textoCompleto);
+      const productoDeLaCuenta = productos.find((p) => p.noCuenta.endsWith(cuentaUltimos4));
+      const idxEncontrado = productoDeLaCuenta
+        ? posicionesHeader.findIndex((idx) => nombreProductoDeHeader(textoCompleto, idx).toUpperCase() === productoDeLaCuenta.producto.toUpperCase())
+        : -1;
+      if (idxEncontrado === -1) {
+        return {
+          movimientos: [],
+          erroresPorFila: [],
+          errorDocumento: `El PDF trae más de un producto y no se pudo ubicar cuál corresponde a la cuenta terminación ${cuentaUltimos4} en el RESUMEN INTEGRAL del documento -- revisa que sea el PDF correcto para esta cuenta.`,
+        };
+      }
+      idxElegidoPos = idxEncontrado;
+    } else {
+      // Sin número de cuenta para desambiguar: solo es seguro seguir si
+      // ningún producto posterior al primero trae movimientos reales.
+      for (let i = 1; i < posicionesHeader.length; i++) {
+        const idxSiguiente = i + 1 < posicionesHeader.length ? posicionesHeader[i + 1] : null;
+        const seccionN = seccionDeHeader(textoCompleto, posicionesHeader[i], idxSiguiente, idxOtros);
+        if (!/SIN MOVIMIENTOS/i.test(seccionN)) {
+          return {
+            movimientos: [],
+            erroresPorFila: [],
+            errorDocumento: "El PDF trae más de un producto con movimientos (ej. cuenta + inversión) -- carga de PDF con varios productos no soportada todavía, se necesita agregar el número de cuenta a la carga para saber cuál tabla corresponde.",
+          };
+        }
+      }
     }
   }
 
-  const seccion = textoCompleto.slice(inicioSeccion, finSeccion);
+  const idxHeaderElegido = posicionesHeader[idxElegidoPos];
+  const idxSiguienteElegido = idxElegidoPos + 1 < posicionesHeader.length ? posicionesHeader[idxElegidoPos + 1] : null;
+  const seccion = seccionDeHeader(textoCompleto, idxHeaderElegido, idxSiguienteElegido, idxOtros);
 
   const anclas = [...seccion.matchAll(RE_FECHA_ANCLA)];
   if (anclas.length === 0) {
@@ -226,8 +289,16 @@ export function parsearPdfEstadoCuentaBanorte(textoCompleto: string): ResultadoP
 
   // Autovalidación contra lo que el propio documento declara -- ver
   // comentario del encabezado para por qué no se valida contra "Total de
-  // retiros" declarado.
-  const declarado = extraerTotalesDeclarados(textoCompleto);
+  // retiros" declarado. Solo se aplica cuando el producto elegido es el
+  // primero del PDF: el layout con "Saldo actual $X" / "+ Total de
+  // depósitos $X" etiquetados solo se confirmó contra un PDF real para el
+  // producto principal -- en productos posteriores (ej. una inversión que
+  // acompaña a la cuenta) ese resumen aparece colapsado sin etiquetas, así
+  // que buscar esas frases en todo el documento podría comparar contra el
+  // resumen de OTRO producto. La consistencia interna (saldo acumulado
+  // movimiento a movimiento arrancando en "SALDO ANTERIOR" de la sección
+  // elegida) ya se valida arriba sin depender de esto.
+  const declarado = idxElegidoPos === 0 ? extraerTotalesDeclarados(textoCompleto) : { totalDepositos: null, saldoFinal: null };
 
   if (declarado.saldoFinal != null && Math.abs(saldoAnterior - declarado.saldoFinal) > 0.01) {
     return {

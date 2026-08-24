@@ -4,6 +4,16 @@ import { useAuth } from "../lib/auth";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
+interface FilaEstadoCarga {
+  empresa_id: string;
+  empresa_nombre: string;
+  ultima_carga_estado_cuenta: string | null;
+  ultimo_periodo_cfdi_recibidos: string | null;
+  ultimo_periodo_cfdi_emitidos: string | null;
+  ultimo_periodo_oc: string | null;
+  ultimo_periodo_ov: string | null;
+}
+
 interface FilaKpi {
   empresa_id: string;
   anio: number;
@@ -40,6 +50,21 @@ interface FilaCosteoMensual {
   costo_unitario_promedio: number | null;
 }
 
+function formatoPeriodo(periodo: string): string {
+  const anio = periodo.slice(0, 4);
+  const mes = Number(periodo.slice(4, 6));
+  return `${MESES[mes - 1]} ${anio}`;
+}
+
+/** Chip verde con el último periodo/fecha cargado, o rojo "Sin cargar" si
+ * esa categoría nunca tuvo un archivo para esta empresa (valor null). */
+function ChipCarga({ valor, formato }: { valor: string | null; formato: (v: string) => string }) {
+  if (!valor) {
+    return <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Sin cargar</span>;
+  }
+  return <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">{formato(valor)}</span>;
+}
+
 export function Dashboard() {
   const { veTodasLasEmpresas, perfil } = useAuth();
   // El costeo de producción de Clavicón solo lo ve quien ya tiene acceso al
@@ -64,6 +89,17 @@ export function Dashboard() {
       return data as any[];
     },
     enabled: veTodasLasEmpresas,
+  });
+
+  // Qué le falta cargar a cada empresa (RLS de v_estado_carga_empresa ya
+  // filtra a solo la(s) empresa(s) que el rol puede ver).
+  const { data: estadoCarga } = useQuery({
+    queryKey: ["estado-carga-empresa"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_estado_carga_empresa").select("*").order("empresa_nombre");
+      if (error) throw error;
+      return data as FilaEstadoCarga[];
+    },
   });
 
   // Saldo del movimiento más reciente de cada cuenta -- a diferencia de
@@ -94,6 +130,21 @@ export function Dashboard() {
 
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
 
+  // Agrupado por empresa (en vez de una tabla plana ordenada solo por fecha)
+  // para poder identificar de un vistazo a qué empresa pertenece cada
+  // cuenta, sobre todo cuando el usuario ve el consolidado de las 8.
+  const gruposPorEmpresa = (() => {
+    if (!saldosPorCuenta) return [];
+    const mapa = new Map<string, { empresaNombre: string; cuentas: typeof saldosPorCuenta }>();
+    for (const s of saldosPorCuenta) {
+      const empresaId = s.empresa_id ?? "sin-empresa";
+      const empresaNombre = s.empresas?.nombre ?? "Empresa desconocida";
+      if (!mapa.has(empresaId)) mapa.set(empresaId, { empresaNombre, cuentas: [] });
+      mapa.get(empresaId)!.cuentas.push(s);
+    }
+    return [...mapa.values()].sort((a, b) => a.empresaNombre.localeCompare(b.empresaNombre, "es"));
+  })();
+
   const ytd = kpis?.reduce(
     (acc, k) => ({
       movimientos: acc.movimientos + k.movimientos,
@@ -109,6 +160,46 @@ export function Dashboard() {
       <p className="mb-6 text-sm text-slate-500">
         {veTodasLasEmpresas ? "Consolidado — las 8 empresas" : `Empresa asignada`} · {perfil?.rol}
       </p>
+
+      {estadoCarga && estadoCarga.length > 0 && (
+        <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
+          <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">Estado de carga por empresa</p>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Empresa</th>
+                <th className="px-3 py-2">Estado de cuenta</th>
+                <th className="px-3 py-2">CFDI recibidos</th>
+                <th className="px-3 py-2">CFDI emitidos</th>
+                <th className="px-3 py-2">Catálogo OC/OS</th>
+                <th className="px-3 py-2">Catálogo OV</th>
+              </tr>
+            </thead>
+            <tbody>
+              {estadoCarga.map((e) => (
+                <tr key={e.empresa_id} className="border-t border-slate-100">
+                  <td className="px-3 py-2 font-medium text-slate-800">{e.empresa_nombre}</td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultima_carga_estado_cuenta} formato={(v) => new Date(v).toLocaleDateString("es-MX")} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_cfdi_recibidos} formato={formatoPeriodo} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_cfdi_emitidos} formato={formatoPeriodo} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_oc} formato={formatoPeriodo} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ChipCarga valor={e.ultimo_periodo_ov} formato={formatoPeriodo} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Tarjeta titulo="Movimientos YTD" valor={String(ytd.movimientos)} />
@@ -182,30 +273,38 @@ export function Dashboard() {
         </div>
       )}
 
-      {saldosPorCuenta && saldosPorCuenta.length > 0 && (
-        <div className="overflow-x-auto rounded border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Cuenta</th>
-                {veTodasLasEmpresas && <th className="px-3 py-2">Empresa</th>}
-                <th className="px-3 py-2">Último movimiento</th>
-                <th className="px-3 py-2 text-right">Saldo (según el banco)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {saldosPorCuenta.map((s) => (
-                <tr key={s.cuenta_id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">
-                    {s.cuentas_bancarias?.banco} ····{s.cuentas_bancarias?.ultimos_4}
-                  </td>
-                  {veTodasLasEmpresas && <td className="px-3 py-2">{s.empresas?.nombre}</td>}
-                  <td className="px-3 py-2">{s.fecha_ultimo_movimiento}</td>
-                  <td className="px-3 py-2 text-right font-medium">{formatoMoneda(Number(s.saldo_cierre))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {gruposPorEmpresa.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Saldo por cuenta</h2>
+          <div className="space-y-4">
+            {gruposPorEmpresa.map((grupo) => (
+              <div key={grupo.empresaNombre} className="overflow-x-auto rounded border border-slate-200 bg-white">
+                {veTodasLasEmpresas && (
+                  <p className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800">{grupo.empresaNombre}</p>
+                )}
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Cuenta</th>
+                      <th className="px-3 py-2">Último movimiento</th>
+                      <th className="px-3 py-2 text-right">Saldo (según el banco)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grupo.cuentas.map((s) => (
+                      <tr key={s.cuenta_id} className="border-t border-slate-100">
+                        <td className="px-3 py-2">
+                          {s.cuentas_bancarias?.banco} ····{s.cuentas_bancarias?.ultimos_4}
+                        </td>
+                        <td className="px-3 py-2">{s.fecha_ultimo_movimiento}</td>
+                        <td className="px-3 py-2 text-right font-medium">{formatoMoneda(Number(s.saldo_cierre))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

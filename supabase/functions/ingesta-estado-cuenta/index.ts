@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
     const erroresPorFila: { fila: number; errores: string[] }[] = [];
 
     if (esPdf) {
-      const { data: cuentaRow, error: errCuenta } = await dbServicio.from("cuentas_bancarias").select("banco").eq("id", cuentaId).single();
+      const { data: cuentaRow, error: errCuenta } = await dbServicio.from("cuentas_bancarias").select("banco, ultimos_4").eq("id", cuentaId).single();
       if (errCuenta || !cuentaRow) {
         await marcarArchivoError(dbServicio, archivoId, "No se encontró la cuenta bancaria seleccionada");
         return jsonResponse({ error: "No se encontró la cuenta bancaria seleccionada", archivoId }, 400);
@@ -104,7 +104,10 @@ Deno.serve(async (req) => {
       const parserPorBanco: Record<string, (bytes: Uint8Array) => Promise<ResultadoParseoPdf>> = {
         BanBajio: async (b) => parsearPdfEstadoCuentaBanBajio(await pdfATexto(b)),
         BBVA: async (b) => parsearPaginasBBVA(await pdfAPosiciones(b)),
-        Banorte: async (b) => parsearPdfEstadoCuentaBanorte(await pdfATexto(b)),
+        // ultimos_4 permite desambiguar cuando el PDF trae más de un
+        // producto (ej. cuenta + inversión) -- ver comentario del
+        // encabezado de pdf-estado-cuenta-banorte.ts.
+        Banorte: async (b) => parsearPdfEstadoCuentaBanorte(await pdfATexto(b), cuentaRow.ultimos_4),
         Santander: async (b) => parsearPdfEstadoCuentaSantander(await pdfATexto(b)),
       };
       const parser = parserPorBanco[cuentaRow.banco];
