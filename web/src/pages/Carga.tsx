@@ -136,7 +136,10 @@ export function Carga() {
       queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
       queryClient.invalidateQueries({ queryKey: ["movimientos"] });
       queryClient.invalidateQueries({ queryKey: ["kpis-mensuales"] });
+      queryClient.invalidateQueries({ queryKey: ["kpis-anuales"] });
       queryClient.invalidateQueries({ queryKey: ["kpis-por-empresa"] });
+      queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
+      queryClient.invalidateQueries({ queryKey: ["pendientes-por-empresa"] });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -169,6 +172,7 @@ export function Carga() {
         const json = await llamarFuncion(nombreFuncion, form);
         setResultado(json);
         queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
+        queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
       } catch (err) {
         setError((err as Error).message);
       } finally {

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 
@@ -14,13 +15,27 @@ interface FilaEstadoCarga {
   ultimo_periodo_ov: string | null;
 }
 
-interface FilaKpi {
+interface FilaPendientes {
+  empresa_id: string;
+  ambiguos: number;
+  duplicados: number;
+  faltantes: number;
+}
+
+interface FilaKpiMensual {
   empresa_id: string;
   anio: number;
   mes: number;
   movimientos: number;
-  pct_proyecto: number | null;
-  pct_nombre: number | null;
+  pct_factura_ajustado: number | null;
+  total_cargo: number;
+  total_abono: number;
+}
+
+interface FilaKpiAnual {
+  empresa_id: string;
+  anio: number;
+  movimientos: number;
   pct_factura_ajustado: number | null;
   total_cargo: number;
   total_abono: number;
@@ -28,15 +43,6 @@ interface FilaKpi {
 
 function formatoMoneda(v: number): string {
   return v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
-}
-
-function Tarjeta({ titulo, valor }: { titulo: string; valor: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <p className="text-xs uppercase text-slate-500">{titulo}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{valor}</p>
-    </div>
-  );
 }
 
 function formatoPeriodo(periodo: string): string {
@@ -54,36 +60,57 @@ function ChipCarga({ valor, formato }: { valor: string | null; formato: (v: stri
   return <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">{formato(valor)}</span>;
 }
 
+/** Número en rojo si hay pendientes (>0), gris si está en cero -- para que
+ * el ojo vaya directo a las empresas con algo por resolver. */
+function Conteo({ valor }: { valor: number }) {
+  return <span className={valor > 0 ? "font-semibold text-red-700" : "text-slate-400"}>{valor}</span>;
+}
+
 export function Dashboard() {
   const { veTodasLasEmpresas, perfil } = useAuth();
 
-  const { data: kpis, isLoading } = useQuery({
-    queryKey: ["kpis-mensuales"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_kpis_mensuales").select("*").order("anio").order("mes");
-      if (error) throw error;
-      return data as FilaKpi[];
-    },
-  });
-
-  const { data: porEmpresa } = useQuery({
-    queryKey: ["kpis-por-empresa"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_movimientos_por_empresa").select("*, empresas(nombre)");
-      if (error) throw error;
-      return data as any[];
-    },
-    enabled: veTodasLasEmpresas,
-  });
-
-  // Qué le falta cargar a cada empresa (RLS de v_estado_carga_empresa ya
-  // filtra a solo la(s) empresa(s) que el rol puede ver).
-  const { data: estadoCarga } = useQuery({
+  // Qué le falta cargar a cada empresa, de forma GLOBAL (RLS de
+  // v_estado_carga_empresa ya filtra a solo la(s) empresa(s) que el rol
+  // puede ver) -- primera pregunta que el Dashboard debe contestar antes de
+  // cualquier número (SPEC.md sección 5: "Estatus de carga... primero de
+  // manera global"). También sirve como la lista de empresas activas
+  // visibles para el resto de las tablas de esta página.
+  const { data: estadoCarga, isLoading } = useQuery({
     queryKey: ["estado-carga-empresa"],
     queryFn: async () => {
       const { data, error } = await supabase.from("v_estado_carga_empresa").select("*").order("empresa_nombre");
       if (error) throw error;
       return data as FilaEstadoCarga[];
+    },
+  });
+
+  // Segunda pregunta, ya específica por empresa: cuántos movimientos traen
+  // algo por resolver (ambiguo, posible duplicado, o pendiente de revisión
+  // sin explicación todavía).
+  const { data: pendientes } = useQuery({
+    queryKey: ["pendientes-por-empresa"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_pendientes_por_empresa").select("*");
+      if (error) throw error;
+      return data as FilaPendientes[];
+    },
+  });
+
+  const { data: kpisMensuales } = useQuery({
+    queryKey: ["kpis-mensuales"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_kpis_mensuales").select("empresa_id, anio, mes, movimientos, pct_factura_ajustado, total_cargo, total_abono");
+      if (error) throw error;
+      return data as FilaKpiMensual[];
+    },
+  });
+
+  const { data: kpisAnuales } = useQuery({
+    queryKey: ["kpis-anuales"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_kpis_anuales").select("*");
+      if (error) throw error;
+      return data as FilaKpiAnual[];
     },
   });
 
@@ -120,14 +147,30 @@ export function Dashboard() {
     return [...mapa.values()].sort((a, b) => a.empresaNombre.localeCompare(b.empresaNombre, "es"));
   })();
 
-  const ytd = kpis?.reduce(
-    (acc, k) => ({
-      movimientos: acc.movimientos + k.movimientos,
-      cargo: acc.cargo + Number(k.total_cargo),
-      abono: acc.abono + Number(k.total_abono),
-    }),
-    { movimientos: 0, cargo: 0, abono: 0 },
-  ) ?? { movimientos: 0, cargo: 0, abono: 0 };
+  const pendientesPorEmpresa = new Map((pendientes ?? []).map((p) => [p.empresa_id, p]));
+
+  // Mes actual y mes anterior (hoy: agosto -> julio/agosto), en vez de
+  // fijar "julio/agosto" a mano -- así la tabla sigue mostrando los 2 meses
+  // relevantes sin tocar código cuando avance el calendario.
+  const ahora = new Date();
+  const anioActual = ahora.getFullYear();
+  const mesActual = ahora.getMonth() + 1;
+  const anioMesAnterior = mesActual === 1 ? anioActual - 1 : anioActual;
+  const mesAnterior = mesActual === 1 ? 12 : mesActual - 1;
+
+  const kpiMensualDe = (empresaId: string, anio: number, mes: number) =>
+    kpisMensuales?.find((k) => k.empresa_id === empresaId && k.anio === anio && k.mes === mes) ?? null;
+  const kpiAnualDe = (empresaId: string) => kpisAnuales?.find((k) => k.empresa_id === empresaId && k.anio === anioActual) ?? null;
+
+  function CeldasMes({ kpi }: { kpi: FilaKpiMensual | FilaKpiAnual | null }) {
+    return (
+      <>
+        <td className="px-3 py-2 text-right">{formatoMoneda(Number(kpi?.total_cargo ?? 0))}</td>
+        <td className="px-3 py-2 text-right">{formatoMoneda(Number(kpi?.total_abono ?? 0))}</td>
+        <td className="px-3 py-2 text-right">{kpi?.pct_factura_ajustado ?? "—"}%</td>
+      </>
+    );
+  }
 
   return (
     <div>
@@ -138,7 +181,7 @@ export function Dashboard() {
 
       {estadoCarga && estadoCarga.length > 0 && (
         <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
-          <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">Estado de carga por empresa</p>
+          <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">1. Estado de carga por empresa (global)</p>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -176,73 +219,131 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Tarjeta titulo="Movimientos YTD" valor={String(ytd.movimientos)} />
-        <Tarjeta titulo="Cargo total YTD" valor={formatoMoneda(ytd.cargo)} />
-        <Tarjeta titulo="Abono total YTD" valor={formatoMoneda(ytd.abono)} />
-        <Tarjeta titulo="Neto YTD (depósitos − cargos del periodo, no es el saldo del banco)" valor={formatoMoneda(ytd.abono - ytd.cargo)} />
-      </div>
-
-      <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-3 py-2">Mes</th>
-              <th className="px-3 py-2 text-right"># Mov.</th>
-              <th className="px-3 py-2 text-right">% Proyecto</th>
-              <th className="px-3 py-2 text-right">% Nombre</th>
-              <th className="px-3 py-2 text-right">% FACTURA (ajustado)</th>
-              <th className="px-3 py-2 text-right">Cargo</th>
-              <th className="px-3 py-2 text-right">Abono</th>
-            </tr>
-          </thead>
-          <tbody>
-            {kpis?.map((k) => (
-              <tr key={`${k.empresa_id}-${k.anio}-${k.mes}`} className="border-t border-slate-100">
-                <td className="px-3 py-2">
-                  {MESES[k.mes - 1]} {k.anio}
-                </td>
-                <td className="px-3 py-2 text-right">{k.movimientos}</td>
-                <td className="px-3 py-2 text-right">{k.pct_proyecto ?? "—"}%</td>
-                <td className="px-3 py-2 text-right">{k.pct_nombre ?? "—"}%</td>
-                <td className="px-3 py-2 text-right">{k.pct_factura_ajustado ?? "—"}%</td>
-                <td className="px-3 py-2 text-right">{formatoMoneda(Number(k.total_cargo))}</td>
-                <td className="px-3 py-2 text-right">{formatoMoneda(Number(k.total_abono))}</td>
-              </tr>
-            ))}
-            {(!kpis || kpis.length === 0) && (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
-                  Sin datos todavía. Carga un estado de cuenta para empezar.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {veTodasLasEmpresas && porEmpresa && (
+      {estadoCarga && estadoCarga.length > 0 && (
         <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
+          <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+            2. Pendientes por empresa (específico) — clic en{" "}
+            <Link to="/movimientos" className="underline">
+              Movimientos
+            </Link>{" "}
+            y en el semáforo de la fila para resolver
+          </p>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-3 py-2">Empresa</th>
-                <th className="px-3 py-2 text-right"># Mov.</th>
-                <th className="px-3 py-2 text-right">Cargo</th>
-                <th className="px-3 py-2 text-right">Abono</th>
-                <th className="px-3 py-2 text-right">Neto</th>
+                <th className="px-3 py-2 text-right">🟣 Ambiguos</th>
+                <th className="px-3 py-2 text-right">Posibles duplicados</th>
+                <th className="px-3 py-2 text-right">🔴 Faltantes / por revisar</th>
               </tr>
             </thead>
             <tbody>
-              {porEmpresa.map((e) => (
+              {estadoCarga.map((e) => {
+                const p = pendientesPorEmpresa.get(e.empresa_id);
+                return (
+                  <tr key={e.empresa_id} className="border-t border-slate-100">
+                    <td className="px-3 py-2 font-medium text-slate-800">{e.empresa_nombre}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Conteo valor={p?.ambiguos ?? 0} />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Conteo valor={p?.duplicados ?? 0} />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Conteo valor={p?.faltantes ?? 0} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {estadoCarga && estadoCarga.length > 0 && (
+        <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
+          <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">3. Cargos, abonos y % Factura por empresa</p>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th rowSpan={2} className="px-3 py-2 align-bottom">
+                  Empresa
+                </th>
+                <th colSpan={3} className="border-l border-slate-200 px-3 py-1 text-center">
+                  {MESES[mesAnterior - 1]} {anioMesAnterior}
+                </th>
+                <th colSpan={3} className="border-l border-slate-200 px-3 py-1 text-center">
+                  {MESES[mesActual - 1]} {anioActual}
+                </th>
+                <th colSpan={3} className="border-l border-slate-200 px-3 py-1 text-center">
+                  Acumulado {anioActual}
+                </th>
+              </tr>
+              <tr>
+                <th className="border-l border-slate-200 px-3 py-2 text-right">Cargo</th>
+                <th className="px-3 py-2 text-right">Abono</th>
+                <th className="px-3 py-2 text-right">% Factura</th>
+                <th className="border-l border-slate-200 px-3 py-2 text-right">Cargo</th>
+                <th className="px-3 py-2 text-right">Abono</th>
+                <th className="px-3 py-2 text-right">% Factura</th>
+                <th className="border-l border-slate-200 px-3 py-2 text-right">Cargo</th>
+                <th className="px-3 py-2 text-right">Abono</th>
+                <th className="px-3 py-2 text-right">% Factura</th>
+              </tr>
+            </thead>
+            <tbody>
+              {estadoCarga.map((e) => (
                 <tr key={e.empresa_id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">{e.empresas?.nombre}</td>
-                  <td className="px-3 py-2 text-right">{e.movimientos}</td>
-                  <td className="px-3 py-2 text-right">{formatoMoneda(Number(e.total_cargo))}</td>
-                  <td className="px-3 py-2 text-right">{formatoMoneda(Number(e.total_abono))}</td>
-                  <td className="px-3 py-2 text-right">{formatoMoneda(Number(e.neto))}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{e.empresa_nombre}</td>
+                  <CeldasMes kpi={kpiMensualDe(e.empresa_id, anioMesAnterior, mesAnterior)} />
+                  <CeldasMes kpi={kpiMensualDe(e.empresa_id, anioActual, mesActual)} />
+                  <CeldasMes kpi={kpiAnualDe(e.empresa_id)} />
                 </tr>
               ))}
+              {estadoCarga.length > 1 && (
+                <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+                  <td className="px-3 py-2">Total</td>
+                  <CeldasMes
+                    kpi={{
+                      empresa_id: "",
+                      anio: anioMesAnterior,
+                      mes: mesAnterior,
+                      movimientos: 0,
+                      pct_factura_ajustado: null,
+                      total_cargo: estadoCarga.reduce((a, e) => a + Number(kpiMensualDe(e.empresa_id, anioMesAnterior, mesAnterior)?.total_cargo ?? 0), 0),
+                      total_abono: estadoCarga.reduce((a, e) => a + Number(kpiMensualDe(e.empresa_id, anioMesAnterior, mesAnterior)?.total_abono ?? 0), 0),
+                    }}
+                  />
+                  <CeldasMes
+                    kpi={{
+                      empresa_id: "",
+                      anio: anioActual,
+                      mes: mesActual,
+                      movimientos: 0,
+                      pct_factura_ajustado: null,
+                      total_cargo: estadoCarga.reduce((a, e) => a + Number(kpiMensualDe(e.empresa_id, anioActual, mesActual)?.total_cargo ?? 0), 0),
+                      total_abono: estadoCarga.reduce((a, e) => a + Number(kpiMensualDe(e.empresa_id, anioActual, mesActual)?.total_abono ?? 0), 0),
+                    }}
+                  />
+                  <CeldasMes
+                    kpi={{
+                      empresa_id: "",
+                      anio: anioActual,
+                      movimientos: 0,
+                      pct_factura_ajustado: null,
+                      total_cargo: estadoCarga.reduce((a, e) => a + Number(kpiAnualDe(e.empresa_id)?.total_cargo ?? 0), 0),
+                      total_abono: estadoCarga.reduce((a, e) => a + Number(kpiAnualDe(e.empresa_id)?.total_abono ?? 0), 0),
+                    }}
+                  />
+                </tr>
+              )}
+              {estadoCarga.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
+                    Sin datos todavía. Carga un estado de cuenta para empezar.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

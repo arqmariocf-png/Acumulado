@@ -76,7 +76,9 @@ export function Movimientos() {
       setCuentaReclasificando(null);
       queryClient.invalidateQueries({ queryKey: ["movimientos"] });
       queryClient.invalidateQueries({ queryKey: ["kpis-mensuales"] });
+      queryClient.invalidateQueries({ queryKey: ["kpis-anuales"] });
       queryClient.invalidateQueries({ queryKey: ["kpis-por-empresa"] });
+      queryClient.invalidateQueries({ queryKey: ["pendientes-por-empresa"] });
       queryClient.invalidateQueries({ queryKey: ["concentrado-pendientes"] });
     },
   });
