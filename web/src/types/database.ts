@@ -52,6 +52,10 @@ export interface Movimiento {
   factura: string | null;
   comentarios: string | null;
   observacion: string | null;
+  /** Solo aplica a préstamos entre empresas del grupo (factura = "N/A -
+   * PRESTAMO INTERCOMPAÑIA"): la otra empresa involucrada, capturada a mano
+   * en Reportes Especiales. */
+  empresa_contraparte_id: string | null;
   estado_clasificacion: EstadoClasificacion;
   posible_duplicado: boolean;
   version: number;

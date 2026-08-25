@@ -6,6 +6,7 @@ const ENLACES = [
   { a: "/movimientos", etiqueta: "Movimientos" },
   { a: "/carga", etiqueta: "Carga" },
   { a: "/reportes", etiqueta: "Reportes especiales" },
+  { a: "/prestamos-intercompania", etiqueta: "Préstamos entre empresas" },
   { a: "/pendientes", etiqueta: "Pendientes" },
 ];
 
