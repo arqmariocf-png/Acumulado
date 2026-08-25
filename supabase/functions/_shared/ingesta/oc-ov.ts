@@ -1,7 +1,19 @@
 // Mapea registros del catálogo de OC/OS y OV, ya sea desde la API del
-// backoffice (JSON, campos dados textualmente en SPEC.md sección 3) o desde
-// la carga manual de Excel de respaldo (mismos campos, como encabezados).
-
+// backoffice o desde la carga manual de Excel de respaldo.
+//
+// Campos de la API CONFIRMADOS contra la respuesta real (2026-08-25, ver
+// migración sync_catalogo_oc_ov.sql para el flujo automático que usa estos
+// mismos nombres directo en SQL):
+//   - api_ocs_aut  -> { ordersProject: [{ Id_Orden, Tipo_orden ("Compra" o
+//     "Servicio" -- así se distingue OC de OS, no hay un campo "OC"/"OS"
+//     literal), Proyecto, Empresa_solicitante, Proveedor, TOTAL (todo
+//     mayúsculas), Creado, ... }] } -- una fila por orden, no por línea.
+//   - api_ov_aut -> { ordenVentaDashModel: [{ Id_cotizacion,
+//     Folio_orden_venta, Project, empresa, Cliente_nombre, Cliente_apellido,
+//     OV_Subtotal, FechaOV, ... }] } -- una fila por orden de venta.
+// Las variantes "_det_aut" devuelven el mismo catálogo pero por LÍNEA/ítem
+// (Item, Cantidad, Costo por renglón) -- no sirven para este mapeo de
+// cabecera, que es todo lo que el modelo de datos de la app guarda hoy.
 import { normalizarTexto, periodoDeFecha } from "../motor/normalizar.ts";
 
 export interface OrdenCompraMapeada {
@@ -11,6 +23,10 @@ export interface OrdenCompraMapeada {
   proveedor: string | null;
   total: number | null;
   fechaCreacion: string | null; // ISO
+  /** Nombre de la empresa tal como lo manda la API (Empresa_solicitante) --
+   * solo viene poblado desde mapearOrdenCompraDesdeApi; la carga manual de
+   * Excel ya sabe la empresa por el formulario donde se sube el archivo. */
+  empresaNombre: string | null;
 }
 
 export interface OrdenVentaMapeada {
@@ -19,6 +35,9 @@ export interface OrdenVentaMapeada {
   cliente: string | null;
   total: number | null;
   fechaOv: string | null; // ISO
+  /** Nombre de la empresa tal como lo manda la API (campo "empresa") --
+   * mismo criterio que empresaNombre en OrdenCompraMapeada. */
+  empresaNombre: string | null;
 }
 
 function aFechaIso(valor: unknown): string | null {
@@ -43,35 +62,34 @@ function aNumeroONull(valor: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * SPEC.md sección 3 lista los campos de la API como `Id_Orden, Proyecto,
- * Empresa_solicitante, Proveedor, Total, Creado` pero NO especifica cómo
- * distingue la API entre OC (orden de compra) y OS (orden de servicio) —
- * puede venir en un campo no documentado (`Tipo`, `Tipo_Orden`, un prefijo en
- * Id_Orden, o endpoints separados). Mientras se confirma con el equipo del
- * backoffice, este mapeo acepta un campo opcional `Tipo`/`tipo` en el JSON y
- * cae a 'OC' por default — HAY QUE VALIDAR esto contra la API real antes de
- * confiar en la distinción OC/OS en producción.
- */
+/** Tipo_orden trae literalmente "Compra" o "Servicio" -- confirmado contra
+ * la API real, no un valor "OC"/"OS" directo. Se mantienen los alias
+ * (Tipo/tipo/Tipo_Orden con "OC"/"OS") por si algún registro viejo o la
+ * carga manual los trae en ese formato. */
 export function mapearOrdenCompraDesdeApi(json: Record<string, unknown>): OrdenCompraMapeada {
-  const tipoRaw = String(json.Tipo ?? json.tipo ?? json.Tipo_Orden ?? "OC").toUpperCase();
+  const tipoRaw = String(json.Tipo_orden ?? json.Tipo ?? json.tipo ?? json.Tipo_Orden ?? "").trim().toUpperCase();
   return {
     idOrden: String(json.Id_Orden ?? json.id_orden ?? "").trim(),
-    tipo: tipoRaw === "OS" ? "OS" : "OC",
+    tipo: tipoRaw === "OS" || tipoRaw === "SERVICIO" ? "OS" : "OC",
     proyecto: json.Proyecto ? String(json.Proyecto).trim() : null,
     proveedor: json.Proveedor ? String(json.Proveedor).trim() : null,
-    total: aNumeroONull(json.Total ?? json.total),
+    total: aNumeroONull(json.TOTAL ?? json.Total ?? json.total),
     fechaCreacion: aFechaIso(json.Creado ?? json.creado),
+    empresaNombre: json.Empresa_solicitante ? String(json.Empresa_solicitante).trim() : null,
   };
 }
 
 export function mapearOrdenVentaDesdeApi(json: Record<string, unknown>): OrdenVentaMapeada {
+  const nombre = json.Cliente_nombre ? String(json.Cliente_nombre).trim() : "";
+  const apellido = json.Cliente_apellido ? String(json.Cliente_apellido).trim() : "";
+  const cliente = [nombre, apellido].filter(Boolean).join(" ") || (json.Cliente ? String(json.Cliente).trim() : "") || null;
   return {
-    idOv: String(json["Id OV"] ?? json.Folio_orden_venta ?? json.id_ov ?? "").trim(),
-    proyecto: json.Proyecto ? String(json.Proyecto).trim() : null,
-    cliente: json.Cliente ? String(json.Cliente).trim() : null,
-    total: aNumeroONull(json.Total ?? json.total),
+    idOv: String(json.Folio_orden_venta ?? json["Id OV"] ?? json.Id_cotizacion ?? json.id_ov ?? "").trim(),
+    proyecto: json.Project ? String(json.Project).trim() : json.Proyecto ? String(json.Proyecto).trim() : null,
+    cliente,
+    total: aNumeroONull(json.OV_Subtotal ?? json.Total ?? json.total),
     fechaOv: aFechaIso(json.FechaOV ?? json.fechaOV ?? json.fecha_ov),
+    empresaNombre: json.empresa ? String(json.empresa).trim() : null,
   };
 }
 
@@ -93,6 +111,7 @@ export function mapearFilaOrdenCompraExcel(filaObj: Record<string, string>): Ord
     proveedor: get("PROVEEDOR").trim() || null,
     total: aNumeroONull(get("TOTAL")),
     fechaCreacion: aFechaIso(get("CREADO")),
+    empresaNombre: null,
   };
 }
 
@@ -106,6 +125,7 @@ export function mapearFilaOrdenVentaExcel(filaObj: Record<string, string>): Orde
     cliente: get("CLIENTE").trim() || null,
     total: aNumeroONull(get("TOTAL")),
     fechaOv: aFechaIso(get("FECHAOV").trim() || get("FECHA OV")),
+    empresaNombre: null,
   };
 }
 
