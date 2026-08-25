@@ -63,6 +63,43 @@ export interface Movimiento {
   updated_at: string;
 }
 
+export interface PerfilFiscalParametros {
+  id: string;
+  empresa_id: string;
+  anio: number;
+  coeficiente_utilidad: number;
+  tasa_isr: number;
+  tasa_iva: number;
+  perdidas_fiscales_inicio_anio: number;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+/** Fila calculada de v_perfil_fiscal_mensual (ver
+ * supabase/migrations/20260825030000_perfil_fiscal.sql para las fórmulas). */
+export interface PerfilFiscalMensual {
+  empresa_id: string;
+  anio: number;
+  mes: number;
+  periodo: string;
+  ingresos_nominales_mes: number;
+  ingresos_nominales_acumulado: number;
+  coeficiente_utilidad: number;
+  utilidad_fiscal_estimada_acumulada: number;
+  perdidas_fiscales_inicio_anio: number;
+  base_gravable_isr_acumulada: number;
+  tasa_isr: number;
+  isr_causado_acumulado: number;
+  isr_a_cargo_mes: number;
+  ingresos_cobrados_mes: number;
+  tasa_iva: number;
+  iva_trasladado_mes: number;
+  gastos_mes: number;
+  iva_acreditable_mes: number;
+  saldo_iva_mes: number;
+  saldo_iva_acumulado: number;
+}
+
 export interface ReglaClasificacion {
   id: string;
   palabra_clave: string;

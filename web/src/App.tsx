@@ -13,6 +13,7 @@ const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ defa
 const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga })));
 const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then((m) => ({ default: m.ReportesEspeciales })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
+const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
@@ -42,6 +43,7 @@ export default function App() {
                   <Route path="/carga" element={<Carga />} />
                   <Route path="/reportes" element={<ReportesEspeciales />} />
                   <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
+                  <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
                   <Route path="/pendientes" element={<Pendientes />} />
 
                   <Route element={<ProtectedRoute roles={["rh"]} />}>
