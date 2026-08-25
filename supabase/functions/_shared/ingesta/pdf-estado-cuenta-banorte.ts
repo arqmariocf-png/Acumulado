@@ -1,10 +1,24 @@
-// Parsea el estado de cuenta de Banorte en PDF, formato "ENLACE NEGOCIOS
-// BASICA" (confirmado contra un archivo real: PDF_BANORTE_ACEROS_JULIO_2026.pdf,
-// cuenta Banorte 1273 de Aceros y Envasados de Puebla, julio 2026).
+// Parsea el estado de cuenta de Banorte en PDF. Soporta DOS formatos reales
+// distintos que Banorte genera para el mismo banco, según de dónde se haya
+// descargado el PDF:
+//
+//   1. "ESTADO DE CUENTA" mensual formal, formato "ENLACE NEGOCIOS BASICA"
+//      (confirmado contra PDF_BANORTE_ACEROS_JULIO_2026.pdf, cuenta Banorte
+//      1273 de Aceros y Envasados de Puebla, julio 2026) -- función
+//      parsearFormatoEstadoCuentaMensual más abajo.
+//   2. "Detalle de Movimientos" exportado del portal en línea Enlace
+//      (confirmado contra ESTADO_DE_CUENTA_AL_25_DE_AGOSTO.pdf, cuenta
+//      Banorte 7022 de Ergodinova, del 01 al 25 de agosto 2026) -- función
+//      parsearFormatoDetalleMovimientos más abajo. Se distingue por traer el
+//      encabezado "Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos
+//      Saldos" en vez de "FECHA DESCRIPCIÓN / ESTABLECIMIENTO...".
+//
+// parsearPdfEstadoCuentaBanorte (al final de este archivo) detecta cuál de
+// los dos trae el PDF y despacha a la función correspondiente.
 //
 // A diferencia de BBVA (tabla real con columnas Cargos/Abonos separadas por
-// posición), este formato de Banorte NO trae columnas de monto fijas por
-// posición -- pdf.js/unpdf lo aplana a texto plano tipo:
+// posición), ninguno de los dos formatos de Banorte trae columnas de monto
+// fijas por posición -- pdf.js/unpdf lo aplana a texto plano tipo:
 //
 //   15-JUL-26 PAGO DE CAPITAL 091574212 28,500.00 23,505.04
 //
@@ -74,7 +88,12 @@ const MESES: Record<string, number> = {
 };
 
 const RE_FECHA_ANCLA = /^(\d{2})-([A-Z]{3})-(\d{2})\s/gm;
-const RE_IVA_EMBEBIDO = /IVA:[\d,]+\.\d{2}/g;
+// \s (no espacio literal) porque en el formato "Detalle de Movimientos" el
+// monto del IVA embebido a veces cae en la línea siguiente dentro del mismo
+// bloque de texto plano (ej. "RFC: AUSD881130R6A IVA:\n000000000055.17 ..."),
+// a diferencia del formato de estado de cuenta mensual donde siempre es
+// "IVA:00000000.00" pegado sin espacio.
+const RE_IVA_EMBEBIDO = /IVA:\s*[\d,]+\.\d{2}/g;
 const RE_MONTO = /-?[\d,]+\.\d{2}/g;
 const RE_ENCABEZADO_TABLA = "FECHA DESCRIPCIÓN / ESTABLECIMIENTO";
 const RE_OTROS_MARCADOR = "OTROS▼";
@@ -149,11 +168,8 @@ function seccionDeHeader(textoCompleto: string, idxHeader: number, idxSiguienteH
  *   comportamiento de bloquear el documento ante un segundo producto con
  *   movimientos reales.
  */
-export function parsearPdfEstadoCuentaBanorte(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+function parsearFormatoEstadoCuentaMensual(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
   const posicionesHeader = [...textoCompleto.matchAll(new RegExp(RE_ENCABEZADO_TABLA, "g"))].map((m) => m.index!);
-  if (posicionesHeader.length === 0) {
-    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontró la tabla de movimientos (encabezado FECHA DESCRIPCIÓN / ESTABLECIMIENTO...) en el PDF" };
-  }
   const idxOtros = textoCompleto.indexOf(RE_OTROS_MARCADOR);
 
   let idxElegidoPos = 0;
@@ -320,4 +336,207 @@ export function parsearPdfEstadoCuentaBanorte(textoCompleto: string, cuentaUltim
   }
 
   return { movimientos, erroresPorFila, errorDocumento: null };
+}
+
+// ── Formato 2: "Detalle de Movimientos" del portal Enlace ──────────────────
+//
+// Ejemplo real (ESTADO_DE_CUENTA_AL_25_DE_AGOSTO.pdf, cuenta 7022 de
+// Ergodinova):
+//
+//   Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos Saldos Cheque
+//   03/Ago./2026 10130 511
+//   COMPRA ORDEN DE PAGO SPEI 030826 =REFERENCIA CTA/CLABE:...
+//   $400.00 $2,165,024.37
+//
+// Cada movimiento arranca con "DD/Mmm./AAAA " seguido del número de
+// Movimiento y Cód. de Trans. del banco (ambos enteros, se descartan del
+// texto de la descripción salvo el de Movimiento que se guarda como folio).
+// A diferencia del formato mensual, este NO trae una fila "SALDO ANTERIOR"
+// que ancle el saldo inicial de la tabla -- en vez de eso, el saldo inicial
+// del periodo se DERIVA de lo que el documento sí declara en su encabezado
+// ("Saldo Actual") y al final de la tabla ("Total: $retiros $depositos"):
+// saldoInicial = saldoActual - totalDepositos + totalRetiros. Esto además
+// sirve de autovalidación: si la extracción de algún monto o su
+// clasificación depósito/retiro falla, la cadena de saldos (que sí se lee
+// directo del texto en cada renglón, no se calcula) no va a terminar en el
+// "Saldo Actual" declarado, y se bloquea el documento.
+const RE_ENCABEZADO_DETALLE = "Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos Saldos";
+const RE_FECHA_ANCLA_DETALLE = /^(\d{2})\/([A-Za-z]{3})\.\/(\d{4})\s/gm;
+const RE_MOVIMIENTO_COD_TRANS = /^(\d+)\s+(\d+)\s*/;
+const RE_CUENTA_SUCURSAL = /(\d{6,})\s\|\s\d{3,4}-SUCURSAL/;
+
+interface TotalesDetalle {
+  saldoActual: number | null;
+  totalRetiros: number | null;
+  totalDepositos: number | null;
+  numeroCuenta: string | null;
+}
+
+function extraerTotalesDetalle(textoCompleto: string): TotalesDetalle {
+  const mSaldoActual = textoCompleto.match(/Saldo Actual:\s*\$([\d,]+\.\d{2})/i);
+  const mTotal = textoCompleto.match(/^Total:\s*\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})/m);
+  const mCuenta = textoCompleto.match(RE_CUENTA_SUCURSAL);
+  return {
+    saldoActual: mSaldoActual ? aNumero(mSaldoActual[1]) : null,
+    totalRetiros: mTotal ? aNumero(mTotal[1]) : null,
+    totalDepositos: mTotal ? aNumero(mTotal[2]) : null,
+    numeroCuenta: mCuenta ? mCuenta[1] : null,
+  };
+}
+
+function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+  const declarado = extraerTotalesDetalle(textoCompleto);
+
+  if (cuentaUltimos4 && declarado.numeroCuenta && !declarado.numeroCuenta.endsWith(cuentaUltimos4)) {
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: `El PDF es de la cuenta terminación ${declarado.numeroCuenta.slice(-4)}, no de la cuenta terminación ${cuentaUltimos4} seleccionada -- revisa que sea el PDF correcto.`,
+    };
+  }
+
+  if (declarado.saldoActual == null || declarado.totalRetiros == null || declarado.totalDepositos == null) {
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: "No se pudo determinar el saldo inicial del periodo -- faltan 'Saldo Actual:' o la fila 'Total: $... $...' que el PDF debe declarar al final de la tabla de movimientos.",
+    };
+  }
+
+  const idxHeader = textoCompleto.indexOf(RE_ENCABEZADO_DETALLE);
+  const idxFinLinea = textoCompleto.indexOf("\n", idxHeader);
+  const idxInicioTabla = idxFinLinea === -1 ? idxHeader + RE_ENCABEZADO_DETALLE.length : idxFinLinea + 1;
+  const mFinTabla = textoCompleto.slice(idxInicioTabla).match(/^Total:/m);
+  const idxFinTabla = mFinTabla ? idxInicioTabla + mFinTabla.index! : -1;
+  const seccion = textoCompleto.slice(idxInicioTabla, idxFinTabla === -1 ? undefined : idxFinTabla);
+
+  const anclas = [...seccion.matchAll(RE_FECHA_ANCLA_DETALLE)];
+  if (anclas.length === 0) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontró ningún movimiento (fecha DD/Mmm./AAAA) en la tabla del PDF" };
+  }
+
+  // Ver comentario de la sección arriba: no hay "SALDO ANTERIOR" en este
+  // formato, así que el saldo inicial se deriva de lo declarado.
+  let saldoAnterior = Math.round((declarado.saldoActual - declarado.totalDepositos + declarado.totalRetiros) * 100) / 100;
+
+  const movimientos: FilaEstadoCuentaMapeada[] = [];
+  const erroresPorFila: { fila: number; errores: string[] }[] = [];
+  let filaNum = 0;
+
+  for (let i = 0; i < anclas.length; i++) {
+    const m = anclas[i];
+    const inicioBloque = m.index!;
+    const finBloque = i + 1 < anclas.length ? anclas[i + 1].index! : seccion.length;
+    const bloque = seccion.slice(inicioBloque, finBloque);
+
+    const [, diaStr, mesAbrev, anioStr] = m;
+    const mes = MESES[mesAbrev.toUpperCase()];
+    filaNum++;
+    if (!mes) {
+      erroresPorFila.push({ fila: filaNum, errores: [`Mes no reconocido: "${mesAbrev}"`] });
+      continue;
+    }
+    const fechaIso = `${anioStr}-${String(mes).padStart(2, "0")}-${diaStr}`;
+
+    const textoSinFecha = bloque.slice(m[0].length);
+    const mMovCod = textoSinFecha.match(RE_MOVIMIENTO_COD_TRANS);
+    const folio = mMovCod ? mMovCod[1] : null;
+    const textoSinMovCod = mMovCod ? textoSinFecha.slice(mMovCod[0].length) : textoSinFecha;
+    const textoSinIva = textoSinMovCod.replace(RE_IVA_EMBEBIDO, "");
+    const montos = textoSinIva.match(RE_MONTO) ?? [];
+    const descripcion = textoSinIva
+      .replace(RE_MONTO, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (montos.length !== 2) {
+      erroresPorFila.push({
+        fila: filaNum,
+        errores: [`Se esperaban 2 montos (movimiento y saldo) y se encontraron ${montos.length} -- posible línea mal extraída: "${descripcion.slice(0, 120)}"`],
+      });
+      continue;
+    }
+
+    const monto = aNumero(montos[0]);
+    const saldo = aNumero(montos[1]);
+    const delta = Math.round((saldo - saldoAnterior) * 100) / 100;
+    const esDeposito = Math.abs(delta - monto) < 0.01;
+    const esRetiro = Math.abs(delta + monto) < 0.01;
+
+    if (!esDeposito && !esRetiro) {
+      erroresPorFila.push({
+        fila: filaNum,
+        errores: [`El saldo (${saldo}) no cuadra con el saldo anterior (${saldoAnterior}) +/- el monto (${monto}) -- posible línea mal extraída`],
+      });
+      saldoAnterior = saldo;
+      continue;
+    }
+
+    movimientos.push({
+      fechaPago: fechaIso,
+      fechaOrden: null,
+      folio,
+      proyecto: null,
+      nombreRazonSocial: descripcion || null,
+      cargoTotal: esRetiro ? monto : null,
+      abonoTotal: esDeposito ? monto : null,
+      saldo,
+      referenciaTipo: null as ReferenciaTipo | null,
+      referenciaNumero: null,
+      factura: null,
+      comentarios: null,
+      observacion: "Extraído automáticamente de un PDF de Banorte (Detalle de Movimientos)",
+    });
+    saldoAnterior = saldo;
+  }
+
+  if (Math.abs(saldoAnterior - declarado.saldoActual) > 0.01) {
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: `El PDF declara un Saldo Actual de ${declarado.saldoActual} pero el saldo de los movimientos extraídos termina en ${saldoAnterior} -- no se insertó nada, revisa el archivo manualmente`,
+    };
+  }
+
+  const sumaDepositos = Math.round(movimientos.reduce((a, m) => a + (m.abonoTotal ?? 0), 0) * 100) / 100;
+  if (Math.abs(sumaDepositos - declarado.totalDepositos) > 0.01) {
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: `El PDF declara un total de Depósitos de ${declarado.totalDepositos} pero los movimientos clasificados como depósito suman ${sumaDepositos} -- no se insertó nada, revisa el archivo manualmente`,
+    };
+  }
+
+  const sumaRetiros = Math.round(movimientos.reduce((a, m) => a + (m.cargoTotal ?? 0), 0) * 100) / 100;
+  if (Math.abs(sumaRetiros - declarado.totalRetiros) > 0.01) {
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: `El PDF declara un total de Retiros de ${declarado.totalRetiros} pero los movimientos clasificados como retiro suman ${sumaRetiros} -- no se insertó nada, revisa el archivo manualmente`,
+    };
+  }
+
+  return { movimientos, erroresPorFila, errorDocumento: null };
+}
+
+/**
+ * @param textoCompleto Texto de todas las páginas del PDF, concatenado (ver
+ *   pdf-cargador.ts / pdfATexto).
+ * @param cuentaUltimos4 Últimos 4 dígitos de la cuenta bancaria seleccionada
+ *   en la carga (cuentas_bancarias.ultimos_4) -- se usa para elegir la tabla
+ *   de movimientos correcta cuando el PDF trae más de un producto (formato
+ *   1) o para confirmar que el PDF es de la cuenta correcta (formato 2).
+ */
+export function parsearPdfEstadoCuentaBanorte(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+  const esFormatoDetalle = textoCompleto.includes(RE_ENCABEZADO_DETALLE);
+  const esFormatoMensual = textoCompleto.includes(RE_ENCABEZADO_TABLA);
+
+  if (esFormatoDetalle) return parsearFormatoDetalleMovimientos(textoCompleto, cuentaUltimos4);
+  if (esFormatoMensual) return parsearFormatoEstadoCuentaMensual(textoCompleto, cuentaUltimos4);
+
+  return {
+    movimientos: [],
+    erroresPorFila: [],
+    errorDocumento: "No se encontró la tabla de movimientos (encabezado FECHA DESCRIPCIÓN / ESTABLECIMIENTO...) en el PDF",
+  };
 }
