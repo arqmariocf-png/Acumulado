@@ -123,10 +123,12 @@ export function PerfilFiscal() {
       </p>
 
       <div className="mb-4 max-w-3xl rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-        <strong>Aproximaciones de esta primera versión:</strong> "Ingresos cobrados" (para IVA) se toma igual a lo
-        facturado del mes, porque todavía no capturamos fecha real de cobro por CFDI. "IVA acreditable" se estima
-        extrayendo el 16% del total de CFDI recibidos del mes, sin distinguir gastos exentos. Verifíquenlo contra el
-        papel de trabajo antes de usarlo para presentar declaraciones.
+        <strong>Aproximaciones de esta primera versión:</strong> "Ingresos nominales" e "Ingresos cobrados" ya se
+        calculan como subtotal (sin IVA), extraído del total del CFDI dividiéndolo entre (1 + tasa IVA) -- `cfdi` no
+        guarda el subtotal por separado. "Ingresos cobrados" además se toma igual a lo facturado del mes, porque
+        todavía no capturamos fecha real de cobro por CFDI. "IVA acreditable" se estima extrayendo el 16% del total
+        de CFDI recibidos del mes, sin distinguir gastos exentos. Verifíquenlo contra el papel de trabajo antes de
+        usarlo para presentar declaraciones.
       </div>
 
       <div className="mb-6 flex flex-wrap items-end gap-3">
