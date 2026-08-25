@@ -7,6 +7,7 @@ const ENLACES = [
   { a: "/carga", etiqueta: "Carga" },
   { a: "/reportes", etiqueta: "Reportes especiales" },
   { a: "/prestamos-intercompania", etiqueta: "Préstamos entre empresas" },
+  { a: "/perfil-fiscal", etiqueta: "Perfil fiscal" },
   { a: "/pendientes", etiqueta: "Pendientes" },
 ];
 
