@@ -80,9 +80,19 @@ function cruzarProyectoNombre(
 
 /** Fase 4.3 — clasificación por palabra clave. Reglas ordenadas por
  * `orden` ascendente para que las más específicas (ej. "DEVOLUCION ERROR")
- * se evalúen antes que las genéricas (ej. "DEVOLUCION"). */
+ * se evalúen antes que las genéricas (ej. "DEVOLUCION").
+ *
+ * Busca en `comentarios` (el campo que usa el Excel canónico, sección 2 de
+ * SPEC.md) Y en `nombreRazonSocial` -- los parsers de PDF de estado de
+ * cuenta (BBVA, Banorte, Santander, BanBajío) nunca llenan `comentarios`,
+ * la descripción real del banco ("TRASPASO CUENTAS PROPIAS", "COMISION
+ * ADMINISTRACION...", etc.) queda en `nombreRazonSocial` -- confirmado en
+ * producción: con el motor buscando solo en `comentarios`, ni un solo
+ * movimiento cargado por PDF caía en ninguna categoría N/A- pese a traer la
+ * palabra clave textual en la descripción, dejando Reportes Especiales
+ * siempre vacío y esos movimientos atorados en pendiente_revision. */
 function clasificarPorPalabraClave(mov: MovimientoEntrada, contexto: ContextoConciliacion): string | null {
-  const textoBuscable = `${mov.comentarios ?? ""} ${mov.referenciaNumero ?? ""}`;
+  const textoBuscable = `${mov.comentarios ?? ""} ${mov.nombreRazonSocial ?? ""} ${mov.referenciaNumero ?? ""}`;
   const reglasOrdenadas = [...contexto.reglas].sort((a, b) => a.orden - b.orden);
   for (const regla of reglasOrdenadas) {
     if (contieneTexto(textoBuscable, regla.palabraClave)) {
