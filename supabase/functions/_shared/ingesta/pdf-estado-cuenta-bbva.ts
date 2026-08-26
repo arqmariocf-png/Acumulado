@@ -584,31 +584,30 @@ function parsearComoWeb(paginas: ItemPdfPosicionado[][], anclas: AnclasColumnasW
       continue;
     }
 
-    const itemCargo = bloque.find((i) => RE_MONTO_WEB.test(i.texto) && Math.abs(i.x1 - anclas.cargo) < TOLERANCIA_X);
-    const itemAbono = bloque.find((i) => RE_MONTO_WEB.test(i.texto) && Math.abs(i.x1 - anclas.abono) < TOLERANCIA_X);
-    const itemSaldo = bloque.find((i) => RE_MONTO_WEB.test(i.texto) && Math.abs(i.x1 - anclas.saldo) < TOLERANCIA_X);
-
-    if (itemCargo && itemAbono) {
+    // El Saldo es siempre la columna MÁS A LA DERECHA de las dos que trae
+    // cada movimiento (el monto de Cargo/Abono + el Saldo -- nunca los tres
+    // juntos, Cargo y Abono son mutuamente excluyentes) -- se identifica por
+    // posición RELATIVA entre los montos de la fila, no por tolerancia fija
+    // contra el x1 del label "Saldo" del encabezado. Confirmado con un PDF
+    // real (Aceros, cuenta 1226) donde un saldo de 7 cifras ($1,805,436.58)
+    // cae ~16pt a la derecha del label -- más que TOLERANCIA_X (15) -- así
+    // que la tolerancia fija fallaba en encontrar el Saldo justo en las
+    // filas con saldos más grandes/anchos. El monto restante (Cargo o
+    // Abono) sí se sigue clasificando contra las anclas de columna: ahí solo
+    // hay que decidir entre dos opciones, así que "más cercano a cuál" es
+    // robusto sin importar qué tan ancho sea el número.
+    const itemsMonto = bloque.filter((i) => RE_MONTO_WEB.test(i.texto)).sort((a, b) => a.x1 - b.x1);
+    if (itemsMonto.length !== 2) {
       return {
         movimientos: [],
         erroresPorFila: [],
-        errorDocumento: `La fila del ${itemFecha.texto} trae un monto en Cargo (${itemCargo.texto}) Y en Abono (${itemAbono.texto}) a la vez -- posible columna mal identificada, no se insertó nada`,
+        errorDocumento: `Se esperaban 2 montos (Cargo/Abono + Saldo) para el movimiento del ${itemFecha.texto} y se encontraron ${itemsMonto.length} -- no se insertó nada, revisa el archivo manualmente`,
       };
     }
-    if (!itemCargo && !itemAbono) {
-      return {
-        movimientos: [],
-        erroresPorFila: [],
-        errorDocumento: `No se encontró un monto de Cargo ni de Abono para el movimiento del ${itemFecha.texto} -- no se insertó nada, revisa el archivo manualmente`,
-      };
-    }
-    if (!itemSaldo) {
-      return {
-        movimientos: [],
-        erroresPorFila: [],
-        errorDocumento: `No se encontró el Saldo del movimiento del ${itemFecha.texto} -- no se insertó nada, revisa el archivo manualmente`,
-      };
-    }
+    const [itemMovimiento, itemSaldo] = itemsMonto;
+    const masCercaDeCargo = Math.abs(itemMovimiento.x1 - anclas.cargo) <= Math.abs(itemMovimiento.x1 - anclas.abono);
+    const itemCargo = masCercaDeCargo ? itemMovimiento : undefined;
+    const itemAbono = masCercaDeCargo ? undefined : itemMovimiento;
 
     const descripcion = bloque
       .filter((i) => i !== itemFecha && !RE_MONTO_WEB.test(i.texto) && !ETIQUETAS_ENCABEZADO_WEB.has(i.texto))
