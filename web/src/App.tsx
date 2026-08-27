@@ -12,6 +12,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default:
 const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ default: m.Movimientos })));
 const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga })));
 const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then((m) => ({ default: m.ReportesEspeciales })));
+const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ default: m.SaldosDiarios })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
@@ -45,6 +46,10 @@ export default function App() {
                   <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
                   <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
                   <Route path="/pendientes" element={<Pendientes />} />
+
+                  <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
+                    <Route path="/saldos" element={<SaldosDiarios />} />
+                  </Route>
 
                   <Route element={<ProtectedRoute roles={["rh"]} />}>
                     <Route path="/rh" element={<RH />} />

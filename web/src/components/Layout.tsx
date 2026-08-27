@@ -15,6 +15,7 @@ export function Layout() {
   const { perfil, cerrarSesion } = useAuth();
   const esAdmin = perfil?.rol === "admin";
   const veRH = perfil?.rol === "rh" || esAdmin;
+  const veSaldos = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -35,6 +36,16 @@ export function Layout() {
                   {e.etiqueta}
                 </NavLink>
               ))}
+              {veSaldos && (
+                <NavLink
+                  to="/saldos"
+                  className={({ isActive }) =>
+                    `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
+                  }
+                >
+                  Saldos
+                </NavLink>
+              )}
               {veRH && (
                 <NavLink
                   to="/rh"
