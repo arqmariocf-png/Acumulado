@@ -152,3 +152,63 @@ Cada usuario necesita login individual (usuario/contraseña) con el rol asignado
 ## 9. Datos de referencia para pruebas
 
 El archivo `Acumulado_Bancos_2026.xlsx` (ya construido manualmente) puede usarse como dataset de prueba/semilla: contiene ~600 movimientos reales de julio y agosto 2026 ya clasificados, y sirve para validar que la lógica de la app reproduce los mismos resultados.
+
+---
+
+## 10. Módulo de Inventario (extensión, agregada 2026-08-24)
+
+**Objetivo:** llevar un registro de entradas y salidas de almacén, compatible
+con lectura de código de barras, y que conviva con el módulo de conciliación
+bancaria haciendo "match" contra el mismo catálogo de OC (compras) y OV
+(ventas) que ya usa el motor de conciliación.
+
+### 10.1 Modelo
+
+- **Almacenes** — hoy un almacén por empresa (decisión del cliente); el
+  esquema admite varios por empresa a futuro sin migrar tablas.
+- **Productos** — catálogo por empresa: SKU, nombre, código de barras
+  (opcional, único por empresa cuando existe), unidad de medida, costo de
+  referencia.
+- **Movimientos de inventario** — cada entrada o salida es una fila con
+  producto, cantidad, costo unitario, fecha y (opcional) la orden de compra
+  u orden de venta con la que se vincula. La existencia de cada producto
+  **siempre se calcula de este historial** (vista `existencias`), nunca se
+  guarda como contador aparte -- mismo criterio que ya usa este proyecto
+  para el saldo bancario.
+
+### 10.2 Escaneo de código de barras
+
+Dos formas, ambas soportadas:
+1. **Lector físico USB/Bluetooth** — funciona sin librerías: estos lectores
+   actúan como teclado (escriben el código + Enter), así que un `<input>`
+   de texto con autofoco y un handler de `Enter` es suficiente.
+2. **Cámara del navegador** — vía `@zxing/browser`, cargado con `import()`
+   dinámico para no engordar el bundle principal (solo se descarga cuando
+   alguien abre la cámara).
+
+### 10.3 Match con el acumulado (Sección 3-4 de este documento)
+
+El catálogo de OC/OS/OV que ya ingiere este proyecto (`ordenes_compra`,
+`ordenes_venta`, sección 2-3) **solo trae el total en dinero de la orden**,
+no el detalle línea por producto (ese detalle vendría de
+`api_ocs_det_aut`/`api_ov_det_aut`, ver TODO en
+`supabase/functions/proxy-backoffice/index.ts`). Por eso el match de
+inventario es **por monto acumulado de la orden completa**, no por línea de
+producto: cada movimiento vinculado a una orden aporta `cantidad ×
+costo_unitario`, y las vistas `avance_recepcion_oc` / `avance_embarque_ov`
+comparan esa suma contra el total de la orden para marcar
+`sin_recibir` / `parcial` / `completo` (mismo criterio de semaforización que
+la sección 5.5 de este documento). Si más adelante se confirma el contrato
+de `api_ocs_det_aut`, se puede evolucionar a match por línea sin romper lo
+ya construido -- las tablas de inventario no dependen del detalle de la OC,
+solo la vista de avance tendría que ganar granularidad.
+
+### 10.4 Pendiente de validar
+
+- Nunca se probó contra un dispositivo real con cámara (solo se validó que
+  compila y hace lazy-load correcto del chunk de `@zxing/browser`).
+- El match por monto asume que el costo unitario capturado en el almacén es
+  representativo del precio de la orden -- si difiere sistemáticamente
+  (impuestos, fletes incluidos en el total de la OC pero no en el costo del
+  producto, etc.) el % de avance puede no cuadrar exactamente contra el
+  total de la orden aunque físicamente ya se haya recibido/embarcado todo.
