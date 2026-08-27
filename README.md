@@ -17,6 +17,9 @@ supabase/functions/    Edge functions (Deno) + módulos puros compartidos
   ingesta-oc-ov/          Carga manual de Excel para OC/OV (respaldo)
   proxy-backoffice/       Integración con la API de OC/OV del backoffice
 web/                    Frontend (Vite + React + Tailwind + Supabase)
+  src/pages/inventario/     Entradas/salidas de almacén (con escaneo de código de
+                            barras), existencias, catálogo de productos, y match
+                            de recepción/embarque contra OC/OV (SPEC.md sección 10)
 ```
 
 Los módulos en `_shared/motor` y `_shared/ingesta` son TypeScript puro sin
@@ -97,3 +100,9 @@ mecánicos (leer, mapear, llamar al módulo puro, escribir).
 4. **API del backoffice sin autenticación** (hallazgo de seguridad, sección
    7.1 del spec) — corregirlo es un prerequisito para que `proxy-backoffice`
    se use en producción con datos reales.
+5. **Módulo de inventario (SPEC.md sección 10) sin probar contra un
+   dispositivo real con cámara** — el escaneo por cámara (`@zxing/browser`)
+   solo se validó en build; falta probar en un teléfono/tablet real del
+   almacén. El match contra OC/OV es por monto total de la orden, no por
+   línea de producto, porque el catálogo de OC/OV todavía no trae detalle de
+   línea (ver sección 10.3 del spec).
