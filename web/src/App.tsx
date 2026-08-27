@@ -12,6 +12,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default:
 const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ default: m.Movimientos })));
 const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga })));
 const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then((m) => ({ default: m.ReportesEspeciales })));
+const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ default: m.SaldosDiarios })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
@@ -24,6 +25,11 @@ const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
 const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
 const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
 const Resolucion = lazy(() => import("./pages/requisiciones/Resolucion").then((m) => ({ default: m.Resolucion })));
+const InventarioLayout = lazy(() => import("./pages/inventario/InventarioLayout").then((m) => ({ default: m.InventarioLayout })));
+const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos").then((m) => ({ default: m.Movimientos })));
+const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
+const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
+const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
 
 const queryClient = new QueryClient();
 
@@ -49,6 +55,17 @@ export default function App() {
                   <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
                   <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
                   <Route path="/pendientes" element={<Pendientes />} />
+
+                  <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
+                    <Route path="/saldos" element={<SaldosDiarios />} />
+                  </Route>
+
+                  <Route path="/inventario" element={<InventarioLayout />}>
+                    <Route index element={<InventarioMovimientos />} />
+                    <Route path="existencias" element={<InventarioExistencias />} />
+                    <Route path="productos" element={<InventarioProductos />} />
+                    <Route path="match" element={<InventarioMatch />} />
+                  </Route>
 
                   <Route path="/requisiciones" element={<RequisicionesLayout />}>
                     <Route index element={<MisRequisiciones />} />

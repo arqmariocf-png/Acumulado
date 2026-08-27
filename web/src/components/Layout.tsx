@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 const ENLACES = [
   { a: "/", etiqueta: "Dashboard" },
   { a: "/movimientos", etiqueta: "Movimientos" },
+  { a: "/inventario", etiqueta: "Inventario" },
   { a: "/carga", etiqueta: "Carga" },
   { a: "/reportes", etiqueta: "Reportes especiales" },
   { a: "/prestamos-intercompania", etiqueta: "Préstamos entre empresas" },
@@ -16,10 +17,11 @@ export function Layout() {
   const { perfil, cerrarSesion } = useAuth();
   const esAdmin = perfil?.rol === "admin";
   const veRH = perfil?.rol === "rh" || esAdmin;
+  const veSaldos = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin;
   // 'responsable' es un rol acotado a sus proyectos (ver SPEC.md sección 10)
-  // -- no debe ver el resto de los módulos financieros, ni aunque RLS ya se
-  // los bloquee del lado del dato (evita que le aparezcan pantallas vacías
-  // sin sentido para su rol).
+  // -- no debe ver el resto de los módulos financieros/operativos, ni aunque
+  // RLS ya se los bloquee del lado del dato (evita que le aparezcan
+  // pantallas vacías sin sentido para su rol).
   const enlaces = perfil?.rol === "responsable" ? ENLACES.filter((e) => e.a === "/requisiciones") : ENLACES;
 
   return (
@@ -41,6 +43,16 @@ export function Layout() {
                   {e.etiqueta}
                 </NavLink>
               ))}
+              {veSaldos && (
+                <NavLink
+                  to="/saldos"
+                  className={({ isActive }) =>
+                    `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
+                  }
+                >
+                  Saldos
+                </NavLink>
+              )}
               {veRH && (
                 <NavLink
                   to="/rh"

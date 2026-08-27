@@ -28,6 +28,7 @@ export function clienteServicio(): SupabaseClient {
 
 export interface PerfilAutenticado {
   id: string;
+  nombre: string | null;
   rol: string;
   empresaId: string | null;
 }
@@ -43,10 +44,10 @@ export async function obtenerPerfilAutenticado(req: Request): Promise<PerfilAute
   } = await cliente.auth.getUser();
   if (!user) return null;
 
-  const { data: perfil, error } = await cliente.from("profiles").select("id, rol, empresa_id").eq("id", user.id).single();
+  const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, empresa_id").eq("id", user.id).single();
   if (error || !perfil) return null;
 
-  return { id: perfil.id, rol: perfil.rol, empresaId: perfil.empresa_id };
+  return { id: perfil.id, nombre: perfil.nombre, rol: perfil.rol, empresaId: perfil.empresa_id };
 }
 
 export function puedeEscribirEnEmpresa(perfil: PerfilAutenticado, empresaId: string): boolean {
