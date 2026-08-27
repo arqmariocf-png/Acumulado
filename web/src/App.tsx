@@ -21,6 +21,11 @@ const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ defa
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
+const InventarioLayout = lazy(() => import("./pages/inventario/InventarioLayout").then((m) => ({ default: m.InventarioLayout })));
+const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos").then((m) => ({ default: m.Movimientos })));
+const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
+const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
+const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
 
 const queryClient = new QueryClient();
 
@@ -49,6 +54,13 @@ export default function App() {
 
                   <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
                     <Route path="/saldos" element={<SaldosDiarios />} />
+                  </Route>
+
+                  <Route path="/inventario" element={<InventarioLayout />}>
+                    <Route index element={<InventarioMovimientos />} />
+                    <Route path="existencias" element={<InventarioExistencias />} />
+                    <Route path="productos" element={<InventarioProductos />} />
+                    <Route path="match" element={<InventarioMatch />} />
                   </Route>
 
                   <Route element={<ProtectedRoute roles={["rh"]} />}>
