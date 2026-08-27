@@ -4,7 +4,7 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh";
+export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "responsable";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
@@ -205,4 +205,75 @@ export interface DocumentoFaltante {
   personal_nombre: string;
   tipo_documento_id: string;
   tipo_documento_nombre: string;
+}
+
+// Módulo de Requisiciones (ver supabase/migrations/20260827193332-193730_requisiciones_*.sql).
+// El "catálogo de conceptos" reutiliza public.productos del módulo de Inventario -- ver Producto en
+// este mismo archivo.
+
+export type EstadoRequisicion = "enviada" | "en_revision" | "resuelta" | "cancelada";
+export type EstadoNecesidadCompra = "pendiente" | "vinculada" | "cancelada";
+export type EstadoNecesidadEntrega = "pendiente" | "entregada" | "cancelada";
+
+export interface Proyecto {
+  id: string;
+  id_backoffice: number | null;
+  nombre: string;
+  empresa_id: string;
+  tipo: string | null;
+  responsable_nombre: string | null;
+  responsable_id: string | null;
+  comprador_nombre: string | null;
+  comprador_id: string | null;
+  activo: boolean;
+}
+
+export interface Requisicion {
+  id: string;
+  folio: number;
+  proyecto_id: string;
+  empresa_id: string;
+  solicitado_por: string;
+  fecha: string;
+  estado: EstadoRequisicion;
+  comentario: string | null;
+  created_at: string;
+}
+
+export interface RequisicionLinea {
+  id: string;
+  requisicion_id: string;
+  concepto_id: string;
+  cantidad_solicitada: number;
+  unidad_medida: string;
+  comentario: string | null;
+}
+
+export interface NecesidadCompra {
+  id: string;
+  requisicion_linea_id: string;
+  cantidad: number;
+  proveedor_sugerido: string | null;
+  estado: EstadoNecesidadCompra;
+  orden_compra_id: string | null;
+}
+
+export interface NecesidadEntrega {
+  id: string;
+  requisicion_linea_id: string;
+  cantidad: number;
+  estado: EstadoNecesidadEntrega;
+  movimiento_inventario_id: string | null;
+  orden_venta_id: string | null;
+}
+
+export interface AvanceResolucionLinea {
+  requisicion_linea_id: string;
+  requisicion_id: string;
+  concepto_id: string;
+  cantidad_solicitada: number;
+  unidad_medida: string;
+  cantidad_a_compra: number;
+  cantidad_a_entrega: number;
+  cantidad_sin_resolver: number;
 }

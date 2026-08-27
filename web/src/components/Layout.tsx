@@ -8,6 +8,7 @@ const ENLACES = [
   { a: "/reportes", etiqueta: "Reportes especiales" },
   { a: "/prestamos-intercompania", etiqueta: "Préstamos entre empresas" },
   { a: "/perfil-fiscal", etiqueta: "Perfil fiscal" },
+  { a: "/requisiciones", etiqueta: "Requisiciones" },
   { a: "/pendientes", etiqueta: "Pendientes" },
 ];
 
@@ -15,6 +16,11 @@ export function Layout() {
   const { perfil, cerrarSesion } = useAuth();
   const esAdmin = perfil?.rol === "admin";
   const veRH = perfil?.rol === "rh" || esAdmin;
+  // 'responsable' es un rol acotado a sus proyectos (ver SPEC.md sección 10)
+  // -- no debe ver el resto de los módulos financieros, ni aunque RLS ya se
+  // los bloquee del lado del dato (evita que le aparezcan pantallas vacías
+  // sin sentido para su rol).
+  const enlaces = perfil?.rol === "responsable" ? ENLACES.filter((e) => e.a === "/requisiciones") : ENLACES;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -23,7 +29,7 @@ export function Layout() {
           <div className="flex items-center gap-6">
             <span className="text-lg font-semibold text-slate-900">Acumulado · Grupo Loma</span>
             <nav className="flex gap-4 text-sm">
-              {ENLACES.map((e) => (
+              {enlaces.map((e) => (
                 <NavLink
                   key={e.a}
                   to={e.a}
