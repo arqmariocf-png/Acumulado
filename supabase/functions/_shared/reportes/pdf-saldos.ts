@@ -74,6 +74,21 @@ function dibujarTexto(
   estado.pagina.drawText(texto, { x: xFinal, y: estado.y, size: tamano, font: fuente, color });
 }
 
+/** Recorta `texto` con "…" al final hasta que quepa en `anchoMax` -- sin
+ * esto, un alias largo de cuenta (ej. "BanBajio ····1015 (Cuenta real del
+ * Excel maestro (Balken) — prueba de ciclo completo)") se dibuja completo
+ * de todos modos y su ancho real invade la columna de al lado, encimando el
+ * texto sobre los montos y haciendo que la fila se vea "incompleta". */
+function truncarTexto(fuente: PDFFont, texto: string, tamano: number, anchoMax: number): string {
+  if (fuente.widthOfTextAtSize(texto, tamano) <= anchoMax) return texto;
+  const elipsis = "…";
+  let recortado = texto;
+  while (recortado.length > 1 && fuente.widthOfTextAtSize(recortado + elipsis, tamano) > anchoMax) {
+    recortado = recortado.slice(0, -1);
+  }
+  return recortado + elipsis;
+}
+
 function dibujarLineaHorizontal(estado: EstadoPdf, y: number, color = COLOR_LINEA): void {
   estado.pagina.drawLine({
     start: { x: MARGEN_X, y },
@@ -147,7 +162,9 @@ function dibujarFila(
   for (let i = 0; i < columnas.length; i++) {
     const col = columnas[i];
     const esNegativo = opts.colorNegativoEnIndices?.includes(i) && (opts.valoresNumericos?.[i] ?? 0) < 0;
-    dibujarTexto(estado, valores[i] ?? "", x, {
+    const fuenteCelda = opts.negrita ? estado.fuenteNegrita : estado.fuente;
+    const texto = truncarTexto(fuenteCelda, valores[i] ?? "", 9, col.ancho - 6);
+    dibujarTexto(estado, texto, x, {
       negrita: opts.negrita,
       tamano: 9,
       color: esNegativo ? COLOR_NEGATIVO : COLOR_TEXTO,
@@ -218,12 +235,16 @@ const COLUMNAS_GLOBAL: Columna[] = [
   { titulo: "SALDO ACTUAL", ancho: 158, alinear: "derecha" },
 ];
 
+// Los 5 anchos deben sumar <= ANCHO_PAGINA - 2*MARGEN_X (528pt) -- si suman
+// más, la(s) última(s) columna(s) se dibujan fuera del área imprimible (o
+// hasta fuera de la página) en TODAS las filas, no solo en las que tienen
+// texto largo. 190+84+84+84+86 = 528.
 const COLUMNAS_DIA: Columna[] = [
   { titulo: "CUENTA", ancho: 190, alinear: "izquierda" },
-  { titulo: "SALDO INICIAL", ancho: 100, alinear: "derecha" },
-  { titulo: "ENTRADAS", ancho: 100, alinear: "derecha" },
-  { titulo: "SALIDAS", ancho: 100, alinear: "derecha" },
-  { titulo: "SALDO FINAL", ancho: 98, alinear: "derecha" },
+  { titulo: "SALDO INICIAL", ancho: 84, alinear: "derecha" },
+  { titulo: "ENTRADAS", ancho: 84, alinear: "derecha" },
+  { titulo: "SALIDAS", ancho: 84, alinear: "derecha" },
+  { titulo: "SALDO FINAL", ancho: 86, alinear: "derecha" },
 ];
 
 export interface DatosReportePdf {

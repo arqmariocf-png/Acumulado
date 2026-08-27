@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { Semaforo } from "../components/Semaforo";
 import type { EstadoClasificacion, Movimiento } from "../types/database";
+
+const TAMANO_PAGINA = 50;
 
 const ESTADOS: { valor: EstadoClasificacion | "todos"; etiqueta: string }[] = [
   { valor: "todos", etiqueta: "Todos los estados" },
@@ -38,21 +40,39 @@ export function Movimientos() {
   const [estado, setEstado] = useState<EstadoClasificacion | "todos">("todos");
   const [soloDuplicados, setSoloDuplicados] = useState(false);
   const [cuentaReclasificando, setCuentaReclasificando] = useState<string | null>(null);
+  const [pagina, setPagina] = useState(0);
 
   const empresaFiltro = veTodasLasEmpresas ? empresaId : (perfil?.empresa_id ?? "");
 
-  const { data: movimientos, isLoading, error } = useQuery({
-    queryKey: ["movimientos", empresaFiltro, estado, soloDuplicados],
+  // Al cambiar cualquier filtro, la página actual puede quedar fuera de
+  // rango del nuevo resultado (ej. estabas en la página 5 y el filtro nuevo
+  // solo trae 2 páginas) -- siempre se regresa a la primera.
+  useEffect(() => {
+    setPagina(0);
+  }, [empresaFiltro, estado, soloDuplicados]);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["movimientos", empresaFiltro, estado, soloDuplicados, pagina],
     queryFn: async () => {
-      let query = supabase.from("movimientos").select("*").order("fecha_pago", { ascending: false }).limit(200);
+      const desde = pagina * TAMANO_PAGINA;
+      const hasta = desde + TAMANO_PAGINA - 1;
+      let query = supabase
+        .from("movimientos")
+        .select("*", { count: "exact" })
+        .order("fecha_pago", { ascending: false })
+        .range(desde, hasta);
       if (empresaFiltro) query = query.eq("empresa_id", empresaFiltro);
       if (estado !== "todos") query = query.eq("estado_clasificacion", estado);
       if (soloDuplicados) query = query.eq("posible_duplicado", true);
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
-      return data as Movimiento[];
+      return { movimientos: data as Movimiento[], total: count ?? 0 };
     },
   });
+
+  const movimientos = data?.movimientos;
+  const total = data?.total ?? 0;
+  const totalPaginas = Math.max(1, Math.ceil(total / TAMANO_PAGINA));
 
   // Reclasifica TODOS los movimientos de la cuenta bancaria de la fila en la
   // que se dio clic (no solo esa fila) contra el catálogo actual (CFDI,
@@ -166,6 +186,33 @@ export function Movimientos() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {movimientos && total > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+          <span>
+            Mostrando {pagina * TAMANO_PAGINA + 1}–{Math.min((pagina + 1) * TAMANO_PAGINA, total)} de {total} movimientos
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPagina((p) => Math.max(0, p - 1))}
+              disabled={pagina === 0}
+              className="rounded border border-slate-300 px-3 py-1.5 disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <span className="text-xs text-slate-500">
+              Página {pagina + 1} de {totalPaginas}
+            </span>
+            <button
+              onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))}
+              disabled={pagina + 1 >= totalPaginas}
+              className="rounded border border-slate-300 px-3 py-1.5 disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       )}
     </div>
