@@ -20,7 +20,11 @@ const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => (
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
+const AdminProyectos = lazy(() => import("./pages/admin/Proyectos").then((m) => ({ default: m.Proyectos })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
+const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
+const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
+const Resolucion = lazy(() => import("./pages/requisiciones/Resolucion").then((m) => ({ default: m.Resolucion })));
 const InventarioLayout = lazy(() => import("./pages/inventario/InventarioLayout").then((m) => ({ default: m.InventarioLayout })));
 const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos").then((m) => ({ default: m.Movimientos })));
 const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
@@ -63,6 +67,13 @@ export default function App() {
                     <Route path="match" element={<InventarioMatch />} />
                   </Route>
 
+                  <Route path="/requisiciones" element={<RequisicionesLayout />}>
+                    <Route index element={<MisRequisiciones />} />
+                    <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>
+                      <Route path="resolucion" element={<Resolucion />} />
+                    </Route>
+                  </Route>
+
                   <Route element={<ProtectedRoute roles={["rh"]} />}>
                     <Route path="/rh" element={<RH />} />
                   </Route>
@@ -72,6 +83,7 @@ export default function App() {
                       <Route index element={<Usuarios />} />
                       <Route path="reglas" element={<Reglas />} />
                       <Route path="excepciones" element={<Excepciones />} />
+                      <Route path="proyectos" element={<AdminProyectos />} />
                     </Route>
                   </Route>
                 </Route>

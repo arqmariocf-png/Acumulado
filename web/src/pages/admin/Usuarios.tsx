@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import type { AppRol, Empresa, Profile } from "../../types/database";
 
-const ROLES: AppRol[] = ["pendiente", "empresa", "direccion", "corporativo", "rh", "admin"];
+const ROLES: AppRol[] = ["pendiente", "empresa", "direccion", "corporativo", "rh", "responsable", "admin"];
 
 // Admin de usuarios (SPEC.md sección 6): asignar rol y empresa es lo único
 // que determina qué puede ver/hacer cada usuario -- nunca se hardcodea en
