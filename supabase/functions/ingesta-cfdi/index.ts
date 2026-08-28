@@ -115,6 +115,7 @@ Deno.serve(async (req) => {
             contraparte: resultado.registro.nombreContraparte,
             fecha: resultado.registro.fecha,
             archivo_id: archivoId,
+            es_complemento_pago: resultado.registro.esComplementoPago,
           });
         } else if (!resultado.omitida) {
           // Filas sin UUID (relleno del Excel) se descartan en silencio --
