@@ -52,6 +52,15 @@ export interface FilaCfdiMapeada {
   fecha: string | null; // ISO yyyy-mm-dd
   rfcContraparte: string | null;
   nombreContraparte: string | null;
+  /** true si la fila viene de una hoja de complementos de pago
+   * (RecibosDePago/Pago20 -- identificadas porque solo esas hojas traen
+   * columna ImpPagado/"Imp Pagado DR"). El motor de conciliación SÍ debe
+   * seguir cruzando estas filas contra el banco (para eso existen), pero
+   * el cálculo de ingresos/gastos acumulados de Perfil Fiscal debe
+   * excluirlas -- el monto ya se contó una vez con la factura de ingreso
+   * original; contarlo otra vez con su complemento de pago sería doble
+   * conteo (confirmado con el usuario). */
+  esComplementoPago: boolean;
 }
 
 export interface ResultadoMapeoCfdi {
@@ -210,9 +219,15 @@ export function mapearFilaCfdi(
 
   if (errores.length > 0) return { fila: numeroFila, registro: null, errores };
 
+  // Solo las hojas de complementos de pago traen columna ImpPagado/"Imp
+  // Pagado DR" -- una hoja de CFDI normales (Sheet1/General) nunca la
+  // trae, así que basta con que la hoja la tenga mapeada en el índice
+  // (independientemente de si esta fila en particular la trae vacía).
+  const esComplementoPago = indice.has("impPagado");
+
   return {
     fila: numeroFila,
     errores: [],
-    registro: { folio: uuid, total: total!, fecha, rfcContraparte, nombreContraparte },
+    registro: { folio: uuid, total: total!, fecha, rfcContraparte, nombreContraparte, esComplementoPago },
   };
 }
