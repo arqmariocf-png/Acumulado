@@ -11,8 +11,60 @@
 // POST multipart/form-data: file, empresaId
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.122.0";
-import { clienteServicio, obtenerPerfilAutenticado, type PerfilAutenticado } from "../_shared/supabase-clients.ts";
-import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+
+// Copiado en línea (no importado de ../_shared/supabase-clients.ts ni
+// ../_shared/cors.ts): el bundler de edge functions falló repetidamente al
+// resolver esos imports relativos para esta función específica -- ver
+// _shared/supabase-clients.ts y _shared/cors.ts para la versión canónica
+// usada por el resto de las funciones de este proyecto, que sí las importan
+// normalmente.
+function clienteComoUsuario(req: Request): SupabaseClient {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: authHeader } },
+  });
+}
+
+function clienteServicio(): SupabaseClient {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+}
+
+interface PerfilAutenticado {
+  id: string;
+  nombre: string | null;
+  rol: string;
+  empresaId: string | null;
+}
+
+async function obtenerPerfilAutenticado(req: Request): Promise<PerfilAutenticado | null> {
+  const cliente = clienteComoUsuario(req);
+  const {
+    data: { user },
+  } = await cliente.auth.getUser();
+  if (!user) return null;
+
+  const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, empresa_id").eq("id", user.id).single();
+  if (error || !perfil) return null;
+
+  return { id: perfil.id, nombre: perfil.nombre, rol: perfil.rol, empresaId: perfil.empresa_id };
+}
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function respuestaCors(): Response {
+  return new Response("ok", { headers: corsHeaders });
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 // No se reutiliza puedeEscribirEnEmpresa() de _shared: esa función no sabe
 // del rol 'almacen' (agregado solo para inventario -- ver
@@ -71,9 +123,13 @@ async function leerNotaConClaude(apiKey: string, bytes: Uint8Array, mediaType: s
               "Esta es la foto de una nota o remisión de entrega de un proveedor a un almacén de construcción en México. " +
               "Extrae cada línea de producto/material que puedas leer, con su cantidad y unidad si están visibles. " +
               "También el nombre del proveedor y la fecha si aparecen. " +
+              "A veces la foto muestra dos copias del mismo pedido lado a lado o una sobre otra (por ejemplo una 'Orden de Surtido' " +
+              "con precios y una 'Nota de Bodeguero' sin precios, con texto de una copia traslapado sobre la otra por el papel carbón) " +
+              "-- es el MISMO pedido duplicado, no dos pedidos distintos: extrae cada línea UNA sola vez, tomando la cantidad y " +
+              "descripción de la copia que se vea más clara para esa línea. " +
               "Responde ÚNICAMENTE con un objeto JSON (sin explicación, sin markdown, sin texto antes o después) con esta forma exacta: " +
               '{"proveedor": string o null, "fecha": string (AAAA-MM-DD) o null, "items": [{"descripcion": string, "cantidad": number o null, "unidad": string o null}]}. ' +
-              "Si no puedes leer algo con confianza (letra ilegible, foto borrosa, etc.), usa null en ese campo en vez de adivinar. " +
+              "Si no puedes leer algo con confianza (letra ilegible, foto borrosa, traslape de texto, etc.), usa null en ese campo en vez de adivinar. " +
               "Si no logras identificar ninguna línea de producto, responde con items: [].",
           },
         ],
