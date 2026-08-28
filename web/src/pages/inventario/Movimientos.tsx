@@ -1,14 +1,110 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../../lib/supabase";
+import { supabase, urlFuncion } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
-import type { Producto, TipoMovimientoInventario } from "../../types/database";
+import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
 interface FilaCarrito {
   producto: Producto;
   cantidad: number;
   costoUnitario: number | null;
+}
+
+// Tres formas de decidir qué producto va al carrito: escanear (físico o
+// cámara), buscar por nombre a mano (proveedores sin QR/código), o subir la
+// foto de la nota/remisión de papel y dejar que la IA sugiera los conceptos
+// -- las tres terminan agregando filas al mismo `carrito` de abajo.
+type ModoCaptura = "codigo" | "nombre" | "foto";
+
+const MODOS_CAPTURA: { valor: ModoCaptura; etiqueta: string }[] = [
+  { valor: "codigo", etiqueta: "Código de barras" },
+  { valor: "nombre", etiqueta: "Buscar por nombre" },
+  { valor: "foto", etiqueta: "Foto de la nota" },
+];
+
+/** Buscador reutilizable por nombre -- lo usa tanto el modo "Buscar por
+ * nombre" como cada concepto sugerido por la foto (ahí sirve para mapear la
+ * descripción leída por la IA a un producto real del catálogo). */
+function BuscadorProducto({
+  empresaId,
+  placeholder,
+  onSeleccionar,
+}: {
+  empresaId: string;
+  placeholder?: string;
+  onSeleccionar: (producto: Producto) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState<Producto[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
+
+  async function buscar() {
+    const limpio = query.trim();
+    if (!limpio || !empresaId) return;
+    setBuscando(true);
+    try {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("activo", true)
+        .ilike("nombre", `%${limpio}%`)
+        .order("nombre")
+        .limit(10);
+      if (error) throw error;
+      setResultados(data as Producto[]);
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              buscar();
+            }
+          }}
+          placeholder={placeholder ?? "Buscar producto por nombre…"}
+          className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+        />
+        <button
+          type="button"
+          onClick={buscar}
+          disabled={buscando}
+          className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          {buscando ? "Buscando…" : "Buscar"}
+        </button>
+      </div>
+      {resultados && (
+        <ul className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-200 bg-white text-sm">
+          {resultados.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  onSeleccionar(p);
+                  setResultados(null);
+                  setQuery("");
+                }}
+                className="block w-full px-2 py-1 text-left hover:bg-slate-100"
+              >
+                {p.nombre} <span className="text-xs text-slate-400">({p.sku})</span>
+              </button>
+            </li>
+          ))}
+          {resultados.length === 0 && <li className="px-2 py-1 text-slate-400">Sin resultados.</li>}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function useEmpresas() {
@@ -93,6 +189,7 @@ export function Movimientos() {
   const [esAjuste, setEsAjuste] = useState(false);
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [carrito, setCarrito] = useState<FilaCarrito[]>([]);
+  const [modo, setModo] = useState<ModoCaptura>("codigo");
   const [codigo, setCodigo] = useState("");
   const [mostrarCamara, setMostrarCamara] = useState(false);
   const [codigoSinProducto, setCodigoSinProducto] = useState<string | null>(null);
@@ -100,6 +197,10 @@ export function Movimientos() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [notaEntregaId, setNotaEntregaId] = useState<string | null>(null);
+  const [itemsSugeridos, setItemsSugeridos] = useState<ItemSugeridoNota[]>([]);
+  const [errorLecturaFoto, setErrorLecturaFoto] = useState<string | null>(null);
   const inputCodigoRef = useRef<HTMLInputElement>(null);
 
   const { data: almacen } = useAlmacen(empresaId);
@@ -110,13 +211,13 @@ export function Movimientos() {
     setOrdenId("");
   }, [tipo, empresaId]);
 
-  function agregarAlCarrito(producto: Producto) {
+  function agregarAlCarrito(producto: Producto, cantidadSugerida?: number) {
     setCarrito((prev) => {
       const existente = prev.find((f) => f.producto.id === producto.id);
       if (existente) {
-        return prev.map((f) => (f.producto.id === producto.id ? { ...f, cantidad: f.cantidad + 1 } : f));
+        return prev.map((f) => (f.producto.id === producto.id ? { ...f, cantidad: f.cantidad + (cantidadSugerida ?? 1) } : f));
       }
-      return [...prev, { producto, cantidad: 1, costoUnitario: producto.costo_referencia }];
+      return [...prev, { producto, cantidad: cantidadSugerida ?? 1, costoUnitario: producto.costo_referencia }];
     });
   }
 
@@ -180,6 +281,40 @@ export function Movimientos() {
     }
   }
 
+  function limpiarFoto() {
+    setNotaEntregaId(null);
+    setItemsSugeridos([]);
+    setErrorLecturaFoto(null);
+  }
+
+  async function onSubirFoto(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!empresaId) return;
+    setError(null);
+    limpiarFoto();
+    setSubiendoFoto(true);
+    try {
+      const form = new FormData(e.currentTarget);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const respuesta = await fetch(urlFuncion("ocr-nota-entrega"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      setNotaEntregaId(json.notaEntregaId);
+      setItemsSugeridos(json.itemsSugeridos ?? []);
+      setErrorLecturaFoto(json.errorLectura ?? null);
+      e.currentTarget.reset();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubiendoFoto(false);
+    }
+  }
+
   function actualizarFila(productoId: string, campo: "cantidad" | "costoUnitario", valor: number) {
     setCarrito((prev) => prev.map((f) => (f.producto.id === productoId ? { ...f, [campo]: valor } : f)));
   }
@@ -214,6 +349,7 @@ export function Movimientos() {
         orden_venta_id: !esAjuste && tipo === "salida" && ordenId ? ordenId : null,
         es_ajuste: esAjuste,
         codigo_escaneado: f.producto.codigo_barras,
+        nota_entrega_id: notaEntregaId,
         registrado_por: userId,
       }));
 
@@ -222,6 +358,7 @@ export function Movimientos() {
 
       setMensaje(`Guardado: ${filas.length} línea(s) de ${tipo === "entrada" ? "entrada" : "salida"}.`);
       setCarrito([]);
+      limpiarFoto();
       queryClient.invalidateQueries({ queryKey: ["movimientos-inventario-recientes"] });
       queryClient.invalidateQueries({ queryKey: ["existencias"] });
       queryClient.invalidateQueries({ queryKey: ["avance-recepcion-oc"] });
@@ -301,60 +438,149 @@ export function Movimientos() {
 
       {empresaId && almacen && (
         <>
-          <div className="mb-4 flex max-w-md items-center gap-2">
-            <input
-              ref={inputCodigoRef}
-              autoFocus
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              onKeyDown={onKeyDownCodigo}
-              placeholder="Escanea o escribe el código de barras y presiona Enter"
-              disabled={buscando}
-              className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => setMostrarCamara(true)}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
-            >
-              Usar cámara
-            </button>
+          <div className="mb-4">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Cómo vas a capturar</label>
+            <div className="flex overflow-hidden rounded border border-slate-300">
+              {MODOS_CAPTURA.map((m) => (
+                <button
+                  key={m.valor}
+                  type="button"
+                  onClick={() => setModo(m.valor)}
+                  className={`px-3 py-1.5 text-sm ${modo === m.valor ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+                >
+                  {m.etiqueta}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {codigoSinProducto && (
-            <form onSubmit={onCrearProductoRapido} className="mb-4 max-w-md space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
-              <p className="text-sm font-medium text-blue-900">
-                No hay ningún producto con el código <code>{codigoSinProducto}</code> en esta empresa. Créalo para continuar:
-              </p>
-              <input name="nombre" required placeholder="Nombre del producto" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
-              <div className="flex gap-2">
-                <input name="sku" placeholder={`SKU (default: ${codigoSinProducto})`} className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
-                <input name="unidad" placeholder="Unidad (default PZA)" className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
-              </div>
-              <div className="flex gap-2">
-                <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Crear y agregar</button>
+          {modo === "codigo" && (
+            <>
+              <div className="mb-4 flex max-w-md items-center gap-2">
+                <input
+                  ref={inputCodigoRef}
+                  autoFocus
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  onKeyDown={onKeyDownCodigo}
+                  placeholder="Escanea o escribe el código de barras y presiona Enter"
+                  disabled={buscando}
+                  className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    setCodigoSinProducto(null);
-                    setCodigo("");
-                  }}
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+                  onClick={() => setMostrarCamara(true)}
+                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
                 >
-                  Cancelar
+                  Usar cámara
                 </button>
               </div>
-            </form>
+
+              {codigoSinProducto && (
+                <form onSubmit={onCrearProductoRapido} className="mb-4 max-w-md space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-sm font-medium text-blue-900">
+                    No hay ningún producto con el código <code>{codigoSinProducto}</code> en esta empresa. Créalo para continuar:
+                  </p>
+                  <input name="nombre" required placeholder="Nombre del producto" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  <div className="flex gap-2">
+                    <input name="sku" placeholder={`SKU (default: ${codigoSinProducto})`} className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                    <input name="unidad" placeholder="Unidad (default PZA)" className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Crear y agregar</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCodigoSinProducto(null);
+                        setCodigo("");
+                      }}
+                      className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {mostrarCamara && (
+                <BarcodeScanner
+                  onDetectado={(c) => {
+                    setMostrarCamara(false);
+                    buscarPorCodigo(c);
+                  }}
+                  onCerrar={() => setMostrarCamara(false)}
+                />
+              )}
+            </>
           )}
 
-          {mostrarCamara && (
-            <BarcodeScanner
-              onDetectado={(c) => {
-                setMostrarCamara(false);
-                buscarPorCodigo(c);
-              }}
-              onCerrar={() => setMostrarCamara(false)}
-            />
+          {modo === "nombre" && (
+            <div className="mb-4 max-w-md">
+              <p className="mb-1 text-xs text-slate-500">Para proveedores sin QR ni código de barras: busca el producto por su nombre y agrégalo al carrito.</p>
+              <BuscadorProducto empresaId={empresaId} onSeleccionar={(p) => agregarAlCarrito(p)} />
+            </div>
+          )}
+
+          {modo === "foto" && (
+            <div className="mb-4 max-w-xl space-y-3">
+              <p className="text-xs text-slate-500">
+                Sube la foto de la nota o remisión de papel del proveedor -- la IA intentará leer los conceptos, cantidades y proveedor
+                automáticamente. La foto aplica a todo el movimiento (todas las líneas que agregues quedan vinculadas a ella).
+              </p>
+              <form onSubmit={onSubirFoto} className="flex items-center gap-2">
+                <input type="hidden" name="empresaId" value={empresaId} />
+                <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required disabled={subiendoFoto} className="flex-1 text-sm" />
+                <button
+                  disabled={subiendoFoto}
+                  className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {subiendoFoto ? "Leyendo…" : "Subir y leer"}
+                </button>
+              </form>
+
+              {notaEntregaId && (
+                <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+                  Foto guardada.{" "}
+                  <button type="button" onClick={limpiarFoto} className="underline">
+                    Quitar y subir otra
+                  </button>
+                </div>
+              )}
+
+              {errorLecturaFoto && (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">⚠️ {errorLecturaFoto}</p>
+              )}
+
+              {itemsSugeridos.length > 0 && (
+                <div className="space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-sm font-medium text-blue-900">
+                    Conceptos detectados -- confírmalos buscando el producto correspondiente para agregarlos al carrito:
+                  </p>
+                  {itemsSugeridos.map((item, i) => (
+                    <div key={i} className="rounded border border-blue-100 bg-white p-2">
+                      <p className="mb-1 text-sm text-slate-800">
+                        {item.descripcion || "(sin descripción legible)"}
+                        {item.cantidad != null && (
+                          <span className="text-slate-500">
+                            {" "}
+                            — cantidad sugerida: {item.cantidad}
+                            {item.unidad ? ` ${item.unidad}` : ""}
+                          </span>
+                        )}
+                      </p>
+                      <BuscadorProducto
+                        empresaId={empresaId}
+                        placeholder="Buscar el producto correspondiente…"
+                        onSeleccionar={(p) => {
+                          agregarAlCarrito(p, item.cantidad ?? 1);
+                          setItemsSugeridos((prev) => prev.filter((_, idx) => idx !== i));
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {carrito.length > 0 && (
