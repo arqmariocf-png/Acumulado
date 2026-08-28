@@ -247,8 +247,31 @@ export interface MovimientoInventario {
   es_ajuste: boolean;
   codigo_escaneado: string | null;
   comentario: string | null;
+  nota_entrega_id: string | null;
   registrado_por: string;
   created_at: string;
+}
+
+/** Foto de una nota/remisión de entrega en papel, para proveedores sin QR ni
+ * código de barras (ver supabase/functions/ocr-nota-entrega y
+ * supabase/migrations/20260828150006_inventario_notas_entrega.sql). Los
+ * items sugeridos por OCR viven en texto_extraido -- no tienen su propia
+ * tabla porque son solo una sugerencia editable, no un registro definitivo. */
+export interface NotaEntrega {
+  id: string;
+  empresa_id: string;
+  storage_path: string;
+  proveedor_sugerido: string | null;
+  fecha_sugerida: string | null;
+  texto_extraido: { items: ItemSugeridoNota[]; error: string | null } | null;
+  subido_por: string;
+  created_at: string;
+}
+
+export interface ItemSugeridoNota {
+  descripcion: string;
+  cantidad: number | null;
+  unidad: string | null;
 }
 
 export interface Existencia {
