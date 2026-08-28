@@ -73,8 +73,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 // son datos bancarios/financieros donde 'almacen' NO debe tener acceso.
 function puedeSubirNotaEnEmpresa(perfil: PerfilAutenticado, empresaId: string): boolean {
   if (perfil.rol === "corporativo" || perfil.rol === "admin") return true;
-  if (perfil.rol === "empresa" || perfil.rol === "almacen") return perfil.empresaId === empresaId;
-  return false;
+  if (perfil.rol !== "empresa" && perfil.rol !== "almacen") return false;
+  // empresa_id null es la convención del proyecto para "ve/opera en todas
+  // las empresas" (ver auth_ve_todas_empresas() en la base de datos) -- un
+  // usuario de almacén con acceso a las 8 empresas tiene empresa_id null,
+  // no una empresa fija, así que no basta con comparar igualdad.
+  return perfil.empresaId === null || perfil.empresaId === empresaId;
 }
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
