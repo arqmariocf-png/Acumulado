@@ -107,6 +107,101 @@ function BuscadorProducto({
   );
 }
 
+/** Tarjeta de un concepto sugerido por la foto: primero intenta que el
+ * usuario lo mapee a un producto existente (BuscadorProducto); si el
+ * material todavía no está dado de alta en el catálogo, ofrece crearlo ahí
+ * mismo precargado con lo que ya leyó la IA (descripción/unidad), igual que
+ * el modo de código de barras ya hace cuando el código no matchea nada. */
+function ItemSugeridoCard({
+  item,
+  empresaId,
+  onAgregado,
+}: {
+  item: ItemSugeridoNota;
+  empresaId: string;
+  onAgregado: (producto: Producto) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [creando, setCreando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onCrear(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const nombre = String(form.get("nombre") ?? "").trim();
+    const sku = String(form.get("sku") ?? "").trim();
+    const unidad = String(form.get("unidad") ?? "PZA").trim() || "PZA";
+    if (!nombre || !sku) return;
+    setError(null);
+    try {
+      const { data, error: errInsert } = await supabase
+        .from("productos")
+        .insert({ empresa_id: empresaId, sku, nombre, unidad_medida: unidad })
+        .select("*")
+        .single();
+      if (errInsert) throw errInsert;
+      onAgregado(data as Producto);
+      queryClient.invalidateQueries({ queryKey: ["productos"] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <div className="rounded border border-blue-100 bg-white p-2">
+      <p className="mb-1 text-sm text-slate-800">
+        {item.descripcion || "(sin descripción legible)"}
+        {item.cantidad != null && (
+          <span className="text-slate-500">
+            {" "}
+            — cantidad sugerida: {item.cantidad}
+            {item.unidad ? ` ${item.unidad}` : ""}
+          </span>
+        )}
+      </p>
+
+      {!creando ? (
+        <>
+          <BuscadorProducto empresaId={empresaId} placeholder="Buscar el producto correspondiente…" onSeleccionar={onAgregado} />
+          <button type="button" onClick={() => setCreando(true)} className="mt-1 text-xs text-blue-700 hover:underline">
+            No existe en el catálogo -- crear producto nuevo
+          </button>
+        </>
+      ) : (
+        <form onSubmit={onCrear} className="mt-1 space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+          <input
+            name="nombre"
+            required
+            defaultValue={item.descripcion}
+            placeholder="Nombre del producto"
+            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+          />
+          <div className="flex gap-2">
+            <input name="sku" required placeholder="SKU" className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <input
+              name="unidad"
+              defaultValue={item.unidad ?? "PZA"}
+              placeholder="Unidad (default PZA)"
+              className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Crear y agregar</button>
+            <button
+              type="button"
+              onClick={() => setCreando(false)}
+              className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+            >
+              Cancelar
+            </button>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </form>
+      )}
+    </div>
+  );
+}
+
 function useEmpresas() {
   return useQuery({
     queryKey: ["empresas"],
@@ -178,6 +273,97 @@ function useMovimientosRecientes(empresaId: string) {
   });
 }
 
+// Entradas/salidas que se guardaron sin orden porque todavía no se sabía a
+// cuál correspondían (ver asignar_orden_movimiento_inventario()) -- se
+// resuelven después sin tener que reescribir el movimiento a mano.
+function usePendientesAsignarOrden(empresaId: string, tipo: TipoMovimientoInventario) {
+  return useQuery({
+    queryKey: ["pendientes-asignar-orden", empresaId, tipo],
+    enabled: !!empresaId,
+    queryFn: async () => {
+      const columnaOrden = tipo === "entrada" ? "orden_compra_id" : "orden_venta_id";
+      const { data, error } = await supabase
+        .from("movimientos_inventario")
+        .select("id, cantidad, fecha, productos(nombre, sku)")
+        .eq("empresa_id", empresaId)
+        .eq("tipo", tipo)
+        .eq("es_ajuste", false)
+        .is(columnaOrden, null)
+        .order("fecha", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Fila de un movimiento sin orden vinculada, con su propio selector para
+ * asignarla -- no reutiliza el selector de "vincular a orden" de arriba
+ * porque ese aplica al movimiento que se está por CREAR, este a uno que ya
+ * existe. */
+function AsignarOrdenFila({
+  movimiento,
+  ordenes,
+  onAsignado,
+}: {
+  movimiento: { id: string; cantidad: number; fecha: string; productos: { nombre: string; sku: string } | null };
+  ordenes: { id: string; etiqueta: string }[] | undefined;
+  onAsignado: () => void;
+}) {
+  const [ordenId, setOrdenId] = useState("");
+  const [asignando, setAsignando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onAsignar() {
+    if (!ordenId) return;
+    setAsignando(true);
+    setError(null);
+    try {
+      const { error: errRpc } = await supabase.rpc("asignar_orden_movimiento_inventario", {
+        p_movimiento_id: movimiento.id,
+        p_orden_id: ordenId,
+      });
+      if (errRpc) throw errRpc;
+      onAsignado();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAsignando(false);
+    }
+  }
+
+  return (
+    <tr className="border-t border-slate-100">
+      <td className="whitespace-nowrap px-3 py-2">{movimiento.fecha}</td>
+      <td className="px-3 py-2">
+        {movimiento.productos?.nombre} <span className="text-xs text-slate-400">({movimiento.productos?.sku})</span>
+      </td>
+      <td className="px-3 py-2 text-right">{movimiento.cantidad}</td>
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-2">
+          <select value={ordenId} onChange={(e) => setOrdenId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
+            <option value="">Selecciona la orden…</option>
+            {ordenes?.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.etiqueta}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onAsignar}
+            disabled={!ordenId || asignando}
+            className="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {asignando ? "Asignando…" : "Asignar"}
+          </button>
+        </div>
+        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      </td>
+    </tr>
+  );
+}
+
 export function Movimientos() {
   const { veTodasLasEmpresas, perfil } = useAuth();
   const queryClient = useQueryClient();
@@ -206,6 +392,7 @@ export function Movimientos() {
   const { data: almacen } = useAlmacen(empresaId);
   const { data: ordenes } = useOrdenes(empresaId, tipo);
   const { data: recientes, isLoading: cargandoRecientes } = useMovimientosRecientes(empresaId);
+  const { data: pendientesOrden } = usePendientesAsignarOrden(empresaId, tipo);
 
   useEffect(() => {
     setOrdenId("");
@@ -562,26 +749,15 @@ export function Movimientos() {
                     Conceptos detectados -- confírmalos buscando el producto correspondiente para agregarlos al carrito:
                   </p>
                   {itemsSugeridos.map((item, i) => (
-                    <div key={i} className="rounded border border-blue-100 bg-white p-2">
-                      <p className="mb-1 text-sm text-slate-800">
-                        {item.descripcion || "(sin descripción legible)"}
-                        {item.cantidad != null && (
-                          <span className="text-slate-500">
-                            {" "}
-                            — cantidad sugerida: {item.cantidad}
-                            {item.unidad ? ` ${item.unidad}` : ""}
-                          </span>
-                        )}
-                      </p>
-                      <BuscadorProducto
-                        empresaId={empresaId}
-                        placeholder="Buscar el producto correspondiente…"
-                        onSeleccionar={(p) => {
-                          agregarAlCarrito(p, item.cantidad ?? 1);
-                          setItemsSugeridos((prev) => prev.filter((_, idx) => idx !== i));
-                        }}
-                      />
-                    </div>
+                    <ItemSugeridoCard
+                      key={i}
+                      item={item}
+                      empresaId={empresaId}
+                      onAgregado={(p) => {
+                        agregarAlCarrito(p, item.cantidad ?? 1);
+                        setItemsSugeridos((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                    />
                   ))}
                 </div>
               )}
@@ -651,6 +827,44 @@ export function Movimientos() {
 
       {error && <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {mensaje && <p className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{mensaje}</p>}
+
+      {empresaId && pendientesOrden && pendientesOrden.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">
+            Pendientes por asignar {tipo === "entrada" ? "orden de compra" : "orden de venta"}
+          </h2>
+          <p className="mb-2 text-xs text-slate-500">
+            Se guardaron sin vincular porque todavía no se sabía a qué orden correspondían -- asígnala en cuanto la confirmes.
+          </p>
+          <div className="overflow-x-auto rounded border border-amber-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-amber-50 text-left text-xs uppercase text-amber-800">
+                <tr>
+                  <th className="px-3 py-2">Fecha</th>
+                  <th className="px-3 py-2">Producto</th>
+                  <th className="px-3 py-2 text-right">Cantidad</th>
+                  <th className="px-3 py-2">Asignar orden</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendientesOrden.map((m) => (
+                  <AsignarOrdenFila
+                    key={m.id}
+                    movimiento={m as any}
+                    ordenes={ordenes}
+                    onAsignado={() => {
+                      queryClient.invalidateQueries({ queryKey: ["pendientes-asignar-orden"] });
+                      queryClient.invalidateQueries({ queryKey: ["movimientos-inventario-recientes"] });
+                      queryClient.invalidateQueries({ queryKey: ["avance-recepcion-oc"] });
+                      queryClient.invalidateQueries({ queryKey: ["avance-embarque-ov"] });
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {empresaId && (
         <div className="mt-6">
