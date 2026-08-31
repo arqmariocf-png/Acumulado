@@ -293,8 +293,13 @@ export function Movimientos() {
     setError(null);
     limpiarFoto();
     setSubiendoFoto(true);
+    // Se guarda la referencia del <form> antes del primer await: React pone
+    // en null e.currentTarget en cuanto termina la parte síncrona del
+    // manejador, así que usarlo después de un await (para el .reset() de
+    // abajo) revienta con "No se pueden leer las propiedades de null".
+    const formEl = e.currentTarget;
     try {
-      const form = new FormData(e.currentTarget);
+      const form = new FormData(formEl);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const respuesta = await fetch(urlFuncion("ocr-nota-entrega"), {
@@ -307,7 +312,7 @@ export function Movimientos() {
       setNotaEntregaId(json.notaEntregaId);
       setItemsSugeridos(json.itemsSugeridos ?? []);
       setErrorLecturaFoto(json.errorLectura ?? null);
-      e.currentTarget.reset();
+      formEl.reset();
     } catch (err) {
       setError((err as Error).message);
     } finally {
