@@ -30,6 +30,11 @@ const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos"
 const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
 const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
 const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
+const PreciosLayout = lazy(() => import("./pages/precios/PreciosLayout").then((m) => ({ default: m.PreciosLayout })));
+const PreciosAnalisis = lazy(() => import("./pages/precios/Analisis").then((m) => ({ default: m.Analisis })));
+const PreciosPublicados = lazy(() => import("./pages/precios/Publicados").then((m) => ({ default: m.Publicados })));
+const PreciosCatalogo = lazy(() => import("./pages/precios/Catalogo").then((m) => ({ default: m.Catalogo })));
+const PreciosDetalle = lazy(() => import("./pages/precios/Detalle").then((m) => ({ default: m.Detalle })));
 
 const queryClient = new QueryClient();
 
@@ -72,6 +77,15 @@ export default function App() {
                     <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>
                       <Route path="resolucion" element={<Resolucion />} />
                     </Route>
+                  </Route>
+
+                  {/* El detalle vive fuera del layout de pestanas: es una
+                      tarjeta completa y ahi las pestanas estorban. */}
+                  <Route path="/precios/:id" element={<PreciosDetalle />} />
+                  <Route path="/precios" element={<PreciosLayout />}>
+                    <Route index element={<PreciosAnalisis />} />
+                    <Route path="publicados" element={<PreciosPublicados />} />
+                    <Route path="catalogo" element={<PreciosCatalogo />} />
                   </Route>
 
                   <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>

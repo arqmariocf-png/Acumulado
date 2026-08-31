@@ -4,7 +4,7 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable" | "rh_documentos";
+export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable" | "rh_documentos" | "produccion";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
@@ -384,4 +384,114 @@ export interface AvanceResolucionLinea {
   cantidad_a_compra: number;
   cantidad_a_entrega: number;
   cantidad_sin_resolver: number;
+}
+
+// Módulo de Precios Unitarios (ver supabase/migrations/*_pu_*.sql).
+//
+// El precio NUNCA se guarda: v_pu_analisis_costeo lo recalcula de la explosión
+// de insumos cada vez que se consulta, y el costo de cada insumo sale de su
+// historial. Por eso ajustar un rendimiento o cotizar un material vuelve a
+// costear solos todos los análisis en borrador.
+
+export type PuTipoInsumo = "material" | "mano_obra" | "herramienta" | "equipo" | "auxiliar";
+
+export type PuBaseCalculo = "cantidad" | "pct_mano_obra";
+
+export type PuEstado =
+  | "borrador"
+  | "en_revision_material"
+  | "material_confirmado"
+  | "autorizado"
+  | "publicado"
+  | "obsoleto";
+
+export interface PuInsumo {
+  id: string;
+  codigo: string;
+  descripcion: string;
+  unidad: string;
+  tipo: PuTipoInsumo;
+  activo: boolean;
+}
+
+export interface PuFactor {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  // Fracción, no porcentaje: 18% se guarda como 0.18.
+  indirectos_pct: number;
+  financiamiento_pct: number;
+  utilidad_pct: number;
+  cargos_adicionales_pct: number;
+  vigente_desde: string;
+  activo: boolean;
+}
+
+/** Fila de v_pu_analisis_costeo: la tarjeta con su precio ya calculado. */
+export interface PuCosteo {
+  analisis_id: string;
+  empresa_id: string;
+  empresa_codigo: string;
+  empresa_nombre: string;
+  proyecto_id: string | null;
+  proyecto_nombre: string | null;
+  codigo: string;
+  concepto: string;
+  unidad: string;
+  es_auxiliar: boolean;
+  estado: PuEstado;
+  creado_por: string | null;
+  creado_por_nombre: string | null;
+  factor_nombre: string | null;
+  indirectos_pct: number;
+  financiamiento_pct: number;
+  utilidad_pct: number;
+  cargos_adicionales_pct: number;
+  costo_directo: number;
+  importe_material: number;
+  importe_mano_obra: number;
+  importe_equipo: number;
+  importe_indirectos: number;
+  importe_financiamiento: number;
+  importe_utilidad: number;
+  importe_cargos_adicionales: number;
+  precio_unitario: number;
+  insumos_sin_precio: number;
+  updated_at: string;
+}
+
+/** Fila de v_pu_analisis_detalle: un renglón de la tarjeta, ya costeado. */
+export interface PuRenglon {
+  item_id: string;
+  analisis_id: string;
+  orden: number;
+  base_calculo: PuBaseCalculo;
+  codigo: string | null;
+  descripcion: string | null;
+  unidad: string | null;
+  tipo: PuTipoInsumo;
+  cantidad: number;
+  rendimiento: number;
+  /** cantidad / rendimiento, o la fracción cuando base_calculo es pct_mano_obra. */
+  aportacion: number;
+  costo_unitario: number;
+  importe: number;
+  costo_cerrado: boolean;
+  /** El insumo nunca se ha cotizado: cuenta como cero y hay que avisarlo. */
+  sin_precio: boolean;
+  proveedor: string | null;
+  precio_autorizado_en: string | null;
+}
+
+export interface PuAprobacion {
+  id: string;
+  analisis_id: string;
+  estado_anterior: PuEstado;
+  estado_nuevo: PuEstado;
+  actor_id: string | null;
+  actor_rol: AppRol | null;
+  /** Congelado al firmar: el documento conserva quién firmó ese día. */
+  actor_nombre: string | null;
+  comentario: string | null;
+  created_at: string;
 }
