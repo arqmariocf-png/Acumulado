@@ -8,6 +8,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 // Cada página en su propio chunk: nadie necesita el código de Admin o Carga
 // en la carga inicial del Dashboard, y viceversa.
 const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
+const Inicio = lazy(() => import("./pages/Inicio").then((m) => ({ default: m.Inicio })));
 const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ default: m.Movimientos })));
 const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga })));
@@ -53,7 +54,8 @@ export default function App() {
 
               <Route element={<ProtectedRoute />}>
                 <Route element={<Layout />}>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/" element={<Inicio />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/movimientos" element={<Movimientos />} />
                   <Route path="/carga" element={<Carga />} />
                   <Route path="/reportes" element={<ReportesEspeciales />} />
