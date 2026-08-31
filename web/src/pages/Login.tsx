@@ -27,6 +27,17 @@ export function Login() {
       const { error, data } = await supabase.auth.signUp({ email, password });
       if (error) {
         setError(error.message);
+      } else if (data.user && data.user.identities?.length === 0) {
+        // Caso real (Andrea, 31-ago-2026): ya tenía cuenta confirmada (de una
+        // invitación) e intentó "Crear cuenta" de nuevo con ese correo.
+        // Supabase, a propósito, NO manda error aquí (así nadie puede probar
+        // qué correos ya están registrados) -- responde 200 sin sesión,
+        // exactamente igual que una cuenta nueva real, pero sin mandar
+        // ningún correo porque no hay nada que confirmar. El mensaje
+        // genérico de abajo ("revisa tu correo") sería falso en este caso
+        // -- se detecta por identities vacío, la señal que sí distingue
+        // ambos casos del lado del cliente.
+        setError('Ya existe una cuenta con este correo. Usa "Entrar" con tu contraseña.');
       } else if (data.session) {
         // Confirmación de correo desactivada en el proyecto: ya queda con sesión.
         // El trigger handle_new_user ya le creó un profile en rol 'pendiente' —
