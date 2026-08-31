@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 const ENLACES = [
-  { a: "/", etiqueta: "Dashboard" },
+  { a: "/", etiqueta: "Inicio" },
   { a: "/movimientos", etiqueta: "Movimientos" },
   { a: "/inventario", etiqueta: "Inventario" },
   { a: "/carga", etiqueta: "Carga" },
@@ -16,7 +16,7 @@ const ENLACES = [
 
 // Lo que sí le toca ver a un supervisor de obra: pedir material y armar sus
 // precios unitarios. El resto de los módulos financieros siguen fuera.
-const ENLACES_RESPONSABLE = ["/requisiciones", "/precios"];
+const ENLACES_RESPONSABLE = ["/", "/requisiciones", "/precios"];
 
 export function Layout() {
   const { perfil, cerrarSesion } = useAuth();
@@ -33,9 +33,10 @@ export function Layout() {
       ? ENLACES.filter((e) => ENLACES_RESPONSABLE.includes(e.a))
       : perfil?.rol === "almacen"
         ? // Almacén entra a inventario y a poner precio de material en los PU.
-          ENLACES.filter((e) => ["/inventario", "/requisiciones", "/precios"].includes(e.a))
+          ENLACES.filter((e) => ["/", "/inventario", "/requisiciones", "/precios"].includes(e.a))
         : perfil?.rol === "rh_documentos"
-          ? []
+          ? // Sólo el inicio: desde ahí llega a RH, que es su único módulo.
+            ENLACES.filter((e) => e.a === "/")
           : ENLACES;
 
   return (
