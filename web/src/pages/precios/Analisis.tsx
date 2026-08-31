@@ -22,19 +22,36 @@ function useAnalisis(filtro: Filtro, etapa: PuEstado | undefined) {
   });
 }
 
-/** Obras donde el usuario puede abrir un análisis. RLS ya filtra las suyas. */
+/**
+ * Obras donde el usuario puede abrir un análisis. RLS ya filtra las suyas.
+ *
+ * La empresa se trae en una consulta aparte en vez de anidarla con
+ * `empresas(codigo)`: supabase-js tipa el anidado como arreglo aunque
+ * PostgREST devuelva un objeto para una relación muchos-a-uno, y esa
+ * discrepancia rompe el build. Dos consultas y un Map salen más baratos que
+ * pelearse con ese tipo.
+ */
 function useProyectos() {
   return useQuery({
     queryKey: ["pu-proyectos"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("proyectos")
-        .select("id, nombre, empresa_id, empresas(codigo)")
-        .eq("activo", true)
-        .order("nombre")
-        .limit(500);
-      if (error) throw error;
-      return data as { id: string; nombre: string; empresa_id: string; empresas: { codigo: string } | null }[];
+      const [proyectos, empresas] = await Promise.all([
+        supabase.from("proyectos").select("id, nombre, empresa_id").eq("activo", true).order("nombre").limit(500),
+        supabase.from("empresas").select("id, codigo"),
+      ]);
+      if (proyectos.error) throw proyectos.error;
+      if (empresas.error) throw empresas.error;
+
+      const codigoPorEmpresa = new Map<string, string>(
+        (empresas.data ?? []).map((e) => [String(e.id), String(e.codigo)]),
+      );
+
+      return (proyectos.data ?? []).map((p) => ({
+        id: String(p.id),
+        nombre: String(p.nombre),
+        empresa_id: String(p.empresa_id),
+        empresa_codigo: codigoPorEmpresa.get(String(p.empresa_id)) ?? "",
+      }));
     },
   });
 }
@@ -131,7 +148,7 @@ export function Analisis() {
                 <option value="">Elige una obra…</option>
                 {proyectos?.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.empresas?.codigo} · {p.nombre}
+                    {p.empresa_codigo} · {p.nombre}
                   </option>
                 ))}
               </select>
