@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { AgregarRenglon } from "./AgregarRenglon";
+import { CircuitoFirmas } from "./CircuitoFirmas";
 import {
   COLOR_ESTADO,
   ETIQUETA_ESTADO,
@@ -457,6 +458,8 @@ export function Detalle() {
         {mover.error && <p className="mt-2 text-sm text-red-600">{(mover.error as Error).message}</p>}
         {errorPdf && <p className="mt-2 text-sm text-red-600">{errorPdf}</p>}
       </section>
+
+      <CircuitoFirmas estado={pu.estado} bitacora={bitacora} elaboradoPor={pu.creado_por_nombre} />
 
       {bitacora.length > 0 && (
         <section className="rounded border border-slate-200 bg-white p-4">
