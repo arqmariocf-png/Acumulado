@@ -74,7 +74,7 @@ export default function App() {
                     </Route>
                   </Route>
 
-                  <Route element={<ProtectedRoute roles={["rh"]} />}>
+                  <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>
                     <Route path="/rh" element={<RH />} />
                   </Route>
 

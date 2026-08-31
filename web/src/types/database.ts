@@ -4,7 +4,7 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable";
+export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable" | "rh_documentos";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
@@ -167,6 +167,8 @@ export interface AsignacionDiaria {
   fecha: string;
 }
 
+export type TipoContrato = "confidencialidad" | "laboral_determinado" | "laboral_indeterminado" | "prestacion_servicios";
+
 export interface Contratacion {
   id: string;
   personal_id: string;
@@ -177,6 +179,7 @@ export interface Contratacion {
   duracion_dias: number;
   fecha_fin: string;
   estatus: "vigente" | "vencido" | "rescindido" | "renovado";
+  tipo_contrato: TipoContrato;
   contrato_storage_path: string | null;
   contrato_generado_at: string | null;
 }
