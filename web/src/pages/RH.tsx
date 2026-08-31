@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
-import type { AsignacionDiaria, Contratacion, DocumentoFaltante, Personal, TipoDocumentoPersonal } from "../types/database";
+import { useAuth } from "../lib/auth";
+import type { AsignacionDiaria, Contratacion, DocumentoFaltante, Personal, TipoDocumentoPersonal, TipoContrato } from "../types/database";
 
 type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos";
 
@@ -46,14 +47,21 @@ function usePersonal() {
 }
 
 export function RH() {
-  const [pestana, setPestana] = useState<Pestana>("personal");
+  const { perfil } = useAuth();
+  // 'rh_documentos' (ej. Raúl) solo captura expedientes, bajo supervisión de
+  // 'rh' (ej. Eréndira) -- no debe ver ni las otras pestañas (sueldos,
+  // asignaciones diarias, datos de personal editables) aunque RLS ya se lo
+  // bloquee del lado del dato, ver 20260828020000_rh_documentos_rol_enum.sql.
+  const soloDocumentos = perfil?.rol === "rh_documentos";
+  const pestanas = soloDocumentos ? PESTANAS.filter((p) => p.valor === "documentos") : PESTANAS;
+  const [pestana, setPestana] = useState<Pestana>(soloDocumentos ? "documentos" : "personal");
 
   return (
     <div>
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {PESTANAS.map((p) => (
+        {pestanas.map((p) => (
           <button
             key={p.valor}
             onClick={() => setPestana(p.valor)}
@@ -430,6 +438,17 @@ function FilaAsignacion({
 
 // ── Contrataciones ───────────────────────────────────────────────────────
 
+const TIPOS_CONTRATO: { valor: TipoContrato; etiqueta: string }[] = [
+  { valor: "laboral_determinado", etiqueta: "Contrato laboral (tiempo determinado)" },
+  { valor: "laboral_indeterminado", etiqueta: "Contrato laboral (tiempo indeterminado)" },
+  { valor: "prestacion_servicios", etiqueta: "Prestación de servicios" },
+  { valor: "confidencialidad", etiqueta: "Confidencialidad" },
+];
+
+const ETIQUETA_TIPO_CONTRATO: Record<TipoContrato, string> = Object.fromEntries(
+  TIPOS_CONTRATO.map((t) => [t.valor, t.etiqueta]),
+) as Record<TipoContrato, string>;
+
 function useContrataciones() {
   return useQuery({
     queryKey: ["rh-contrataciones"],
@@ -473,6 +492,7 @@ function PestanaContrataciones() {
       sueldo_semanal: Number(fd.get("sueldo_semanal")),
       fecha_inicio: fd.get("fecha_inicio"),
       duracion_dias: Number(fd.get("duracion_dias")),
+      tipo_contrato: fd.get("tipo_contrato"),
     });
     (e.target as HTMLFormElement).reset();
   }
@@ -502,6 +522,16 @@ function PestanaContrataciones() {
             {empresas?.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={etiquetaCampo}>Tipo de contrato *</label>
+          <select name="tipo_contrato" required className={campoTexto} defaultValue="laboral_determinado">
+            {TIPOS_CONTRATO.map((t) => (
+              <option key={t.valor} value={t.valor}>
+                {t.etiqueta}
               </option>
             ))}
           </select>
@@ -538,6 +568,7 @@ function PestanaContrataciones() {
             <tr>
               <th className="px-3 py-2">Persona</th>
               <th className="px-3 py-2">Empresa (patrón)</th>
+              <th className="px-3 py-2">Tipo de contrato</th>
               <th className="px-3 py-2">Puesto</th>
               <th className="px-3 py-2 text-right">Sueldo semanal</th>
               <th className="px-3 py-2">Inicio</th>
@@ -550,6 +581,7 @@ function PestanaContrataciones() {
               <tr key={c.id} className="border-t border-slate-100">
                 <td className="px-3 py-2">{c.personal?.nombre ?? "—"}</td>
                 <td className="px-3 py-2">{c.empresa?.nombre ?? "—"}</td>
+                <td className="px-3 py-2">{ETIQUETA_TIPO_CONTRATO[c.tipo_contrato] ?? c.tipo_contrato}</td>
                 <td className="px-3 py-2">{c.puesto}</td>
                 <td className="px-3 py-2 text-right">${c.sueldo_semanal.toLocaleString("es-MX")}</td>
                 <td className="px-3 py-2">{c.fecha_inicio}</td>
@@ -559,7 +591,7 @@ function PestanaContrataciones() {
             ))}
             {contrataciones?.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
                   Todavía no hay contrataciones registradas.
                 </td>
               </tr>

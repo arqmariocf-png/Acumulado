@@ -16,13 +16,19 @@ const ENLACES = [
 export function Layout() {
   const { perfil, cerrarSesion } = useAuth();
   const esAdmin = perfil?.rol === "admin";
-  const veRH = perfil?.rol === "rh" || esAdmin;
+  const veRH = perfil?.rol === "rh" || perfil?.rol === "rh_documentos" || esAdmin;
   const veSaldos = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin;
   // 'responsable' es un rol acotado a sus proyectos (ver SPEC.md sección 10)
-  // -- no debe ver el resto de los módulos financieros/operativos, ni aunque
-  // RLS ya se los bloquee del lado del dato (evita que le aparezcan
-  // pantallas vacías sin sentido para su rol).
-  const enlaces = perfil?.rol === "responsable" ? ENLACES.filter((e) => e.a === "/requisiciones") : ENLACES;
+  // y 'rh_documentos' a subir expedientes (ver 20260828020000_rh_documentos_
+  // rol_enum.sql) -- ninguno de los dos debe ver el resto de los módulos
+  // financieros/operativos, ni aunque RLS ya se los bloquee del lado del
+  // dato (evita que le aparezcan pantallas vacías sin sentido para su rol).
+  const enlaces =
+    perfil?.rol === "responsable"
+      ? ENLACES.filter((e) => e.a === "/requisiciones")
+      : perfil?.rol === "rh_documentos"
+        ? []
+        : ENLACES;
 
   return (
     <div className="min-h-screen bg-slate-50">
