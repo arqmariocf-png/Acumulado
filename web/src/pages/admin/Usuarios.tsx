@@ -91,8 +91,8 @@ export function Usuarios() {
       if (variables.telefono) {
         const mensaje =
           variables.tipo === "recovery"
-            ? `Hola, aquí tienes tu link para definir tu contraseña de Acumulado: ${link}`
-            : `Hola, aquí tienes tu link de acceso a Acumulado: ${link}`;
+            ? `Hola, aquí tienes tu link para definir tu contraseña de Grupo Loma: ${link}`
+            : `Hola, aquí tienes tu link de acceso a Grupo Loma: ${link}`;
         window.open(`https://wa.me/${numeroWhatsapp(variables.telefono)}?text=${encodeURIComponent(mensaje)}`, "_blank");
       } else {
         window.prompt(`Link de acceso para ${email} (ya copiado al portapapeles) -- mándaselo por WhatsApp u otro canal:`, link);

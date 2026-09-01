@@ -44,7 +44,7 @@ export function Layout() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
-            <span className="text-lg font-semibold text-slate-900">Acumulado · Grupo Loma</span>
+            <span className="text-lg font-semibold text-slate-900">Grupo Loma</span>
             <nav className="flex gap-4 text-sm">
               {enlaces.map((e) => (
                 <NavLink

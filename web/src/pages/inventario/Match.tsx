@@ -80,7 +80,7 @@ export function Match() {
     <div>
       <p className="mb-4 max-w-2xl text-sm text-slate-500">
         Compara lo que el almacén registró como recibido/embarcado (entradas y salidas de inventario vinculadas a una
-        orden) contra el total en dinero de esa orden en el catálogo de Acumulado.
+        orden) contra el total en dinero de esa orden en el catálogo de Grupo Loma.
       </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">

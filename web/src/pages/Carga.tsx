@@ -324,7 +324,7 @@ export function Carga() {
           </p>
           {(resultado.oc_empresas_no_encontradas?.length > 0 || resultado.ov_empresas_no_encontradas?.length > 0) && (
             <p className="text-xs text-amber-800">
-              ⚠️ Empresas del backoffice sin equivalente en Acumulado (revisa el nombre exacto en la tabla "empresas"):{" "}
+              ⚠️ Empresas del backoffice sin equivalente en Grupo Loma (revisa el nombre exacto en la tabla "empresas"):{" "}
               {[...(resultado.oc_empresas_no_encontradas ?? []), ...(resultado.ov_empresas_no_encontradas ?? [])].join(", ")}
             </p>
           )}
