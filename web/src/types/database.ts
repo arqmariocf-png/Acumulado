@@ -22,6 +22,7 @@ export interface Profile {
   rol: AppRol;
   empresa_id: string | null;
   activo: boolean;
+  telefono: string | null;
 }
 
 export interface CuentaBancaria {
