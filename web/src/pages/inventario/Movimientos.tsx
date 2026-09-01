@@ -611,7 +611,7 @@ export function Movimientos() {
       {!esAjuste && empresaId && (
         <div className="mb-4 max-w-md">
           <label className="mb-1 block text-xs font-medium text-slate-600">
-            Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Acumulado)" : "orden de venta (match con Acumulado)"}
+            Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Grupo Loma)" : "orden de venta (match con Grupo Loma)"}
           </label>
           <select value={ordenId} onChange={(e) => setOrdenId(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
             <option value="">Sin vincular</option>
