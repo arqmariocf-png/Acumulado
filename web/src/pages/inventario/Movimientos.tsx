@@ -671,7 +671,9 @@ export function Movimientos() {
               {codigoSinProducto && (
                 <form onSubmit={onCrearProductoRapido} className="mb-4 max-w-md space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
                   <p className="text-sm font-medium text-blue-900">
-                    No hay ningún producto con el código <code>{codigoSinProducto}</code> en esta empresa. Créalo para continuar:
+                    No hay ningún producto con el código{" "}
+                    <code className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-blue-900">{codigoSinProducto}</code> en esta
+                    empresa. Créalo para continuar:
                   </p>
                   <input name="nombre" required placeholder="Nombre del producto" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
                   <div className="flex gap-2">
