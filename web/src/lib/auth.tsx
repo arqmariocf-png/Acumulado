@@ -10,6 +10,8 @@ interface AuthState {
   puedeEscribirEnEmpresa: (empresaId: string) => boolean;
   veTodasLasEmpresas: boolean;
   cerrarSesion: () => Promise<void>;
+  recuperandoContrasena: boolean;
+  terminarRecuperacion: () => void;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -18,6 +20,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [perfil, setPerfil] = useState<Profile | null>(null);
   const [cargando, setCargando] = useState(true);
+  // Se activa cuando el link viene de generar-link-acceso con tipo
+  // "recovery" (ver Usuarios.tsx / NuevaContrasena.tsx): supabase-js detecta
+  // el token en el hash de la URL al cargar, sin importar en qué ruta cayó,
+  // y dispara este evento en vez de un login normal.
+  const [recuperandoContrasena, setRecuperandoContrasena] = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -27,7 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
     });
 
-    const { data: suscripcion } = supabase.auth.onAuthStateChange((_evento, nuevaSession) => {
+    const { data: suscripcion } = supabase.auth.onAuthStateChange((evento, nuevaSession) => {
+      if (evento === "PASSWORD_RECOVERY") setRecuperandoContrasena(true);
       setSession(nuevaSession);
     });
 
@@ -72,8 +80,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  function terminarRecuperacion() {
+    setRecuperandoContrasena(false);
+  }
+
   return (
-    <AuthContext.Provider value={{ cargando, session, perfil, puedeEscribirEnEmpresa, veTodasLasEmpresas, cerrarSesion }}>
+    <AuthContext.Provider
+      value={{
+        cargando,
+        session,
+        perfil,
+        puedeEscribirEnEmpresa,
+        veTodasLasEmpresas,
+        cerrarSesion,
+        recuperandoContrasena,
+        terminarRecuperacion,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
