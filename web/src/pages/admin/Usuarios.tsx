@@ -121,23 +121,25 @@ export function Usuarios() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
-              <th className="px-3 py-2">Nombre</th>
-              <th className="px-3 py-2">Rol</th>
-              <th className="px-3 py-2">Empresa</th>
-              <th className="px-3 py-2">Activo</th>
-              <th className="px-3 py-2">Teléfono (WhatsApp)</th>
-              <th className="px-3 py-2">Acceso</th>
+              <th className="px-2 py-2">Nombre</th>
+              <th className="px-2 py-2">Rol</th>
+              <th className="px-2 py-2">Empresa</th>
+              <th className="px-2 py-2">Activo</th>
+              <th className="px-2 py-2">Teléfono (WhatsApp)</th>
+              <th className="px-2 py-2">Acceso</th>
             </tr>
           </thead>
           <tbody>
             {perfilesFiltrados?.map((p) => (
               <tr key={p.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{p.nombre}</td>
-                <td className="px-3 py-2">
+                <td className="max-w-[140px] truncate px-2 py-2" title={p.nombre}>
+                  {p.nombre}
+                </td>
+                <td className="px-2 py-2">
                   <select
                     value={p.rol}
                     onChange={(e) => actualizar.mutate({ id: p.id, rol: e.target.value as AppRol })}
-                    className="rounded border border-slate-300 px-2 py-1 text-sm"
+                    className="max-w-[110px] rounded border border-slate-300 px-1 py-1 text-sm"
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
@@ -146,13 +148,13 @@ export function Usuarios() {
                     ))}
                   </select>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-2 py-2">
                   <select
                     value={p.empresa_id ?? ""}
                     onChange={(e) => actualizar.mutate({ id: p.id, empresa_id: e.target.value || null })}
-                    className="rounded border border-slate-300 px-2 py-1 text-sm"
+                    className="max-w-[110px] rounded border border-slate-300 px-1 py-1 text-sm"
                   >
-                    <option value="">— (todas, si corporativo/admin)</option>
+                    <option value="">— (todas)</option>
                     {empresas?.map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.nombre}
@@ -160,7 +162,7 @@ export function Usuarios() {
                     ))}
                   </select>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-2 py-2">
                   <input
                     type="checkbox"
                     checked={p.activo}
@@ -173,7 +175,7 @@ export function Usuarios() {
                     }
                   />
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-2 py-2">
                   <input
                     type="tel"
                     key={p.telefono ?? ""}
@@ -183,16 +185,16 @@ export function Usuarios() {
                       const valor = e.target.value.trim() || null;
                       if (valor !== (p.telefono ?? null)) actualizar.mutate({ id: p.id, telefono: valor });
                     }}
-                    className="w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+                    className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                   />
                 </td>
-                <td className="px-3 py-2">
-                  <div className="flex gap-2">
+                <td className="px-2 py-2">
+                  <div className="flex flex-col gap-1">
                     <button
                       type="button"
                       disabled={generarLink.isPending}
                       onClick={() => generarLink.mutate({ userId: p.id, tipo: "magiclink", telefono: p.telefono })}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                       title="Genera un link de acceso directo (sin correo). Con teléfono guardado, abre WhatsApp listo para enviar; si no, lo copia para pegarlo en cualquier canal."
                     >
                       Generar link
@@ -201,7 +203,7 @@ export function Usuarios() {
                       type="button"
                       disabled={generarLink.isPending}
                       onClick={() => generarLink.mutate({ userId: p.id, tipo: "recovery", telefono: p.telefono })}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                       title="Genera un link para que la persona defina una contraseña nueva. Con teléfono guardado, abre WhatsApp listo para enviar; si no, lo copia para pegarlo en cualquier canal."
                     >
                       Nueva contraseña
