@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../../lib/supabase";
+import { supabase, urlFuncion } from "../../lib/supabase";
 import type { AppRol, Empresa, Profile } from "../../types/database";
 
 const ROLES: AppRol[] = ["pendiente", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "admin"];
@@ -38,6 +38,30 @@ export function Usuarios() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }),
   });
 
+  // Desbloqueo cuando el correo no le llega a alguien (caso real: el mailer
+  // compartido de Supabase reporta "enviado" pero el servidor de correo del
+  // destinatario lo filtra, o se topa con el límite de envíos por hora) --
+  // genera un link de acceso directo (magic link) que el admin copia y manda
+  // por otro canal (WhatsApp, etc.), sin esperar a que llegue nada por correo.
+  const generarLink = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const respuesta = await fetch(urlFuncion("generar-link-acceso"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      return json as { link: string; email: string };
+    },
+    onSuccess: ({ link, email }) => {
+      navigator.clipboard?.writeText(link).catch(() => {});
+      window.prompt(`Link de acceso para ${email} (ya copiado al portapapeles) -- mándaselo por WhatsApp u otro canal:`, link);
+    },
+    onError: (err) => alert((err as Error).message),
+  });
+
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
 
   return (
@@ -54,6 +78,7 @@ export function Usuarios() {
               <th className="px-3 py-2">Rol</th>
               <th className="px-3 py-2">Empresa</th>
               <th className="px-3 py-2">Activo</th>
+              <th className="px-3 py-2">Acceso</th>
             </tr>
           </thead>
           <tbody>
@@ -99,6 +124,17 @@ export function Usuarios() {
                         .then(() => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }))
                     }
                   />
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    disabled={generarLink.isPending}
+                    onClick={() => generarLink.mutate(p.id)}
+                    className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                    title="Genera un link de acceso directo (sin correo) para mandarle por otro canal, ej. cuando no le llega el correo de confirmación/recuperación."
+                  >
+                    Generar link
+                  </button>
                 </td>
               </tr>
             ))}
