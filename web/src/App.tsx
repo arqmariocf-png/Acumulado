@@ -1,13 +1,14 @@
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider } from "./lib/auth";
+import { AuthProvider, useAuth } from "./lib/auth";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 // Cada página en su propio chunk: nadie necesita el código de Admin o Carga
 // en la carga inicial del Dashboard, y viceversa.
 const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
+const NuevaContrasena = lazy(() => import("./pages/NuevaContrasena").then((m) => ({ default: m.NuevaContrasena })));
 const Inicio = lazy(() => import("./pages/Inicio").then((m) => ({ default: m.Inicio })));
 const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ default: m.Movimientos })));
@@ -49,65 +50,79 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Suspense fallback={<Cargando />}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-
-              <Route element={<ProtectedRoute />}>
-                <Route element={<Layout />}>
-                  <Route path="/" element={<Inicio />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/movimientos" element={<Movimientos />} />
-                  <Route path="/carga" element={<Carga />} />
-                  <Route path="/reportes" element={<ReportesEspeciales />} />
-                  <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
-                  <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
-                  <Route path="/pendientes" element={<Pendientes />} />
-
-                  <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
-                    <Route path="/saldos" element={<SaldosDiarios />} />
-                  </Route>
-
-                  <Route path="/inventario" element={<InventarioLayout />}>
-                    <Route index element={<InventarioMovimientos />} />
-                    <Route path="existencias" element={<InventarioExistencias />} />
-                    <Route path="productos" element={<InventarioProductos />} />
-                    <Route path="match" element={<InventarioMatch />} />
-                  </Route>
-
-                  <Route path="/requisiciones" element={<RequisicionesLayout />}>
-                    <Route index element={<MisRequisiciones />} />
-                    <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>
-                      <Route path="resolucion" element={<Resolucion />} />
-                    </Route>
-                  </Route>
-
-                  {/* El detalle vive fuera del layout de pestanas: es una
-                      tarjeta completa y ahi las pestanas estorban. */}
-                  <Route path="/precios/:id" element={<PreciosDetalle />} />
-                  <Route path="/precios" element={<PreciosLayout />}>
-                    <Route index element={<PreciosAnalisis />} />
-                    <Route path="publicados" element={<PreciosPublicados />} />
-                    <Route path="catalogo" element={<PreciosCatalogo />} />
-                  </Route>
-
-                  <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>
-                    <Route path="/rh" element={<RH />} />
-                  </Route>
-
-                  <Route element={<ProtectedRoute soloAdmin />}>
-                    <Route path="/admin" element={<AdminLayout />}>
-                      <Route index element={<Usuarios />} />
-                      <Route path="reglas" element={<Reglas />} />
-                      <Route path="excepciones" element={<Excepciones />} />
-                      <Route path="proyectos" element={<AdminProyectos />} />
-                    </Route>
-                  </Route>
-                </Route>
-              </Route>
-            </Routes>
+            <Enrutador />
           </Suspense>
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
+  );
+}
+
+function Enrutador() {
+  const { recuperandoContrasena } = useAuth();
+
+  // El link de tipo "recovery" (Admin -> Usuarios -> Generar link) puede
+  // caer en cualquier ruta -- supabase-js detecta el token apenas carga la
+  // página. Mientras esté activo, se muestra sólo el formulario de
+  // contraseña nueva y nada más de la app, sin importar en qué URL llegó.
+  if (recuperandoContrasena) return <NuevaContrasena />;
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Inicio />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/movimientos" element={<Movimientos />} />
+          <Route path="/carga" element={<Carga />} />
+          <Route path="/reportes" element={<ReportesEspeciales />} />
+          <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
+          <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
+          <Route path="/pendientes" element={<Pendientes />} />
+
+          <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
+            <Route path="/saldos" element={<SaldosDiarios />} />
+          </Route>
+
+          <Route path="/inventario" element={<InventarioLayout />}>
+            <Route index element={<InventarioMovimientos />} />
+            <Route path="existencias" element={<InventarioExistencias />} />
+            <Route path="productos" element={<InventarioProductos />} />
+            <Route path="match" element={<InventarioMatch />} />
+          </Route>
+
+          <Route path="/requisiciones" element={<RequisicionesLayout />}>
+            <Route index element={<MisRequisiciones />} />
+            <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>
+              <Route path="resolucion" element={<Resolucion />} />
+            </Route>
+          </Route>
+
+          {/* El detalle vive fuera del layout de pestanas: es una
+              tarjeta completa y ahi las pestanas estorban. */}
+          <Route path="/precios/:id" element={<PreciosDetalle />} />
+          <Route path="/precios" element={<PreciosLayout />}>
+            <Route index element={<PreciosAnalisis />} />
+            <Route path="publicados" element={<PreciosPublicados />} />
+            <Route path="catalogo" element={<PreciosCatalogo />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>
+            <Route path="/rh" element={<RH />} />
+          </Route>
+
+          <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Usuarios />} />
+              <Route path="reglas" element={<Reglas />} />
+              <Route path="excepciones" element={<Excepciones />} />
+              <Route path="proyectos" element={<AdminProyectos />} />
+            </Route>
+          </Route>
+        </Route>
+      </Route>
+    </Routes>
   );
 }

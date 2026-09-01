@@ -41,15 +41,19 @@ export function Usuarios() {
   // Desbloqueo cuando el correo no le llega a alguien (caso real: el mailer
   // compartido de Supabase reporta "enviado" pero el servidor de correo del
   // destinatario lo filtra, o se topa con el límite de envíos por hora) --
-  // genera un link de acceso directo (magic link) que el admin copia y manda
-  // por otro canal (WhatsApp, etc.), sin esperar a que llegue nada por correo.
+  // genera un link de acceso directo que el admin copia y manda por otro
+  // canal (WhatsApp, etc.), sin esperar a que llegue nada por correo.
+  // tipo "magiclink": entra directo con la sesión que ya tenía.
+  // tipo "recovery": entra a definir una contraseña nueva (ver
+  // NuevaContrasena.tsx) -- caso real Mario Contreras, 1-sep-2026: nunca
+  // tuvo una que recordara, siempre entraba por magic link.
   const generarLink = useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async ({ userId, tipo }: { userId: string; tipo: "magiclink" | "recovery" }) => {
       const { data: sessionData } = await supabase.auth.getSession();
       const respuesta = await fetch(urlFuncion("generar-link-acceso"), {
         method: "POST",
         headers: { Authorization: `Bearer ${sessionData.session?.access_token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId, tipo }),
       });
       const json = await respuesta.json();
       if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
@@ -126,15 +130,26 @@ export function Usuarios() {
                   />
                 </td>
                 <td className="px-3 py-2">
-                  <button
-                    type="button"
-                    disabled={generarLink.isPending}
-                    onClick={() => generarLink.mutate(p.id)}
-                    className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
-                    title="Genera un link de acceso directo (sin correo) para mandarle por otro canal, ej. cuando no le llega el correo de confirmación/recuperación."
-                  >
-                    Generar link
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={generarLink.isPending}
+                      onClick={() => generarLink.mutate({ userId: p.id, tipo: "magiclink" })}
+                      className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      title="Genera un link de acceso directo (sin correo) para mandarle por otro canal, ej. cuando no le llega el correo de confirmación/recuperación."
+                    >
+                      Generar link
+                    </button>
+                    <button
+                      type="button"
+                      disabled={generarLink.isPending}
+                      onClick={() => generarLink.mutate({ userId: p.id, tipo: "recovery" })}
+                      className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      title="Genera un link para que la persona defina una contraseña nueva, sin depender de que le llegue el correo de recuperación."
+                    >
+                      Nueva contraseña
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
