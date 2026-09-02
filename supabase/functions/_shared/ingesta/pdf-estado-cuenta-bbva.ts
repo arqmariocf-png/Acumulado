@@ -637,23 +637,12 @@ function parsearComoWeb(paginas: ItemPdfPosicionado[][], anclas: AnclasColumnasW
   // MAESTRA PYME (ver comentario del encabezado), así que la confianza viene
   // de otros dos lados:
   //
-  // 1. Los movimientos vienen del más reciente al más antiguo -- el primero
-  //    de la lista debe cuadrar con "Saldo disponible" que declara la
-  //    página 1.
-  const saldoDisponible = extraerSaldoDisponible(paginas);
-  if (saldoDisponible != null && movimientos.length > 0 && Math.abs(movimientos[0].saldo - saldoDisponible) > 0.01) {
-    return {
-      movimientos: [],
-      erroresPorFila: [],
-      errorDocumento: `El PDF declara un Saldo disponible de ${saldoDisponible} pero el movimiento más reciente extraído tiene saldo ${movimientos[0].saldo} -- no se insertó nada, revisa el archivo manualmente`,
-    };
-  }
-
-  // 2. Cada fila ya trae su propio saldo real impreso por el banco (a
+  // 1. Cada fila ya trae su propio saldo real impreso por el banco (a
   //    diferencia de MAESTRA PYME, que solo lo imprime en checkpoints) --
   //    se valida que, en orden cronológico, cada saldo cuadre exactamente
-  //    con el saldo anterior +/- el monto clasificado por columna. Si algo
-  //    no cuadra, la clasificación de esa fila (o de alguna entre medio) es
+  //    con el saldo anterior +/- el monto clasificado por columna. Esta es
+  //    la validación FUERTE (bloquea todo el documento si falla): si algo no
+  //    cuadra, la clasificación de esa fila (o de alguna entre medio) es
   //    sospechosa y no se puede confiar en el lote completo.
   const cronologico = [...movimientos].reverse();
   for (let i = 1; i < cronologico.length; i++) {
@@ -667,6 +656,30 @@ function parsearComoWeb(paginas: ItemPdfPosicionado[][], anclas: AnclasColumnasW
         errorDocumento: `El saldo del movimiento del ${actual.fechaPago} (${actual.saldo}) no cuadra con el saldo del movimiento anterior (${anterior.saldo}) +/- el monto clasificado -- no se insertó nada, revisa el archivo manualmente`,
       };
     }
+  }
+
+  // 2. Los movimientos vienen del más reciente al más antiguo -- lo esperado
+  //    es que el primero de la lista cuadre con "Saldo disponible" que
+  //    declara la página 1. Esta validación es SUAVE (advertencia, no
+  //    bloquea la carga): "Saldo disponible" es el saldo DISPONIBLE del
+  //    banco, no necesariamente el saldo CONTABLE del último movimiento --
+  //    confirmado con un PDF real (Aceros, cuenta 5859, 31-ago-2026) donde el
+  //    saldo disponible declarado ($23,845.14) coincidía con el PENÚLTIMO
+  //    movimiento, no con el último (una nómina del mismo día, $14,775.00),
+  //    aun cuando la cadena de saldos de TODO el documento (la validación
+  //    fuerte de arriba) encadenaba perfecto sin un solo hueco -- o sea, la
+  //    extracción era correcta y el desfase era del propio banco (probable
+  //    retención/disponibilidad de nómina el mismo día), no un error de
+  //    parseo. Bloquear el documento entero por esto habría descartado datos
+  //    buenos; se avisa en su lugar para que alguien lo revise si quiere.
+  const saldoDisponible = extraerSaldoDisponible(paginas);
+  if (saldoDisponible != null && movimientos.length > 0 && Math.abs(movimientos[0].saldo - saldoDisponible) > 0.01) {
+    erroresPorFila.unshift({
+      fila: 0,
+      errores: [
+        `El PDF declara un Saldo disponible de ${saldoDisponible} pero el movimiento más reciente extraído tiene saldo ${movimientos[0].saldo} -- la cadena de saldos de todos los movimientos SÍ cuadra internamente, así que probablemente es una diferencia entre saldo disponible y saldo contable del banco (ej. retención de nómina del mismo día), no un error de extracción. Revisa que el saldo final coincida con el estado de cuenta real.`,
+      ],
+    });
   }
 
   return { movimientos, erroresPorFila, errorDocumento: null };
