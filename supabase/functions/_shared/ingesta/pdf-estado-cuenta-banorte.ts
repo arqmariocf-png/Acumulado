@@ -244,8 +244,19 @@ function parsearFormatoEstadoCuentaMensual(textoCompleto: string, cuentaUltimos4
       .trim();
 
     // "SALDO ANTERIOR" es el ancla del saldo inicial de la sección, no un
-    // movimiento -- mismo rol que "SALDO INICIAL" en BanBajío.
-    if (/^SALDO ANTERIOR$/i.test(descripcion)) {
+    // movimiento -- mismo rol que "SALDO INICIAL" en BanBajío. Cuando la
+    // cuenta no tuvo movimientos en el periodo, el banco imprime "SIN
+    // MOVIMIENTOS" pegado en la misma línea/bloque (sin otra fecha ancla que
+    // lo separe, porque no hay ningún movimiento real después) -- confirmado
+    // con un PDF real (Constructora Supervisión y Consultoría LOMA, cuenta
+    // Banorte 7529, julio 2026: "30-JUN-26 SALDO ANTERIOR 17,184.01\nSIN
+    // MOVIMIENTOS"). Sin este descuento, la comparación exacta de abajo
+    // fallaba porque la descripción traía "SALDO ANTERIOR SIN MOVIMIENTOS",
+    // no "SALDO ANTERIOR" a secas, y el documento se bloqueaba entero con
+    // "No se pudo leer el Saldo Anterior del PDF" para una cuenta sin nada
+    // que insertar -- no un error real de extracción.
+    const descripcionSinAvisoVacio = descripcion.replace(/\s*SIN MOVIMIENTOS\s*$/i, "").trim();
+    if (/^SALDO ANTERIOR$/i.test(descripcionSinAvisoVacio)) {
       if (montos.length !== 1) {
         return { movimientos: [], erroresPorFila: [], errorDocumento: `No se pudo leer el Saldo Anterior del PDF (se encontraron ${montos.length} monto(s) en esa línea, se esperaba 1)` };
       }
