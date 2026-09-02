@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parsearPdfEstadoCuentaBanorte } from "./pdf-estado-cuenta-banorte.ts";
 import { TEXTO_REAL_BANORTE_ACEROS_JULIO_2026 } from "./pdf-estado-cuenta-banorte.fixture.ts";
+import { TEXTO_REAL_BANORTE_SIN_MOVIMIENTOS_CSC_JULIO_2026 } from "./pdf-estado-cuenta-banorte-sin-movimientos.fixture.ts";
 
 test("parsea el PDF real de Banorte (Aceros, julio 2026, ENLACE NEGOCIOS BASICA): 7 movimientos, cuadra exacto con lo que el banco declara", () => {
   const r = parsearPdfEstadoCuentaBanorte(TEXTO_REAL_BANORTE_ACEROS_JULIO_2026);
@@ -143,4 +144,11 @@ test("si el saldo final calculado no cuadra con el declarado, bloquea todo el do
   const r = parsearPdfEstadoCuentaBanorte(texto);
   assert.equal(r.movimientos.length, 0);
   assert.match(r.errorDocumento ?? "", /Saldo Final.*999/);
+});
+
+test('una cuenta sin movimientos en el periodo ("SALDO ANTERIOR ... SIN MOVIMIENTOS" sin otra fecha ancla que las separe) no bloquea el documento -- no hay nada que insertar, no es un error (caso real: Constructora Supervisión y Consultoría LOMA, cuenta Banorte 7529, julio 2026)', () => {
+  const r = parsearPdfEstadoCuentaBanorte(TEXTO_REAL_BANORTE_SIN_MOVIMIENTOS_CSC_JULIO_2026, "7529");
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.erroresPorFila.length, 0);
+  assert.equal(r.movimientos.length, 0);
 });

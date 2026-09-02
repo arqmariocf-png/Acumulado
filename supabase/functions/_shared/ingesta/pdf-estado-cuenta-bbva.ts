@@ -253,9 +253,13 @@ export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoPa
     return parsearComoWeb(paginas, anclasWeb);
   }
 
-  // Ninguno de los dos formatos conocidos -- el diagnóstico más útil casi
+  if (esFormatoApp(paginas)) {
+    return parsearComoApp(paginas);
+  }
+
+  // Ninguno de los formatos conocidos -- el diagnóstico más útil casi
   // siempre es que ni siquiera se pudo leer el periodo/año (mismo texto de
-  // error que antes de que existiera el segundo formato).
+  // error que antes de que existiera el segundo/tercer formato).
   const anio = extraerAnio(paginas[0] ?? []);
   if (!anio) {
     return { movimientos: [], erroresPorFila: [], errorDocumento: "No se pudo determinar el año del periodo en el PDF" };
@@ -264,7 +268,7 @@ export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoPa
     movimientos: [],
     erroresPorFila: [],
     errorDocumento:
-      "No se pudo ubicar el encabezado de columnas de ningún formato de BBVA conocido (ni CARGOS/ABONOS/OPERACIÓN/LIQUIDACIÓN del PDF oficial, ni Fecha/Cargo/Abono/Saldo del PDF de banca en línea) en el documento",
+      "No se pudo ubicar el encabezado de columnas de ningún formato de BBVA conocido (ni CARGOS/ABONOS/OPERACIÓN/LIQUIDACIÓN del PDF oficial, ni Fecha/Cargo/Abono/Saldo de banca en línea, ni FECHA/DESCRIPCIÓN/ABONO/CARGO/SALDO del formato app) en el documento",
   };
 }
 
@@ -635,44 +639,54 @@ function parsearComoWeb(paginas: ItemPdfPosicionado[][], anclas: AnclasColumnasW
 
   // Autovalidación: el documento no declara totales de Cargos/Abonos como
   // MAESTRA PYME (ver comentario del encabezado), así que la confianza viene
-  // de otros dos lados:
-  //
-  // 1. Cada fila ya trae su propio saldo real impreso por el banco (a
-  //    diferencia de MAESTRA PYME, que solo lo imprime en checkpoints) --
-  //    se valida que, en orden cronológico, cada saldo cuadre exactamente
-  //    con el saldo anterior +/- el monto clasificado por columna. Esta es
-  //    la validación FUERTE (bloquea todo el documento si falla): si algo no
-  //    cuadra, la clasificación de esa fila (o de alguna entre medio) es
-  //    sospechosa y no se puede confiar en el lote completo.
+  // de la cadena de saldos + "Saldo disponible" -- ver validarCadenaYSaldoDisponible.
+  const errorCadena = validarCadenaYSaldoDisponible(movimientos, extraerSaldoDisponible(paginas), erroresPorFila);
+  if (errorCadena) return { movimientos: [], erroresPorFila: [], errorDocumento: errorCadena };
+
+  return { movimientos, erroresPorFila, errorDocumento: null };
+}
+
+/** Compartida entre los formatos de BBVA que traen los movimientos ya en
+ * orden MÁS RECIENTE PRIMERO con su propio saldo real impreso por fila
+ * ("Detalle de movimientos" web y el formato app/personal, ver comentario
+ * del encabezado de cada uno) -- ambos se autovalidan igual:
+ *
+ * 1. FUERTE (bloquea todo el documento si falla): en orden cronológico,
+ *    cada saldo debe cuadrar exactamente con el saldo anterior +/- el monto
+ *    clasificado por columna. Si algo no cuadra, la clasificación de esa
+ *    fila (o de alguna entre medio) es sospechosa y no se puede confiar en
+ *    el lote completo.
+ * 2. SUAVE (advertencia de fila 0, no bloquea): el primero de la lista
+ *    (el más reciente) debería cuadrar con "Saldo disponible" que declara
+ *    la página 1 -- pero "Saldo disponible" es el saldo DISPONIBLE del
+ *    banco, no necesariamente el saldo CONTABLE del último movimiento --
+ *    confirmado con un PDF real (Aceros, cuenta 5859, 31-ago-2026) donde el
+ *    saldo disponible declarado ($23,845.14) coincidía con el PENÚLTIMO
+ *    movimiento, no con el último (una nómina del mismo día, $14,775.00),
+ *    aun cuando la cadena de saldos de TODO el documento (la validación
+ *    fuerte de arriba) encadenaba perfecto sin un solo hueco -- o sea, la
+ *    extracción era correcta y el desfase era del propio banco (probable
+ *    retención/disponibilidad de nómina el mismo día), no un error de
+ *    parseo. Bloquear el documento entero por esto habría descartado datos
+ *    buenos; se avisa en su lugar para que alguien lo revise si quiere.
+ *
+ * Devuelve el mensaje de errorDocumento si la validación FUERTE falla, o
+ * null si pasó (y ya empujó la advertencia SUAVE a erroresPorFila si aplica). */
+function validarCadenaYSaldoDisponible(
+  movimientos: FilaEstadoCuentaMapeada[],
+  saldoDisponible: number | null,
+  erroresPorFila: { fila: number; errores: string[] }[],
+): string | null {
   const cronologico = [...movimientos].reverse();
   for (let i = 1; i < cronologico.length; i++) {
     const anterior = cronologico[i - 1];
     const actual = cronologico[i];
     const esperado = Math.round((anterior.saldo + (actual.abonoTotal ?? 0) - (actual.cargoTotal ?? 0)) * 100) / 100;
     if (Math.abs(esperado - actual.saldo) > 0.01) {
-      return {
-        movimientos: [],
-        erroresPorFila: [],
-        errorDocumento: `El saldo del movimiento del ${actual.fechaPago} (${actual.saldo}) no cuadra con el saldo del movimiento anterior (${anterior.saldo}) +/- el monto clasificado -- no se insertó nada, revisa el archivo manualmente`,
-      };
+      return `El saldo del movimiento del ${actual.fechaPago} (${actual.saldo}) no cuadra con el saldo del movimiento anterior (${anterior.saldo}) +/- el monto clasificado -- no se insertó nada, revisa el archivo manualmente`;
     }
   }
 
-  // 2. Los movimientos vienen del más reciente al más antiguo -- lo esperado
-  //    es que el primero de la lista cuadre con "Saldo disponible" que
-  //    declara la página 1. Esta validación es SUAVE (advertencia, no
-  //    bloquea la carga): "Saldo disponible" es el saldo DISPONIBLE del
-  //    banco, no necesariamente el saldo CONTABLE del último movimiento --
-  //    confirmado con un PDF real (Aceros, cuenta 5859, 31-ago-2026) donde el
-  //    saldo disponible declarado ($23,845.14) coincidía con el PENÚLTIMO
-  //    movimiento, no con el último (una nómina del mismo día, $14,775.00),
-  //    aun cuando la cadena de saldos de TODO el documento (la validación
-  //    fuerte de arriba) encadenaba perfecto sin un solo hueco -- o sea, la
-  //    extracción era correcta y el desfase era del propio banco (probable
-  //    retención/disponibilidad de nómina el mismo día), no un error de
-  //    parseo. Bloquear el documento entero por esto habría descartado datos
-  //    buenos; se avisa en su lugar para que alguien lo revise si quiere.
-  const saldoDisponible = extraerSaldoDisponible(paginas);
   if (saldoDisponible != null && movimientos.length > 0 && Math.abs(movimientos[0].saldo - saldoDisponible) > 0.01) {
     erroresPorFila.unshift({
       fila: 0,
@@ -681,6 +695,180 @@ function parsearComoWeb(paginas: ItemPdfPosicionado[][], anclas: AnclasColumnasW
       ],
     });
   }
+
+  return null;
+}
+
+// ── Tercer formato: "app/personal" ──────────────────────────────────────
+// Confirmado contra un PDF real (Mario Contreras Farfán, cuenta terminación
+// 2047, agosto 2026) -- un tercer layout de BBVA, distinto tanto de MAESTRA
+// PYME como del "Detalle de movimientos" de banca en línea de arriba (por el
+// encabezado "Saldo disponible" seguido de "Cuenta: · <dígitos>" en vez de
+// "Número de cuenta:", probablemente el PDF que genera la app/versión
+// personal de BBVA en vez del portal empresarial).
+//
+// Diferencias clave frente al formato "Detalle de movimientos" (web):
+//   - Encabezado de columnas en MAYÚSCULAS y con ABONO antes que CARGO:
+//     "FECHA DESCRIPCIÓN ABONO CARGO SALDO" (el otro es "Fecha Concepto /
+//     Referencia Cargo Abono Saldo", Título y Cargo antes de Abono).
+//   - Fecha CON año y mes en letras minúsculas: "31 ago 2026" (el otro es
+//     "20-08", día-mes sin año).
+//   - Cada monto no es un solo item de texto -- el PDF renderiza los
+//     centavos en superíndice, así que pdf.js lo parte en 3 items
+//     CONSECUTIVOS en el orden del stream: el signo ("$" o "-$"), la parte
+//     entera con el punto ("59,448."), y los 2 dígitos de centavos ("28").
+//     Confirmado con el PDF real que esos 3 items SIEMPRE aparecen
+//     consecutivos en orden de lectura (izquierda a derecha), tanto para
+//     cargos como para abonos -- por eso este parser reconstruye montos por
+//     ADYACENCIA en el orden natural del stream en vez de por posición x1
+//     (a diferencia de MAESTRA PYME): más simple y, para este layout
+//     específico, más confiable, porque el signo (con o sin "-") ya dice
+//     directamente si es cargo o abono, sin necesitar anclas de columna.
+//   - Cada fila trae exactamente 2 montos reconstruidos: el del movimiento
+//     (cargo o abono, según el signo) SIEMPRE antes que el del saldo en el
+//     orden del stream -- confirmado con filas de cargo Y de abono reales.
+//   - El año ya viene incluido en cada fecha -- no hace falta una extracción
+//     de año aparte del resumen de la página 1 (a diferencia de los otros
+//     dos formatos).
+
+const RE_FECHA_APP = /^(\d{1,2}) ([A-Za-zÁÉÍÓÚñÑ]{3}) (\d{4})$/;
+const RE_MONTO_SIGNO = /^-?\$$/;
+const RE_MONTO_ENTERO = /^[\d,]+\.$/;
+const RE_MONTO_CENTAVOS = /^\d{2}$/;
+
+/** Igual idea que extraerAnclasColumnas/Web pero para este formato: busca
+ * una fila con los 5 labels de encabezado juntos, en MAYÚSCULAS. No hace
+ * falta devolver posiciones (x1) -- este formato no las necesita, ver
+ * comentario de la sección. */
+function esFormatoApp(paginas: ItemPdfPosicionado[][]): boolean {
+  for (const itemsPagina of paginas) {
+    const porFila = new Map<number, ItemPdfPosicionado[]>();
+    for (const item of itemsPagina) {
+      const clave = Math.round(item.y * 10) / 10;
+      const lista = porFila.get(clave);
+      if (lista) lista.push(item);
+      else porFila.set(clave, [item]);
+    }
+    for (const itemsFila of porFila.values()) {
+      const tiene = (texto: string) => itemsFila.some((i) => i.texto === texto);
+      if (tiene("FECHA") && tiene("DESCRIPCIÓN") && tiene("ABONO") && tiene("CARGO") && tiene("SALDO")) return true;
+    }
+  }
+  return false;
+}
+
+function extraerSaldoDisponibleApp(paginas: ItemPdfPosicionado[][]): number | null {
+  const texto = paginas.map((p) => p.map((i) => i.texto).join(" ")).join(" ");
+  const m = texto.match(/Saldo disponible[\s\S]{0,80}?\$\s*([\d,]+\.\d{2})/i);
+  return m ? aNumero(m[1]) : null;
+}
+
+/** Reconstruye un monto a partir de 3 items consecutivos (signo + entero-con-
+ * punto + centavos, ver comentario de la sección) empezando en `desde`.
+ * Devuelve el monto (con signo) y el índice siguiente al último item
+ * consumido, o null si en `desde` no arranca ese patrón. */
+function leerMontoApp(items: ItemPdfPosicionado[], desde: number): { monto: number; siguiente: number } | null {
+  const signo = items[desde];
+  const entero = items[desde + 1];
+  const centavos = items[desde + 2];
+  if (!signo || !entero || !centavos) return null;
+  if (!RE_MONTO_SIGNO.test(signo.texto) || !RE_MONTO_ENTERO.test(entero.texto) || !RE_MONTO_CENTAVOS.test(centavos.texto)) return null;
+  const esNegativo = signo.texto === "-$";
+  const valor = aNumero(entero.texto.slice(0, -1) + "." + centavos.texto);
+  return { monto: esNegativo ? -valor : valor, siguiente: desde + 3 };
+}
+
+function parsearComoApp(paginas: ItemPdfPosicionado[][]): ResultadoParseoPdf {
+  // El orden NATURAL del stream (sin reordenar por x0/y) es lo que preserva
+  // la adyacencia signo+entero+centavos -- ver comentario de la sección.
+  const items = paginas.flat();
+
+  const indicesAncla: number[] = [];
+  for (let i = 0; i < items.length; i++) {
+    if (RE_FECHA_APP.test(items[i].texto)) indicesAncla.push(i);
+  }
+  if (indicesAncla.length === 0) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontró ningún movimiento (fecha 'DD mmm AAAA') en la tabla del PDF" };
+  }
+
+  const movimientos: FilaEstadoCuentaMapeada[] = [];
+
+  for (let a = 0; a < indicesAncla.length; a++) {
+    const inicio = indicesAncla[a];
+    let fin = a + 1 < indicesAncla.length ? indicesAncla[a + 1] : items.length;
+    // El último movimiento del documento arrastra el aviso legal de pie de
+    // página -- se recorta ahí si aparece, mismo criterio que el formato web.
+    for (let i = inicio; i < fin; i++) {
+      if (items[i].texto.startsWith("En cumplimiento")) {
+        fin = i;
+        break;
+      }
+    }
+    const bloque = items.slice(inicio, fin);
+
+    const itemFecha = bloque[0];
+    const m = itemFecha.texto.match(RE_FECHA_APP)!;
+    const [, diaStr, mesAbrev, anioStr] = m;
+    const mes = MESES[mesAbrev.toUpperCase()];
+    if (!mes) {
+      return { movimientos: [], erroresPorFila: [], errorDocumento: `Mes no reconocido: "${mesAbrev}" en el movimiento del ${itemFecha.texto}` };
+    }
+
+    // Reconstruye los montos por adyacencia en todo el bloque (ver
+    // leerMontoApp) -- se esperan exactamente 2: primero el del movimiento
+    // (cargo o abono, según el signo), luego el saldo, en ese orden.
+    const montosEncontrados: number[] = [];
+    for (let i = 0; i < bloque.length; i++) {
+      const resultado = leerMontoApp(bloque, i);
+      if (resultado) {
+        montosEncontrados.push(resultado.monto);
+        i = resultado.siguiente - 1; // el for ya suma 1
+      }
+    }
+    if (montosEncontrados.length !== 2) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `Se esperaban 2 montos (movimiento y saldo) para el movimiento del ${itemFecha.texto} y se encontraron ${montosEncontrados.length} -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
+    const [montoMovimiento, saldo] = montosEncontrados;
+
+    const descripcion = bloque
+      .slice(1)
+      .filter((it) => {
+        if (it === itemFecha) return false;
+        // Excluye los 6 items (2 montos x 3 piezas) ya consumidos arriba --
+        // se identifican por el mismo patrón, no por índice, para no
+        // depender de que leerMontoApp haya arrancado justo en esas
+        // posiciones (más robusto si algún día un monto no reconstruye).
+        return !RE_MONTO_SIGNO.test(it.texto) && !RE_MONTO_ENTERO.test(it.texto) && !RE_MONTO_CENTAVOS.test(it.texto);
+      })
+      .map((it) => it.texto)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    movimientos.push({
+      fechaPago: `${anioStr}-${String(mes).padStart(2, "0")}-${diaStr.padStart(2, "0")}`,
+      fechaOrden: null,
+      folio: null,
+      proyecto: null,
+      nombreRazonSocial: descripcion || null,
+      cargoTotal: montoMovimiento < 0 ? -montoMovimiento : null,
+      abonoTotal: montoMovimiento < 0 ? null : montoMovimiento,
+      saldo,
+      referenciaTipo: null as ReferenciaTipo | null,
+      referenciaNumero: null,
+      factura: null,
+      comentarios: null,
+      observacion: 'Extraído automáticamente de un PDF de BBVA (formato app/personal)',
+    });
+  }
+
+  const erroresPorFila: { fila: number; errores: string[] }[] = [];
+  const errorCadena = validarCadenaYSaldoDisponible(movimientos, extraerSaldoDisponibleApp(paginas), erroresPorFila);
+  if (errorCadena) return { movimientos: [], erroresPorFila: [], errorDocumento: errorCadena };
 
   return { movimientos, erroresPorFila, errorDocumento: null };
 }
