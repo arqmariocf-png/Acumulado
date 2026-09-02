@@ -4,6 +4,7 @@ import { parsearPaginasBBVA } from "./pdf-estado-cuenta-bbva.ts";
 import { PAGINAS_REALES_BBVA_ACEROS_JULIO_2026 } from "./pdf-estado-cuenta-bbva.fixture.ts";
 import { PAGINAS_REALES_BBVA_MARIO_JULIO_2026 } from "./pdf-estado-cuenta-bbva-mario.fixture.ts";
 import { POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026 } from "./pdf-estado-cuenta-bbva-web.fixture.ts";
+import { PAGINAS_REALES_BBVA_WEB_ACEROS_31_AGOSTO_2026 } from "./pdf-estado-cuenta-bbva-web-nomina.fixture.ts";
 
 test("parsea el PDF real de BBVA (Aceros, julio 2026, formato MAESTRA PYME BBVA): 139 movimientos clasificados por columna, cuadra exacto con lo que el banco declara", () => {
   const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026);
@@ -194,4 +195,19 @@ test('en el formato "Detalle de movimientos", el aviso legal de pie de página n
   const ultimo = r.movimientos[r.movimientos.length - 1];
   assert.equal(ultimo.nombreRazonSocial, "SPEI RECIBIDOSTP/0171440815 646 0375372");
   assert.doesNotMatch(ultimo.nombreRazonSocial ?? "", /En cumplimiento|Cerrar|Imprimir/);
+});
+
+test('en el formato "Detalle de movimientos", si "Saldo disponible" no coincide con el movimiento más reciente pero la cadena de saldos de TODOS los movimientos sí encadena perfecto, no bloquea el documento -- inserta todo y agrega una advertencia de fila 0 (caso real: nómina el mismo día, Aceros cuenta 5859, 31-ago-2026)', () => {
+  const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_WEB_ACEROS_31_AGOSTO_2026);
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos.length, 152);
+
+  // El movimiento más reciente (nómina) SÍ se inserta con su saldo real,
+  // aunque no coincida con "Saldo disponible" del encabezado.
+  assert.equal(r.movimientos[0].saldo, 14775.0);
+  assert.equal(r.movimientos[0].nombreRazonSocial, "PAGO DE NOMINA/IN 4205095328 ACEROS Y ENVASADOS DE PUEBLA SA DE CV");
+
+  const advertenciaDocumento = r.erroresPorFila.find((e) => e.fila === 0);
+  assert.ok(advertenciaDocumento, "debe traer una advertencia de fila 0 (documento completo)");
+  assert.match(advertenciaDocumento!.errores[0], /Saldo disponible de 23845\.14.*saldo 14775/);
 });
