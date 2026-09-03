@@ -19,6 +19,14 @@ export interface FilaSaldoCuenta {
   entradas: number;
   salidas: number;
   saldoFinal: number;
+  /** Corrección manual fija (puede ser negativa) que se guarda en
+   * cuentas_bancarias.ajuste_saldo -- NO se recalcula sola, solo cambia si
+   * alguien la edita a mano en Admin -> Cuentas. Existe para no tener que
+   * reinvestigar cada vez de dónde viene una diferencia contra el saldo real
+   * del banco (ver migración ajuste_saldo_cuentas). */
+  ajusteSaldo: number;
+  /** De dónde viene el ajuste (ej. "comisión no capturada, jul-ago 2026"). */
+  ajusteNota: string | null;
   tieneMovimientos: boolean;
 }
 
@@ -27,6 +35,16 @@ export interface SubtotalSaldos {
   entradas: number;
   salidas: number;
   saldoFinal: number;
+  ajusteSaldo: number;
+}
+
+/** saldoFinal (el que arrastra el sistema, 100% de movimientos cargados) +
+ * ajusteSaldo (la corrección manual fija) = el saldo real del banco. Sirve
+ * igual para una FilaSaldoCuenta que para un SubtotalSaldos, porque ambos
+ * traen los mismos dos campos. Redondeado a centavos para no arrastrar
+ * ruido de punto flotante en la suma. */
+export function saldoAjustado(f: Pick<FilaSaldoCuenta, "saldoFinal" | "ajusteSaldo">): number {
+  return Math.round((f.saldoFinal + f.ajusteSaldo) * 100) / 100;
 }
 
 export interface GrupoEmpresaSaldos {
@@ -54,8 +72,9 @@ function sumarSubtotal(filas: FilaSaldoCuenta[]): SubtotalSaldos {
       entradas: acc.entradas + f.entradas,
       salidas: acc.salidas + f.salidas,
       saldoFinal: acc.saldoFinal + f.saldoFinal,
+      ajusteSaldo: acc.ajusteSaldo + f.ajusteSaldo,
     }),
-    { saldoInicial: 0, entradas: 0, salidas: 0, saldoFinal: 0 },
+    { saldoInicial: 0, entradas: 0, salidas: 0, saldoFinal: 0, ajusteSaldo: 0 },
   );
 }
 

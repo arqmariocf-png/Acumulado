@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const TABS = [
   { a: "/admin", etiqueta: "Usuarios", end: true },
+  { a: "/admin/cuentas", etiqueta: "Cuentas (ajuste de saldo)" },
   { a: "/admin/reglas", etiqueta: "Reglas de clasificación" },
   { a: "/admin/excepciones", etiqueta: "Excepciones de proveedor" },
   { a: "/admin/proyectos", etiqueta: "Proyectos" },

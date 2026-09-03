@@ -5,7 +5,7 @@
 // (probado aparte con node --test, sin este archivo de por medio).
 
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
-import { etiquetaCuenta, type ReporteSaldosDia } from "./saldos.ts";
+import { etiquetaCuenta, saldoAjustado, type FilaSaldoCuenta, type ReporteSaldosDia } from "./saldos.ts";
 
 const ANCHO_PAGINA = 612; // carta, en puntos
 const ALTO_PAGINA = 792;
@@ -210,6 +210,29 @@ function dibujarTablaReporte(
   estado.y -= 10;
 }
 
+/** Lista, debajo de la tabla de posición global, el motivo de cada cuenta
+ * que trae un ajuste distinto de cero -- para que quien lea el reporte no
+ * tenga que ir a Admin -> Cuentas ni acordarse de nada, la explicación ya
+ * está impresa junto al número. Si el ajuste existe pero todavía no tiene
+ * nota (ver cuentas_bancarias.ajuste_nota), lo dice explícitamente en vez de
+ * omitir la cuenta en silencio. */
+function dibujarNotasAjuste(estado: EstadoPdf, reporte: ReporteSaldosDia): void {
+  const filasConAjuste: FilaSaldoCuenta[] = reporte.grupos.flatMap((g) => g.filas).filter((f) => f.ajusteSaldo !== 0);
+  if (filasConAjuste.length === 0) return;
+
+  estado.y -= 4;
+  asegurarEspacio(estado, ALTO_RENGLON * (filasConAjuste.length + 1));
+  dibujarTexto(estado, "Notas de ajuste:", MARGEN_X, { negrita: true, tamano: 8, color: COLOR_TEXTO_SUAVE });
+  estado.y -= ALTO_RENGLON;
+  for (const f of filasConAjuste) {
+    asegurarEspacio(estado, ALTO_RENGLON);
+    const nota = f.ajusteNota?.trim() ? f.ajusteNota : "(sin nota capturada -- agrégala en Admin -> Cuentas)";
+    const texto = truncarTexto(estado.fuente, `${etiquetaCuenta(f)}: ${nota}`, 8, ANCHO_PAGINA - 2 * MARGEN_X);
+    dibujarTexto(estado, texto, MARGEN_X, { tamano: 8, color: COLOR_TEXTO_SUAVE });
+    estado.y -= ALTO_RENGLON;
+  }
+}
+
 function dibujarNumeroPaginas(estado: EstadoPdf): void {
   const paginas = estado.doc.getPages();
   paginas.forEach((pagina, i) => {
@@ -230,9 +253,16 @@ function dibujarNumeroPaginas(estado: EstadoPdf): void {
   });
 }
 
+// 250+90+90+98 = 528 (mismo límite que COLUMNAS_DIA, ver comentario abajo).
+// AJUSTE y SALDO REAL van pegados a SALDO SISTEMA a propósito -- es la
+// corrección manual fija de cuentas_bancarias.ajuste_saldo (ver saldos.ts),
+// para que quien revise el reporte vea la diferencia contra el banco real
+// ahí mismo, sin tener que ir a investigar de qué meses viene cada vez.
 const COLUMNAS_GLOBAL: Columna[] = [
-  { titulo: "CUENTA", ancho: 330, alinear: "izquierda" },
-  { titulo: "SALDO ACTUAL", ancho: 158, alinear: "derecha" },
+  { titulo: "CUENTA", ancho: 250, alinear: "izquierda" },
+  { titulo: "SALDO SISTEMA", ancho: 90, alinear: "derecha" },
+  { titulo: "AJUSTE", ancho: 90, alinear: "derecha" },
+  { titulo: "SALDO REAL", ancho: 98, alinear: "derecha" },
 ];
 
 // Los 5 anchos deben sumar <= ANCHO_PAGINA - 2*MARGEN_X (528pt) -- si suman
@@ -274,15 +304,16 @@ export async function generarPdfSaldosDiarios(datos: DatosReportePdf): Promise<U
   dibujarTituloSeccion(
     estado,
     "1. Posición global (saldo actual por cuenta)",
-    "Último saldo conocido de cada cuenta, sin importar la fecha del último movimiento.",
+    "AJUSTE: corrección manual fija que se suma al SALDO SISTEMA. SALDO REAL debe coincidir con el banco (ver notas abajo).",
   );
   dibujarTablaReporte(
     estado,
     datos.global,
     COLUMNAS_GLOBAL,
-    (f) => [etiquetaCuenta(f), formatoMoneda(f.saldoFinal)],
-    (s) => ["", formatoMoneda(s.saldoFinal)],
+    (f) => [etiquetaCuenta(f), formatoMoneda(f.saldoFinal), formatoMoneda(f.ajusteSaldo), formatoMoneda(saldoAjustado(f))],
+    (s) => ["", formatoMoneda(s.saldoFinal), formatoMoneda(s.ajusteSaldo), formatoMoneda(saldoAjustado(s))],
   );
+  dibujarNotasAjuste(estado, datos.global);
 
   estado.y -= 10;
   dibujarTituloSeccion(estado, `2. Movimientos de ayer — ${formatoFechaLarga(datos.fechaAyer)}`);

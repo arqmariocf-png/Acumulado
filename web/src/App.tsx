@@ -20,6 +20,7 @@ const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ de
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
+const Cuentas = lazy(() => import("./pages/admin/Cuentas").then((m) => ({ default: m.Cuentas })));
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
 const AdminProyectos = lazy(() => import("./pages/admin/Proyectos").then((m) => ({ default: m.Proyectos })));
@@ -116,6 +117,7 @@ function Enrutador() {
           <Route element={<ProtectedRoute soloAdmin />}>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Usuarios />} />
+              <Route path="cuentas" element={<Cuentas />} />
               <Route path="reglas" element={<Reglas />} />
               <Route path="excepciones" element={<Excepciones />} />
               <Route path="proyectos" element={<AdminProyectos />} />
