@@ -49,6 +49,8 @@ interface FilaRpc {
   entradas: string | number;
   salidas: string | number;
   saldo_final: string | number;
+  ajuste_saldo: string | number;
+  ajuste_nota: string | null;
   tiene_movimientos: boolean;
 }
 
@@ -64,6 +66,8 @@ function mapearFila(f: FilaRpc): FilaSaldoCuenta {
     entradas: Number(f.entradas),
     salidas: Number(f.salidas),
     saldoFinal: Number(f.saldo_final),
+    ajusteSaldo: Number(f.ajuste_saldo),
+    ajusteNota: f.ajuste_nota,
     tieneMovimientos: f.tiene_movimientos,
   };
 }

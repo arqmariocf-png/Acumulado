@@ -32,6 +32,12 @@ export interface CuentaBancaria {
   ultimos_4: string;
   alias: string | null;
   activo: boolean;
+  /** Corrección manual fija (puede ser negativa) que se suma al saldo que
+   * arrastra el sistema para llegar al saldo real del banco -- ver Admin ->
+   * Cuentas y el reporte de saldos. NO se recalcula sola. */
+  ajuste_saldo: number;
+  /** De dónde viene el ajuste_saldo (ej. "comisión no capturada, jul-ago 2026"). */
+  ajuste_nota: string | null;
 }
 
 export interface Movimiento {
