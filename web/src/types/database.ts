@@ -458,6 +458,11 @@ export interface PuCosteo {
   importe_material: number;
   importe_mano_obra: number;
   importe_equipo: number;
+  /** Lo que aportan los análisis básicos consumidos dentro de éste. Va
+   * aparte de los otros tres: un básico ya trae su propio material y mano de
+   * obra adentro, así que sumarlo a esos capítulos los contaría dos veces.
+   * costo_directo sí lo incluye. */
+  importe_basicos: number;
   importe_indirectos: number;
   importe_financiamiento: number;
   importe_utilidad: number;

@@ -212,3 +212,144 @@ solo la vista de avance tendría que ganar granularidad.
   (impuestos, fletes incluidos en el total de la OC pero no en el costo del
   producto, etc.) el % de avance puede no cuadrar exactamente contra el
   total de la orden aunque físicamente ya se haya recibido/embarcado todo.
+
+---
+
+## 11. Módulo de Precios Unitarios (extensión, agregada 2026-09-05)
+
+El frontend de este módulo (`web/src/pages/precios/`) se había integrado
+antes que su esquema, así que la pantalla existía pero consultaba tablas que
+no estaban en la base -- aparecía desconectada. Esta sección documenta el
+modelo con el que quedó conectado (migraciones `*_pu_*.sql`).
+
+Un análisis de precio unitario (APU) es la tarjeta que dice cuánto cuesta
+producir una unidad de un concepto de obra -- un metro cuadrado de muro, un
+metro cúbico de excavación -- desglosada en materiales, mano de obra,
+herramienta y equipo, más el sobrecosto que convierte el costo en precio de
+venta.
+
+### 11.1 El precio nunca se guarda
+
+La regla que gobierna todo el módulo: **no hay una sola columna donde viva un
+precio unitario**. `v_pu_analisis_costeo` lo recalcula de la explosión de
+insumos cada vez que se consulta, y el costo de cada insumo sale de su
+historial de cotizaciones (`pu_insumo_precios`, append-only).
+
+La consecuencia práctica es la que pidió el negocio: corregir un rendimiento
+o cotizar un material vuelve a costear solos todos los análisis en borrador
+que lo usan, sin tener que abrirlos uno por uno. Y un análisis viejo sigue
+siendo reproducible, porque la cotización con la que se armó sigue en el
+historial con su fecha.
+
+Lo único que sí se congela es lo que alguien firmó a mano:
+`pu_analisis_items.costo_congelado` -- el precio y proveedor que almacén
+autoriza para un renglón concreto. Si mañana sube el catálogo, ese análisis
+conserva el precio con el que se cotizó.
+
+### 11.2 Modelo
+
+| Tabla | Qué es |
+|---|---|
+| `pu_insumos` | Catálogo de insumos **del grupo**, no de cada empresa: un jornal de albañil cuesta lo mismo lo capture quien lo capture. No guarda costo. |
+| `pu_insumo_precios` | Historial de cotizaciones. `empresa_id` NULL = precio de grupo; una empresa puede tener el suyo (gana sobre el de grupo) porque el flete cambia el costo real según dónde esté la obra. |
+| `pu_factores` | Indirectos, financiamiento, utilidad y cargos adicionales, como fracción (18% = 0.18). Por empresa y con vigencia. |
+| `pu_analisis` | La tarjeta: empresa, obra, clave, concepto, unidad, estado y factor asignado. |
+| `pu_analisis_items` | Los renglones. Cada uno es un insumo del catálogo **o** un análisis básico consumido dentro de éste, nunca los dos. |
+| `pu_aprobaciones` | Bitácora de firmas. La escribe sólo un trigger; no hay policy de INSERT para nadie, ni para admin. |
+
+**Básicos (análisis auxiliares).** Un mortero, una cuadrilla o un habilitado
+de acero se capturan como análisis con `es_auxiliar = true` y se consumen
+dentro de otros a costo directo, **sin indirectos ni utilidad**: el
+sobrecosto se cobra una sola vez, en el concepto que sí se vende. Se pueden
+anidar, y un trigger corta los ciclos (un básico no puede contener, ni
+indirectamente, al análisis que lo contiene).
+
+**Herramienta menor.** Se captura con `base_calculo = 'pct_mano_obra'`: su
+costo es el subtotal de mano de obra **del propio análisis**, no un precio de
+proveedor. Por eso se recalcula sola cuando alguien corrige un rendimiento,
+que es exactamente la razón de capturarla así y no como un importe fijo.
+
+### 11.3 Cómo se arma el precio
+
+La aportación de un renglón es `cantidad / rendimiento` (en mano de obra:
+jornadas entre unidades que produce la cuadrilla por jornada). El costo
+directo es la suma de los importes de todos los renglones.
+
+Sobre el costo directo va el sobrecosto **en cascada**, cada porcentaje sobre
+el subtotal que ya trae los anteriores, que es el orden de la Ley de Obras
+Públicas:
+
+```
+PU = ((((CD + indirectos) + financiamiento) + utilidad) + cargos adicionales)
+```
+
+Los importes se redondean a centavos renglón por renglón y el precio es la
+suma de esos importes ya redondeados -- no el redondeo de la suma. La tarjeta
+impresa tiene que cuadrar cuando alguien la sume a mano, que es justo lo que
+hace quien la revisa.
+
+Sin factor asignado los cuatro porcentajes son cero y el precio unitario es
+el costo directo pelón. La pantalla y el PDF lo avisan explícitamente, para
+que nadie confunda un PU sin factor con un precio de venta.
+
+### 11.4 Circuito de firmas
+
+```
+borrador ──▶ en_revision_material ──▶ material_confirmado ──▶ autorizado ──▶ publicado
+(supervisión)      (almacén)             (dirección)        (dirección general)
+```
+
+Quién resuelve cada etapa lo decide `pu_puede_actuar(estado)`, que usan por
+igual el trigger de flujo y las políticas de RLS -- una sola definición, para
+que no haya dos versiones de la regla que se puedan desincronizar. El
+frontend pinta los botones que cree que aplican, pero lo que manda es la
+base: si alguien fuerza una acción, la rechaza con su propio mensaje y la
+pantalla lo muestra tal cual.
+
+Reglas que impone el trigger:
+
+- Sólo se avanza de una etapa a la siguiente, nunca se saltan pasos.
+- Regresar a borrador (el rechazo) lo puede hacer quien tenía que resolver la
+  etapa en la que está. Borra el avance: las firmas anteriores ya no
+  sostienen esta versión, porque las cantidades pueden cambiar antes de
+  reenviarlo.
+- No se envía a revisión un análisis sin renglones.
+- No se publica un concepto sin factor de sobrecosto asignado.
+- Dar de baja (`obsoleto`) sólo desde `publicado`, y sólo dirección general.
+
+Qué se puede tocar y cuándo: en borrador se captura todo; en revisión de
+material el análisis está congelado salvo precio y proveedor (lo que almacén
+tiene que resolver); de ahí en adelante no se toca nada -- si hay que
+corregir, se regresa a borrador y el circuito vuelve a empezar.
+
+**El circuito no va en el PDF.** La tarjeta se le entrega al cliente, y quién
+autorizó internamente es gobierno interno de Grupo Loma, no información del
+entregable. Eso se ve en pantalla (`CircuitoFirmas.tsx`).
+
+### 11.5 Quién ve qué
+
+A diferencia de Requisiciones (donde un `responsable` sólo ve sus proyectos),
+aquí la lectura es **por empresa**: un precio unitario no es el documento de
+una obra, es el catálogo de precios de la empresa y quien trabaja ahí lo
+consulta completo. Se suman las obras donde el usuario esté asignado aunque
+sean de otra empresa.
+
+- `responsable` (supervisión): elabora y envía a revisión.
+- `almacen`: pone precio y proveedor. No entra al catálogo de insumos -- no
+  es suyo.
+- `direccion`: autoriza.
+- `admin` (dirección general): define los factores, publica y da de baja.
+- `rh` / `rh_documentos` / `pendiente`: no entran.
+
+### 11.6 Pendiente de validar
+
+- Los porcentajes del factor sembrado son un punto de partida, no los del
+  grupo: hay que confirmarlos con Dirección General antes de publicar un
+  precio real (ver "Pendientes conocidos" en README.md).
+- El PDF (`pu-pdf`) se validó dibujando las variantes reales de la tarjeta
+  (borrador con marca de agua, publicado, básico, vacío y de varias páginas)
+  pero nunca corriendo bajo Deno, porque este entorno de desarrollo no lo
+  tiene instalado.
+- El catálogo de insumos arranca casi vacío a propósito: sólo trae
+  "Herramienta menor" y "Equipo de seguridad", que son los dos renglones que
+  prácticamente todo análisis lleva. El resto se captura conforme se use.
