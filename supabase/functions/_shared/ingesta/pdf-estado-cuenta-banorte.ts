@@ -1,4 +1,4 @@
-// Parsea el estado de cuenta de Banorte en PDF. Soporta DOS formatos reales
+// Parsea el estado de cuenta de Banorte en PDF. Soporta TRES formatos reales
 // distintos que Banorte genera para el mismo banco, según de dónde se haya
 // descargado el PDF:
 //
@@ -12,9 +12,15 @@
 //      parsearFormatoDetalleMovimientos más abajo. Se distingue por traer el
 //      encabezado "Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos
 //      Saldos" en vez de "FECHA DESCRIPCIÓN / ESTABLECIMIENTO...".
+//   3. "Cuentas de Cheques" detallado, con Depósitos/Retiros ya en columnas
+//      separadas (confirmado contra ESTADO_DE_CUENTA_AL_4_DE_SEPTIEMBRE.pdf,
+//      misma cuenta Banorte 1273 de Aceros, agosto 2026) -- función
+//      parsearFormatoCuentaChequesDetallado más abajo. Se distingue por el
+//      encabezado "MOVIMIENTO DESCRIPCIÓN DETALLADA" (ver comentario de esa
+//      sección para el resto del encabezado, partido en varias líneas).
 //
 // parsearPdfEstadoCuentaBanorte (al final de este archivo) detecta cuál de
-// los dos trae el PDF y despacha a la función correspondiente.
+// los tres trae el PDF y despacha a la función correspondiente.
 //
 // A diferencia de BBVA (tabla real con columnas Cargos/Abonos separadas por
 // posición), ninguno de los dos formatos de Banorte trae columnas de monto
@@ -530,18 +536,256 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
   return { movimientos, erroresPorFila, errorDocumento: null };
 }
 
+// ── Formato 3: "Cuentas de Cheques" detallado ───────────────────────────
+//
+// Confirmado contra un PDF real (ESTADO_DE_CUENTA_AL_4_DE_SEPTIEMBRE.pdf,
+// misma cuenta 1273 de Aceros y Envasados de Puebla, agosto 2026) -- un
+// tercer export de Banorte, distinto tanto del "ESTADO DE CUENTA" mensual
+// como del "Detalle de Movimientos" de arriba. El encabezado real es:
+//
+//   CUENTA FECHA DE
+//   OPERACIÓN FECHA REFERENCIA DESCRIPCIÓN COD.
+//   TRANSAC SUCURSAL DEPÓSITOS RETIROS SALDO MOVIMIENTO DESCRIPCIÓN DETALLADA CHEQUE
+//
+// pdf.js lo parte en esas 3 líneas por el ancho de columna -- se detecta
+// solo por el fragmento "MOVIMIENTO DESCRIPCIÓN DETALLADA", que siempre
+// queda junto y no aparece en los otros 2 formatos.
+//
+// A diferencia de los otros dos, Depósitos y Retiros YA vienen en columnas
+// separadas (con "-" como relleno de la columna vacía) -- no hace falta
+// inferir por delta de saldo, y cada movimiento SÍ trae su propio SALDO
+// real impreso (a diferencia del formato mensual, que solo lo imprime en
+// SALDO ANTERIOR). Cada renglón arranca con el número de cuenta completo
+// repetido (ej. "1155651273"), seguido de FECHA DE OPERACIÓN, FECHA,
+// REFERENCIA -- se ancla por ese patrón fijo (ver RE_ANCLA_DETALLADO) en
+// vez de por la fecha sola, porque una fecha DD/MM/AAAA por sí sola no es
+// lo bastante única para no confundirse con una fecha mencionada dentro de
+// la descripción detallada de un SPEI (ej. "REFERENCIA: 0140826").
+//
+// Justo después de Depósitos/Retiros/Saldo viene el número de MOVIMIENTO
+// (un consecutivo del banco, ej. 657, 658...) pegado sin nada en medio --
+// se usa como ancla para extraer los 3 montos + el consecutivo en un solo
+// match (ver RE_MONTOS_MOVIMIENTO), y el consecutivo se guarda como folio,
+// mismo criterio que "Movimiento" en el formato "Detalle de Movimientos".
+// COD. TRANSAC (3 dígitos) y SUCURSAL (3-4 dígitos) siempre son los
+// últimos 2 números antes de esa ancla -- se recortan de la descripción
+// porque no aportan nada legible (ver limpiarDescripcionDetallado).
+//
+// CUENTA ÚNICA POR ARCHIVO: no se ha visto todavía un PDF real de este
+// formato con más de un producto -- solo se valida que el número de cuenta
+// completo (repetido en cada renglón) termine en cuentaUltimos4, igual que
+// el formato "Detalle de Movimientos".
+//
+// AUTOVALIDACIÓN, más fuerte que los otros 2 formatos: cada renglón ya
+// trae su saldo real, así que la cadena se valida directo entre renglones
+// consecutivos (saldo[i] = saldo[i-1] +/- el monto clasificado, en orden
+// ASCENDENTE -- este documento sí viene más antiguo primero) SIN depender
+// de ningún saldo inicial declarado -- y el documento declara cantidad +
+// suma tanto de depósitos como de retiros ("OPERACIONES: X Y" / "TOTAL: $X
+// $Y"), a diferencia del formato mensual (que solo declara depósitos).
+//
+// Deliberadamente NO se valida contra "Final Mes Anterior" / "Inicial del
+// día" declarados: confirmado con el PDF real que ambos quedan en
+// $2,678.68 -- el mismo valor que "Saldo Actual" al FINAL del periodo, no
+// el saldo antes de los movimientos (que la cadena interna sí reconstruye
+// correcto, en $3,773.86) -- una etiqueta del propio banco que no describe
+// lo que dice describir, mismo tipo de quirk ya visto en Santander "Saldo
+// Inicial" y BBVA "Saldo disponible". La cadena de saldos (fuerte) y los
+// totales de depósitos/retiros/Saldo Actual (fuertes) ya dan suficiente
+// confianza sin depender de este campo.
+const RE_ENCABEZADO_DETALLADO = "MOVIMIENTO DESCRIPCIÓN DETALLADA";
+const RE_ANCLA_DETALLADO = /^(\d+) \d{2}\/\d{2}\/\d{4} (\d{2})\/(\d{2})\/(\d{4}) \d+ /gm;
+const RE_MONTOS_MOVIMIENTO_DETALLADO = /(-|\$[\d,]+\.\d{2})\s+(-|\$[\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+(\d+)/;
+
+interface TotalesDetallado {
+  numeroDepositos: number | null;
+  numeroRetiros: number | null;
+  totalDepositos: number | null;
+  totalRetiros: number | null;
+  saldoActual: number | null;
+}
+
+function extraerTotalesDetallado(textoCompleto: string): TotalesDetallado {
+  const mOperaciones = textoCompleto.match(/OPERACIONES:\s*(\d+)\s+(\d+)/i);
+  const mTotal = textoCompleto.match(/TOTAL:\s*\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})/i);
+  const mSaldoActual = textoCompleto.match(/Saldo Actual:\s*\$([\d,]+\.\d{2})/i);
+  return {
+    numeroDepositos: mOperaciones ? Number(mOperaciones[1]) : null,
+    numeroRetiros: mOperaciones ? Number(mOperaciones[2]) : null,
+    totalDepositos: mTotal ? aNumero(mTotal[1]) : null,
+    totalRetiros: mTotal ? aNumero(mTotal[2]) : null,
+    saldoActual: mSaldoActual ? aNumero(mSaldoActual[1]) : null,
+  };
+}
+
+/** COD. TRANSAC (3 dígitos) + SUCURSAL (3-4 dígitos) son siempre los
+ * últimos 2 números antes de los montos -- ver comentario de la sección. */
+function limpiarDescripcionDetallado(texto: string): string {
+  return texto
+    .replace(/\s+\d{3}\s+\d{3,4}\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parsearFormatoCuentaChequesDetallado(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+  RE_ANCLA_DETALLADO.lastIndex = 0;
+  const anclas = [...textoCompleto.matchAll(RE_ANCLA_DETALLADO)];
+  if (anclas.length === 0) {
+    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontró ningún movimiento (cuenta + fecha + referencia) en la tabla del PDF" };
+  }
+
+  const numeroCuenta = anclas[0][1];
+  if (cuentaUltimos4 && !numeroCuenta.endsWith(cuentaUltimos4)) {
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: `El PDF es de la cuenta terminación ${numeroCuenta.slice(-4)}, no de la cuenta terminación ${cuentaUltimos4} seleccionada -- revisa que sea el PDF correcto.`,
+    };
+  }
+
+  const movimientos: FilaEstadoCuentaMapeada[] = [];
+  const erroresPorFila: { fila: number; errores: string[] }[] = [];
+
+  for (let i = 0; i < anclas.length; i++) {
+    const m = anclas[i];
+    const inicio = m.index!;
+    const fin = i + 1 < anclas.length ? anclas[i + 1].index! : textoCompleto.length;
+    const bloque = textoCompleto.slice(inicio, fin);
+    const filaNum = i + 1;
+
+    const [, , dia, mes, anio] = m;
+    if (Number(mes) < 1 || Number(mes) > 12) {
+      erroresPorFila.push({ fila: filaNum, errores: [`Mes no reconocido en la fecha "${dia}/${mes}/${anio}"`] });
+      continue;
+    }
+
+    const textoSinAncla = bloque.slice(m[0].length);
+    const matchMontos = textoSinAncla.match(RE_MONTOS_MOVIMIENTO_DETALLADO);
+    if (!matchMontos) {
+      erroresPorFila.push({ fila: filaNum, errores: ["No se encontraron los montos de Depósitos/Retiros/Saldo/Movimiento en esta fila -- posible línea mal extraída"] });
+      continue;
+    }
+
+    const [textoMontos, depositoTxt, retiroTxt, saldoTxt, folio] = matchMontos;
+    if (depositoTxt !== "-" && retiroTxt !== "-") {
+      erroresPorFila.push({ fila: filaNum, errores: [`La fila trae Depósito (${depositoTxt}) y Retiro (${retiroTxt}) a la vez -- posible columna mal identificada`] });
+      continue;
+    }
+    const deposito = depositoTxt === "-" ? null : aNumero(depositoTxt.replace(/^\$/, ""));
+    const retiro = retiroTxt === "-" ? null : aNumero(retiroTxt.replace(/^\$/, ""));
+    if (deposito == null && retiro == null) {
+      erroresPorFila.push({ fila: filaNum, errores: ["No se encontró ni Depósito ni Retiro para esta fila"] });
+      continue;
+    }
+    const saldo = aNumero(saldoTxt);
+
+    const idxMontos = textoSinAncla.indexOf(textoMontos);
+    const descripcion = limpiarDescripcionDetallado(textoSinAncla.slice(0, idxMontos));
+    // Lo que sigue a los montos es DESCRIPCIÓN DETALLADA (texto libre del
+    // SPEI, o "-" si no aplica) + CHEQUE ("-" o un número) -- se pegan a la
+    // descripción principal quitando los "-" de relleno de ambas columnas.
+    // El ÚLTIMO movimiento del documento arrastra el resumen de pie de
+    // página ("DEPÓSITOS RETIROS\nOPERACIONES:...\nTOTAL:...") porque no hay
+    // otra ancla que lo delimite -- se recorta ahí si aparece, mismo
+    // criterio que otros parsers de este proyecto con su pie de página.
+    const restoCrudo = textoSinAncla.slice(idxMontos + textoMontos.length);
+    const idxPie = restoCrudo.indexOf("DEPÓSITOS RETIROS");
+    const detalle = (idxPie === -1 ? restoCrudo : restoCrudo.slice(0, idxPie))
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .filter((t) => t !== "-")
+      .join(" ")
+      .trim();
+
+    movimientos.push({
+      fechaPago: `${anio}-${mes}-${dia}`,
+      fechaOrden: null,
+      folio,
+      proyecto: null,
+      nombreRazonSocial: [descripcion, detalle].filter(Boolean).join(" ") || null,
+      cargoTotal: retiro,
+      abonoTotal: deposito,
+      saldo,
+      referenciaTipo: null as ReferenciaTipo | null,
+      referenciaNumero: null,
+      factura: null,
+      comentarios: null,
+      observacion: "Extraído automáticamente de un PDF de Banorte (Cuentas de Cheques detallado)",
+    });
+  }
+
+  // Autovalidación FUERTE #1: cadena de saldos en orden ascendente (ver
+  // comentario de la sección).
+  for (let i = 1; i < movimientos.length; i++) {
+    const anterior = movimientos[i - 1];
+    const actual = movimientos[i];
+    const esperado = Math.round((anterior.saldo + (actual.abonoTotal ?? 0) - (actual.cargoTotal ?? 0)) * 100) / 100;
+    if (Math.abs(esperado - actual.saldo) > 0.01) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `El saldo del movimiento del ${actual.fechaPago} (${actual.saldo}) no cuadra con el saldo del movimiento anterior (${anterior.saldo}) +/- el monto clasificado -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
+  }
+
+  // Autovalidación FUERTE #2 y #3: cantidad + suma de depósitos/retiros, y
+  // Saldo Actual, contra lo que el propio documento declara.
+  const declarado = extraerTotalesDetallado(textoCompleto);
+  const depositosExtraidos = movimientos.filter((mv) => mv.abonoTotal != null);
+  const retirosExtraidos = movimientos.filter((mv) => mv.cargoTotal != null);
+  const sumaDepositos = Math.round(depositosExtraidos.reduce((a, mv) => a + (mv.abonoTotal ?? 0), 0) * 100) / 100;
+  const sumaRetiros = Math.round(retirosExtraidos.reduce((a, mv) => a + (mv.cargoTotal ?? 0), 0) * 100) / 100;
+
+  if (declarado.numeroDepositos != null && declarado.totalDepositos != null) {
+    if (depositosExtraidos.length !== declarado.numeroDepositos || Math.abs(sumaDepositos - declarado.totalDepositos) > 0.01) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `El PDF declara ${declarado.numeroDepositos} depósito(s) por $${declarado.totalDepositos} pero se extrajeron ${depositosExtraidos.length} por $${sumaDepositos} -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
+  }
+
+  if (declarado.numeroRetiros != null && declarado.totalRetiros != null) {
+    if (retirosExtraidos.length !== declarado.numeroRetiros || Math.abs(sumaRetiros - declarado.totalRetiros) > 0.01) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `El PDF declara ${declarado.numeroRetiros} retiro(s) por $${declarado.totalRetiros} pero se extrajeron ${retirosExtraidos.length} por $${sumaRetiros} -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
+  }
+
+  if (declarado.saldoActual != null && movimientos.length > 0) {
+    const ultimoSaldo = movimientos[movimientos.length - 1].saldo;
+    if (Math.abs(ultimoSaldo - declarado.saldoActual) > 0.01) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `El PDF declara un Saldo Actual de ${declarado.saldoActual} pero el último movimiento extraído queda en ${ultimoSaldo} -- no se insertó nada, revisa el archivo manualmente`,
+      };
+    }
+  }
+
+  return { movimientos, erroresPorFila, errorDocumento: null };
+}
+
 /**
  * @param textoCompleto Texto de todas las páginas del PDF, concatenado (ver
  *   pdf-cargador.ts / pdfATexto).
  * @param cuentaUltimos4 Últimos 4 dígitos de la cuenta bancaria seleccionada
  *   en la carga (cuentas_bancarias.ultimos_4) -- se usa para elegir la tabla
  *   de movimientos correcta cuando el PDF trae más de un producto (formato
- *   1) o para confirmar que el PDF es de la cuenta correcta (formato 2).
+ *   1) o para confirmar que el PDF es de la cuenta correcta (formatos 2 y 3).
  */
 export function parsearPdfEstadoCuentaBanorte(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+  const esFormatoDetallado = textoCompleto.includes(RE_ENCABEZADO_DETALLADO);
   const esFormatoDetalle = textoCompleto.includes(RE_ENCABEZADO_DETALLE);
   const esFormatoMensual = textoCompleto.includes(RE_ENCABEZADO_TABLA);
 
+  if (esFormatoDetallado) return parsearFormatoCuentaChequesDetallado(textoCompleto, cuentaUltimos4);
   if (esFormatoDetalle) return parsearFormatoDetalleMovimientos(textoCompleto, cuentaUltimos4);
   if (esFormatoMensual) return parsearFormatoEstadoCuentaMensual(textoCompleto, cuentaUltimos4);
 
