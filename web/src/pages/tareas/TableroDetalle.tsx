@@ -5,6 +5,8 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { TarjetaPanel } from "./TarjetaPanel";
+import { CalendarioVencimientos } from "./Vencimientos";
+import { BORDE_SEMAFORO, COLOR_SEMAFORO, semaforoFecha } from "./semaforo";
 
 function useTablero(tableroId: string) {
   return useQuery({
@@ -66,21 +68,21 @@ function TarjetaCard({ tarjeta, nombreAsignado, onClick, onDragStart }: {
   onClick: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
 }) {
-  const vencida = tarjeta.fecha_limite && tarjeta.fecha_limite < new Date().toISOString().slice(0, 10);
+  const semaforo = tarjeta.fecha_limite ? semaforoFecha(tarjeta.fecha_limite) : null;
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onClick={onClick}
-      className="mb-2 cursor-pointer rounded border border-slate-200 bg-white p-2.5 text-sm shadow-sm hover:border-slate-400"
+      className={`mb-2 cursor-pointer rounded border-l-4 border-y border-r border-slate-200 bg-white p-2.5 text-sm shadow-sm hover:border-slate-400 ${semaforo ? BORDE_SEMAFORO[semaforo] : "border-l-slate-200"}`}
     >
       <p className="font-medium text-slate-900">{tarjeta.titulo}</p>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         {nombreAsignado && (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{nombreAsignado}</span>
         )}
-        {tarjeta.fecha_limite && (
-          <span className={`rounded-full px-2 py-0.5 text-xs ${vencida ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-700"}`}>
+        {tarjeta.fecha_limite && semaforo && (
+          <span className={`rounded-full px-2 py-0.5 text-xs ${COLOR_SEMAFORO[semaforo]}`}>
             {new Date(tarjeta.fecha_limite + "T00:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}
           </span>
         )}
@@ -190,6 +192,8 @@ export function TableroDetalle() {
       </div>
 
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      <CalendarioVencimientos tarjetas={tarjetas ?? []} onSeleccionar={setTarjetaSeleccionada} />
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {columnas.map((columna) => {
