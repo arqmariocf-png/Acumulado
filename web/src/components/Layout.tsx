@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 const ENLACES = [
@@ -41,59 +42,35 @@ export function Layout() {
             ENLACES.filter((e) => e.a === "/")
           : ENLACES;
 
+  // "Inicio" siempre visible y directo; el resto (más los extras condicio-
+  // nados por rol) va dentro del desplegable -- la barra ya no alcanza a
+  // mostrar todos los módulos en una sola fila conforme se agregan más.
+  const enlacesMenu = enlaces.filter((e) => e.a !== "/");
+  if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
+  if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
+  if (esAdmin) enlacesMenu.push({ a: "/admin", etiqueta: "Admin" });
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 sm:gap-6">
             <span className="text-lg font-semibold text-slate-900">Grupo Loma</span>
-            <nav className="flex gap-4 text-sm">
-              {enlaces.map((e) => (
-                <NavLink
-                  key={e.a}
-                  to={e.a}
-                  end={e.a === "/"}
-                  className={({ isActive }) =>
-                    `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
-                  }
-                >
-                  {e.etiqueta}
-                </NavLink>
-              ))}
-              {veSaldos && (
-                <NavLink
-                  to="/saldos"
-                  className={({ isActive }) =>
-                    `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
-                  }
-                >
-                  Saldos
-                </NavLink>
-              )}
-              {veRH && (
-                <NavLink
-                  to="/rh"
-                  className={({ isActive }) =>
-                    `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
-                  }
-                >
-                  RH
-                </NavLink>
-              )}
-              {esAdmin && (
-                <NavLink
-                  to="/admin"
-                  className={({ isActive }) =>
-                    `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
-                  }
-                >
-                  Admin
-                </NavLink>
-              )}
+            <nav className="flex items-center gap-2 text-sm">
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) =>
+                  `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`
+                }
+              >
+                Inicio
+              </NavLink>
+              <MenuModulos enlaces={enlacesMenu} />
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
-            <span>
+            <span className="hidden sm:inline">
               {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol}</span>
             </span>
             <button onClick={cerrarSesion} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100">
@@ -105,6 +82,51 @@ export function Layout() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>
+    </div>
+  );
+}
+
+function MenuModulos({ enlaces }: { enlaces: { a: string; etiqueta: string }[] }) {
+  const [abierto, setAbierto] = useState(false);
+  const location = useLocation();
+  const contenedorRef = useRef<HTMLDivElement>(null);
+
+  const activo = enlaces.some((e) => location.pathname === e.a || location.pathname.startsWith(`${e.a}/`));
+
+  useEffect(() => {
+    function onClickFuera(e: MouseEvent) {
+      if (contenedorRef.current && !contenedorRef.current.contains(e.target as Node)) setAbierto(false);
+    }
+    document.addEventListener("mousedown", onClickFuera);
+    return () => document.removeEventListener("mousedown", onClickFuera);
+  }, []);
+
+  useEffect(() => setAbierto(false), [location.pathname]);
+
+  if (enlaces.length === 0) return null;
+
+  return (
+    <div ref={contenedorRef} className="relative">
+      <button
+        onClick={() => setAbierto((v) => !v)}
+        className={`flex items-center gap-1 rounded px-2 py-1 ${activo ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+      >
+        Módulos
+        <span className="text-xs">▾</span>
+      </button>
+      {abierto && (
+        <div className="absolute left-0 z-20 mt-1 w-56 rounded border border-slate-200 bg-white py-1 shadow-lg">
+          {enlaces.map((e) => (
+            <NavLink
+              key={e.a}
+              to={e.a}
+              className={({ isActive }) => `block px-3 py-1.5 text-sm ${isActive ? "bg-slate-100 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              {e.etiqueta}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
