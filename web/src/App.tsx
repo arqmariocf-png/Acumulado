@@ -38,6 +38,8 @@ const PreciosAnalisis = lazy(() => import("./pages/precios/Analisis").then((m) =
 const PreciosPublicados = lazy(() => import("./pages/precios/Publicados").then((m) => ({ default: m.Publicados })));
 const PreciosCatalogo = lazy(() => import("./pages/precios/Catalogo").then((m) => ({ default: m.Catalogo })));
 const PreciosDetalle = lazy(() => import("./pages/precios/Detalle").then((m) => ({ default: m.Detalle })));
+const Tableros = lazy(() => import("./pages/tareas/Tableros").then((m) => ({ default: m.Tableros })));
+const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((m) => ({ default: m.TableroDetalle })));
 
 const queryClient = new QueryClient();
 
@@ -100,6 +102,9 @@ function Enrutador() {
               <Route path="resolucion" element={<Resolucion />} />
             </Route>
           </Route>
+
+          <Route path="/tareas" element={<Tableros />} />
+          <Route path="/tareas/:tableroId" element={<TableroDetalle />} />
 
           {/* El detalle vive fuera del layout de pestanas: es una
               tarjeta completa y ahi las pestanas estorban. */}

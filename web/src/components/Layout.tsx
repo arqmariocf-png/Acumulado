@@ -11,12 +11,14 @@ const ENLACES = [
   { a: "/perfil-fiscal", etiqueta: "Perfil fiscal" },
   { a: "/requisiciones", etiqueta: "Requisiciones" },
   { a: "/precios", etiqueta: "Precios unitarios" },
+  { a: "/tareas", etiqueta: "Tareas" },
   { a: "/pendientes", etiqueta: "Pendientes" },
 ];
 
-// Lo que sí le toca ver a un supervisor de obra: pedir material y armar sus
-// precios unitarios. El resto de los módulos financieros siguen fuera.
-const ENLACES_RESPONSABLE = ["/", "/requisiciones", "/precios"];
+// Lo que sí le toca ver a un supervisor de obra: pedir material, armar sus
+// precios unitarios y dar seguimiento a sus tareas. El resto de los módulos
+// financieros siguen fuera.
+const ENLACES_RESPONSABLE = ["/", "/requisiciones", "/precios", "/tareas"];
 
 export function Layout() {
   const { perfil, cerrarSesion } = useAuth();
@@ -33,7 +35,7 @@ export function Layout() {
       ? ENLACES.filter((e) => ENLACES_RESPONSABLE.includes(e.a))
       : perfil?.rol === "almacen"
         ? // Almacén entra a inventario y a poner precio de material en los PU.
-          ENLACES.filter((e) => ["/", "/inventario", "/requisiciones", "/precios"].includes(e.a))
+          ENLACES.filter((e) => ["/", "/inventario", "/requisiciones", "/precios", "/tareas"].includes(e.a))
         : perfil?.rol === "rh_documentos"
           ? // Sólo el inicio: desde ahí llega a RH, que es su único módulo.
             ENLACES.filter((e) => e.a === "/")

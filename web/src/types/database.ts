@@ -502,3 +502,80 @@ export interface PuAprobacion {
   comentario: string | null;
   created_at: string;
 }
+
+/** Fila de la vista v_directorio: nombre/rol de cualquier usuario con acceso
+ * al sistema, visible para cualquier perfil no-pendiente (no expone
+ * empresa_id ni datos financieros) -- se usa para mostrar/asignar personas
+ * en Tareas sin necesitar permiso de Admin sobre profiles. */
+export interface DirectorioPerfil {
+  id: string;
+  nombre: string;
+  rol: AppRol;
+  activo: boolean;
+}
+
+// ── Tareas (tablero estilo Trello) ──────────────────────────────────────
+
+export interface Tablero {
+  id: string;
+  /** NULL = tablero "corporativo", visible desde cualquier empresa. */
+  empresa_id: string | null;
+  nombre: string;
+  descripcion: string | null;
+  archivado: boolean;
+  creado_por: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TableroColumna {
+  id: string;
+  tablero_id: string;
+  nombre: string;
+  orden: number;
+  created_at: string;
+}
+
+export interface Tarjeta {
+  id: string;
+  tablero_id: string;
+  columna_id: string;
+  titulo: string;
+  descripcion: string | null;
+  orden_venta_id: string | null;
+  asignado_a: string | null;
+  creado_por: string;
+  fecha_limite: string | null;
+  orden: number;
+  archivada: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TarjetaComentario {
+  id: string;
+  tarjeta_id: string;
+  autor_id: string;
+  texto: string;
+  created_at: string;
+}
+
+export interface TarjetaArchivo {
+  id: string;
+  tarjeta_id: string;
+  storage_path: string;
+  nombre_original: string;
+  subido_por: string;
+  created_at: string;
+}
+
+export type TarjetaActividadTipo = "creada" | "movida" | "asignada" | "archivada" | "reabierta" | "editada";
+
+export interface TarjetaActividad {
+  id: string;
+  tarjeta_id: string;
+  tipo: TarjetaActividadTipo;
+  detalle: Record<string, unknown> | null;
+  actor_id: string;
+  created_at: string;
+}
