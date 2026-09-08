@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
@@ -7,6 +7,17 @@ import type { DirectorioPerfil, Tablero, TableroColumna, Tarjeta } from "../../t
 import { TarjetaPanel } from "./TarjetaPanel";
 import { CalendarioVencimientos } from "./Vencimientos";
 import { BORDE_SEMAFORO, COLOR_SEMAFORO, semaforoFecha } from "./semaforo";
+
+function useEmpresas() {
+  return useQuery({
+    queryKey: ["empresas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("empresas").select("id, nombre").eq("activo", true).order("nombre");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
 
 function useTablero(tableroId: string) {
   return useQuery({
@@ -94,14 +105,17 @@ function TarjetaCard({ tarjeta, nombreAsignado, onClick, onDragStart }: {
 
 export function TableroDetalle() {
   const { tableroId } = useParams<{ tableroId: string }>();
+  const navigate = useNavigate();
   const { perfil } = useAuth();
   const queryClient = useQueryClient();
   const { data: tablero } = useTablero(tableroId!);
   const { data: columnas } = useColumnas(tableroId!);
   const { data: tarjetas } = useTarjetas(tableroId!);
   const { data: directorio } = useDirectorio();
+  const { data: empresas } = useEmpresas();
   const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState<string | null>(null);
   const [nuevaColumna, setNuevaColumna] = useState(false);
+  const [editandoTablero, setEditandoTablero] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const puedeAdministrar = perfil?.rol === "admin" || perfil?.rol === "corporativo";
@@ -109,6 +123,50 @@ export function TableroDetalle() {
 
   function invalidarTarjetas() {
     queryClient.invalidateQueries({ queryKey: ["tarjetas", tableroId] });
+  }
+
+  const actualizarTablero = useMutation({
+    mutationFn: async (cambios: { nombre: string; descripcion: string; empresa_id: string }) => {
+      const { error: errUpdate } = await supabase
+        .from("tableros")
+        .update({
+          nombre: cambios.nombre,
+          descripcion: cambios.descripcion || null,
+          empresa_id: cambios.empresa_id || null,
+        })
+        .eq("id", tableroId);
+      if (errUpdate) throw errUpdate;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tablero", tableroId] });
+      queryClient.invalidateQueries({ queryKey: ["tableros"] });
+      setEditandoTablero(false);
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  const archivarTablero = useMutation({
+    mutationFn: async () => {
+      const { error: errUpdate } = await supabase.from("tableros").update({ archivado: true }).eq("id", tableroId);
+      if (errUpdate) throw errUpdate;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tableros"] });
+      navigate("/tareas");
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  function onSubmitEditarTablero(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const nombre = String(fd.get("nombre") ?? "").trim();
+    if (!nombre) return;
+    actualizarTablero.mutate({
+      nombre,
+      descripcion: String(fd.get("descripcion") ?? "").trim(),
+      empresa_id: String(fd.get("empresa_id") ?? ""),
+    });
   }
 
   const crearTarjeta = useMutation({
@@ -184,12 +242,59 @@ export function TableroDetalle() {
       <Link to="/tareas" className="text-xs text-slate-500 hover:underline">
         ← Todos los tableros
       </Link>
-      <div className="mt-1 mb-4 flex items-baseline justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">{tablero.nombre}</h1>
-          <p className="text-xs text-slate-500">{tablero.empresas?.nombre ?? "Corporativo · todas las empresas"}</p>
+      {editandoTablero ? (
+        <form onSubmit={onSubmitEditarTablero} className="mt-1 mb-4 max-w-xl rounded border border-slate-200 bg-white p-4">
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-700">Nombre *</label>
+            <input name="nombre" required defaultValue={tablero.nombre} className={campoTexto} />
+          </div>
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-700">Descripción</label>
+            <input name="descripcion" defaultValue={tablero.descripcion ?? ""} className={campoTexto} />
+          </div>
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-700">Empresa</label>
+            <select name="empresa_id" defaultValue={tablero.empresa_id ?? ""} className={campoTexto}>
+              <option value="">Corporativo (visible a todas las empresas)</option>
+              {empresas?.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <button type="submit" disabled={actualizarTablero.isPending} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+                {actualizarTablero.isPending ? "Guardando…" : "Guardar"}
+              </button>
+              <button type="button" onClick={() => setEditandoTablero(false)} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+                Cancelar
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => confirm(`¿Archivar el tablero "${tablero.nombre}"? Sus tarjetas dejan de verse pero no se borran.`) && archivarTablero.mutate()}
+              className="text-xs text-red-600 hover:underline"
+            >
+              Archivar tablero
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-1 mb-4 flex items-baseline justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">{tablero.nombre}</h1>
+            <p className="text-xs text-slate-500">{tablero.empresas?.nombre ?? "Corporativo · todas las empresas"}</p>
+            {tablero.descripcion && <p className="mt-1 text-sm text-slate-600">{tablero.descripcion}</p>}
+          </div>
+          {puedeAdministrar && (
+            <button onClick={() => setEditandoTablero(true)} className="shrink-0 rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+              Editar tablero
+            </button>
+          )}
         </div>
-      </div>
+      )}
 
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
