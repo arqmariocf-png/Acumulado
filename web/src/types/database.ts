@@ -341,6 +341,35 @@ export interface Proyecto {
   comprador_nombre: string | null;
   comprador_id: string | null;
   activo: boolean;
+  /** A qué cliente pertenece este proyecto -- alimenta el catálogo de
+   * precios por cliente (pu_precios_cliente) en la ventana de Proyectos. */
+  cliente: string | null;
+}
+
+export interface ProyectoPlano {
+  id: string;
+  proyecto_id: string;
+  nombre_original: string;
+  storage_path: string;
+  tipo_archivo: "pdf" | "dwg";
+  subido_por: string;
+  created_at: string;
+}
+
+/** Catálogo de referencia de precios ya negociados por cliente -- apoyo
+ * para cotizar rápido, no sustituye el costeo por insumo de Precios
+ * Unitarios (pu_analisis). */
+export interface PuPrecioCliente {
+  id: string;
+  empresa_id: string;
+  cliente: string;
+  concepto: string;
+  unidad: string;
+  precio_unitario: number;
+  vigente_desde: string;
+  activo: boolean;
+  created_by: string;
+  created_at: string;
 }
 
 export interface Requisicion {
@@ -524,6 +553,8 @@ export interface Tablero {
   descripcion: string | null;
   archivado: boolean;
   creado_por: string;
+  /** Proyecto al que da seguimiento este tablero (avance en Proyectos). */
+  proyecto_id: string | null;
   created_at: string;
   updated_at: string;
 }
