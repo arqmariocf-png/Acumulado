@@ -18,6 +18,7 @@ const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ 
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
+const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
 const Cuentas = lazy(() => import("./pages/admin/Cuentas").then((m) => ({ default: m.Cuentas })));
@@ -84,6 +85,7 @@ function Enrutador() {
           <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
           <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
           <Route path="/pendientes" element={<Pendientes />} />
+          <Route path="/checador" element={<Checador />} />
 
           <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
             <Route path="/saldos" element={<SaldosDiarios />} />
