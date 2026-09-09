@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 
 const ENLACES = [
   { a: "/", etiqueta: "Inicio" },
@@ -46,6 +47,9 @@ export function Layout() {
   // nados por rol) va dentro del desplegable -- la barra ya no alcanza a
   // mostrar todos los módulos en una sola fila conforme se agregan más.
   const enlacesMenu = enlaces.filter((e) => e.a !== "/");
+  // El checador es para todo mundo, sin importar el rol -- por eso se agrega
+  // aparte de ENLACES en vez de vivir en la lista que cada rol filtra.
+  enlacesMenu.push({ a: "/checador", etiqueta: "Checador" });
   if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
   if (esAdmin) enlacesMenu.push({ a: "/admin", etiqueta: "Admin" });
@@ -73,6 +77,7 @@ export function Layout() {
             <span className="hidden sm:inline">
               {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol}</span>
             </span>
+            {perfil && <BotonNotificaciones profileId={perfil.id} />}
             <button onClick={cerrarSesion} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100">
               Salir
             </button>
@@ -83,6 +88,46 @@ export function Layout() {
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function BotonNotificaciones({ profileId }: { profileId: string }) {
+  const [soportado] = useState(pushSoportado());
+  const [suscrito, setSuscrito] = useState(false);
+  const [cargando, setCargando] = useState(false);
+
+  useEffect(() => {
+    if (soportado) estaSuscrito().then(setSuscrito);
+  }, [soportado]);
+
+  if (!soportado) return null;
+
+  async function alternar() {
+    setCargando(true);
+    try {
+      if (suscrito) {
+        await desuscribirsePush();
+        setSuscrito(false);
+      } else {
+        await suscribirsePush(profileId);
+        setSuscrito(true);
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={alternar}
+      disabled={cargando}
+      title={suscrito ? "Notificaciones activadas -- clic para desactivar" : "Activar recordatorios de tareas del día"}
+      className={`rounded border px-2 py-1 text-xs ${suscrito ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-300 text-slate-600 hover:bg-slate-100"}`}
+    >
+      {suscrito ? "🔔 Activas" : "🔔 Activar"}
+    </button>
   );
 }
 
