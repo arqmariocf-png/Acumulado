@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
@@ -60,6 +60,7 @@ export function Analisis() {
   const { perfil } = useAuth();
   const navegar = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
 
   const etapa = perfil ? ETAPA_DEL_ROL[perfil.rol] : undefined;
   const [filtro, setFiltro] = useState<Filtro>(etapa ? "pendientes" : "todos");
@@ -69,6 +70,13 @@ export function Analisis() {
   const { data: proyectos } = useProyectos();
 
   const puedeCrear = perfil?.rol !== "almacen" && perfil?.rol !== "rh";
+
+  // Link "+ Nuevo análisis" desde la ventana de Proyectos (/precios?proyecto=id)
+  // -- abre el formulario directo con la obra ya seleccionada.
+  const proyectoPreseleccionado = searchParams.get("proyecto") ?? "";
+  useEffect(() => {
+    if (proyectoPreseleccionado && puedeCrear) setAbriendo(true);
+  }, [proyectoPreseleccionado, puedeCrear]);
 
   const crear = useMutation({
     mutationFn: async (form: HTMLFormElement) => {
@@ -144,7 +152,7 @@ export function Analisis() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="sm:col-span-2 text-sm">
               <span className="mb-1 block text-slate-600">Obra</span>
-              <select name="proyecto" required className="w-full rounded border border-slate-300 px-2 py-1.5">
+              <select name="proyecto" required defaultValue={proyectoPreseleccionado} className="w-full rounded border border-slate-300 px-2 py-1.5">
                 <option value="">Elige una obra…</option>
                 {proyectos?.map((p) => (
                   <option key={p.id} value={p.id}>

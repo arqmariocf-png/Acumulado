@@ -19,6 +19,8 @@ const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
+const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => ({ default: m.Proyectos })));
+const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
 const Cuentas = lazy(() => import("./pages/admin/Cuentas").then((m) => ({ default: m.Cuentas })));
@@ -86,6 +88,8 @@ function Enrutador() {
           <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
           <Route path="/pendientes" element={<Pendientes />} />
           <Route path="/checador" element={<Checador />} />
+          <Route path="/proyectos" element={<Proyectos />} />
+          <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
 
           <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
             <Route path="/saldos" element={<SaldosDiarios />} />
