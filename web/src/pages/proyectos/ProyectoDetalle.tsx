@@ -25,6 +25,7 @@ export function ProyectoDetalle() {
   const { id } = useParams<{ id: string }>();
   const { data: proyecto } = useProyecto(id!);
   const [tab, setTab] = useState<Tab>("planos");
+  const [prellenado, setPrellenado] = useState<{ concepto: string; unidad: string } | null>(null);
 
   if (!proyecto) return <p className="text-sm text-slate-500">Cargando…</p>;
 
@@ -58,8 +59,16 @@ export function ProyectoDetalle() {
         ))}
       </div>
 
-      {tab === "planos" && <PestanaPlanos proyectoId={proyecto.id} />}
-      {tab === "cotizacion" && <PestanaCotizacion proyecto={proyecto} />}
+      {tab === "planos" && (
+        <PestanaPlanos
+          proyectoId={proyecto.id}
+          onUsarConcepto={(c) => {
+            setPrellenado(c);
+            setTab("cotizacion");
+          }}
+        />
+      )}
+      {tab === "cotizacion" && <PestanaCotizacion proyecto={proyecto} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />}
       {tab === "avance" && <PestanaAvance proyecto={proyecto} />}
     </div>
   );
@@ -78,11 +87,49 @@ function usePlanos(proyectoId: string) {
   });
 }
 
-function PestanaPlanos({ proyectoId }: { proyectoId: string }) {
+interface ConceptoSugerido {
+  concepto: string;
+  unidad: string | null;
+  cantidad: number | null;
+  tipo: "material" | "mano_obra" | "no_determinado";
+  fuente: string;
+}
+
+const ETIQUETA_TIPO_SUGERIDO: Record<ConceptoSugerido["tipo"], string> = {
+  material: "Material",
+  mano_obra: "Mano de obra",
+  no_determinado: "Sin clasificar",
+};
+
+function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onUsarConcepto: (c: { concepto: string; unidad: string }) => void }) {
   const queryClient = useQueryClient();
   const { data: planos } = usePlanos(proyectoId);
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analizandoId, setAnalizandoId] = useState<string | null>(null);
+  const [resultadoIA, setResultadoIA] = useState<{ planoId: string; nombre: string; conceptos: ConceptoSugerido[]; advertencia: string } | null>(null);
+
+  async function onAnalizarConIA(planoId: string, nombre: string) {
+    setError(null);
+    setResultadoIA(null);
+    setAnalizandoId(planoId);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const respuesta = await fetch(urlFuncion("plano-analizar-ia"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ planoId }),
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      setResultadoIA({ planoId, nombre, conceptos: json.conceptos ?? [], advertencia: json.advertencia ?? "" });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAnalizandoId(null);
+    }
+  }
 
   async function onSubir(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -185,9 +232,20 @@ function PestanaPlanos({ proyectoId }: { proyectoId: string }) {
                 <td className="px-3 py-2 uppercase text-slate-500">{p.tipo_archivo}</td>
                 <td className="px-3 py-2 text-slate-500">{new Date(p.created_at).toLocaleDateString("es-MX")}</td>
                 <td className="px-3 py-2 text-right">
-                  <button onClick={() => onBorrar(p.id)} className="text-xs text-slate-400 hover:text-red-600">
-                    Borrar
-                  </button>
+                  <div className="flex justify-end gap-3">
+                    {p.tipo_archivo === "pdf" && (
+                      <button
+                        onClick={() => onAnalizarConIA(p.id, p.nombre_original)}
+                        disabled={analizandoId === p.id}
+                        className="text-xs text-slate-600 hover:underline disabled:opacity-50"
+                      >
+                        {analizandoId === p.id ? "Leyendo…" : "Analizar con IA"}
+                      </button>
+                    )}
+                    <button onClick={() => onBorrar(p.id)} className="text-xs text-slate-400 hover:text-red-600">
+                      Borrar
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -201,6 +259,63 @@ function PestanaPlanos({ proyectoId }: { proyectoId: string }) {
           </tbody>
         </table>
       </div>
+
+      {resultadoIA && (
+        <div className="mt-4 rounded border border-slate-200 bg-white p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700">Borrador de IA -- {resultadoIA.nombre}</h3>
+            <button onClick={() => setResultadoIA(null)} className="text-xs text-slate-400 hover:text-slate-600">
+              Cerrar
+            </button>
+          </div>
+          {resultadoIA.advertencia && (
+            <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{resultadoIA.advertencia}</p>
+          )}
+          <p className="mb-2 text-xs text-slate-500">
+            Esto es solo una sugerencia leída del plano -- revisa y corrige antes de usarlo como cotización real.
+          </p>
+          <div className="overflow-x-auto rounded border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Concepto</th>
+                  <th className="px-3 py-2">Unidad</th>
+                  <th className="px-3 py-2">Cantidad</th>
+                  <th className="px-3 py-2">Tipo</th>
+                  <th className="px-3 py-2">Fuente</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {resultadoIA.conceptos.map((c, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="px-3 py-2">{c.concepto}</td>
+                    <td className="px-3 py-2">{c.unidad ?? "—"}</td>
+                    <td className="px-3 py-2">{c.cantidad ?? "sin anotar"}</td>
+                    <td className="px-3 py-2 text-slate-500">{ETIQUETA_TIPO_SUGERIDO[c.tipo]}</td>
+                    <td className="px-3 py-2 text-xs text-slate-400">{c.fuente}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => onUsarConcepto({ concepto: c.concepto, unidad: c.unidad ?? "" })}
+                        className="text-xs text-slate-600 hover:underline"
+                      >
+                        Usar →
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {resultadoIA.conceptos.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                      La IA no encontró conceptos con especificación escrita en este plano.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -236,7 +351,15 @@ function useAnalisisDelProyecto(proyectoId: string) {
   });
 }
 
-function PestanaCotizacion({ proyecto }: { proyecto: Proyecto }) {
+function PestanaCotizacion({
+  proyecto,
+  prellenado,
+  onConsumirPrellenado,
+}: {
+  proyecto: Proyecto;
+  prellenado: { concepto: string; unidad: string } | null;
+  onConsumirPrellenado: () => void;
+}) {
   const { perfil } = useAuth();
   const queryClient = useQueryClient();
   const [cliente, setCliente] = useState(proyecto.cliente ?? "");
@@ -323,23 +446,48 @@ function PestanaCotizacion({ proyecto }: { proyecto: Proyecto }) {
           </div>
 
           {puedeEscribirPu && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                agregarPrecio.mutate(new FormData(e.currentTarget));
-                (e.target as HTMLFormElement).reset();
-              }}
-              className="mb-6 grid max-w-2xl grid-cols-1 gap-2 rounded border border-slate-200 bg-white p-3 sm:grid-cols-4"
-            >
-              <input name="concepto" required placeholder="Concepto" className={`${campoTexto} sm:col-span-2`} />
-              <input name="unidad" required placeholder="Unidad" className={campoTexto} />
-              <div className="flex gap-2">
-                <input name="precio_unitario" required type="number" step="0.01" min="0" placeholder="Precio" className={campoTexto} />
-                <button type="submit" className="shrink-0 rounded bg-slate-900 px-3 text-sm font-medium text-white">
-                  +
-                </button>
-              </div>
-            </form>
+            <>
+              {prellenado && (
+                <p className="mb-2 max-w-2xl rounded border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
+                  Concepto tomado del plano -- solo falta el precio.{" "}
+                  <button onClick={onConsumirPrellenado} className="text-slate-400 hover:underline">
+                    Quitar
+                  </button>
+                </p>
+              )}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  agregarPrecio.mutate(new FormData(e.currentTarget));
+                  (e.target as HTMLFormElement).reset();
+                  onConsumirPrellenado();
+                }}
+                className="mb-6 grid max-w-2xl grid-cols-1 gap-2 rounded border border-slate-200 bg-white p-3 sm:grid-cols-4"
+              >
+                <input
+                  key={`concepto-${prellenado?.concepto ?? ""}`}
+                  name="concepto"
+                  required
+                  defaultValue={prellenado?.concepto ?? ""}
+                  placeholder="Concepto"
+                  className={`${campoTexto} sm:col-span-2`}
+                />
+                <input
+                  key={`unidad-${prellenado?.unidad ?? ""}`}
+                  name="unidad"
+                  required
+                  defaultValue={prellenado?.unidad ?? ""}
+                  placeholder="Unidad"
+                  className={campoTexto}
+                />
+                <div className="flex gap-2">
+                  <input name="precio_unitario" required type="number" step="0.01" min="0" placeholder="Precio" className={campoTexto} />
+                  <button type="submit" className="shrink-0 rounded bg-slate-900 px-3 text-sm font-medium text-white">
+                    +
+                  </button>
+                </div>
+              </form>
+            </>
           )}
         </>
       ) : (
