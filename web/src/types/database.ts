@@ -164,6 +164,30 @@ export interface Personal {
   fecha_ingreso: string;
   activo: boolean;
   created_at: string;
+  /** Cuenta de acceso vinculada -- una vez que la tiene, puede checar
+   * entrada/salida desde su celular (ver v_asistencia_semanal_personal). */
+  profile_id: string | null;
+}
+
+/** Fila de v_asistencia_semanal_personal: días con marca de entrada en el
+ * checador por semana, cruzados con el sueldo de la contratación vigente
+ * -- informativo para armar la lista de nómina, no calcula el monto final. */
+export interface AsistenciaSemanalPersonal {
+  personal_id: string;
+  personal_nombre: string;
+  contratacion_id: string;
+  empresa_id: string;
+  semana_inicio: string;
+  dias_checados: number;
+  sueldo_semanal: number;
+}
+
+/** Fila de v_proyeccion_nomina_semanal: gasto de nómina esperado por
+ * empresa y semana, sumando sueldo_semanal de contrataciones vigentes. */
+export interface ProyeccionNominaSemanal {
+  empresa_id: string;
+  semana_inicio: string;
+  monto_proyectado: number;
 }
 
 export interface AsignacionDiaria {
