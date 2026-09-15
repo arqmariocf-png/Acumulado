@@ -43,6 +43,7 @@ const PreciosCatalogo = lazy(() => import("./pages/precios/Catalogo").then((m) =
 const PreciosDetalle = lazy(() => import("./pages/precios/Detalle").then((m) => ({ default: m.Detalle })));
 const Tableros = lazy(() => import("./pages/tareas/Tableros").then((m) => ({ default: m.Tableros })));
 const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((m) => ({ default: m.TableroDetalle })));
+const BbvaMantenimiento = lazy(() => import("./pages/bbva/BbvaMantenimiento").then((m) => ({ default: m.BbvaMantenimiento })));
 
 const queryClient = new QueryClient();
 
@@ -93,6 +94,10 @@ function Enrutador() {
 
           <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
             <Route path="/saldos" element={<SaldosDiarios />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
+            <Route path="/mantenimiento/bbva" element={<BbvaMantenimiento />} />
           </Route>
 
           <Route path="/inventario" element={<InventarioLayout />}>
