@@ -28,6 +28,7 @@ export function Layout() {
   const esAdmin = perfil?.rol === "admin";
   const veRH = perfil?.rol === "rh" || perfil?.rol === "rh_documentos" || esAdmin;
   const veSaldos = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin;
+  const veMantenimientoBbva = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin;
   // 'responsable' es un rol acotado a sus proyectos (ver SPEC.md sección 10)
   // y 'rh_documentos' a subir expedientes (ver 20260828020000_rh_documentos_
   // rol_enum.sql) -- ninguno de los dos debe ver el resto de los módulos
@@ -52,6 +53,7 @@ export function Layout() {
   // aparte de ENLACES en vez de vivir en la lista que cada rol filtra.
   enlacesMenu.push({ a: "/checador", etiqueta: "Checador" });
   if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
+  if (veMantenimientoBbva) enlacesMenu.push({ a: "/mantenimiento/bbva", etiqueta: "Mantenimiento BBVA" });
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
   if (esAdmin) enlacesMenu.push({ a: "/admin", etiqueta: "Admin" });
 
