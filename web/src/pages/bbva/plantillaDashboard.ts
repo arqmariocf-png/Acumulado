@@ -277,6 +277,11 @@ const PLANTILLA = /* html */ `<!doctype html><html><head><meta charset=utf8><met
     <div class="panel"><div id="conciliacionBlock"></div></div>
   </section>
 
+  <section id="qaNotasSection">
+    <div class="section-head"><h2>Notas de calidad de datos</h2><span class="hint">detectadas al procesar el maestro, revisar con el equipo</span></div>
+    <div id="qaNotasBlock"></div>
+  </section>
+
   <section>
     <div class="section-head"><h2>Folios más antiguos esperando al supervisor</h2><span class="hint">con más días desde apertura, sin pago</span></div>
     <div class="panel" style="padding:14px 8px 6px;">
@@ -517,8 +522,6 @@ function renderAdquira(){
     <span><b class="mono" style="color:var(--ink)">\${a.folios_sin_pedido}</b> aún sin número de pedido (no han llegado a Adquira)</span>
     <span><b class="mono" style="color:var(--ink)">\${a.folios_con_pedido_sin_factura}</b> con pedido pero sin factura encontrada</span>
   </div>\`));
-  const notes = DATA.qa_notas||[];
-  if(notes[0]) wrap.appendChild(el(\`<div class="note" style="margin-top:14px"><span class="ico">!</span><span>\${notes[0]}</span></div>\`));
 }
 
 function renderProceso(){
@@ -569,15 +572,16 @@ function renderMesProceso(){
 
 function renderConciliacion(){
   const c = DATA.conciliacion;
+  if(!c) return;
   const wrap = document.getElementById("conciliacionBlock");
   const stats = [
     ["Pedidos con folios en Puebla", c.total_pedidos],
     ["Con factura en Adquira", c.pedidos_con_factura],
     ["Sin factura encontrada", c.pedidos_sin_factura],
     ["Con diferencia de monto", c.pedidos_con_diferencia_monto],
-  ];
+  ].filter(([,val]) => val !== undefined);
   const statRow = document.createElement("div");
-  statRow.style.cssText = "display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;";
+  statRow.style.cssText = \`display:grid;grid-template-columns:repeat(\${stats.length},1fr);gap:14px;margin-bottom:14px;\`;
   stats.forEach(([label,val])=>{
     statRow.appendChild(el(\`<div>
       <div style="font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:3px;">\${label}</div>
@@ -589,12 +593,24 @@ function renderConciliacion(){
     <span style="color:var(--ink-2)">Suma folios Puebla (pedidos)</span>
     <span class="mono" style="font-weight:600">\${fmtMXN(c.suma_folios_puebla)}</span>
   </div>\`));
-  wrap.appendChild(el(\`<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
-    <span style="color:var(--ink-2)">Suma de esas mismas facturas en Adquira</span>
-    <span class="mono" style="font-weight:600">\${fmtMXN(c.suma_facturas_adquira)}</span>
-  </div>\`));
-  const notes = DATA.qa_notas||[];
-  if(notes[1]) wrap.appendChild(el(\`<div class="note" style="margin-top:14px"><span class="ico">!</span><span>\${notes[1]}</span></div>\`));
+  if(c.suma_facturas_adquira !== undefined){
+    wrap.appendChild(el(\`<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
+      <span style="color:var(--ink-2)">Suma de esas mismas facturas en Adquira</span>
+      <span class="mono" style="font-weight:600">\${fmtMXN(c.suma_facturas_adquira)}</span>
+    </div>\`));
+  } else {
+    wrap.appendChild(el(\`<div class="note" style="margin-top:12px"><span class="ico">i</span><span>El maestro actual ya trae pedido/factura por folio, pero falta el archivo de facturas de Adquira para comparar montos y detectar diferencias -- súbelo cuando lo tengas para activar esa comparación.</span></div>\`));
+  }
+}
+
+function renderQaNotas(){
+  const notas = DATA.qa_notas||[];
+  const sec = document.getElementById("qaNotasSection");
+  if(notas.length === 0){ sec.hidden = true; return; }
+  const wrap = document.getElementById("qaNotasBlock");
+  notas.forEach((nota)=>{
+    wrap.appendChild(el(\`<div class="note" style="margin-bottom:10px"><span class="ico">!</span><span>\${nota}</span></div>\`));
+  });
 }
 
 renderKPIs();
@@ -615,6 +631,7 @@ renderProceso();
 renderMesProceso();
 renderAdquira();
 renderConciliacion();
+renderQaNotas();
 renderWorklist();
 document.getElementById("totalFoliosHint").textContent = DATA.kpi.total_folios + " folios vigentes";
 document.getElementById("sucursalesHint").textContent = "de " + DATA.kpi.n_sucursales + " sucursales";
