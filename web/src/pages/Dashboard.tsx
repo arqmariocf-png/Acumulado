@@ -41,7 +41,10 @@ interface FilaKpiAnual {
   total_abono: number;
 }
 
-interface FilaCosteoMensualClavicon {
+interface FilaCosteoMensualPlanta {
+  empresa_id: string;
+  empresa_codigo: string;
+  empresa_nombre: string;
   producto_id: string;
   producto_nombre: string;
   producto_tipo: string;
@@ -142,17 +145,22 @@ export function Dashboard() {
     },
   });
 
-  // Costos de producción de Clavicón junto a los KPIs financieros de las 8
-  // empresas -- "intercomunicado con Acumulado" pedía verlo aquí, no solo
-  // dentro del módulo. RLS de v_costeo_mensual_clavicon ya limita a
-  // produccion/admin/corporativo: para el resto de los roles la consulta
-  // simplemente vuelve vacía, sin necesitar un chequeo de rol aquí.
-  const { data: costeoClavicon } = useQuery({
-    queryKey: ["costeo-mensual-clavicon-dashboard"],
+  // Costos de producción de las plantas (Clavicón y Balken) junto a los
+  // KPIs financieros de las 8 empresas -- "intercomunicado con Acumulado"
+  // pedía verlo aquí, no solo dentro del módulo. RLS de las tablas de
+  // producción ya limita a produccion/admin/corporativo: para el resto de
+  // los roles la consulta simplemente vuelve vacía, sin chequeo de rol aquí.
+  const { data: costeoPlantas } = useQuery({
+    queryKey: ["costeo-mensual-planta-dashboard"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_costeo_mensual_clavicon").select("*").order("anio", { ascending: false }).order("mes", { ascending: false });
+      const { data, error } = await supabase
+        .from("v_costeo_mensual_planta")
+        .select("*")
+        .order("empresa_nombre")
+        .order("anio", { ascending: false })
+        .order("mes", { ascending: false });
       if (error) throw error;
-      return data as FilaCosteoMensualClavicon[];
+      return data as FilaCosteoMensualPlanta[];
     },
   });
 
@@ -410,14 +418,15 @@ export function Dashboard() {
         </div>
       )}
 
-      {costeoClavicon && costeoClavicon.length > 0 && (
+      {costeoPlantas && costeoPlantas.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded border border-slate-200 bg-white">
           <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
-            Producción — Mallas y Clavos Clavicón · costo mensual por producto (lotes terminados)
+            Producción — costo mensual por producto (lotes terminados)
           </p>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
+                <th className="px-3 py-2">Planta</th>
                 <th className="px-3 py-2">Producto</th>
                 <th className="px-3 py-2">Periodo</th>
                 <th className="px-3 py-2 text-right">Lotes</th>
@@ -427,8 +436,9 @@ export function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {costeoClavicon.map((c) => (
+              {costeoPlantas.map((c) => (
                 <tr key={`${c.producto_id}-${c.anio}-${c.mes}`} className="border-t border-slate-100">
+                  <td className="px-3 py-2 font-medium text-slate-800">{c.empresa_nombre}</td>
                   <td className="px-3 py-2">{c.producto_nombre}</td>
                   <td className="px-3 py-2">
                     {MESES[c.mes - 1]} {c.anio}

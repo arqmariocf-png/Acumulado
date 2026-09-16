@@ -1,18 +1,60 @@
 import { useState, type FormEvent } from "react";
+import { Navigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import type {
-  CosteoMensualClavicon,
+  CosteoMensualPlanta,
   CosteoOrdenProduccion,
   ManoDeObraProduccion,
   MateriaPrima,
   MovimientoMateriaPrima,
   OrdenProduccion,
   ProductoProduccion,
+  ProductoProduccionTipo,
   RecetaItem,
   StockMateriaPrima,
   StockProductoTerminado,
 } from "../types/database";
+
+// Una sola pantalla para las dos plantas del grupo. Todo lo que cambia
+// entre una y otra (empresa, qué fabrica, placeholders) vive aquí; la
+// lógica de costeo por lote es idéntica para las dos.
+const PLANTAS = {
+  clavicon: {
+    codigo: "MCC",
+    corto: "Clavicón",
+    tipos: ["clavo", "malla_armex"] as ProductoProduccionTipo[],
+    ejemploMateria: "Alambrón calibre 12",
+    ejemploProducto: "Clavo cal. 12",
+    ejemploCalibre: "12",
+    ejemploPresentacion: "Caja 25 kg",
+  },
+  balken: {
+    codigo: "VBB",
+    corto: "Balken",
+    tipos: ["vigueta", "bovedilla", "bloque"] as ProductoProduccionTipo[],
+    ejemploMateria: "Cemento CPC 30R",
+    ejemploProducto: "Vigueta 12 cm x 3.00 m",
+    ejemploCalibre: "12 cm",
+    ejemploPresentacion: "Pieza",
+  },
+} as const;
+
+type PlantaKey = keyof typeof PLANTAS;
+type Planta = (typeof PLANTAS)[PlantaKey];
+
+const TIPO_ETIQUETA: Record<ProductoProduccionTipo, string> = {
+  malla_armex: "Malla armex",
+  clavo: "Clavo",
+  vigueta: "Vigueta",
+  bovedilla: "Bovedilla",
+  bloque: "Bloque",
+};
+
+interface Empresa {
+  id: string;
+  nombre: string;
+}
 
 type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo";
 
@@ -46,26 +88,35 @@ function formatoNumero(v: number | null | undefined): string {
   return v.toLocaleString("es-MX", { maximumFractionDigits: 4 });
 }
 
-/** Todo lo de este módulo se ancla a la empresa Clavicón (MCC) -- la
- * integración con OC/OV (20260824090005_produccion_integra_oc_ov.sql) solo
- * aplica ahí. */
-function useEmpresaClavicon() {
+function useEmpresaPlanta(codigo: string) {
   return useQuery({
-    queryKey: ["empresa-mcc"],
+    queryKey: ["empresa-planta", codigo],
     queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").eq("codigo", "MCC").single();
+      const { data, error } = await supabase.from("empresas").select("id, nombre").eq("codigo", codigo).single();
       if (error) throw error;
-      return data as { id: string; nombre: string };
+      return data as Empresa;
     },
   });
 }
 
 export function Produccion() {
+  const { planta } = useParams<{ planta: string }>();
+  if (!planta || !(planta in PLANTAS)) return <Navigate to="/produccion/clavicon" replace />;
+  // key={planta}: al cambiar de planta se reinicia pestaña y paneles abiertos.
+  return <ProduccionPlanta key={planta} planta={PLANTAS[planta as PlantaKey]} />;
+}
+
+function ProduccionPlanta({ planta }: { planta: Planta }) {
   const [pestana, setPestana] = useState<Pestana>("ordenes");
+  const { data: empresa, isLoading, error } = useEmpresaPlanta(planta.codigo);
+
+  if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
+  if (error || !empresa) return <p className="text-sm text-red-600">No se encontró la empresa {planta.codigo} en el catálogo.</p>;
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Producción y Costeo — Clavicón</h1>
+      <h1 className="mb-1 text-xl font-semibold text-slate-900">Producción y Costeo — {planta.corto}</h1>
+      <p className="mb-4 text-sm text-slate-500">{empresa.nombre}</p>
 
       <div className="mb-4 flex flex-wrap gap-2">
         {PESTANAS.map((p) => (
@@ -79,41 +130,41 @@ export function Produccion() {
         ))}
       </div>
 
-      {pestana === "catalogo" && <PestanaCatalogo />}
-      {pestana === "inventario" && <PestanaInventario />}
-      {pestana === "ordenes" && <PestanaOrdenes />}
-      {pestana === "costeo" && <PestanaCosteo />}
+      {pestana === "catalogo" && <PestanaCatalogo empresa={empresa} planta={planta} />}
+      {pestana === "inventario" && <PestanaInventario empresa={empresa} />}
+      {pestana === "ordenes" && <PestanaOrdenes empresa={empresa} />}
+      {pestana === "costeo" && <PestanaCosteo empresa={empresa} />}
     </div>
   );
 }
 
 // ── Catálogo (materias primas, productos, receta) ───────────────────────
 
-function useMateriasPrimas() {
+function useMateriasPrimas(empresaId: string) {
   return useQuery({
-    queryKey: ["materias-primas"],
+    queryKey: ["materias-primas", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("materias_primas").select("*").order("nombre");
+      const { data, error } = await supabase.from("materias_primas").select("*").eq("empresa_id", empresaId).order("nombre");
       if (error) throw error;
       return data as MateriaPrima[];
     },
   });
 }
 
-function useProductos() {
+function useProductos(empresaId: string) {
   return useQuery({
-    queryKey: ["productos-produccion"],
+    queryKey: ["productos-produccion", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("productos_produccion").select("*").order("nombre");
+      const { data, error } = await supabase.from("productos_produccion").select("*").eq("empresa_id", empresaId).order("nombre");
       if (error) throw error;
       return data as ProductoProduccion[];
     },
   });
 }
 
-function PestanaCatalogo() {
-  const { data: materias } = useMateriasPrimas();
-  const { data: productos } = useProductos();
+function PestanaCatalogo({ empresa, planta }: { empresa: Empresa; planta: Planta }) {
+  const { data: materias } = useMateriasPrimas(empresa.id);
+  const { data: productos } = useProductos(empresa.id);
   const queryClient = useQueryClient();
   const [errorMp, setErrorMp] = useState<string | null>(null);
   const [errorProd, setErrorProd] = useState<string | null>(null);
@@ -121,19 +172,19 @@ function PestanaCatalogo() {
 
   const crearMateriaPrima = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const { error } = await supabase.from("materias_primas").insert(payload);
+      const { error } = await supabase.from("materias_primas").insert({ ...payload, empresa_id: empresa.id });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["materias-primas"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["materias-primas", empresa.id] }),
     onError: (err) => setErrorMp((err as Error).message),
   });
 
   const crearProducto = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const { error } = await supabase.from("productos_produccion").insert(payload);
+      const { error } = await supabase.from("productos_produccion").insert({ ...payload, empresa_id: empresa.id });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["productos-produccion"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["productos-produccion", empresa.id] }),
     onError: (err) => setErrorProd((err as Error).message),
   });
 
@@ -167,7 +218,7 @@ function PestanaCatalogo() {
           <form onSubmit={onSubmitMateriaPrima} className="mb-3 flex flex-wrap items-end gap-2 rounded border border-slate-200 bg-white p-3">
             <div className="flex-1">
               <label className={etiquetaCampo}>Nombre *</label>
-              <input name="nombre" required className={campoTexto} placeholder="Alambrón calibre 12" />
+              <input name="nombre" required className={campoTexto} placeholder={planta.ejemploMateria} />
             </div>
             <div className="w-32">
               <label className={etiquetaCampo}>Unidad *</label>
@@ -206,31 +257,34 @@ function PestanaCatalogo() {
         </div>
 
         <div>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Productos (malla armex / clavos)</h2>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Productos ({planta.tipos.map((t) => TIPO_ETIQUETA[t].toLowerCase()).join(" / ")})</h2>
           <form onSubmit={onSubmitProducto} className="mb-3 space-y-2 rounded border border-slate-200 bg-white p-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className={etiquetaCampo}>Tipo *</label>
-                <select name="tipo" required className={campoTexto} defaultValue="clavo">
-                  <option value="clavo">Clavo</option>
-                  <option value="malla_armex">Malla armex</option>
+                <select name="tipo" required className={campoTexto} defaultValue={planta.tipos[0]}>
+                  {planta.tipos.map((t) => (
+                    <option key={t} value={t}>
+                      {TIPO_ETIQUETA[t]}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
-                <label className={etiquetaCampo}>Calibre</label>
-                <input name="calibre" className={campoTexto} placeholder="12" />
+                <label className={etiquetaCampo}>Calibre / medida</label>
+                <input name="calibre" className={campoTexto} placeholder={planta.ejemploCalibre} />
               </div>
               <div>
                 <label className={etiquetaCampo}>Nombre *</label>
-                <input name="nombre" required className={campoTexto} placeholder="Clavo cal. 12" />
+                <input name="nombre" required className={campoTexto} placeholder={planta.ejemploProducto} />
               </div>
               <div>
                 <label className={etiquetaCampo}>Presentación</label>
-                <input name="presentacion" className={campoTexto} placeholder="Caja 25kg" />
+                <input name="presentacion" className={campoTexto} placeholder={planta.ejemploPresentacion} />
               </div>
               <div>
                 <label className={etiquetaCampo}>Unidad *</label>
-                <input name="unidad_medida" required className={campoTexto} placeholder="caja" />
+                <input name="unidad_medida" required className={campoTexto} placeholder="pza" />
               </div>
             </div>
             <button disabled={crearProducto.isPending} className={botonPrimario}>
@@ -244,7 +298,7 @@ function PestanaCatalogo() {
                 <tr>
                   <th className="px-3 py-2">Nombre</th>
                   <th className="px-3 py-2">Tipo</th>
-                  <th className="px-3 py-2">Calibre</th>
+                  <th className="px-3 py-2">Calibre / medida</th>
                   <th className="px-3 py-2">Unidad</th>
                 </tr>
               </thead>
@@ -252,7 +306,7 @@ function PestanaCatalogo() {
                 {productos?.map((p) => (
                   <tr key={p.id} className="border-t border-slate-100">
                     <td className="px-3 py-2">{p.nombre}</td>
-                    <td className="px-3 py-2">{p.tipo === "malla_armex" ? "Malla armex" : "Clavo"}</td>
+                    <td className="px-3 py-2">{TIPO_ETIQUETA[p.tipo] ?? p.tipo}</td>
                     <td className="px-3 py-2">{p.calibre ?? "—"}</td>
                     <td className="px-3 py-2">{p.unidad_medida}</td>
                   </tr>
@@ -402,24 +456,23 @@ function RecetaDelProducto({ productoId, materias }: { productoId: string; mater
 
 // ── Inventario ───────────────────────────────────────────────────────────
 
-function PestanaInventario() {
-  const { data: empresa } = useEmpresaClavicon();
-  const { data: materias } = useMateriasPrimas();
-  const { data: productos } = useProductos();
+function PestanaInventario({ empresa }: { empresa: Empresa }) {
+  const { data: materias } = useMateriasPrimas(empresa.id);
+  const { data: productos } = useProductos(empresa.id);
 
   const { data: stockMp } = useQuery({
-    queryKey: ["stock-materia-prima"],
+    queryKey: ["stock-materia-prima", empresa.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_stock_materia_prima").select("*").order("nombre");
+      const { data, error } = await supabase.from("v_stock_materia_prima").select("*").eq("empresa_id", empresa.id).order("nombre");
       if (error) throw error;
       return data as StockMateriaPrima[];
     },
   });
 
   const { data: stockProd } = useQuery({
-    queryKey: ["stock-producto-terminado"],
+    queryKey: ["stock-producto-terminado", empresa.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_stock_producto_terminado").select("*").order("nombre");
+      const { data, error } = await supabase.from("v_stock_producto_terminado").select("*").eq("empresa_id", empresa.id).order("nombre");
       if (error) throw error;
       return data as StockProductoTerminado[];
     },
@@ -481,22 +534,22 @@ function PestanaInventario() {
         </div>
       </div>
 
-      {empresa && <EntradaMateriaPrima empresaId={empresa.id} materias={materias ?? []} />}
-      {empresa && <SalidaProductoTerminado empresaId={empresa.id} productos={productos ?? []} />}
+      <EntradaMateriaPrima empresaId={empresa.id} materias={materias ?? []} />
+      <SalidaProductoTerminado empresaId={empresa.id} productos={productos ?? []} />
     </div>
   );
 }
 
 /** Entrada de materia prima -- SIEMPRE ligada a una OC real (existente o
  * de alta manual) para no capturar la compra dos veces (integración
- * "OC/OV compartidas" del plan). */
+ * "OC/OV compartidas"). */
 function EntradaMateriaPrima({ empresaId, materias }: { empresaId: string; materias: MateriaPrima[] }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [ocId, setOcId] = useState<string>("__nueva__");
 
   const { data: ordenesCompra } = useQuery({
-    queryKey: ["ordenes-compra-mcc", empresaId],
+    queryKey: ["ordenes-compra-planta", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_compra")
@@ -540,8 +593,8 @@ function EntradaMateriaPrima({ empresaId, materias }: { empresaId: string; mater
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stock-materia-prima"] });
-      queryClient.invalidateQueries({ queryKey: ["ordenes-compra-mcc", empresaId] });
+      queryClient.invalidateQueries({ queryKey: ["stock-materia-prima", empresaId] });
+      queryClient.invalidateQueries({ queryKey: ["ordenes-compra-planta", empresaId] });
       setOcId("__nueva__");
     },
     onError: (err) => setError((err as Error).message),
@@ -629,7 +682,7 @@ function SalidaProductoTerminado({ empresaId, productos }: { empresaId: string; 
   const [ovId, setOvId] = useState<string>("__nueva__");
 
   const { data: ordenesVenta } = useQuery({
-    queryKey: ["ordenes-venta-mcc", empresaId],
+    queryKey: ["ordenes-venta-planta", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_venta")
@@ -643,9 +696,9 @@ function SalidaProductoTerminado({ empresaId, productos }: { empresaId: string; 
   });
 
   const { data: stockProd } = useQuery({
-    queryKey: ["stock-producto-terminado"],
+    queryKey: ["stock-producto-terminado", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_stock_producto_terminado").select("*");
+      const { data, error } = await supabase.from("v_stock_producto_terminado").select("*").eq("empresa_id", empresaId);
       if (error) throw error;
       return data as StockProductoTerminado[];
     },
@@ -683,8 +736,8 @@ function SalidaProductoTerminado({ empresaId, productos }: { empresaId: string; 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stock-producto-terminado"] });
-      queryClient.invalidateQueries({ queryKey: ["ordenes-venta-mcc", empresaId] });
+      queryClient.invalidateQueries({ queryKey: ["stock-producto-terminado", empresaId] });
+      queryClient.invalidateQueries({ queryKey: ["ordenes-venta-planta", empresaId] });
       setOvId("__nueva__");
     },
     onError: (err) => setError((err as Error).message),
@@ -759,23 +812,26 @@ function SalidaProductoTerminado({ empresaId, productos }: { empresaId: string; 
 
 // ── Órdenes de producción (costeo por lote) ─────────────────────────────
 
-function useOrdenesProduccion() {
+type OrdenConProducto = OrdenProduccion & { productos_produccion: { nombre: string } };
+
+function useOrdenesProduccion(empresaId: string) {
   return useQuery({
-    queryKey: ["ordenes-produccion"],
+    queryKey: ["ordenes-produccion", empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_produccion")
         .select("*, productos_produccion(nombre)")
+        .eq("empresa_id", empresaId)
         .order("fecha_inicio", { ascending: false });
       if (error) throw error;
-      return data as (OrdenProduccion & { productos_produccion: { nombre: string } })[];
+      return data as OrdenConProducto[];
     },
   });
 }
 
-function PestanaOrdenes() {
-  const { data: ordenes } = useOrdenesProduccion();
-  const { data: productos } = useProductos();
+function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
+  const { data: ordenes } = useOrdenesProduccion(empresa.id);
+  const { data: productos } = useProductos(empresa.id);
   const queryClient = useQueryClient();
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -783,11 +839,11 @@ function PestanaOrdenes() {
 
   const crear = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const { error } = await supabase.from("ordenes_produccion").insert(payload);
+      const { error } = await supabase.from("ordenes_produccion").insert({ ...payload, empresa_id: empresa.id });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ordenes-produccion"] });
+      queryClient.invalidateQueries({ queryKey: ["ordenes-produccion", empresa.id] });
       setMostrarForm(false);
     },
     onError: (err) => setError((err as Error).message),
@@ -805,6 +861,8 @@ function PestanaOrdenes() {
       notas: oVacio(fd, "notas"),
     });
   }
+
+  const ordenSeleccionada = seleccionada ? ordenes?.find((o) => o.id === seleccionada) : undefined;
 
   return (
     <div>
@@ -907,12 +965,7 @@ function PestanaOrdenes() {
         </table>
       </div>
 
-      {seleccionada && (
-        <OrdenDetalle
-          orden={ordenes!.find((o) => o.id === seleccionada)!}
-          onClose={() => setSeleccionada(null)}
-        />
-      )}
+      {ordenSeleccionada && <OrdenDetalle empresa={empresa} orden={ordenSeleccionada} onClose={() => setSeleccionada(null)} />}
     </div>
   );
 }
@@ -928,9 +981,9 @@ function useCosteoOrden(ordenId: string) {
   });
 }
 
-function OrdenDetalle({ orden, onClose }: { orden: OrdenProduccion & { productos_produccion: { nombre: string } }; onClose: () => void }) {
+function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: OrdenConProducto; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const { data: materias } = useMateriasPrimas();
+  const { data: materias } = useMateriasPrimas(empresa.id);
   const { data: costeo } = useCosteoOrden(orden.id);
   const [error, setError] = useState<string | null>(null);
 
@@ -967,7 +1020,7 @@ function OrdenDetalle({ orden, onClose }: { orden: OrdenProduccion & { productos
 
   const invalidarCosteo = () => {
     queryClient.invalidateQueries({ queryKey: ["costeo-orden", orden.id] });
-    queryClient.invalidateQueries({ queryKey: ["stock-materia-prima"] });
+    queryClient.invalidateQueries({ queryKey: ["stock-materia-prima", empresa.id] });
   };
 
   const agregarConsumo = useMutation({
@@ -1055,8 +1108,8 @@ function OrdenDetalle({ orden, onClose }: { orden: OrdenProduccion & { productos
       if (errEntrada) throw errEntrada;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ordenes-produccion"] });
-      queryClient.invalidateQueries({ queryKey: ["stock-producto-terminado"] });
+      queryClient.invalidateQueries({ queryKey: ["ordenes-produccion", empresa.id] });
+      queryClient.invalidateQueries({ queryKey: ["stock-producto-terminado", empresa.id] });
       invalidarCosteo();
       onClose();
     },
@@ -1269,22 +1322,23 @@ function SeccionIndirectos({
 
 // ── Costeo consolidado ───────────────────────────────────────────────────
 
-function PestanaCosteo() {
+function PestanaCosteo({ empresa }: { empresa: Empresa }) {
   const { data: mensual } = useQuery({
-    queryKey: ["costeo-mensual-clavicon"],
+    queryKey: ["costeo-mensual-planta", empresa.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_costeo_mensual_clavicon").select("*").order("anio").order("mes");
+      const { data, error } = await supabase.from("v_costeo_mensual_planta").select("*").eq("empresa_id", empresa.id).order("anio").order("mes");
       if (error) throw error;
-      return data as CosteoMensualClavicon[];
+      return data as CosteoMensualPlanta[];
     },
   });
 
   const { data: porOrden } = useQuery({
-    queryKey: ["costeo-por-orden"],
+    queryKey: ["costeo-por-orden", empresa.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("v_costeo_orden_produccion")
         .select("*, ordenes_produccion(productos_produccion(nombre))")
+        .eq("empresa_id", empresa.id)
         .order("fecha_inicio", { ascending: false });
       if (error) throw error;
       return data as (CosteoOrdenProduccion & { ordenes_produccion: { productos_produccion: { nombre: string } } })[];
