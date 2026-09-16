@@ -46,6 +46,7 @@ const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((
 const BbvaMantenimiento = lazy(() => import("./pages/bbva/BbvaMantenimiento").then((m) => ({ default: m.BbvaMantenimiento })));
 const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ default: m.ManoDeObra })));
 const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
+const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
 
 const queryClient = new QueryClient();
 
@@ -138,6 +139,10 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["rh"]} />}>
             <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
             <Route path="/rh/agenda-pagos" element={<AgendaPagos />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["produccion"]} />}>
+            <Route path="/produccion" element={<Produccion />} />
           </Route>
 
           <Route element={<ProtectedRoute soloAdmin />}>

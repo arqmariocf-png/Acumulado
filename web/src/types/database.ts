@@ -697,3 +697,163 @@ export interface NominaExternaPago {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================================
+// Producción y Costeo (planta Mallas y Clavos Clavicón, empresa MCC)
+// ============================================================
+// "ProductoProduccion" (tabla productos_produccion) para no chocar con el
+// `Producto` del módulo de inventario genérico (tabla productos, sku por
+// empresa) -- son catálogos distintos, sin relación entre sí.
+
+export interface MateriaPrima {
+  id: string;
+  nombre: string;
+  unidad_medida: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProductoProduccionTipo = "malla_armex" | "clavo";
+
+export interface ProductoProduccion {
+  id: string;
+  tipo: ProductoProduccionTipo;
+  nombre: string;
+  calibre: string | null;
+  presentacion: string | null;
+  unidad_medida: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecetaItem {
+  id: string;
+  producto_id: string;
+  materia_prima_id: string;
+  cantidad_por_unidad: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EstadoOrdenProduccion = "planeada" | "en_proceso" | "terminada" | "cancelada";
+
+export interface OrdenProduccion {
+  id: string;
+  folio: string;
+  producto_id: string;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  cantidad_planeada: number;
+  cantidad_producida: number;
+  cantidad_merma: number;
+  estado: EstadoOrdenProduccion;
+  notas: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManoDeObraProduccion {
+  id: string;
+  orden_produccion_id: string;
+  personal_id: string | null;
+  descripcion: string | null;
+  horas: number;
+  costo_hora: number;
+  costo_total: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface CostoIndirectoProduccion {
+  id: string;
+  orden_produccion_id: string;
+  concepto: string;
+  monto: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type TipoMovimientoProduccion = "entrada" | "salida";
+
+export interface MovimientoMateriaPrima {
+  id: string;
+  materia_prima_id: string;
+  tipo: TipoMovimientoProduccion;
+  cantidad: number;
+  costo_unitario: number;
+  fecha: string;
+  orden_compra_id: string | null;
+  orden_produccion_id: string | null;
+  motivo: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface MovimientoProductoTerminado {
+  id: string;
+  producto_id: string;
+  tipo: TipoMovimientoProduccion;
+  cantidad: number;
+  costo_unitario: number;
+  fecha: string;
+  orden_produccion_id: string | null;
+  orden_venta_id: string | null;
+  motivo: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface StockMateriaPrima {
+  materia_prima_id: string;
+  nombre: string;
+  unidad_medida: string;
+  stock_actual: number;
+  costo_promedio_ponderado: number | null;
+}
+
+export interface StockProductoTerminado {
+  producto_id: string;
+  nombre: string;
+  tipo: ProductoProduccionTipo;
+  calibre: string | null;
+  unidad_medida: string;
+  stock_actual: number;
+  costo_promedio_ponderado: number | null;
+}
+
+export interface CosteoOrdenProduccion {
+  orden_produccion_id: string;
+  folio: string;
+  producto_id: string;
+  estado: EstadoOrdenProduccion;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  cantidad_planeada: number;
+  cantidad_producida: number;
+  cantidad_merma: number;
+  costo_materia_prima: number;
+  costo_mano_obra: number;
+  costo_indirectos: number;
+  costo_total: number;
+  costo_unitario: number | null;
+}
+
+export interface CosteoEstandarOrdenProduccion {
+  orden_produccion_id: string;
+  costo_materia_prima_estandar: number;
+}
+
+export interface CosteoMensualClavicon {
+  producto_id: string;
+  producto_nombre: string;
+  producto_tipo: ProductoProduccionTipo;
+  anio: number;
+  mes: number;
+  lotes: number;
+  cantidad_producida: number;
+  costo_total: number;
+  costo_unitario_promedio: number | null;
+}
