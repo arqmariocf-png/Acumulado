@@ -635,3 +635,65 @@ export interface TarjetaActividad {
   actor_id: string;
   created_at: string;
 }
+
+// ============================================================
+// Nómina externa (APIs de Grupo Loma: mano de obra + nómina fija)
+// ============================================================
+// El renglón se guarda tal cual llega de la API (`datos`, jsonb) porque su
+// forma puede cambiar; qué columna es cuál se captura en
+// NominaExternaMapeo y se corrige desde la página si hace falta.
+
+export type NominaExternaOrigenKey = "mano_obra" | "nomina_semanal" | "nomina_quincenal";
+export type NominaExternaEstado = "programado" | "pagado";
+export type MetodoPagoNomina = "efectivo" | "transferencia" | "otro";
+
+export interface NominaExternaOrigen {
+  origen: NominaExternaOrigenKey;
+  nombre: string;
+  url: string;
+  activo: boolean;
+  columnas: string[];
+  ultima_sincronizacion: string | null;
+  ultimo_estado: "ok" | "error" | null;
+  ultimo_error: string | null;
+  ultimo_total_renglones: number | null;
+  ultimo_total_centavos: number | null;
+  /** A partir de cuántos minutos se considera vieja la información. */
+  sincronizar_cada_minutos: number;
+  updated_at: string;
+}
+
+export interface NominaExternaMapeo {
+  origen: NominaExternaOrigenKey;
+  campo_id: string | null;
+  campo_empleado: string | null;
+  campo_importe: string | null;
+  campo_periodo: string | null;
+  campo_centro_costos: string | null;
+  actualizado_por: string | null;
+  updated_at: string;
+}
+
+export interface NominaExternaRenglon {
+  id: string;
+  origen: NominaExternaOrigenKey;
+  llave: string;
+  datos: Record<string, unknown>;
+  sincronizado_en: string;
+}
+
+export interface NominaExternaPago {
+  id: string;
+  origen: NominaExternaOrigenKey;
+  llave: string;
+  estado: NominaExternaEstado;
+  programado_para: string | null;
+  metodo_pago: MetodoPagoNomina;
+  importe_centavos: number | null;
+  pagado_en: string | null;
+  referencia_pago: string | null;
+  notas: string | null;
+  creado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}
