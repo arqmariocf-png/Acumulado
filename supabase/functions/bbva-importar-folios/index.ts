@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     // Mismo criterio que la policy bbva_mantenimiento_insert -- se valida
     // aquí también para poder devolver un mensaje claro en vez de que la
     // RLS lo rechace en silencio con un 42501 genérico.
-    if (perfil.rol !== "admin" && perfil.rol !== "corporativo") {
+    if (perfil.rol !== "admin" && perfil.rol !== "corporativo" && !perfil.bbvaMantenimiento) {
       return jsonResponse({ error: "Sin permiso para cargar el maestro de folios BBVA" }, 403);
     }
 

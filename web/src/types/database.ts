@@ -23,6 +23,7 @@ export interface Profile {
   empresa_id: string | null;
   activo: boolean;
   telefono: string | null;
+  bbva_mantenimiento: boolean;
 }
 
 export interface CuentaBancaria {

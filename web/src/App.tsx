@@ -96,9 +96,12 @@ function Enrutador() {
             <Route path="/saldos" element={<SaldosDiarios />} />
           </Route>
 
-          <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
-            <Route path="/mantenimiento/bbva" element={<BbvaMantenimiento />} />
-          </Route>
+          {/* Sin roles restringidos aquí a propósito: además de admin/corporativo/
+              dirección, alguien con el permiso acotado profiles.bbva_mantenimiento
+              (ej. Christian Bonifacio) también debe entrar, y ese permiso no es
+              un rol de ProtectedRoute -- la visibilidad real la da RLS sobre
+              bbva_mantenimiento_snapshots. */}
+          <Route path="/mantenimiento/bbva" element={<BbvaMantenimiento />} />
 
           <Route path="/inventario" element={<InventarioLayout />}>
             <Route index element={<InventarioMovimientos />} />
