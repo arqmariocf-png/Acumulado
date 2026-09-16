@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Proyecto, ProyectoPlano, PuCosteo, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
+import { PestanaControlObra } from "./ControlObra";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
 
-type Tab = "planos" | "cotizacion" | "avance";
+type Tab = "planos" | "cotizacion" | "avance" | "control";
 
 function useProyecto(id: string) {
   return useQuery({
@@ -33,6 +34,7 @@ export function ProyectoDetalle() {
     { clave: "planos", etiqueta: "Planos" },
     { clave: "cotizacion", etiqueta: "Cotización" },
     { clave: "avance", etiqueta: "Avance" },
+    { clave: "control", etiqueta: "Control de obra" },
   ];
 
   return (
@@ -70,6 +72,7 @@ export function ProyectoDetalle() {
       )}
       {tab === "cotizacion" && <PestanaCotizacion proyecto={proyecto} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />}
       {tab === "avance" && <PestanaAvance proyecto={proyecto} />}
+      {tab === "control" && <PestanaControlObra proyecto={proyecto} />}
     </div>
   );
 }
