@@ -65,7 +65,10 @@ export function Layout() {
     enlacesMenu.push({ a: "/rh/mano-de-obra", etiqueta: "Mano de obra" });
     enlacesMenu.push({ a: "/rh/agenda-pagos", etiqueta: "Agenda de pagos" });
   }
-  if (perfil?.rol === "produccion" || esAdmin) enlacesMenu.push({ a: "/produccion", etiqueta: "Producción" });
+  if (perfil?.rol === "produccion" || esAdmin) {
+    enlacesMenu.push({ a: "/produccion/clavicon", etiqueta: "Producción Clavicón" });
+    enlacesMenu.push({ a: "/produccion/balken", etiqueta: "Producción Balken" });
+  }
   if (esAdmin) enlacesMenu.push({ a: "/admin", etiqueta: "Admin" });
 
   return (

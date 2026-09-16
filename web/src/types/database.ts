@@ -707,6 +707,7 @@ export interface NominaExternaPago {
 
 export interface MateriaPrima {
   id: string;
+  empresa_id: string;
   nombre: string;
   unidad_medida: string;
   activo: boolean;
@@ -714,10 +715,12 @@ export interface MateriaPrima {
   updated_at: string;
 }
 
-export type ProductoProduccionTipo = "malla_armex" | "clavo";
+/** malla_armex/clavo = Clavicón (MCC); vigueta/bovedilla/bloque = Balken (VBB). */
+export type ProductoProduccionTipo = "malla_armex" | "clavo" | "vigueta" | "bovedilla" | "bloque";
 
 export interface ProductoProduccion {
   id: string;
+  empresa_id: string;
   tipo: ProductoProduccionTipo;
   nombre: string;
   calibre: string | null;
@@ -741,6 +744,7 @@ export type EstadoOrdenProduccion = "planeada" | "en_proceso" | "terminada" | "c
 
 export interface OrdenProduccion {
   id: string;
+  empresa_id: string;
   folio: string;
   producto_id: string;
   fecha_inicio: string;
@@ -812,6 +816,7 @@ export interface StockMateriaPrima {
   unidad_medida: string;
   stock_actual: number;
   costo_promedio_ponderado: number | null;
+  empresa_id: string;
 }
 
 export interface StockProductoTerminado {
@@ -822,6 +827,7 @@ export interface StockProductoTerminado {
   unidad_medida: string;
   stock_actual: number;
   costo_promedio_ponderado: number | null;
+  empresa_id: string;
 }
 
 export interface CosteoOrdenProduccion {
@@ -839,6 +845,7 @@ export interface CosteoOrdenProduccion {
   costo_indirectos: number;
   costo_total: number;
   costo_unitario: number | null;
+  empresa_id: string;
 }
 
 export interface CosteoEstandarOrdenProduccion {
@@ -846,7 +853,10 @@ export interface CosteoEstandarOrdenProduccion {
   costo_materia_prima_estandar: number;
 }
 
-export interface CosteoMensualClavicon {
+export interface CosteoMensualPlanta {
+  empresa_id: string;
+  empresa_codigo: string;
+  empresa_nombre: string;
   producto_id: string;
   producto_nombre: string;
   producto_tipo: ProductoProduccionTipo;
