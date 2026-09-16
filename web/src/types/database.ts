@@ -716,7 +716,16 @@ export interface MateriaPrima {
 }
 
 /** malla_armex/clavo = Clavicón (MCC); vigueta/bovedilla/bloque = Balken (VBB). */
-export type ProductoProduccionTipo = "malla_armex" | "clavo" | "vigueta" | "bovedilla" | "bloque";
+export type ProductoProduccionTipo =
+  | "malla_armex"
+  | "clavo" // Clavicón
+  | "vigueta"
+  | "bovedilla"
+  | "bloque" // Balken
+  | "puerta"
+  | "closet"
+  | "cocina"
+  | "mueble"; // Carpintería (CSC)
 
 export interface ProductoProduccion {
   id: string;

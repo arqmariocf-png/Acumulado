@@ -145,7 +145,7 @@ export function Dashboard() {
     },
   });
 
-  // Costos de producción de las plantas (Clavicón y Balken) junto a los
+  // Costos de producción de las plantas (Clavicón, Balken y Carpintería) junto a los
   // KPIs financieros de las 8 empresas -- "intercomunicado con Acumulado"
   // pedía verlo aquí, no solo dentro del módulo. RLS de las tablas de
   // producción ya limita a produccion/admin/corporativo: para el resto de

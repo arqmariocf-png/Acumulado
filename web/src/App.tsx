@@ -142,8 +142,8 @@ function Enrutador() {
           </Route>
 
           <Route element={<ProtectedRoute roles={["produccion"]} />}>
-            {/* Una sola pantalla para las dos plantas del grupo, parametrizada
-                por la planta en la URL (clavicon | balken). */}
+            {/* Una sola pantalla para las plantas del grupo, parametrizada
+                por la planta en la URL (clavicon | balken | carpinteria). */}
             <Route path="/produccion" element={<Navigate to="/produccion/clavicon" replace />} />
             <Route path="/produccion/:planta" element={<Produccion />} />
           </Route>

@@ -18,7 +18,7 @@ import type {
 
 // Una sola pantalla para las dos plantas del grupo. Todo lo que cambia
 // entre una y otra (empresa, qué fabrica, placeholders) vive aquí; la
-// lógica de costeo por lote es idéntica para las dos.
+// lógica de costeo por lote es idéntica para todas.
 const PLANTAS = {
   clavicon: {
     codigo: "MCC",
@@ -38,10 +38,25 @@ const PLANTAS = {
     ejemploCalibre: "12 cm",
     ejemploPresentacion: "Pieza",
   },
+  // El taller de carpintería se lleva bajo CSC (proyecto "TALLER
+  // CARPINTERIA" de esa empresa), por eso comparte empresa con la
+  // constructora en vez de tener una empresa propia.
+  carpinteria: {
+    codigo: "CSC",
+    corto: "Carpintería",
+    tipos: ["puerta", "closet", "cocina", "mueble"] as ProductoProduccionTipo[],
+    ejemploMateria: "Triplay de pino 18 mm",
+    ejemploProducto: "Puerta de tambor 0.90 x 2.10 m",
+    ejemploCalibre: "18 mm",
+    ejemploPresentacion: "Pieza",
+    // CSC tiene cientos de OC/OV de obra; la carpintería solo debe ver (y
+    // dar de alta) las de su propio proyecto.
+    proyecto: "TALLER CARPINTERIA",
+  },
 } as const;
 
 type PlantaKey = keyof typeof PLANTAS;
-type Planta = (typeof PLANTAS)[PlantaKey];
+type Planta = (typeof PLANTAS)[PlantaKey] & { proyecto?: string };
 
 const TIPO_ETIQUETA: Record<ProductoProduccionTipo, string> = {
   malla_armex: "Malla armex",
@@ -49,6 +64,10 @@ const TIPO_ETIQUETA: Record<ProductoProduccionTipo, string> = {
   vigueta: "Vigueta",
   bovedilla: "Bovedilla",
   bloque: "Bloque",
+  puerta: "Puerta",
+  closet: "Clóset",
+  cocina: "Cocina integral",
+  mueble: "Mueble",
 };
 
 interface Empresa {
@@ -131,7 +150,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       </div>
 
       {pestana === "catalogo" && <PestanaCatalogo empresa={empresa} planta={planta} />}
-      {pestana === "inventario" && <PestanaInventario empresa={empresa} />}
+      {pestana === "inventario" && <PestanaInventario empresa={empresa} planta={planta} />}
       {pestana === "ordenes" && <PestanaOrdenes empresa={empresa} />}
       {pestana === "costeo" && <PestanaCosteo empresa={empresa} />}
     </div>
@@ -456,7 +475,7 @@ function RecetaDelProducto({ productoId, materias }: { productoId: string; mater
 
 // ── Inventario ───────────────────────────────────────────────────────────
 
-function PestanaInventario({ empresa }: { empresa: Empresa }) {
+function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Planta }) {
   const { data: materias } = useMateriasPrimas(empresa.id);
   const { data: productos } = useProductos(empresa.id);
 
@@ -534,8 +553,8 @@ function PestanaInventario({ empresa }: { empresa: Empresa }) {
         </div>
       </div>
 
-      <EntradaMateriaPrima empresaId={empresa.id} materias={materias ?? []} />
-      <SalidaProductoTerminado empresaId={empresa.id} productos={productos ?? []} />
+      <EntradaMateriaPrima empresaId={empresa.id} proyecto={planta.proyecto} materias={materias ?? []} />
+      <SalidaProductoTerminado empresaId={empresa.id} proyecto={planta.proyecto} productos={productos ?? []} />
     </div>
   );
 }
@@ -543,20 +562,17 @@ function PestanaInventario({ empresa }: { empresa: Empresa }) {
 /** Entrada de materia prima -- SIEMPRE ligada a una OC real (existente o
  * de alta manual) para no capturar la compra dos veces (integración
  * "OC/OV compartidas"). */
-function EntradaMateriaPrima({ empresaId, materias }: { empresaId: string; materias: MateriaPrima[] }) {
+function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: string; proyecto?: string; materias: MateriaPrima[] }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [ocId, setOcId] = useState<string>("__nueva__");
 
   const { data: ordenesCompra } = useQuery({
-    queryKey: ["ordenes-compra-planta", empresaId],
+    queryKey: ["ordenes-compra-planta", empresaId, proyecto ?? null],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ordenes_compra")
-        .select("id, id_orden, proveedor, total")
-        .eq("empresa_id", empresaId)
-        .order("created_at", { ascending: false })
-        .limit(200);
+      let consulta = supabase.from("ordenes_compra").select("id, id_orden, proveedor, total").eq("empresa_id", empresaId);
+      if (proyecto) consulta = consulta.eq("proyecto", proyecto);
+      const { data, error } = await consulta.order("created_at", { ascending: false }).limit(200);
       if (error) throw error;
       return data as { id: string; id_orden: string; proveedor: string | null; total: number | null }[];
     },
@@ -572,6 +588,7 @@ function EntradaMateriaPrima({ empresaId, materias }: { empresaId: string; mater
             id_orden: fd.get("nueva_oc_folio"),
             tipo: "OC",
             empresa_id: empresaId,
+            proyecto: proyecto ?? null,
             proveedor: oVacio(fd, "nueva_oc_proveedor"),
             total: fd.get("cantidad") && fd.get("costo_unitario") ? Number(fd.get("cantidad")) * Number(fd.get("costo_unitario")) : null,
             fecha_creacion: fd.get("fecha"),
@@ -676,20 +693,17 @@ function EntradaMateriaPrima({ empresaId, materias }: { empresaId: string; mater
 
 /** Salida de producto terminado por venta -- ligada a una OV real (misma
  * lógica que la entrada de materia prima, del otro lado del ciclo). */
-function SalidaProductoTerminado({ empresaId, productos }: { empresaId: string; productos: ProductoProduccion[] }) {
+function SalidaProductoTerminado({ empresaId, proyecto, productos }: { empresaId: string; proyecto?: string; productos: ProductoProduccion[] }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [ovId, setOvId] = useState<string>("__nueva__");
 
   const { data: ordenesVenta } = useQuery({
-    queryKey: ["ordenes-venta-planta", empresaId],
+    queryKey: ["ordenes-venta-planta", empresaId, proyecto ?? null],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ordenes_venta")
-        .select("id, id_ov, cliente, total")
-        .eq("empresa_id", empresaId)
-        .order("created_at", { ascending: false })
-        .limit(200);
+      let consulta = supabase.from("ordenes_venta").select("id, id_ov, cliente, total").eq("empresa_id", empresaId);
+      if (proyecto) consulta = consulta.eq("proyecto", proyecto);
+      const { data, error } = await consulta.order("created_at", { ascending: false }).limit(200);
       if (error) throw error;
       return data as { id: string; id_ov: string; cliente: string | null; total: number | null }[];
     },
@@ -713,6 +727,7 @@ function SalidaProductoTerminado({ empresaId, productos }: { empresaId: string; 
           .insert({
             id_ov: fd.get("nueva_ov_folio"),
             empresa_id: empresaId,
+            proyecto: proyecto ?? null,
             cliente: oVacio(fd, "nueva_ov_cliente"),
             total: fd.get("cantidad") && fd.get("costo_unitario") ? Number(fd.get("cantidad")) * Number(fd.get("costo_unitario")) : null,
             fecha_ov: fd.get("fecha"),
