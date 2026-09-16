@@ -876,3 +876,54 @@ export interface CosteoMensualPlanta {
   costo_total: number;
   costo_unitario_promedio: number | null;
 }
+
+// ── Control de obra por especialidad (Proyectos → Control de obra) ──────────
+
+export type ProyectoControlEstatus = "en_curso" | "cierre" | "cerrado";
+
+/** Un trabajo acotado dentro de un proyecto (ej. la carpintería de Portamar)
+ * con su propio contrato, compras y nómina; el cierre sale de ahí. */
+export interface ProyectoControl {
+  id: string;
+  proyecto_id: string;
+  especialidad: string;
+  presupuesto: number;
+  fecha_inicio: string | null;
+  estatus: ProyectoControlEstatus;
+  semana_cierre: string | null;
+  /** Subpartida con la que llega la mano de obra en la API de Grupo Loma. */
+  subpartida_nomina: string | null;
+  notas: string | null;
+}
+
+export interface ProyectoControlCompra {
+  id: string;
+  control_id: string;
+  orden_compra_id: string | null;
+  fecha: string;
+  proveedor: string;
+  folio: string | null;
+  descripcion: string | null;
+  categoria: string | null;
+  estatus: "pagado" | "pendiente";
+  importe: number;
+}
+
+export interface ProyectoControlNomina {
+  id: string;
+  control_id: string;
+  semana: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  puesto: string;
+  sueldo: number;
+}
+
+/** Renglón de nomina_api_control_obra(): lo cargado al proyecto en la API. */
+export interface NominaApiControlObra {
+  semana: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  nombre: string;
+  monto: number;
+}
