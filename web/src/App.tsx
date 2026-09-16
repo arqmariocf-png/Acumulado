@@ -44,6 +44,8 @@ const PreciosDetalle = lazy(() => import("./pages/precios/Detalle").then((m) => 
 const Tableros = lazy(() => import("./pages/tareas/Tableros").then((m) => ({ default: m.Tableros })));
 const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((m) => ({ default: m.TableroDetalle })));
 const BbvaMantenimiento = lazy(() => import("./pages/bbva/BbvaMantenimiento").then((m) => ({ default: m.BbvaMantenimiento })));
+const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ default: m.ManoDeObra })));
+const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
 
 const queryClient = new QueryClient();
 
@@ -131,6 +133,11 @@ function Enrutador() {
 
           <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>
             <Route path="/rh" element={<RH />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["rh"]} />}>
+            <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
+            <Route path="/rh/agenda-pagos" element={<AgendaPagos />} />
           </Route>
 
           <Route element={<ProtectedRoute soloAdmin />}>

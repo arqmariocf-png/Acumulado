@@ -55,6 +55,12 @@ export function Layout() {
   if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
   if (veMantenimientoBbva) enlacesMenu.push({ a: "/mantenimiento/bbva", etiqueta: "Mantenimiento BBVA" });
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
+  // Nómina externa (APIs de Grupo Loma): solo rh/admin -- rh_documentos
+  // sigue acotado únicamente a subir expedientes.
+  if (perfil?.rol === "rh" || esAdmin) {
+    enlacesMenu.push({ a: "/rh/mano-de-obra", etiqueta: "Mano de obra" });
+    enlacesMenu.push({ a: "/rh/agenda-pagos", etiqueta: "Agenda de pagos" });
+  }
   if (esAdmin) enlacesMenu.push({ a: "/admin", etiqueta: "Admin" });
 
   return (
