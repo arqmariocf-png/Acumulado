@@ -68,6 +68,7 @@ export function Layout() {
   if (perfil?.rol === "produccion" || esAdmin) {
     enlacesMenu.push({ a: "/produccion/clavicon", etiqueta: "Producción Clavicón" });
     enlacesMenu.push({ a: "/produccion/balken", etiqueta: "Producción Balken" });
+    enlacesMenu.push({ a: "/produccion/carpinteria", etiqueta: "Producción Carpintería" });
   }
   if (esAdmin) enlacesMenu.push({ a: "/admin", etiqueta: "Admin" });
 
