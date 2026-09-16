@@ -72,7 +72,7 @@ function SubirMaestro() {
 
 export function BbvaMantenimiento() {
   const { perfil } = useAuth();
-  const puedeSubir = perfil?.rol === "admin" || perfil?.rol === "corporativo";
+  const puedeSubir = perfil?.rol === "admin" || perfil?.rol === "corporativo" || !!perfil?.bbva_mantenimiento;
   const { data: snapshot, isLoading, error } = useUltimoSnapshot();
   const [alto, setAlto] = useState(800);
   const iframeRef = useRef<HTMLIFrameElement>(null);

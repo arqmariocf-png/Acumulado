@@ -31,6 +31,7 @@ export interface PerfilAutenticado {
   nombre: string | null;
   rol: string;
   empresaId: string | null;
+  bbvaMantenimiento: boolean;
 }
 
 /** Lee el profile del usuario autenticado usando su propio JWT (así RLS ya
@@ -44,10 +45,10 @@ export async function obtenerPerfilAutenticado(req: Request): Promise<PerfilAute
   } = await cliente.auth.getUser();
   if (!user) return null;
 
-  const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, empresa_id").eq("id", user.id).single();
+  const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, empresa_id, bbva_mantenimiento").eq("id", user.id).single();
   if (error || !perfil) return null;
 
-  return { id: perfil.id, nombre: perfil.nombre, rol: perfil.rol, empresaId: perfil.empresa_id };
+  return { id: perfil.id, nombre: perfil.nombre, rol: perfil.rol, empresaId: perfil.empresa_id, bbvaMantenimiento: !!perfil.bbva_mantenimiento };
 }
 
 export function puedeEscribirEnEmpresa(perfil: PerfilAutenticado, empresaId: string): boolean {

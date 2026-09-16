@@ -28,7 +28,7 @@ export function Layout() {
   const esAdmin = perfil?.rol === "admin";
   const veRH = perfil?.rol === "rh" || perfil?.rol === "rh_documentos" || esAdmin;
   const veSaldos = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin;
-  const veMantenimientoBbva = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin;
+  const veMantenimientoBbva = perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento;
   // 'responsable' es un rol acotado a sus proyectos (ver SPEC.md sección 10)
   // y 'rh_documentos' a subir expedientes (ver 20260828020000_rh_documentos_
   // rol_enum.sql) -- ninguno de los dos debe ver el resto de los módulos
