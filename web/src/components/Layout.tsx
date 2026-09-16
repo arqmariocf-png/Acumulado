@@ -43,7 +43,11 @@ export function Layout() {
         : perfil?.rol === "rh_documentos"
           ? // Sólo el inicio: desde ahí llega a RH, que es su único módulo.
             ENLACES.filter((e) => e.a === "/")
-          : ENLACES;
+          : perfil?.rol === "produccion"
+            ? // Producción es un rol aislado como RH: nada de movimientos
+              // bancarios/CFDI de ninguna empresa, solo su propio módulo.
+              ENLACES.filter((e) => e.a === "/")
+            : ENLACES;
 
   // "Inicio" siempre visible y directo; el resto (más los extras condicio-
   // nados por rol) va dentro del desplegable -- la barra ya no alcanza a
@@ -61,6 +65,7 @@ export function Layout() {
     enlacesMenu.push({ a: "/rh/mano-de-obra", etiqueta: "Mano de obra" });
     enlacesMenu.push({ a: "/rh/agenda-pagos", etiqueta: "Agenda de pagos" });
   }
+  if (perfil?.rol === "produccion" || esAdmin) enlacesMenu.push({ a: "/produccion", etiqueta: "Producción" });
   if (esAdmin) enlacesMenu.push({ a: "/admin", etiqueta: "Admin" });
 
   return (
