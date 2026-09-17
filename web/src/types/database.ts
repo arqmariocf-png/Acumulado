@@ -165,6 +165,10 @@ export interface Personal {
   fecha_ingreso: string;
   activo: boolean;
   created_at: string;
+  /** Datos que llegan del expediente (extraídos de los documentos). */
+  nss: string | null;
+  licencia_chofer_numero: string | null;
+  licencia_chofer_vigencia: string | null;
   /** Cuenta de acceso vinculada -- una vez que la tiene, puede checar
    * entrada/salida desde su celular (ver v_asistencia_semanal_personal). */
   profile_id: string | null;
@@ -233,6 +237,46 @@ export interface DocumentoPersonal {
   fecha_vigencia: string | null;
   storage_path: string | null;
   verificado: boolean;
+  nombre_original: string | null;
+  mime_type: string | null;
+  datos_extraidos: ExtraccionDocumento | null;
+  extraido_en: string | null;
+  error_extraccion: string | null;
+  aplicado_en: string | null;
+}
+
+/** Lo que Claude leyó de un documento del expediente (edge function
+ * rh-documentos). Es una sugerencia: RH decide qué aplicar a `personal`. */
+export interface ExtraccionDocumento {
+  tipo_detectado: string;
+  campos: Record<string, string | null>;
+  coincide_con_persona: boolean | null;
+  observaciones: string;
+  confianza: "alta" | "media" | "baja";
+}
+
+/** Fila de v_expediente_personal: persona × tipo de documento aplicable,
+ * con el documento vigente (el más reciente) y su estado. */
+export interface ExpedienteFila {
+  personal_id: string;
+  personal_nombre: string;
+  personal_activo: boolean;
+  tipo_documento_id: string;
+  tipo_documento_nombre: string;
+  vigencia_meses: number | null;
+  orden: number;
+  documento_id: string | null;
+  fecha_entrega: string | null;
+  fecha_vigencia: string | null;
+  storage_path: string | null;
+  nombre_original: string | null;
+  mime_type: string | null;
+  verificado: boolean | null;
+  datos_extraidos: ExtraccionDocumento | null;
+  extraido_en: string | null;
+  error_extraccion: string | null;
+  aplicado_en: string | null;
+  estado: "falta" | "vencido" | "vigente";
 }
 
 export interface DocumentoFaltante {
