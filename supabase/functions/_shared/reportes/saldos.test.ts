@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { construirReporteSaldosDia, etiquetaCuenta, saldoAjustado, type FilaSaldoCuenta } from "./saldos.ts";
+import { construirReporteSaldosDia, etiquetaCuenta, saldoAjustado, type FilaSaldoCuenta, descuadreFila, filasConDescuadre } from "./saldos.ts";
 
 function fila(parcial: Partial<FilaSaldoCuenta> & Pick<FilaSaldoCuenta, "empresaNombre" | "banco" | "ultimos4">): FilaSaldoCuenta {
   return {
@@ -85,4 +85,17 @@ test("construirReporteSaldosDia: el subtotal y el total suman el ajusteSaldo de 
   assert.equal(reporte.grupos[0].subtotal.ajusteSaldo, -42661.84);
   assert.equal(reporte.total.ajusteSaldo, -42661.84);
   assert.equal(saldoAjustado(reporte.total), 101187.99);
+});
+
+test("descuadreFila marca las cuentas donde inicial + entradas - salidas no llega al saldo final (caso real 17-sep-2026, Banorte 1273 de Aceros antes de la corrección)", () => {
+  const base = { cuentaId: "c", empresaId: "e", empresaNombre: "Aceros y Envasados de Puebla", banco: "Banorte", ultimos4: "1273", alias: null, ajusteSaldo: 0, ajusteNota: null, tieneMovimientos: true };
+  const noCuadra = { ...base, saldoInicial: 49745.24, entradas: 0, salidas: 0, saldoFinal: 49745.24 };
+  assert.equal(descuadreFila(noCuadra), 0);
+  const faltan = { ...base, cuentaId: "d", ultimos4: "1226", banco: "BBVA", saldoInicial: 5427.19, entradas: 0, salidas: 2000, saldoFinal: 220.95 };
+  assert.equal(descuadreFila(faltan), 3206.24);
+  const cuadra = { ...base, cuentaId: "f", saldoInicial: 49745.24, entradas: 0, salidas: 47685.45, saldoFinal: 2059.79 };
+  assert.equal(descuadreFila(cuadra), 0);
+  const sinMovs = { ...base, cuentaId: "g", tieneMovimientos: false, saldoInicial: 0, entradas: 0, salidas: 0, saldoFinal: 100 };
+  const reporte = construirReporteSaldosDia([noCuadra, faltan, cuadra, sinMovs]);
+  assert.deepEqual(filasConDescuadre(reporte).map((f) => f.ultimos4), ["1226"]);
 });
