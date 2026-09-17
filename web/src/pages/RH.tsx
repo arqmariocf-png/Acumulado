@@ -2,15 +2,14 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
+import { PestanaDocumentos } from "./rh/Expediente";
 import type {
   AsignacionDiaria,
   AsistenciaSemanalPersonal,
   Contratacion,
   DirectorioPerfil,
-  DocumentoFaltante,
   Personal,
   ProyeccionNominaSemanal,
-  TipoDocumentoPersonal,
   TipoContrato,
 } from "../types/database";
 
@@ -808,147 +807,6 @@ function PestanaContrataciones() {
             )}
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-// ── Documentos / Expediente ──────────────────────────────────────────────
-
-function useTiposDocumento() {
-  return useQuery({
-    queryKey: ["rh-tipos-documento"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("tipos_documento_personal").select("*").eq("activo", true).order("orden");
-      if (error) throw error;
-      return data as TipoDocumentoPersonal[];
-    },
-  });
-}
-
-function useDocumentosFaltantes() {
-  return useQuery({
-    queryKey: ["rh-documentos-faltantes"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_documentos_faltantes_personal").select("*");
-      if (error) throw error;
-      return data as DocumentoFaltante[];
-    },
-  });
-}
-
-/** fecha_entrega + N meses, en ISO -- el cálculo real vive aquí porque
- * fecha_vigencia depende de tipos_documento_personal.vigencia_meses, y eso
- * no se puede resolver en una columna generada de SQL (ver comentario de la
- * migración). */
-function sumarMeses(fechaIso: string, meses: number): string {
-  const d = new Date(fechaIso + "T00:00:00");
-  d.setMonth(d.getMonth() + meses);
-  return d.toISOString().slice(0, 10);
-}
-
-function PestanaDocumentos() {
-  const { data: personal } = usePersonal();
-  const { data: tipos } = useTiposDocumento();
-  const { data: faltantes, isLoading: cargandoFaltantes } = useDocumentosFaltantes();
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-
-  const registrar = useMutation({
-    mutationFn: async (payload: { personal_id: string; tipo_documento_id: string; fecha_entrega: string; fecha_vigencia: string | null }) => {
-      const { error } = await supabase.from("documentos_personal").insert(payload);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["rh-documentos-faltantes"] });
-    },
-    onError: (err) => setError((err as Error).message),
-  });
-
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    const fd = new FormData(e.currentTarget);
-    const tipoId = fd.get("tipo_documento_id") as string;
-    const fechaEntrega = fd.get("fecha_entrega") as string;
-    const tipo = tipos?.find((t) => t.id === tipoId);
-    registrar.mutate({
-      personal_id: fd.get("personal_id") as string,
-      tipo_documento_id: tipoId,
-      fecha_entrega: fechaEntrega,
-      fecha_vigencia: tipo?.vigencia_meses ? sumarMeses(fechaEntrega, tipo.vigencia_meses) : null,
-    });
-    (e.target as HTMLFormElement).reset();
-  }
-
-  const faltantesPorPersona = new Map<string, DocumentoFaltante[]>();
-  for (const f of faltantes ?? []) {
-    const lista = faltantesPorPersona.get(f.personal_nombre) ?? [];
-    lista.push(f);
-    faltantesPorPersona.set(f.personal_nombre, lista);
-  }
-
-  return (
-    <div>
-      <form onSubmit={onSubmit} className="mb-6 grid max-w-2xl grid-cols-1 gap-3 rounded border border-slate-200 bg-white p-4 sm:grid-cols-3">
-        <div>
-          <label className={etiquetaCampo}>Persona *</label>
-          <select name="personal_id" required className={campoTexto} defaultValue="">
-            <option value="" disabled>
-              Selecciona…
-            </option>
-            {personal?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={etiquetaCampo}>Documento *</label>
-          <select name="tipo_documento_id" required className={campoTexto} defaultValue="">
-            <option value="" disabled>
-              Selecciona…
-            </option>
-            {tipos?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={etiquetaCampo}>Fecha de entrega *</label>
-          <input type="date" name="fecha_entrega" required defaultValue={hoyIso()} className={campoTexto} />
-        </div>
-        <div className="sm:col-span-3">
-          <p className="mb-2 text-xs text-slate-500">
-            La subida del archivo físico (PDF/foto) todavía no está conectada a Storage -- por ahora esto solo registra que
-            el documento se entregó y calcula su vigencia.
-          </p>
-          {error && <p className="mb-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <button disabled={registrar.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-            {registrar.isPending ? "Guardando…" : "Registrar documento entregado"}
-          </button>
-        </div>
-      </form>
-
-      <h2 className="mb-2 text-sm font-semibold text-slate-700">Expediente incompleto</h2>
-      {cargandoFaltantes && <p className="text-sm text-slate-400">Cargando…</p>}
-
-      {faltantesPorPersona.size === 0 && !cargandoFaltantes && (
-        <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-          Todo el personal activo tiene su expediente completo.
-        </p>
-      )}
-
-      <div className="space-y-3">
-        {[...faltantesPorPersona.entries()].map(([nombre, docs]) => (
-          <div key={nombre} className="rounded border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm font-medium text-amber-900">{nombre}</p>
-            <p className="text-xs text-amber-800">Falta: {docs.map((d) => d.tipo_documento_nombre).join(", ")}</p>
-          </div>
-        ))}
       </div>
     </div>
   );
