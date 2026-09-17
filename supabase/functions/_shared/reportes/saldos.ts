@@ -100,3 +100,21 @@ export function construirReporteSaldosDia(filas: FilaSaldoCuenta[]): ReporteSald
 
   return { grupos, total: sumarSubtotal(filas) };
 }
+
+/** saldoInicial + entradas - salidas - saldoFinal, a centavos. Cero cuando el
+ * día cuadra. Distinto de cero significa que entre la última carga y este
+ * día faltan movimientos, o que algún movimiento quedó registrado con otra
+ * fecha (caso real 17-sep-2026: Banorte 1273 de Aceros, pago de préstamo
+ * con fecha de aplicación 15-sep cargado el 17-sep). Se muestra en el PDF
+ * para que tesorería no tenga que descubrirlo comparando a mano. */
+export function descuadreFila(f: Pick<FilaSaldoCuenta, "saldoInicial" | "entradas" | "salidas" | "saldoFinal">): number {
+  return Math.round((f.saldoInicial + f.entradas - f.salidas - f.saldoFinal) * 100) / 100;
+}
+
+export function tieneDescuadre(f: FilaSaldoCuenta): boolean {
+  return f.tieneMovimientos && Math.abs(descuadreFila(f)) > 0.01;
+}
+
+export function filasConDescuadre(reporte: ReporteSaldosDia): FilaSaldoCuenta[] {
+  return reporte.grupos.flatMap((g) => g.filas).filter(tieneDescuadre);
+}

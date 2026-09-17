@@ -594,7 +594,14 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
 // totales de depósitos/retiros/Saldo Actual (fuertes) ya dan suficiente
 // confianza sin depender de este campo.
 const RE_ENCABEZADO_DETALLADO = "MOVIMIENTO DESCRIPCIÓN DETALLADA";
-const RE_ANCLA_DETALLADO = /^(\d+) \d{2}\/\d{2}\/\d{4} (\d{2})\/(\d{2})\/(\d{4}) \d+ /gm;
+// Cada renglón trae DOS fechas: FECHA DE OPERACIÓN (cuando el dinero se
+// movió) y FECHA (de aplicación / valor). Casi siempre son iguales, pero no
+// en pagos de préstamo: caso real 17-sep-2026, Banorte 1273 de Aceros --
+// "PAGO DE CAPITAL" e "INTERESES" con fecha de operación 17/09 y fecha de
+// aplicación 15/09 (el vencimiento). Tesorería lleva el día por operación,
+// así que esa es la que manda; la de aplicación se anota en la observación
+// cuando difiere para no perderla.
+const RE_ANCLA_DETALLADO = /^(\d+) (\d{2})\/(\d{2})\/(\d{4}) (\d{2})\/(\d{2})\/(\d{4}) \d+ /gm;
 const RE_MONTOS_MOVIMIENTO_DETALLADO = /(-|\$[\d,]+\.\d{2})\s+(-|\$[\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+(\d+)/;
 
 interface TotalesDetallado {
@@ -653,11 +660,13 @@ function parsearFormatoCuentaChequesDetallado(textoCompleto: string, cuentaUltim
     const bloque = textoCompleto.slice(inicio, fin);
     const filaNum = i + 1;
 
-    const [, , dia, mes, anio] = m;
+    const [, , dia, mes, anio, diaAplicacion, mesAplicacion, anioAplicacion] = m;
     if (Number(mes) < 1 || Number(mes) > 12) {
       erroresPorFila.push({ fila: filaNum, errores: [`Mes no reconocido en la fecha "${dia}/${mes}/${anio}"`] });
       continue;
     }
+    const fechaOperacion = `${anio}-${mes}-${dia}`;
+    const fechaAplicacion = `${anioAplicacion}-${mesAplicacion}-${diaAplicacion}`;
 
     const textoSinAncla = bloque.slice(m[0].length);
     const matchMontos = textoSinAncla.match(RE_MONTOS_MOVIMIENTO_DETALLADO);
@@ -699,7 +708,7 @@ function parsearFormatoCuentaChequesDetallado(textoCompleto: string, cuentaUltim
       .trim();
 
     movimientos.push({
-      fechaPago: `${anio}-${mes}-${dia}`,
+      fechaPago: fechaOperacion,
       fechaOrden: null,
       folio,
       proyecto: null,
@@ -711,7 +720,11 @@ function parsearFormatoCuentaChequesDetallado(textoCompleto: string, cuentaUltim
       referenciaNumero: null,
       factura: null,
       comentarios: null,
-      observacion: "Extraído automáticamente de un PDF de Banorte (Cuentas de Cheques detallado)",
+      observacion:
+        "Extraído automáticamente de un PDF de Banorte (Cuentas de Cheques detallado)" +
+        (fechaAplicacion !== fechaOperacion
+          ? `. Fecha de aplicación (valor) ${diaAplicacion}/${mesAplicacion}/${anioAplicacion}; se registra por la fecha de operación`
+          : ""),
     });
   }
 

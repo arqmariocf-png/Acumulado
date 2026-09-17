@@ -171,7 +171,12 @@ Deno.serve(async (req) => {
       .filter((e): e is { fechaPago: string; monto: number; referenciaNumero: string | null } => e.monto != null);
 
     const { nuevos, omitidosPorExistentes } = filtrarMovimientosNuevos(movimientosMapeados, existentes);
-    const filasProcesadas = nuevos.map((m) => filaAMovimiento(m, empresaId, cuentaId, archivoId, perfil.id));
+    // Posición de cada movimiento dentro del archivo (orden real de la cadena
+    // de saldos del banco): con ella fn_saldos_diario_cuenta sabe cuál es el
+    // último saldo del día aunque todos los renglones se inserten en el mismo
+    // instante -- ver migración movimientos_orden_y_saldo_determinista.
+    const ordenEnArchivo = new Map(movimientosMapeados.map((m, i) => [m, i + 1]));
+    const filasProcesadas = nuevos.map((m) => filaAMovimiento(m, empresaId, cuentaId, archivoId, perfil.id, ordenEnArchivo.get(m) ?? null));
 
     if (filasProcesadas.length > 0) {
       const { error: errInsert } = await dbServicio.from("movimientos").insert(filasProcesadas);
@@ -216,11 +221,12 @@ async function marcarArchivoError(dbServicio: ReturnType<typeof clienteServicio>
   await dbServicio.from("archivos_cargados").update({ estado: "error", detalle_error: mensaje }).eq("id", archivoId);
 }
 
-function filaAMovimiento(m: FilaEstadoCuentaMapeada, empresaId: string, cuentaId: string, archivoId: string, creadoPor: string) {
+function filaAMovimiento(m: FilaEstadoCuentaMapeada, empresaId: string, cuentaId: string, archivoId: string, creadoPor: string, ordenEnArchivo: number | null) {
   return {
     empresa_id: empresaId,
     cuenta_id: cuentaId,
     archivo_id: archivoId,
+    orden_en_archivo: ordenEnArchivo,
     folio: m.folio,
     fecha_pago: m.fechaPago,
     fecha_orden: m.fechaOrden,

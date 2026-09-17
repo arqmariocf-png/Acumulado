@@ -5,7 +5,13 @@
 // (probado aparte con node --test, sin este archivo de por medio).
 
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
-import { etiquetaCuenta, saldoAjustado, type FilaSaldoCuenta, type ReporteSaldosDia } from "./saldos.ts";
+import { descuadreFila, etiquetaCuenta, filasConDescuadre, saldoAjustado, tieneDescuadre, type FilaSaldoCuenta, type ReporteSaldosDia } from "./saldos.ts";
+
+/** Etiqueta de la cuenta con "(!)" cuando el día no cuadra (ver
+ * descuadreFila) -- la explicación va en dibujarNotasDescuadre. */
+function etiquetaConAlerta(f: FilaSaldoCuenta): string {
+  return tieneDescuadre(f) ? `${etiquetaCuenta(f)} (!)` : etiquetaCuenta(f);
+}
 
 const ANCHO_PAGINA = 612; // carta, en puntos
 const ALTO_PAGINA = 792;
@@ -233,6 +239,30 @@ function dibujarNotasAjuste(estado: EstadoPdf, reporte: ReporteSaldosDia): void 
   }
 }
 
+/** Cuentas marcadas con "(!)": saldo inicial + entradas - salidas no llega
+ * al saldo final cargado. Casi siempre es que faltan movimientos entre la
+ * última carga y el día (hay que subir el estado de cuenta de los días
+ * intermedios) o que un movimiento quedó con otra fecha. */
+function dibujarNotasDescuadre(estado: EstadoPdf, reporte: ReporteSaldosDia, etiquetaDia: string): void {
+  const filas = filasConDescuadre(reporte);
+  if (filas.length === 0) return;
+  asegurarEspacio(estado, 14 + filas.length * 11);
+  estado.y -= 6;
+  dibujarTexto(estado, `No cuadra ${etiquetaDia} (inicial + entradas - salidas ≠ saldo final):`, MARGEN_X, { negrita: true, tamano: 8, color: COLOR_TEXTO_SUAVE });
+  estado.y -= 11;
+  for (const f of filas) {
+    const dif = descuadreFila(f);
+    const texto = truncarTexto(
+      estado.fuente,
+      `${etiquetaCuenta(f)} (${f.empresaNombre}): diferencia de ${formatoMoneda(dif)} -- faltan movimientos por cargar entre la última carga y este día, o un movimiento quedó con otra fecha.`,
+      8,
+      ANCHO_PAGINA - 2 * MARGEN_X,
+    );
+    dibujarTexto(estado, texto, MARGEN_X, { tamano: 8, color: COLOR_TEXTO_SUAVE });
+    estado.y -= 11;
+  }
+}
+
 function dibujarNumeroPaginas(estado: EstadoPdf): void {
   const paginas = estado.doc.getPages();
   paginas.forEach((pagina, i) => {
@@ -321,9 +351,10 @@ export async function generarPdfSaldosDiarios(datos: DatosReportePdf): Promise<U
     estado,
     datos.ayer,
     COLUMNAS_DIA,
-    (f) => [etiquetaCuenta(f), formatoMoneda(f.saldoInicial), formatoMoneda(f.entradas), formatoMoneda(f.salidas), formatoMoneda(f.saldoFinal)],
+    (f) => [etiquetaConAlerta(f), formatoMoneda(f.saldoInicial), formatoMoneda(f.entradas), formatoMoneda(f.salidas), formatoMoneda(f.saldoFinal)],
     (s) => ["", formatoMoneda(s.saldoInicial), formatoMoneda(s.entradas), formatoMoneda(s.salidas), formatoMoneda(s.saldoFinal)],
   );
+  dibujarNotasDescuadre(estado, datos.ayer, `ayer (${formatoFechaLarga(datos.fechaAyer)})`);
 
   estado.y -= 10;
   dibujarTituloSeccion(estado, `3. Movimientos de hoy — ${formatoFechaLarga(datos.fechaHoy)}`);
@@ -331,9 +362,10 @@ export async function generarPdfSaldosDiarios(datos: DatosReportePdf): Promise<U
     estado,
     datos.hoy,
     COLUMNAS_DIA,
-    (f) => [etiquetaCuenta(f), formatoMoneda(f.saldoInicial), formatoMoneda(f.entradas), formatoMoneda(f.salidas), formatoMoneda(f.saldoFinal)],
+    (f) => [etiquetaConAlerta(f), formatoMoneda(f.saldoInicial), formatoMoneda(f.entradas), formatoMoneda(f.salidas), formatoMoneda(f.saldoFinal)],
     (s) => ["", formatoMoneda(s.saldoInicial), formatoMoneda(s.entradas), formatoMoneda(s.salidas), formatoMoneda(s.saldoFinal)],
   );
+  dibujarNotasDescuadre(estado, datos.hoy, `hoy (${formatoFechaLarga(datos.fechaHoy)})`);
 
   dibujarNumeroPaginas(estado);
 

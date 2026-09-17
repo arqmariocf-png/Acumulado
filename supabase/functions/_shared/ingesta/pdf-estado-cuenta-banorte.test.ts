@@ -212,3 +212,19 @@ test('en el TERCER formato de Banorte, si el saldo declarado (Saldo Actual) no c
   assert.equal(r.movimientos.length, 0);
   assert.match(r.errorDocumento ?? "", /Saldo Actual.*999/);
 });
+
+test("en el TERCER formato de Banorte, cuando FECHA DE OPERACIÓN y FECHA (aplicación) difieren, el movimiento se registra por la fecha de operación y se anota la de aplicación (caso real 17-sep-2026: pago de préstamo con fecha valor 15-sep cargado el 17-sep)", () => {
+  const texto = TEXTO_REAL_BANORTE_ACEROS_AGOSTO_2026_CUENTA_CHEQUES.replace(
+    "1155651273 17/08/2026 17/08/2026 0000000000 PAGO DE CAPITAL",
+    "1155651273 19/08/2026 17/08/2026 0000000000 PAGO DE CAPITAL",
+  );
+  assert.notEqual(texto, TEXTO_REAL_BANORTE_ACEROS_AGOSTO_2026_CUENTA_CHEQUES);
+  const r = parsearPdfEstadoCuentaBanorte(texto, "1273");
+  assert.equal(r.errorDocumento, null);
+  const pago = r.movimientos.find((m) => /PAGO DE CAPITAL/.test(m.nombreRazonSocial ?? ""));
+  assert.equal(pago?.fechaPago, "2026-08-19");
+  assert.match(pago?.observacion ?? "", /aplicación.*17\/08\/2026/);
+  const intereses = r.movimientos.find((m) => /INTERESES/.test(m.nombreRazonSocial ?? ""));
+  assert.equal(intereses?.fechaPago, "2026-08-17");
+  assert.doesNotMatch(intereses?.observacion ?? "", /aplicación/);
+});
