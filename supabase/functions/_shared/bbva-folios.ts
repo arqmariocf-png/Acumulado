@@ -179,6 +179,9 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
 
   const pedidosMap = new Map<string, number>();
   const pedidosConFactura = new Set<string>();
+  // Detalle por pedido para la conciliación contra Adquira (ver
+  // _shared/bbva-adquira.ts: conciliarAdquira toma exactamente esta forma).
+  const pedidosDetalle = new Map<string, { folios: number; monto: number; facturas: string[]; pagados: number }>();
   let folioConFactura = 0, folioSinPedido = 0, folioConPedidoSinFactura = 0;
 
   for (const r of registros) {
@@ -243,6 +246,12 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
       const key = String(r.pedido);
       pedidosMap.set(key, (pedidosMap.get(key) ?? 0) + r.monto);
       if (r.factura) pedidosConFactura.add(key);
+      const det = pedidosDetalle.get(key) ?? { folios: 0, monto: 0, facturas: [], pagados: 0 };
+      det.folios += 1;
+      det.monto += r.monto;
+      if (r.factura && !det.facturas.includes(String(r.factura).trim())) det.facturas.push(String(r.factura).trim());
+      if (r.fechaPago) det.pagados += 1;
+      pedidosDetalle.set(key, det);
     }
   }
 
@@ -290,6 +299,9 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
       total_pedidos: pedidosMap.size,
       pedidos_con_factura: pedidosConFactura.size,
       suma_folios_puebla: redondear2([...pedidosMap.values()].reduce((a, b) => a + b, 0)),
+      pedidos: [...pedidosDetalle.entries()]
+        .map(([pedido, d]) => ({ pedido, folios: d.folios, monto: redondear2(d.monto), facturas: d.facturas, pagados: d.pagados }))
+        .sort((a, b) => a.pedido.localeCompare(b.pedido)),
     },
     qa_notas,
   };

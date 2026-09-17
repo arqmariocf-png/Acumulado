@@ -576,8 +576,9 @@ function renderConciliacion(){
   const wrap = document.getElementById("conciliacionBlock");
   const stats = [
     ["Pedidos con folios en Puebla", c.total_pedidos],
-    ["Con factura en Adquira", c.pedidos_con_factura],
-    ["Sin factura encontrada", c.pedidos_sin_factura],
+    ["Con factura en el maestro", c.pedidos_con_factura],
+    ["Encontrados en Adquira", c.pedidos_en_adquira],
+    ["Monto coincide", c.pedidos_coinciden],
     ["Con diferencia de monto", c.pedidos_con_diferencia_monto],
   ].filter(([,val]) => val !== undefined);
   const statRow = document.createElement("div");
@@ -595,9 +596,41 @@ function renderConciliacion(){
   </div>\`));
   if(c.suma_facturas_adquira !== undefined){
     wrap.appendChild(el(\`<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
-      <span style="color:var(--ink-2)">Suma de esas mismas facturas en Adquira</span>
+      <span style="color:var(--ink-2)">Base imponible (sin IVA) de esos pedidos en Adquira</span>
       <span class="mono" style="font-weight:600">\${fmtMXN(c.suma_facturas_adquira)}</span>
     </div>\`));
+    if(c.suma_adquira_con_iva !== undefined){
+      wrap.appendChild(el(\`<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
+        <span style="color:var(--ink-2)">Importe total con IVA en Adquira</span>
+        <span class="mono" style="font-weight:600">\${fmtMXN(c.suma_adquira_con_iva)}</span>
+      </div>\`));
+    }
+    const m = c.adquira_meta;
+    if(m){
+      wrap.appendChild(el(\`<div class="note" style="margin-top:12px"><span class="ico">i</span><span>Export de Adquira del <b>\${m.fecha_exportacion ?? "—"}</b>: \${m.total_pedidos_export} pedidos por \${fmtMXN(m.importe_export)} en total; \${m.pedidos_fuera_maestro} de ellos (\${fmtMXN(m.importe_fuera_maestro)}) no están en el maestro de Puebla-Tlaxcala (otras regiones u obra menor). El maestro BBVA captura montos <b>sin IVA</b>, por eso se compara contra la base imponible.</span></div>\`));
+    }
+    const sinAdq = c.pedidos_sin_adquira || [];
+    const invalidos = c.pedidos_invalidos || [];
+    if(sinAdq.length || invalidos.length){
+      wrap.appendChild(el(\`<div class="note" style="margin-top:10px"><span class="ico">!</span><span>\${sinAdq.length ? \`Pedidos del maestro que no aparecen en Adquira: <b class="mono">\${sinAdq.join(", ")}</b>. \` : ""}\${invalidos.length ? \`Números de pedido mal capturados en el maestro (no son 10 dígitos): <b class="mono">\${invalidos.join(", ")}</b>.\` : ""}</span></div>\`));
+    }
+    const difs = c.diferencias || [];
+    if(difs.length){
+      const filas = difs.slice(0, 25).map((d)=>\`<tr>
+        <td class="mono">\${d.pedido}</td>
+        <td class="mono" style="text-align:right">\${d.folios}</td>
+        <td class="mono">\${(d.facturas||[]).join(", ") || "—"}</td>
+        <td class="mono" style="text-align:right">\${fmtMXN(d.monto_bbva)}</td>
+        <td class="mono" style="text-align:right">\${fmtMXN(d.base_adquira)}</td>
+        <td class="mono" style="text-align:right;font-weight:600;color:\${d.diferencia > 0 ? "var(--bad)" : "var(--warn)"}">\${d.diferencia > 0 ? "+" : ""}\${fmtMXN(d.diferencia)}</td>
+        <td>\${d.estado_adquira ?? "—"}</td>
+      </tr>\`).join("");
+      wrap.appendChild(el(\`<div style="margin-top:14px;font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;font-weight:600;">Pedidos con diferencia (maestro BBVA vs base Adquira, tolerancia \${fmtMXN(c.tolerancia ?? 1)})</div>
+      <div style="overflow-x:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="color:var(--ink-3);text-align:left"><th style="padding:6px 6px">Pedido</th><th style="padding:6px 6px;text-align:right">Folios</th><th style="padding:6px 6px">Factura</th><th style="padding:6px 6px;text-align:right">Maestro BBVA</th><th style="padding:6px 6px;text-align:right">Base Adquira</th><th style="padding:6px 6px;text-align:right">Diferencia</th><th style="padding:6px 6px">Estado Adquira</th></tr></thead>
+        <tbody>\${filas}</tbody></table></div>
+      <div style="font-size:11.5px;color:var(--ink-3);margin-top:6px">Diferencia positiva: el maestro trae más que lo pedido en Adquira (folios cargados a un pedido que no los cubre, o número de pedido mal capturado). Negativa: Adquira trae más que los folios del maestro (folios sin capturar o de otra región dentro del mismo pedido).</div>\`));
+    }
   } else {
     wrap.appendChild(el(\`<div class="note" style="margin-top:12px"><span class="ico">i</span><span>El maestro actual ya trae pedido/factura por folio, pero falta el archivo de facturas de Adquira para comparar montos y detectar diferencias -- súbelo cuando lo tengas para activar esa comparación.</span></div>\`));
   }
