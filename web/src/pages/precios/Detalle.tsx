@@ -60,6 +60,8 @@ export function Detalle() {
   const queryClient = useQueryClient();
 
   const [filaEnPrecio, setFilaEnPrecio] = useState<string | null>(null);
+  const [filaEnCantidad, setFilaEnCantidad] = useState<string | null>(null);
+  const [editandoCabecera, setEditandoCabecera] = useState(false);
   const [agregando, setAgregando] = useState(false);
   const [comentario, setComentario] = useState("");
   const [errorPdf, setErrorPdf] = useState<string | null>(null);
@@ -108,6 +110,34 @@ export function Detalle() {
     onSuccess: () => {
       setFilaEnPrecio(null);
       invalidar();
+    },
+  });
+
+  // Corregir la cantidad/rendimiento de una partida ya capturada, sin tener
+  // que quitarla y volverla a agregar. RLS (auth_edita_borrador_pu) ya deja
+  // hacerlo a quien participa en la tarjeta mientras esté en borrador.
+  const guardarCantidad = useMutation({
+    mutationFn: async ({ itemId, cantidad, rendimiento }: { itemId: string; cantidad: number; rendimiento?: number }) => {
+      const cambios: Record<string, number> = { cantidad };
+      if (rendimiento !== undefined) cambios.rendimiento = rendimiento;
+      const { error: err } = await supabase.from("pu_analisis_items").update(cambios).eq("id", itemId);
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setFilaEnCantidad(null);
+      invalidar();
+    },
+  });
+
+  const guardarCabecera = useMutation({
+    mutationFn: async ({ concepto, unidad }: { concepto: string; unidad: string }) => {
+      const { error: err } = await supabase.from("pu_analisis").update({ concepto: concepto.trim(), unidad: unidad.trim() }).eq("id", id);
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setEditandoCabecera(false);
+      invalidar();
+      queryClient.invalidateQueries({ queryKey: ["pu-analisis"] });
     },
   });
 
@@ -160,11 +190,47 @@ export function Detalle() {
         <p className="text-xs text-slate-500">
           {pu.codigo} · {pu.empresa_codigo}
         </p>
-        <h2 className="mt-1 font-medium text-slate-900">{pu.concepto}</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          {pu.proyecto_nombre ?? "Biblioteca"} · unidad {pu.unidad}
-          {pu.creado_por_nombre && ` · elaboró ${pu.creado_por_nombre}`}
-        </p>
+        {editandoCabecera ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              guardarCabecera.mutate({ concepto: String(f.get("concepto") ?? ""), unidad: String(f.get("unidad") ?? "") });
+            }}
+            className="mt-2 grid gap-2"
+          >
+            <textarea name="concepto" required defaultValue={pu.concepto} rows={4} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-xs text-slate-600">
+                Unidad{" "}
+                <input name="unidad" required defaultValue={pu.unidad} className="ml-1 w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
+              </label>
+              <button disabled={guardarCabecera.isPending} className="rounded bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-50">
+                {guardarCabecera.isPending ? "Guardando…" : "Guardar"}
+              </button>
+              <button type="button" onClick={() => setEditandoCabecera(false)} className="text-sm text-slate-500 underline">
+                Cancelar
+              </button>
+            </div>
+            {guardarCabecera.error && <p className="text-sm text-red-600">{(guardarCabecera.error as Error).message}</p>}
+          </form>
+        ) : (
+          <>
+            <h2 className="mt-1 font-medium text-slate-900">{pu.concepto}</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {pu.proyecto_nombre ?? "Biblioteca"} · unidad {pu.unidad}
+              {pu.creado_por_nombre && ` · elaboró ${pu.creado_por_nombre}`}
+              {puedeEditar && (
+                <>
+                  {" · "}
+                  <button onClick={() => setEditandoCabecera(true)} className="text-slate-600 underline">
+                    editar concepto
+                  </button>
+                </>
+              )}
+            </p>
+          </>
+        )}
         <span className={`mt-3 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO[pu.estado]}`}>
           {ETIQUETA_ESTADO[pu.estado]}
         </span>
@@ -234,11 +300,73 @@ export function Detalle() {
                           )}
                           {puedeEditar && (
                             <button
+                              onClick={() => setFilaEnCantidad(filaEnCantidad === r.item_id ? null : r.item_id)}
+                              className="ml-2 text-slate-600 underline"
+                            >
+                              cantidad
+                            </button>
+                          )}
+                          {puedeEditar && (
+                            <button
                               onClick={() => borrarRenglon.mutate(r.item_id)}
                               className="ml-2 text-red-600 underline"
                             >
                               quitar
                             </button>
+                          )}
+                          {filaEnCantidad === r.item_id && (
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                const f = new FormData(e.currentTarget);
+                                if (r.base_calculo === "pct_mano_obra") {
+                                  guardarCantidad.mutate({ itemId: r.item_id, cantidad: Number(f.get("porcentaje")) / 100 });
+                                } else if (r.tipo === "mano_obra") {
+                                  guardarCantidad.mutate({
+                                    itemId: r.item_id,
+                                    cantidad: Number(f.get("cantidad")),
+                                    rendimiento: Number(f.get("rendimiento")) || 1,
+                                  });
+                                } else {
+                                  guardarCantidad.mutate({ itemId: r.item_id, cantidad: Number(f.get("cantidad")) });
+                                }
+                              }}
+                              className="mt-2 grid gap-1 text-left"
+                            >
+                              {r.base_calculo === "pct_mano_obra" ? (
+                                <input
+                                  name="porcentaje"
+                                  type="number"
+                                  step="any"
+                                  required
+                                  defaultValue={Number(r.cantidad) * 100}
+                                  placeholder="% sobre mano de obra"
+                                  className="w-40 rounded border border-slate-300 px-2 py-1"
+                                />
+                              ) : (
+                                <input
+                                  name="cantidad"
+                                  type="number"
+                                  step="any"
+                                  required
+                                  defaultValue={r.cantidad}
+                                  placeholder={r.tipo === "mano_obra" ? "Jornadas" : `Cantidad (${r.unidad ?? ""})`}
+                                  className="w-40 rounded border border-slate-300 px-2 py-1"
+                                />
+                              )}
+                              {r.tipo === "mano_obra" && r.base_calculo !== "pct_mano_obra" && (
+                                <input
+                                  name="rendimiento"
+                                  type="number"
+                                  step="any"
+                                  required
+                                  defaultValue={r.rendimiento}
+                                  placeholder="Rendimiento por jornada"
+                                  className="w-40 rounded border border-slate-300 px-2 py-1"
+                                />
+                              )}
+                              <button className="w-40 rounded bg-slate-900 px-2 py-1 text-white">Guardar</button>
+                            </form>
                           )}
                           {filaEnPrecio === r.item_id && (
                             <form
@@ -299,6 +427,11 @@ export function Detalle() {
         {guardarPrecio.error && (
           <p className="border-t border-slate-100 px-3 py-2 text-sm text-red-600">
             {(guardarPrecio.error as Error).message}
+          </p>
+        )}
+        {guardarCantidad.error && (
+          <p className="border-t border-slate-100 px-3 py-2 text-sm text-red-600">
+            {(guardarCantidad.error as Error).message}
           </p>
         )}
         {borrarRenglon.error && (
