@@ -40,9 +40,20 @@ export function Catalogo() {
   const [busqueda, setBusqueda] = useState("");
   const [creando, setCreando] = useState(false);
   const [cotizando, setCotizando] = useState<string | null>(null);
+  const [editando, setEditando] = useState<string | null>(null);
 
   const { data: insumos, isLoading, error } = useInsumos();
   const invalidar = () => queryClient.invalidateQueries({ queryKey: ["pu-insumos"] });
+
+  const rol = perfil?.rol;
+  // Un director de empresa (rol 'empresa') cotiza para SU empresa: el motor
+  // de costeo prefiere ese precio sobre el del grupo, así que sus tarjetas
+  // lo toman y las de las demás empresas no se enteran. Los roles de grupo
+  // siguen cotizando a nivel grupo (empresa_id null).
+  const empresaPrecio = rol === "empresa" ? (perfil?.empresa_id ?? null) : null;
+  // Quién ve el botón "editar": la base decide de verdad (RLS) -- 'empresa'
+  // y 'responsable' solo pueden tocar insumos que ninguna otra empresa usa.
+  const puedeEditarTexto = rol === "admin" || rol === "corporativo" || rol === "direccion" || rol === "empresa" || rol === "responsable";
 
   const crear = useMutation({
     mutationFn: async (form: HTMLFormElement) => {
@@ -66,6 +77,7 @@ export function Catalogo() {
           insumo_id: data.id,
           costo,
           fuente: "alta de catálogo",
+          empresa_id: empresaPrecio,
           creado_por: perfil?.id,
         });
       }
@@ -83,12 +95,10 @@ export function Catalogo() {
         insumo_id: insumoId,
         costo: Number(d.get("costo")),
         fuente: String(d.get("fuente") ?? "").trim() || null,
-        // El catálogo es del grupo: un jornal de albañil cuesta lo mismo lo
-        // capture quien lo capture, así que la cotización se guarda a nivel
-        // grupo (empresa_id null) y la ven las ocho empresas. El esquema sí
-        // admite un precio propio por empresa, pero no se ofrece aquí hasta
-        // que alguien tenga una razón real para partir el catálogo.
-        empresa_id: null,
+        // El catálogo es del grupo: los roles de grupo cotizan a nivel grupo
+        // (empresa_id null) y lo ven las ocho empresas; un director de
+        // empresa cotiza solo para la suya (ver empresaPrecio).
+        empresa_id: empresaPrecio,
         creado_por: perfil?.id,
       });
       if (err) throw err;
@@ -96,6 +106,25 @@ export function Catalogo() {
     onSuccess: () => {
       setCotizando(null);
       invalidar();
+    },
+  });
+
+  const editar = useMutation({
+    mutationFn: async ({ insumoId, form }: { insumoId: string; form: HTMLFormElement }) => {
+      const d = new FormData(form);
+      const { data, error: err } = await supabase
+        .from("pu_insumos")
+        .update({ descripcion: String(d.get("descripcion")).trim(), unidad: String(d.get("unidad")).trim().toUpperCase() })
+        .eq("id", insumoId)
+        .select("id");
+      if (err) throw err;
+      // Con RLS, una fila que no puedes tocar simplemente no se actualiza.
+      if (!data || data.length === 0) throw new Error("No puedes editar este insumo: lo usan tarjetas de otra empresa. Pide el cambio a corporativo.");
+    },
+    onSuccess: () => {
+      setEditando(null);
+      invalidar();
+      queryClient.invalidateQueries({ queryKey: ["pu-detalle"] });
     },
   });
 
@@ -189,13 +218,44 @@ export function Catalogo() {
               {filtrados.map((i) => (
                 <tr key={i.id} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-2 text-slate-500">{i.codigo}</td>
-                  <td className="px-3 py-2">{i.descripcion}</td>
+                  <td className="px-3 py-2">
+                    {editando === i.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          editar.mutate({ insumoId: i.id, form: e.currentTarget });
+                        }}
+                        className="grid gap-1"
+                      >
+                        <input name="descripcion" required defaultValue={i.descripcion} className="w-full rounded border border-slate-300 px-2 py-1" />
+                        <div className="flex items-center gap-2">
+                          <input name="unidad" required defaultValue={i.unidad} className="w-20 rounded border border-slate-300 px-2 py-1 uppercase" />
+                          <button disabled={editar.isPending} className="rounded bg-slate-900 px-2 py-1 text-xs text-white disabled:opacity-50">
+                            Guardar
+                          </button>
+                          <button type="button" onClick={() => setEditando(null)} className="text-xs text-slate-500 underline">
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      i.descripcion
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-slate-500">{TIPOS.find((t) => t.id === i.tipo)?.etiqueta ?? i.tipo}</td>
                   <td className="px-3 py-2 text-slate-500">{i.unidad}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {i.costo_vigente === null ? <span className="text-amber-700">sin cotizar</span> : dinero(i.costo_vigente)}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs">
+                  <td className="px-3 py-2 text-right text-xs whitespace-nowrap">
+                    {puedeEditarTexto && (
+                      <button
+                        onClick={() => setEditando(editando === i.id ? null : i.id)}
+                        className="mr-2 text-slate-600 underline"
+                      >
+                        editar
+                      </button>
+                    )}
                     <button
                       onClick={() => setCotizando(cotizando === i.id ? null : i.id)}
                       className="text-slate-600 underline"
@@ -242,6 +302,7 @@ export function Catalogo() {
       )}
 
       {cotizar.error && <p className="mt-2 text-sm text-red-600">{(cotizar.error as Error).message}</p>}
+      {editar.error && <p className="mt-2 text-sm text-red-600">{(editar.error as Error).message}</p>}
 
       <p className="mt-3 text-xs text-slate-500">
         Un costo nuevo no borra el anterior: se agrega al historial con su fecha. Los análisis viejos siguen siendo
