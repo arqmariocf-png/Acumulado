@@ -120,10 +120,20 @@ export function Carga() {
     setError(null);
     setResultado(null);
     setEnviando(true);
+    // Se captura antes del await: React recicla e.currentTarget al terminar
+    // el handler y después del fetch ya viene null.
+    const formulario = e.currentTarget;
     try {
-      const form = new FormData(e.currentTarget);
+      const form = new FormData(formulario);
+      const cuentaElegida = cuentas?.find((c) => c.id === String(form.get("cuentaId") ?? ""));
       const json = await llamarFuncion("ingesta-estado-cuenta", form);
-      setResultado(json);
+      setResultado({ ...json, cuentaEtiqueta: cuentaElegida ? `${cuentaElegida.banco} ····${cuentaElegida.ultimos_4}` : null });
+      // Limpia el archivo y la cuenta después de una carga exitosa: si el
+      // input de archivo se queda con el PDF anterior, al cambiar de cuenta y
+      // volver a "Cargar" se sube el MISMO PDF a la otra cuenta (caso real
+      // 17-sep-2026: el PDF de BBVA 7382 quedó cargado también en BBVA 9954,
+      // y el 25-ago el de BBVA 4239 en BBVA 1226).
+      formulario.reset();
       if (json.archivoId) {
         // Dispara la clasificación automáticamente tras una ingesta exitosa.
         const { data: sessionData } = await supabase.auth.getSession();
@@ -239,7 +249,7 @@ export function Carga() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Archivo (CSV o Excel, formato canónico -- o PDF si es un estado de cuenta de BanBajío o BBVA)
+              Archivo (CSV o Excel, formato canónico -- o PDF si es un estado de cuenta de BanBajío, BBVA, Banorte o Santander)
             </label>
             <input type="file" name="file" accept=".csv,.xlsx,.xls,.pdf" required className="w-full text-sm" />
           </div>
@@ -341,7 +351,8 @@ export function Carga() {
               title="Listo"
             />
             <span className="text-sm font-medium text-slate-800">
-              Listo{typeof resultado.filasProcesadas === "number" ? ` — ${resultado.filasProcesadas} fila(s) guardadas` : ""}
+              Listo{resultado.cuentaEtiqueta ? ` en ${resultado.cuentaEtiqueta}` : ""}
+              {typeof resultado.filasProcesadas === "number" ? ` — ${resultado.filasProcesadas} fila(s) guardadas` : ""}
               {typeof resultado.filasConError === "number" && resultado.filasConError > 0 ? `, ${resultado.filasConError} pendiente(s)` : ""}
             </span>
           </div>
