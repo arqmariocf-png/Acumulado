@@ -103,7 +103,9 @@ Deno.serve(async (req) => {
 
       const parserPorBanco: Record<string, (bytes: Uint8Array) => Promise<ResultadoParseoPdf>> = {
         BanBajio: async (b) => parsearPdfEstadoCuentaBanBajio(await pdfATexto(b)),
-        BBVA: async (b) => parsearPaginasBBVA(await pdfAPosiciones(b)),
+        // ultimos_4 bloquea el PDF de OTRA cuenta subido por error (caso real
+        // 17-sep-2026, PDF de 7382 cargado como 9954) -- ver extraerNumeroCuentaBBVA.
+        BBVA: async (b) => parsearPaginasBBVA(await pdfAPosiciones(b), cuentaRow.ultimos_4),
         // ultimos_4 permite desambiguar cuando el PDF trae más de un
         // producto (ej. cuenta + inversión) -- ver comentario del
         // encabezado de pdf-estado-cuenta-banorte.ts.

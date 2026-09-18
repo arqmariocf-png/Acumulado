@@ -238,9 +238,56 @@ function extraerAnclasColumnas(paginas: ItemPdfPosicionado[][]): AnclasColumnas 
  * Intenta ubicar las anclas de columna de cada formato de BBVA conocido (ver
  * comentario del encabezado) y usa el que encuentre -- nunca adivina el
  * layout por el nombre del archivo ni por cuál banco es. */
-export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][]): ResultadoParseoPdf {
+// Número de cuenta (y CLABE) que declara el propio PDF: etiqueta "No. de
+// Cuenta" / "No. Cuenta CLABE" en el formato MAESTRA PYME, "Número de cuenta:"
+// en el formato web; el valor es el siguiente item numérico del mismo renglón
+// (misma y). El formato app trae la cuenta enmascarada ("Cuenta: · 52047"), ahí
+// regresa null y no se valida nada. Sirve para bloquear el PDF de OTRA cuenta
+// subido por error -- caso real 17-sep-2026: el PDF de BBVA 7382 cargado
+// seleccionando la cuenta BBVA 9954 de Constructora dejó 97 movimientos ajenos
+// en 9954 y el reporte de saldos mostró el saldo de 7382 en las dos cuentas.
+const RE_ETIQUETA_CUENTA_BBVA = /^(No\. de Cuenta|N[uú]mero de cuenta):?$/i;
+const RE_ETIQUETA_CLABE_BBVA = /^No\. Cuenta CLABE:?$/i;
+
+function valorNumericoEnRenglon(pagina: ItemPdfPosicionado[], etiqueta: ItemPdfPosicionado, re: RegExp): string | null {
+  const valor = pagina
+    .filter((o) => o !== etiqueta && Math.abs(o.y - etiqueta.y) < 2 && o.x0 > etiqueta.x0 && re.test(o.texto.trim()))
+    .sort((a, b) => a.x0 - b.x0)[0];
+  return valor ? valor.texto.trim() : null;
+}
+
+export function extraerNumeroCuentaBBVA(paginas: ItemPdfPosicionado[][]): { numeroCuenta: string | null; clabe: string | null } {
+  let numeroCuenta: string | null = null;
+  let clabe: string | null = null;
+  for (const pagina of paginas) {
+    for (const item of pagina) {
+      const texto = item.texto.trim();
+      if (!numeroCuenta && RE_ETIQUETA_CUENTA_BBVA.test(texto)) numeroCuenta = valorNumericoEnRenglon(pagina, item, /^\d{10,11}$/);
+      if (!clabe && RE_ETIQUETA_CLABE_BBVA.test(texto)) clabe = valorNumericoEnRenglon(pagina, item, /^\d{18}$/);
+    }
+    if (numeroCuenta) break;
+  }
+  return { numeroCuenta, clabe };
+}
+
+export function parsearPaginasBBVA(paginas: ItemPdfPosicionado[][], cuentaUltimos4?: string): ResultadoParseoPdf {
   if (paginas.length === 0 || paginas.every((p) => p.length === 0)) {
     return { movimientos: [], erroresPorFila: [], errorDocumento: "El PDF no tiene contenido de texto extraíble" };
+  }
+
+  // Mismo bloqueo que Banorte (ver pdf-estado-cuenta-banorte.ts): si el PDF
+  // declara su cuenta y no termina en la terminación seleccionada (ni por
+  // número de cuenta ni por CLABE), es el PDF de otra cuenta.
+  if (cuentaUltimos4) {
+    const declarada = extraerNumeroCuentaBBVA(paginas);
+    const coincide = (declarada.numeroCuenta?.endsWith(cuentaUltimos4) ?? false) || (declarada.clabe?.endsWith(cuentaUltimos4) ?? false);
+    if (declarada.numeroCuenta && !coincide) {
+      return {
+        movimientos: [],
+        erroresPorFila: [],
+        errorDocumento: `El PDF es de la cuenta terminación ${declarada.numeroCuenta.slice(-4)}, no de la cuenta terminación ${cuentaUltimos4} seleccionada -- revisa que sea el PDF correcto.`,
+      };
+    }
   }
 
   const anclasMaestraPyme = extraerAnclasColumnas(paginas);
