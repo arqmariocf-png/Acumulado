@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parsearPaginasBBVA } from "./pdf-estado-cuenta-bbva.ts";
+import { extraerNumeroCuentaBBVA, parsearPaginasBBVA } from "./pdf-estado-cuenta-bbva.ts";
 import { PAGINAS_REALES_BBVA_ACEROS_JULIO_2026 } from "./pdf-estado-cuenta-bbva.fixture.ts";
 import { PAGINAS_REALES_BBVA_MARIO_JULIO_2026 } from "./pdf-estado-cuenta-bbva-mario.fixture.ts";
 import { POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026 } from "./pdf-estado-cuenta-bbva-web.fixture.ts";
@@ -240,4 +240,26 @@ test('parsea el TERCER formato de BBVA -- "app/personal" (Mario Contreras, cuent
   const ultimo = r.movimientos[r.movimientos.length - 1];
   assert.equal(ultimo.fechaPago, "2026-08-17");
   assert.doesNotMatch(ultimo.nombreRazonSocial ?? "", /En cumplimiento|Cerrar|Imprimir/);
+});
+
+test("lee la cuenta que declara el PDF (MAESTRA PYME: 'No. de Cuenta' + CLABE; web: 'Número de cuenta:'; app: enmascarada -> null)", () => {
+  assert.deepEqual(extraerNumeroCuentaBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026), { numeroCuenta: "0194615859", clabe: "012650001946158592" });
+  assert.equal(extraerNumeroCuentaBBVA(PAGINAS_REALES_BBVA_MARIO_JULIO_2026).numeroCuenta, "0469952047");
+  assert.equal(extraerNumeroCuentaBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026).numeroCuenta, "0194615859");
+  assert.equal(extraerNumeroCuentaBBVA(PAGINAS_REALES_BBVA_APP_MARIO_AGOSTO_2026).numeroCuenta, null);
+});
+
+test("bloquea el PDF si es de otra cuenta que la seleccionada (caso real: PDF de 7382 subido como 9954)", () => {
+  const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026, "9954");
+  assert.equal(r.movimientos.length, 0);
+  assert.match(r.errorDocumento ?? "", /terminación 5859, no de la cuenta terminación 9954/);
+  const w = parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026, "9954");
+  assert.match(w.errorDocumento ?? "", /terminación 5859/);
+});
+
+test("no bloquea cuando la terminación coincide con la cuenta o con la CLABE, ni cuando el PDF no declara la cuenta completa (app)", () => {
+  assert.equal(parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026, "5859").errorDocumento, null);
+  assert.equal(parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026, "8592").errorDocumento, null);
+  assert.equal(parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026, "5859").errorDocumento, null);
+  assert.equal(parsearPaginasBBVA(PAGINAS_REALES_BBVA_APP_MARIO_AGOSTO_2026, "9999").errorDocumento, null);
 });
