@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, TableroColumna, Tarjeta, TarjetaActividad, TarjetaArchivo, TarjetaComentario } from "../../types/database";
 
@@ -220,7 +221,7 @@ export function TarjetaPanel({
         body: fd,
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       formEl.reset();
       queryClient.invalidateQueries({ queryKey: ["tarjeta-archivos", tarjetaId] });
       queryClient.invalidateQueries({ queryKey: ["tarjeta-actividad", tarjetaId] });
@@ -240,7 +241,7 @@ export function TarjetaPanel({
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       window.open(json.url, "_blank");
     } catch (err) {
       setError((err as Error).message);
@@ -258,7 +259,7 @@ export function TarjetaPanel({
         body: JSON.stringify({ archivoId }),
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       queryClient.invalidateQueries({ queryKey: ["tarjeta-archivos", tarjetaId] });
     } catch (err) {
       setError((err as Error).message);

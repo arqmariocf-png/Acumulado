@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase, urlFuncion } from "../lib/supabase";
+import { errorDeFuncion } from "../lib/funciones";
 
 /** Descarga el PDF de reporte-saldos-diario -- a diferencia del resto de
  * funciones de este proyecto (que devuelven JSON), esta responde el PDF
@@ -14,14 +15,13 @@ async function descargarReporte(): Promise<void> {
   });
 
   if (!respuesta.ok) {
-    let mensaje = `Error ${respuesta.status}`;
+    let json: { error?: string } | null = null;
     try {
-      const json = await respuesta.json();
-      if (json.error) mensaje = json.error;
+      json = await respuesta.json();
     } catch {
       // La respuesta de error no vino en JSON -- se queda el mensaje genérico.
     }
-    throw new Error(mensaje);
+    throw await errorDeFuncion(respuesta, json);
   }
 
   const blob = await respuesta.blob();

@@ -1,4 +1,5 @@
 import { supabase, urlFuncion } from "./supabase";
+import { errorDeFuncion } from "./funciones";
 import type { NominaExternaOrigenKey } from "../types/database";
 
 export interface ResultadoSincronizacion {
@@ -19,6 +20,6 @@ export async function sincronizarNominaExterna(origen?: NominaExternaOrigenKey):
     body: JSON.stringify(origen ? { origen } : {}),
   });
   const json = await respuesta.json();
-  if (!respuesta.ok && respuesta.status !== 207) throw new Error(json.error ?? `Error ${respuesta.status}`);
+  if (!respuesta.ok && respuesta.status !== 207) throw await errorDeFuncion(respuesta, json);
   return json;
 }

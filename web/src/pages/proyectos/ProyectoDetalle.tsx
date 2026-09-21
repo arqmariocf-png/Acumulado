@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import type { Proyecto, ProyectoPlano, PuCosteo, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
@@ -125,7 +126,7 @@ function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onU
         body: JSON.stringify({ planoId }),
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       setResultadoIA({ planoId, nombre, conceptos: json.conceptos ?? [], advertencia: json.advertencia ?? "" });
     } catch (err) {
       setError((err as Error).message);
@@ -154,7 +155,7 @@ function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onU
         body: fd,
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       formEl.reset();
       queryClient.invalidateQueries({ queryKey: ["proyecto-planos", proyectoId] });
     } catch (err) {
@@ -173,7 +174,7 @@ function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onU
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       window.open(json.url, "_blank");
     } catch (err) {
       setError((err as Error).message);
@@ -192,7 +193,7 @@ function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onU
         body: JSON.stringify({ planoId }),
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       queryClient.invalidateQueries({ queryKey: ["proyecto-planos", proyectoId] });
     } catch (err) {
       setError((err as Error).message);
