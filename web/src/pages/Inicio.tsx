@@ -179,13 +179,17 @@ export function Inicio() {
   const esRhDocumentos = rol === "rh_documentos";
   // Supervisor de cuadrilla BBVA: solo folios + semáforo (y el checador).
   const esSupervisorBbva = rol === "supervisor_bbva";
+  // Responsable con permiso de mantenimiento BBVA (Christian, Luis): solo
+  // la operación BBVA y el checador -- tareas y proyectos no les tocan.
+  const esBbvaAcotado = rol === "responsable" && !!perfil?.bbva_mantenimiento;
+  const veMantenimientoBbva = rol === "corporativo" || rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento;
   const veFinanzas = !soloRequisicionesYPrecios && !esAlmacen && !esRhDocumentos && !esSupervisorBbva;
   const veRH = rol === "rh" || esRhDocumentos || esAdmin;
   const veSaldos = rol === "corporativo" || rol === "direccion" || esAdmin;
   const veInventario = veFinanzas || esAlmacen;
-  const vePrecios = !esSupervisorBbva;
-  const veRequisiciones = !esSupervisorBbva;
-  const veFoliosBbva = esSupervisorBbva || rol === "corporativo" || rol === "direccion" || esAdmin;
+  const vePrecios = !esSupervisorBbva && !esBbvaAcotado;
+  const veRequisiciones = !esSupervisorBbva && !esBbvaAcotado;
+  const veFoliosBbva = esSupervisorBbva || rol === "corporativo" || rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento;
 
   const etapaPu =
     rol === "responsable"
@@ -270,9 +274,15 @@ export function Inicio() {
     veFoliosBbva && {
       a: "/bbva/folios",
       etiqueta: "Folios BBVA",
-      descripcion: "folios pendientes o en ejecución",
+      descripcion: "semáforo de atención de las cuadrillas",
       icono: ICONOS.pendientes,
       conteo: foliosPendientes,
+    },
+    veMantenimientoBbva && {
+      a: "/mantenimiento/bbva",
+      etiqueta: "Mantenimiento BBVA",
+      descripcion: "control de folios, estatus por paso y conciliación",
+      icono: ICONOS.panel,
     },
     !!miPersonal && {
       a: "/mis-documentos",
