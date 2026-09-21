@@ -43,7 +43,16 @@ export function Login() {
     } else {
       const { error, data } = await supabase.auth.signUp({ email, password });
       if (error) {
-        setError(error.message);
+        // El mailer compartido de Supabase limita los correos de confirmación
+        // por hora; cuando varias personas se registran el mismo día rebota
+        // "email rate limit exceeded" (caso real Luis Gutiérrez, 21-sep-2026).
+        // La salida es que un administrador cree la cuenta desde Admin >
+        // Usuarios, que no manda correo.
+        setError(
+          /rate limit/i.test(error.message)
+            ? "El servicio de correo está saturado por ahora. Pídele a un administrador que te cree la cuenta desde Admin > Usuarios; te llegará un link por WhatsApp para definir tu contraseña."
+            : error.message,
+        );
       } else if (data.user && data.user.identities?.length === 0) {
         // Caso real (Andrea, 31-ago-2026): ya tenía cuenta confirmada (de una
         // invitación) e intentó "Crear cuenta" de nuevo con ese correo.
