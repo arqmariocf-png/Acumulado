@@ -994,3 +994,56 @@ export interface NominaApiControlObra {
   nombre: string;
   monto: number;
 }
+
+/** Fila del control BBVA nuevo (bbva_folios_control) -- una por trabajo. */
+export interface BbvaFolioControl {
+  id_interno: string;
+  folio: string | null;
+  cr: string | null;
+  sucursal: string | null;
+  solicitud: string | null;
+  fecha_recepcion: string | null;
+  fecha_primera_atencion: string | null;
+  prioridad: string | null;
+  fecha_compromiso_cliente: string | null;
+  supervisor: string | null;
+  equipo: string | null;
+  fecha_programada: string | null;
+  ventana_acceso: string | null;
+  estatus_operativo: string | null;
+  motivo_bloqueo: string | null;
+  siguiente_accion: string | null;
+  responsable_siguiente: string | null;
+  fecha_compromiso_siguiente: string | null;
+  fecha_ultima_actualizacion: string | null;
+  alerta_siguiente_paso: string | null;
+  fecha_finalizacion: string | null;
+  fecha_aceptacion_cliente: string | null;
+  generadores: string | null;
+  reporte_fotografico: string | null;
+  caratula: string | null;
+  presupuesto: string | null;
+  soportes_completos: string | null;
+  fecha_envio_soportes: string | null;
+  autorizacion: string | null;
+  fecha_autorizacion: string | null;
+  accion_fichero: string | null;
+  fecha_fichero: string | null;
+  etapa_seguimiento: string | null;
+  enlace_evidencia: string | null;
+  monto_a_cobrar: number | null;
+  pedido: string | null;
+  factura: string | null;
+  observaciones: string | null;
+  revision_registro: string | null;
+  fecha_recepcion_pedido: string | null;
+  fecha_recepcion_factura: string | null;
+  estado_pago: string | null;
+  monto_cobrado: number | null;
+  monto_solicitado: number | null;
+  pago_aplicado: number | null;
+  saldo_por_cobrar: number | null;
+  revision_cobranza: string | null;
+  corte_id: string | null;
+  actualizado_en: string;
+}

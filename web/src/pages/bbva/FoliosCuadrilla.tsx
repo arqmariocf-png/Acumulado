@@ -49,6 +49,18 @@ function useFoliosCuadrilla() {
   });
 }
 
+/** Paso en el que va cada folio según el control BBVA (vista sin montos). */
+function usePasoControl() {
+  return useQuery({
+    queryKey: ["bbva-folio-paso"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_bbva_folio_paso").select("folio, etapa_seguimiento, estatus_operativo, alerta_siguiente_paso, estado_pago").limit(5000);
+      if (error) throw error;
+      return new Map((data as { folio: string | null; etapa_seguimiento: string | null; estatus_operativo: string | null; alerta_siguiente_paso: string | null; estado_pago: string | null }[]).filter((r) => r.folio).map((r) => [r.folio!.trim(), r]));
+    },
+  });
+}
+
 function fechaCorta(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
@@ -61,6 +73,7 @@ export function FoliosCuadrilla() {
   const veTodos = !esSupervisor;
   const queryClient = useQueryClient();
   const { data: folios, isLoading } = useFoliosCuadrilla();
+  const { data: pasoControl } = usePasoControl();
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<EstatusCuadrilla | "todos">("todos");
 
@@ -169,6 +182,12 @@ export function FoliosCuadrilla() {
                     </p>
                   </div>
                 </div>
+                {pasoControl?.get(f.folio.trim()) && (
+                  <span className="basis-full text-xs text-slate-500">
+                    Control BBVA: {pasoControl.get(f.folio.trim())!.etapa_seguimiento ?? pasoControl.get(f.folio.trim())!.estatus_operativo ?? "—"}
+                    {pasoControl.get(f.folio.trim())!.estado_pago ? ` · ${pasoControl.get(f.folio.trim())!.estado_pago}` : ""}
+                  </span>
+                )}
                 <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${e.chip}`}>
                   {e.etiqueta}
                   {f.estatus === "atendido" && f.atendido_en ? ` · ${fechaCorta(f.atendido_en)}` : ""}

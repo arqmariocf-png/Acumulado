@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { generarHtmlDashboard } from "./plantillaDashboard";
+import { PasosPorFolio } from "./PasosPorFolio";
 import { conciliarAdquira, type PedidoAdquiraResumen, type PedidoBbva } from "../../../../supabase/functions/_shared/bbva-adquira";
 
 /** Pedidos de Adquira ya cargados (bbva_adquira_pedidos) -- la otra mitad
@@ -78,6 +79,7 @@ function SubirMaestro() {
       formEl.reset();
       setOk(`Corte cargado: ${json.kpi.total_folios} folios, ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(json.kpi.monto_total)}.`);
       queryClient.invalidateQueries({ queryKey: ["bbva-mantenimiento-snapshot"] });
+      queryClient.invalidateQueries({ queryKey: ["bbva-folios-control"] });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -180,6 +182,11 @@ export function BbvaMantenimiento() {
         <div>
           <h1 className="mb-2 text-xl font-semibold text-slate-900">Mantenimiento BBVA</h1>
           <p className="text-sm text-slate-500">Todavía no hay ningún corte del maestro de folios cargado.</p>
+        </div>
+      )}
+      {snapshot && (
+        <div className="mb-6">
+          <PasosPorFolio />
         </div>
       )}
       {snapshot && (
