@@ -1,8 +1,17 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import type { AppRol } from "../types/database";
+import type { AppRol, Profile } from "../types/database";
 
-export function ProtectedRoute({ soloAdmin = false, roles }: { soloAdmin?: boolean; roles?: AppRol[] }) {
+export function ProtectedRoute({
+  soloAdmin = false,
+  roles,
+  oPermiso,
+}: {
+  soloAdmin?: boolean;
+  roles?: AppRol[];
+  /** Permiso adicional fuera del rol (ej. profiles.bbva_mantenimiento). */
+  oPermiso?: (perfil: Profile) => boolean;
+}) {
   const { cargando, session, perfil } = useAuth();
 
   if (cargando) return <div className="p-8 text-center text-slate-500">Cargando…</div>;
@@ -26,7 +35,7 @@ export function ProtectedRoute({ soloAdmin = false, roles }: { soloAdmin?: boole
   // 'admin' siempre pasa cualquier restricción de `roles` -- es el rol con
   // acceso total del sistema (SPEC.md sección 6), no tiene sentido pedirle
   // a un admin que además se agregue explícitamente a cada lista.
-  if (roles && perfil.rol !== "admin" && !roles.includes(perfil.rol)) {
+  if (roles && perfil.rol !== "admin" && !roles.includes(perfil.rol) && !(oPermiso && oPermiso(perfil))) {
     return <Navigate to="/" replace />;
   }
 

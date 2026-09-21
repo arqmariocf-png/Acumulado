@@ -96,7 +96,7 @@ function Enrutador() {
           <Route path="/checador" element={<Checador />} />
           <Route path="/mis-documentos" element={<MisDocumentos />} />
 
-          <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} />}>
+          <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
             <Route path="/bbva/folios" element={<FoliosCuadrilla />} />
           </Route>
           <Route path="/proyectos" element={<Proyectos />} />

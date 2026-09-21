@@ -34,8 +34,14 @@ export function Layout() {
   // rol_enum.sql) -- ninguno de los dos debe ver el resto de los módulos
   // financieros/operativos, ni aunque RLS ya se los bloquee del lado del
   // dato (evita que le aparezcan pantallas vacías sin sentido para su rol).
+  // Responsable con permiso de mantenimiento BBVA (Christian, Luis): su
+  // trabajo es la operación BBVA -- tareas, proyectos, requisiciones y
+  // precios no les corresponden (pedido de Mario, 21-sep-2026).
+  const esBbvaAcotado = perfil?.rol === "responsable" && !!perfil?.bbva_mantenimiento;
   const enlaces =
-    perfil?.rol === "responsable"
+    esBbvaAcotado
+      ? ENLACES.filter((e) => e.a === "/")
+      : perfil?.rol === "responsable"
       ? ENLACES.filter((e) => ENLACES_RESPONSABLE.includes(e.a))
       : perfil?.rol === "almacen"
         ? // Almacén entra a inventario y a poner precio de material en los PU.
@@ -59,7 +65,7 @@ export function Layout() {
   enlacesMenu.push({ a: "/checador", etiqueta: "Checador" });
   if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
   if (veMantenimientoBbva) enlacesMenu.push({ a: "/mantenimiento/bbva", etiqueta: "Mantenimiento BBVA" });
-  if (perfil?.rol === "supervisor_bbva" || perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin) {
+  if (perfil?.rol === "supervisor_bbva" || perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento) {
     enlacesMenu.push({ a: "/bbva/folios", etiqueta: "Folios BBVA" });
   }
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
