@@ -43,9 +43,10 @@ export function Layout() {
         : perfil?.rol === "rh_documentos"
           ? // Sólo el inicio: desde ahí llega a RH, que es su único módulo.
             ENLACES.filter((e) => e.a === "/")
-          : perfil?.rol === "produccion"
-            ? // Producción es un rol aislado como RH: nada de movimientos
-              // bancarios/CFDI de ninguna empresa, solo su propio módulo.
+          : perfil?.rol === "produccion" || perfil?.rol === "supervisor_bbva"
+            ? // Producción y los supervisores de cuadrilla BBVA son roles
+              // aislados como RH: nada de movimientos bancarios/CFDI de
+              // ninguna empresa, solo su propio módulo.
               ENLACES.filter((e) => e.a === "/")
             : ENLACES;
 
@@ -58,6 +59,9 @@ export function Layout() {
   enlacesMenu.push({ a: "/checador", etiqueta: "Checador" });
   if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
   if (veMantenimientoBbva) enlacesMenu.push({ a: "/mantenimiento/bbva", etiqueta: "Mantenimiento BBVA" });
+  if (perfil?.rol === "supervisor_bbva" || perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin) {
+    enlacesMenu.push({ a: "/bbva/folios", etiqueta: "Folios BBVA" });
+  }
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
   // Nómina externa (APIs de Grupo Loma): solo rh/admin -- rh_documentos
   // sigue acotado únicamente a subir expedientes.

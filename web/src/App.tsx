@@ -20,6 +20,7 @@ const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ de
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
+const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => ({ default: m.Proyectos })));
 const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
@@ -94,6 +95,10 @@ function Enrutador() {
           <Route path="/pendientes" element={<Pendientes />} />
           <Route path="/checador" element={<Checador />} />
           <Route path="/mis-documentos" element={<MisDocumentos />} />
+
+          <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} />}>
+            <Route path="/bbva/folios" element={<FoliosCuadrilla />} />
+          </Route>
           <Route path="/proyectos" element={<Proyectos />} />
           <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
 
