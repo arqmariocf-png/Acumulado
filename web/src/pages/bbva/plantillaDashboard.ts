@@ -202,20 +202,45 @@ const PLANTILLA = /* html */ `<!doctype html><html><head><meta charset=utf8><met
 
   <section>
     <div class="section-head">
-      <h2>Reporte mensual por proceso</h2>
-      <span class="hint">folios y monto, mes a mes</span>
+      <h2>Reporte mensual — Mantenimiento</h2>
+      <span class="hint" id="mesMantHint">folios, pagado, pendiente y ciclo de cobro, mes a mes</span>
     </div>
     <div class="panel" style="padding:14px 8px 6px;">
       <div class="tablewrap">
         <table class="worklist">
           <thead><tr>
             <th>Mes</th>
-            <th style="text-align:right">Mantenimiento — folios</th>
-            <th style="text-align:right">Mantenimiento — monto</th>
-            <th style="text-align:right">Obra Menor — folios</th>
-            <th style="text-align:right">Obra Menor — monto</th>
+            <th style="text-align:right">Folios</th>
+            <th style="text-align:right">Monto</th>
+            <th style="text-align:right">Pagados</th>
+            <th style="text-align:right">Pendientes</th>
+            <th style="text-align:right">Monto pendiente</th>
+            <th style="text-align:right">Ciclo folio→pago</th>
           </tr></thead>
-          <tbody id="mesProcesoBody"></tbody>
+          <tbody id="mesMantBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Reporte mensual — Obra Menor</h2>
+      <span class="hint" id="mesObraHint">proceso aparte: tiempos distintos a Mantenimiento</span>
+    </div>
+    <div class="panel" style="padding:14px 8px 6px;">
+      <div class="tablewrap">
+        <table class="worklist">
+          <thead><tr>
+            <th>Mes</th>
+            <th style="text-align:right">Folios</th>
+            <th style="text-align:right">Monto</th>
+            <th style="text-align:right">Pagados</th>
+            <th style="text-align:right">Pendientes</th>
+            <th style="text-align:right">Monto pendiente</th>
+            <th style="text-align:right">Ciclo folio→pago</th>
+          </tr></thead>
+          <tbody id="mesObraBody"></tbody>
         </table>
       </div>
     </div>
@@ -553,20 +578,48 @@ function renderProceso(){
 }
 
 function renderMesProceso(){
-  const body = document.getElementById("mesProcesoBody");
   const MESES = {"01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun","07":"Jul","08":"Ago","09":"Sep","10":"Oct","11":"Nov","12":"Dic"};
-  Object.entries(DATA.by_month_proceso).forEach(([key,procs])=>{
-    let label = key;
-    if(key!=="Sin fecha"){ const [y,m]=key.split("-"); label = \`\${MESES[m]||m} \${y}\`; }
-    const m = procs["Mantenimiento"]||{folios:0,monto:0};
-    const o = procs["Obra Menor"]||{folios:0,monto:0};
-    body.appendChild(el(\`<tr>
-      <td>\${label}</td>
-      <td class="num" style="text-align:right">\${m.folios}</td>
-      <td class="num" style="text-align:right">\${fmtMXN(m.monto)}</td>
-      <td class="num" style="text-align:right">\${o.folios||"—"}</td>
-      <td class="num" style="text-align:right">\${o.monto?fmtMXN(o.monto):"—"}</td>
+  const etiqueta = (key)=>{ if(key==="Sin fecha") return key; const [y,m]=key.split("-"); return \`\${MESES[m]||m} \${y}\`; };
+  // Un reporte por proceso: Mantenimiento y Obra Menor tienen tiempos
+  // distintos, así que cada tabla lleva su propio ciclo folio→pago. Los
+  // cortes cargados antes de que existiera este desglose solo traen folios
+  // y monto -- las demás columnas salen con "—" hasta el siguiente maestro.
+  [["Mantenimiento","mesMantBody","mesMantHint"],["Obra Menor","mesObraBody","mesObraHint"]].forEach(([proceso,bodyId,hintId])=>{
+    const body = document.getElementById(bodyId);
+    const tot = {folios:0,monto:0,pagados:0,pendientes:0,monto_pendiente:0};
+    let hayDetalle = false;
+    Object.entries(DATA.by_month_proceso).forEach(([key,procs])=>{
+      const v = procs[proceso];
+      if(!v) return;
+      const detalle = v.pagados !== undefined;
+      hayDetalle = hayDetalle || detalle;
+      tot.folios += v.folios; tot.monto += v.monto;
+      if(detalle){ tot.pagados += v.pagados; tot.pendientes += v.pendientes; tot.monto_pendiente += v.monto_pendiente; }
+      body.appendChild(el(\`<tr>
+        <td>\${etiqueta(key)}</td>
+        <td class="num" style="text-align:right">\${v.folios}</td>
+        <td class="num" style="text-align:right">\${fmtMXN(v.monto)}</td>
+        <td class="num" style="text-align:right">\${detalle ? v.pagados : "—"}</td>
+        <td class="num" style="text-align:right">\${detalle ? v.pendientes : "—"}</td>
+        <td class="num" style="text-align:right">\${detalle ? fmtMXN(v.monto_pendiente) : "—"}</td>
+        <td class="num" style="text-align:right">\${detalle && v.ciclo_promedio_dias != null ? v.ciclo_promedio_dias + " días" : "—"}</td>
+      </tr>\`));
+    });
+    if(!body.children.length){
+      body.appendChild(el(\`<tr><td colspan="7" style="color:var(--ink-3)">Sin folios de \${proceso} en este corte.</td></tr>\`));
+      return;
+    }
+    body.appendChild(el(\`<tr style="font-weight:600;border-top:2px solid var(--border)">
+      <td>Total</td>
+      <td class="num" style="text-align:right">\${tot.folios}</td>
+      <td class="num" style="text-align:right">\${fmtMXN(tot.monto)}</td>
+      <td class="num" style="text-align:right">\${hayDetalle ? tot.pagados : "—"}</td>
+      <td class="num" style="text-align:right">\${hayDetalle ? tot.pendientes : "—"}</td>
+      <td class="num" style="text-align:right">\${hayDetalle ? fmtMXN(tot.monto_pendiente) : "—"}</td>
+      <td class="num" style="text-align:right">\${DATA.by_proceso_ciclo && DATA.by_proceso_ciclo[proceso] != null ? DATA.by_proceso_ciclo[proceso] + " días prom." : "—"}</td>
     </tr>\`));
+    const hint = document.getElementById(hintId);
+    if(hint && !hayDetalle) hint.textContent = "pagado/pendiente y ciclo se llenan con el siguiente maestro que se cargue";
   });
 }
 
