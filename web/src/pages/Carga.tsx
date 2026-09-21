@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
+import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 
 type Pestana = "estado_cuenta" | "cfdi" | "oc_ov";
@@ -85,7 +86,7 @@ async function llamarFuncion(nombre: string, formData: FormData) {
     body: formData,
   });
   const json = await respuesta.json();
-  if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+  if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
   return json;
 }
 
@@ -98,7 +99,7 @@ async function llamarFuncionJson(nombre: string, body: Record<string, unknown>) 
     body: JSON.stringify(body),
   });
   const json = await respuesta.json();
-  if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+  if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
   return json;
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
@@ -495,7 +496,7 @@ export function Movimientos() {
         body: form,
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       setNotaEntregaId(json.notaEntregaId);
       setItemsSugeridos(json.itemsSugeridos ?? []);
       setErrorLecturaFoto(json.errorLectura ?? null);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import { generarHtmlDashboard } from "./plantillaDashboard";
 import { PasosPorFolio } from "./PasosPorFolio";
@@ -75,7 +76,7 @@ function SubirMaestro() {
         body: fd,
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       formEl.reset();
       setOk(`Corte cargado: ${json.kpi.total_folios} folios, ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(json.kpi.monto_total)}.`);
       queryClient.invalidateQueries({ queryKey: ["bbva-mantenimiento-snapshot"] });
@@ -125,7 +126,7 @@ function SubirAdquira() {
         body: fd,
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       formEl.reset();
       setOk(`Adquira actualizado: ${json.pedidos} pedidos, ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(json.importe_total)}${json.fecha_exportacion ? ` (export del ${json.fecha_exportacion})` : ""}.`);
       queryClient.invalidateQueries({ queryKey: ["bbva-adquira-pedidos"] });

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import type { DocumentoFaltante, ExpedienteFila, ExtraccionDocumento, Personal } from "../../types/database";
 
@@ -238,7 +239,7 @@ function FilaDocumento({ fila, persona, puedeAplicar }: { fila: ExpedienteFila; 
         body: cuerpo,
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       form.reset();
       setMostrarSubir(false);
       invalidar();
@@ -258,7 +259,7 @@ function FilaDocumento({ fila, persona, puedeAplicar }: { fila: ExpedienteFila; 
         headers: { Authorization: `Bearer ${await tokenSesion()}` },
       });
       const json = await respuesta.json();
-      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
       window.open(json.url, "_blank", "noopener");
     } catch (err) {
       setError((err as Error).message);

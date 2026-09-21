@@ -29,6 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let activo = true;
 
+    // Sesión "zombi": el token sigue guardado pero Supabase ya no la
+    // reconoce (cambio de contraseña en otro dispositivo, sesión revocada).
+    // getSession no lo detecta porque no consulta al servidor; getUser sí.
+    supabase.auth.getUser().then(({ error }) => {
+      if (error && (error.status === 401 || error.status === 403)) supabase.auth.signOut().catch(() => {});
+    });
     supabase.auth.getSession().then(({ data }) => {
       if (!activo) return;
       setSession(data.session);
