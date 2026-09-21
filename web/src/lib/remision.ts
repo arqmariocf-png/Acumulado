@@ -8,7 +8,6 @@ export interface RemisionImprimible {
   empresa_nombre: string;
   almacen_nombre: string;
   entregar_a: string;
-  destino: string | null;
   observaciones: string | null;
   estatus: string;
   emitida_por_nombre: string | null;
@@ -116,9 +115,8 @@ export function htmlRemision(r: RemisionImprimible, lineas: LineaRemision[], qrS
   </div>
   <div class="datos">
     <div><span>Entregar a</span>${esc(r.entregar_a)}</div>
-    <div><span>Destino / obra</span>${esc(r.destino) || "—"}</div>
     <div><span>Emitida por</span>${esc(r.emitida_por_nombre) || "—"}</div>
-    <div><span>Recibió</span>${entregada ? `${esc(r.recibio_nombre)} · ${esc(r.entregada_en ? new Date(r.entregada_en).toLocaleString("es-MX") : "")}` : "____________________"}</div>
+    <div><span>Recibió</span>${entregada ? `${esc(r.recibio_nombre)} · ${esc(r.entregada_en ? new Date(r.entregada_en).toLocaleString("es-MX") : "")}` : `<em style="color:#666">Pendiente de confirmar (escanea el QR)</em>`}</div>
   </div>
   <table>
     <thead><tr><th class="c" style="width:32px">#</th><th>Producto</th><th class="c" style="width:70px">Unidad</th><th class="r" style="width:90px">Cantidad</th></tr></thead>

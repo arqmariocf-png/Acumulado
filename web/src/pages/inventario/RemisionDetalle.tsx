@@ -92,10 +92,6 @@ export function RemisionDetalle() {
             <dd className="text-slate-900">{remision.entregar_a}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-slate-500">Destino / obra</dt>
-            <dd className="text-slate-900">{remision.destino ?? "—"}</dd>
-          </div>
-          <div>
             <dt className="text-xs uppercase text-slate-500">Emitida por</dt>
             <dd className="text-slate-900">{remision.emitida_por_nombre ?? "—"}</dd>
           </div>

@@ -51,7 +51,7 @@ export function Remisiones() {
     if (soloAbiertas && r.estatus !== "emitida") return false;
     const q = busqueda.trim().toLowerCase();
     if (!q) return true;
-    return r.folio.toLowerCase().includes(q) || r.entregar_a.toLowerCase().includes(q) || (r.destino ?? "").toLowerCase().includes(q);
+    return r.folio.toLowerCase().includes(q) || r.entregar_a.toLowerCase().includes(q);
   });
 
   async function imprimir(id: string) {
@@ -85,7 +85,7 @@ export function Remisiones() {
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar folio, destinatario u obra…"
+          placeholder="Buscar folio o destinatario…"
           className="rounded border border-slate-300 px-2 py-1.5 text-sm"
         />
         <label className="flex items-center gap-1 text-sm text-slate-600">
@@ -105,7 +105,6 @@ export function Remisiones() {
                 <th className="px-3 py-2">Folio</th>
                 <th className="px-3 py-2">Fecha</th>
                 <th className="px-3 py-2">Entregar a</th>
-                <th className="px-3 py-2">Destino</th>
                 <th className="px-3 py-2 text-right">Líneas</th>
                 <th className="px-3 py-2 text-right">Cantidad</th>
                 <th className="px-3 py-2">Estatus</th>
@@ -122,7 +121,6 @@ export function Remisiones() {
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">{r.fecha}</td>
                   <td className="px-3 py-2">{r.entregar_a}</td>
-                  <td className="px-3 py-2">{r.destino ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{r.lineas}</td>
                   <td className="px-3 py-2 text-right">{cantidadTexto(r.cantidad_total)}</td>
                   <td className="px-3 py-2">
@@ -137,7 +135,7 @@ export function Remisiones() {
               ))}
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
                     No hay remisiones para mostrar.
                   </td>
                 </tr>
