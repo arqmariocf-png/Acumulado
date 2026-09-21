@@ -3,10 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { PestanaDocumentos } from "./rh/Expediente";
+import { abrirParaImprimir, htmlFiniquito } from "../lib/documentosRh";
+import { patronDe } from "./MisDocumentos";
 import type {
   AsignacionDiaria,
   AsistenciaSemanalPersonal,
   Contratacion,
+  EmpresaPerfilLegal,
   DirectorioPerfil,
   Personal,
   ProyeccionNominaSemanal,
@@ -314,7 +317,7 @@ function PestanaPersonal() {
   const [bajaDe, setBajaDe] = useState<Personal | null>(null);
   const [mostrarBajas, setMostrarBajas] = useState(false);
   const cambiarEstado = useMutation({
-    mutationFn: async (p: { id: string; activo: boolean; fecha_baja: string | null; motivo_baja: string | null }) => {
+    mutationFn: async (p: { id: string; activo: boolean; fecha_baja: string | null; motivo_baja: string | null; finiquito_entregado_en?: null }) => {
       const { id, ...cambios } = p;
       const { data, error } = await supabase.from("personal").update(cambios).eq("id", id).select("id");
       if (error) throw error;
@@ -346,6 +349,43 @@ function PestanaPersonal() {
 
   const listado = (personal ?? []).filter((p) => mostrarBajas || p.activo);
   const bajas = (personal ?? []).filter((p) => !p.activo).length;
+
+  // Carta finiquito: toda baja la necesita. Se genera desde aquí con la
+  // última contratación (patrón, puesto, sueldo) y se marca cuando se entregó.
+  const finiquitosPendientes = (personal ?? []).filter((p) => !p.activo && !p.finiquito_entregado_en);
+  const { data: contratacionesTodas } = useContrataciones();
+  const empresaIds = Array.from(new Set((contratacionesTodas ?? []).map((c) => c.empresa_id)));
+  const { data: perfilesLegales } = useQuery({
+    queryKey: ["perfil-legal", empresaIds],
+    enabled: empresaIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("empresas_perfil_legal").select("*").in("empresa_id", empresaIds);
+      if (error) throw error;
+      return data as EmpresaPerfilLegal[];
+    },
+  });
+  const [avisoVentana, setAvisoVentana] = useState<string | null>(null);
+  function generarFiniquito(p: Personal) {
+    const contratacion = (contratacionesTodas ?? []).find((c) => c.personal_id === p.id) ?? null; // ya vienen ordenadas por fecha_inicio desc
+    const patron = contratacion
+      ? patronDe(perfilesLegales, contratacion.empresa_id, contratacion.empresa?.nombre ?? null)
+      : patronDe(undefined, "", null);
+    const ok = abrirParaImprimir(htmlFiniquito(p, contratacion, patron));
+    setAvisoVentana(ok ? null : "El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio e inténtalo de nuevo.");
+  }
+  const marcarFiniquito = useMutation({
+    mutationFn: async (p: { id: string; entregado: boolean }) => {
+      const { data, error } = await supabase
+        .from("personal")
+        .update({ finiquito_entregado_en: p.entregado ? new Date().toISOString() : null })
+        .eq("id", p.id)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No se pudo actualizar");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-personal"] }),
+    onError: (err) => setError((err as Error).message),
+  });
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -535,7 +575,8 @@ function PestanaPersonal() {
           </div>
           <p className="text-xs text-slate-600">
             El registro no se borra: expediente, asignaciones y contrataciones quedan como historial. Deja de aparecer en asignaciones
-            diarias y en expedientes incompletos, y se puede reactivar si regresa.
+            diarias y en expedientes incompletos, y se puede reactivar si regresa. <b>Al confirmar, recuerda elaborar la carta finiquito</b>:
+            queda como pendiente aquí mismo hasta que la marques entregada.
           </p>
           {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <div className="flex gap-2">
@@ -550,6 +591,42 @@ function PestanaPersonal() {
       )}
 
       {!mostrarForm && !bajaDe && error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      {finiquitosPendientes.length > 0 && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            Carta finiquito pendiente ({finiquitosPendientes.length}): al dar de baja hay que elaborarla, firmarla y guardarla en el expediente.
+          </p>
+          {avisoVentana && <p className="mt-1 text-xs text-amber-800">{avisoVentana}</p>}
+          <ul className="mt-2 space-y-1">
+            {finiquitosPendientes.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>
+                  {p.nombre}
+                  <span className="text-slate-500">
+                    {" "}
+                    · baja {p.fecha_baja ?? ""}
+                    {p.motivo_baja ? ` · ${p.motivo_baja.replace(/_/g, " ")}` : ""}
+                  </span>
+                </span>
+                <span className="flex gap-3">
+                  <button type="button" onClick={() => generarFiniquito(p)} className="text-xs font-medium text-amber-800 hover:underline">
+                    Generar carta finiquito
+                  </button>
+                  <button
+                    type="button"
+                    disabled={marcarFiniquito.isPending}
+                    onClick={() => marcarFiniquito.mutate({ id: p.id, entregado: true })}
+                    className="text-xs text-slate-700 hover:underline disabled:opacity-50"
+                  >
+                    Ya se entregó
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {bajas > 0 && (
         <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -578,7 +655,9 @@ function PestanaPersonal() {
                 <td className="px-3 py-2">{p.fecha_ingreso}</td>
                 <td className="px-3 py-2">{p.telefono ?? "—"}</td>
                 <td className="px-3 py-2">
-                  {p.activo ? "Activo" : `Baja ${p.fecha_baja ?? ""}${p.motivo_baja ? ` · ${p.motivo_baja.replace(/_/g, " ")}` : ""}`}
+                  {p.activo
+                    ? "Activo"
+                    : `Baja ${p.fecha_baja ?? ""}${p.motivo_baja ? ` · ${p.motivo_baja.replace(/_/g, " ")}` : ""}${p.finiquito_entregado_en ? " · finiquito entregado" : " · finiquito pendiente"}`}
                 </td>
                 <td className="px-3 py-2 text-right">
                   {p.activo ? (
@@ -594,17 +673,22 @@ function PestanaPersonal() {
                       Dar de baja
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={cambiarEstado.isPending}
-                      onClick={() => {
-                        setError(null);
-                        cambiarEstado.mutate({ id: p.id, activo: true, fecha_baja: null, motivo_baja: null });
-                      }}
-                      className="text-xs text-slate-700 hover:underline disabled:opacity-50"
-                    >
-                      Reactivar
-                    </button>
+                    <span className="flex justify-end gap-3">
+                      <button type="button" onClick={() => generarFiniquito(p)} className="text-xs text-amber-800 hover:underline">
+                        Carta finiquito
+                      </button>
+                      <button
+                        type="button"
+                        disabled={cambiarEstado.isPending}
+                        onClick={() => {
+                          setError(null);
+                          cambiarEstado.mutate({ id: p.id, activo: true, fecha_baja: null, motivo_baja: null, finiquito_entregado_en: null });
+                        }}
+                        className="text-xs text-slate-700 hover:underline disabled:opacity-50"
+                      >
+                        Reactivar
+                      </button>
+                    </span>
                   )}
                 </td>
               </tr>

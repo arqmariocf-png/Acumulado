@@ -167,6 +167,9 @@ export interface Personal {
   /** Baja: cuándo y por qué (renuncia | termino_contrato | despido | abandono | otro[: nota]). NULL si está activo. */
   fecha_baja: string | null;
   motivo_baja: string | null;
+  /** Carta finiquito de la baja vigente: NULL = pendiente mientras activo=false. */
+  finiquito_entregado_en: string | null;
+  finiquito_nota: string | null;
   created_at: string;
   /** Datos que llegan del expediente (extraídos de los documentos). */
   nss: string | null;
@@ -221,6 +224,23 @@ export interface Contratacion {
   tipo_contrato: TipoContrato;
   contrato_storage_path: string | null;
   contrato_generado_at: string | null;
+}
+
+export interface EmpresaPerfilLegal {
+  empresa_id: string;
+  razon_social: string;
+  representante_legal_nombre: string;
+  representante_legal_puesto: string;
+  escritura_constitucion_numero: string | null;
+  escritura_constitucion_fecha: string | null;
+  escritura_constitucion_notario: string | null;
+  escritura_constitucion_notaria_numero: string | null;
+  escritura_constitucion_distrito_judicial: string | null;
+  escritura_poderes_numero: string | null;
+  escritura_poderes_fecha: string | null;
+  escritura_poderes_notario: string | null;
+  domicilio_legal: string;
+  ciudad_firma: string;
 }
 
 export interface TipoDocumentoPersonal {

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
+import { useMiPersonal } from "./MisDocumentos";
 import { useAuth } from "../lib/auth";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
@@ -233,6 +234,9 @@ export function Inicio() {
     return count ?? 0;
   });
 
+  // Persona de RH ligada a esta cuenta: ve su contrato y el aviso de privacidad.
+  const { data: miPersonal } = useMiPersonal(perfil?.id);
+
   const rhFaltantes = useConteo("rh", veRH, async () => {
     const { count, error } = await supabase
       .from("v_documentos_faltantes_personal")
@@ -251,6 +255,12 @@ export function Inicio() {
   });
 
   const mosaicos = [
+    !!miPersonal && {
+      a: "/mis-documentos",
+      etiqueta: "Mis documentos",
+      descripcion: "mi contrato y el aviso de privacidad",
+      icono: ICONOS.rh,
+    },
     veRequisiciones && {
       a: "/requisiciones",
       etiqueta: "Requisiciones",
