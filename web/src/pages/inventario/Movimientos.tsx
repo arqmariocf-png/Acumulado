@@ -394,7 +394,6 @@ export function Movimientos() {
   // internas que no necesitan documento.
   const [generarRemision, setGenerarRemision] = useState(true);
   const [entregarA, setEntregarA] = useState("");
-  const [destino, setDestino] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [ultimaRemision, setUltimaRemision] = useState<{ id: string; folio: string } | null>(null);
   const navigate = useNavigate();
@@ -564,7 +563,6 @@ export function Movimientos() {
             almacen_id: almacen.id,
             fecha,
             entregar_a: entregarA.trim(),
-            destino: destino.trim() || null,
             observaciones: observaciones.trim() || null,
             orden_venta_id: ordenId || null,
             emitida_por: userId,
@@ -605,7 +603,6 @@ export function Movimientos() {
       if (remision) {
         setUltimaRemision(remision);
         setEntregarA("");
-        setDestino("");
         setObservaciones("");
         queryClient.invalidateQueries({ queryKey: ["remisiones-salida"] });
         // Abre la remisión lista para imprimir con su QR; si el navegador
@@ -692,22 +689,13 @@ export function Movimientos() {
             Generar remisión de salida con código QR
           </label>
           {generarRemision && (
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Entregar a *</label>
                 <input
                   value={entregarA}
                   onChange={(e) => setEntregarA(e.target.value)}
-                  placeholder="Cliente, obra o persona"
-                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Destino / obra</label>
-                <input
-                  value={destino}
-                  onChange={(e) => setDestino(e.target.value)}
-                  placeholder="Dirección u obra"
+                  placeholder="Cliente o persona que recibe"
                   className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
                 />
               </div>
