@@ -68,6 +68,9 @@ export function Layout() {
   if (perfil?.rol === "supervisor_bbva" || perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento) {
     enlacesMenu.push({ a: "/bbva/folios", etiqueta: "Folios BBVA" });
   }
+  if (perfil?.rol === "corporativo" || perfil?.rol === "direccion" || perfil?.rol === "rh" || esAdmin || !!perfil?.bbva_mantenimiento) {
+    enlacesMenu.push({ a: "/bbva/equilibrio", etiqueta: "Punto de equilibrio BBVA" });
+  }
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
   // Nómina externa (APIs de Grupo Loma): solo rh/admin -- rh_documentos
   // sigue acotado únicamente a subir expedientes.
