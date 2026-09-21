@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const kpiAntes = (anterior?.datos as { kpi?: unknown } | undefined)?.kpi;
 
-    const datos = procesarLibroFoliosBbva(bytes, archivo.name, fechaCorte, kpiAntes);
+    const { datos, folios_control } = procesarLibroFoliosBbva(bytes, archivo.name, fechaCorte, kpiAntes);
 
     const { data: insertado, error: errInsert } = await cliente
       .from("bbva_mantenimiento_snapshots")
@@ -54,7 +54,24 @@ Deno.serve(async (req) => {
       .single();
     if (errInsert) return jsonResponse({ error: `No se pudo guardar el corte: ${errInsert.message}` }, 500);
 
-    return jsonResponse({ ok: true, id: insertado.id, fecha_corte: insertado.fecha_corte, kpi: datos.kpi });
+    // Control nuevo: además del corte agregado se guarda el detalle por
+    // folio (una fila por ID interno, se reemplaza con cada carga) para la
+    // vista "estatus por paso" y para cruzarlo con el semáforo de cuadrillas.
+    let foliosGuardados = 0;
+    if (folios_control) {
+      const filas = folios_control.map((f) => ({ ...f, corte_id: insertado.id, actualizado_en: new Date().toISOString() }));
+      for (let i = 0; i < filas.length; i += 200) {
+        const { error: errUpsert } = await cliente.from("bbva_folios_control").upsert(filas.slice(i, i + 200), { onConflict: "id_interno" });
+        if (errUpsert) return jsonResponse({ error: `Corte guardado, pero falló el detalle por folio: ${errUpsert.message}`, id: insertado.id }, 500);
+        foliosGuardados += Math.min(200, filas.length - i);
+      }
+      // Los ID internos que ya no vienen en el archivo (fila borrada en el
+      // control) se quitan para no mostrar folios fantasma.
+      const ids = folios_control.map((f) => f.id_interno);
+      await cliente.from("bbva_folios_control").delete().not("id_interno", "in", `(${ids.map((x) => `"${x.replace(/"/g, "")}"`).join(",")})`);
+    }
+
+    return jsonResponse({ ok: true, id: insertado.id, fecha_corte: insertado.fecha_corte, kpi: datos.kpi, folios_control: foliosGuardados });
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }

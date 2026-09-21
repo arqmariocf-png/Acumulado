@@ -5,20 +5,10 @@
 // ciclo promedio de cobro coinciden exactamente con el corte ya publicado.
 
 import { XLSX } from "./ingesta/xlsx-cargador.ts";
+import { esFormatoControl, parsearMantto, parsearObraMenor, registrosDesdeControl, resumirControl, type FolioControl, type ObraMenorControl, type Registro } from "./bbva-control.ts";
 
-interface Registro {
-  folio: unknown;
-  fecha: Date | null;
-  supervisor: string;
-  sucursal: string | null;
-  descripcion: string;
-  monto: number;
-  proceso: "Mantenimiento" | "Obra Menor";
-  pedido: unknown;
-  factura: unknown;
-  fechaPago: Date | null;
-  enRevision: boolean;
-}
+export type { Registro };
+
 
 const MESES_ABREV: Record<number, string> = { 1: "01", 2: "02", 3: "03", 4: "04", 5: "05", 6: "06", 7: "07", 8: "08", 9: "09", 10: "10", 11: "11", 12: "12" };
 
@@ -96,11 +86,40 @@ function redondear2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string, fechaCorte: string, kpiAntes: unknown) {
+export interface ResultadoLibroBbva {
+  datos: ReturnType<typeof agregarRegistros> & { control?: ReturnType<typeof resumirControl> };
+  /** Detalle por folio cuando el archivo es el control nuevo (se guarda en bbva_folios_control). */
+  folios_control: FolioControl[] | null;
+  obra_menor: ObraMenorControl[] | null;
+}
+
+/** Acepta el maestro plano (hoja "DB") o el control nuevo (hoja "BBVA
+ * Mantto" con una fila por trabajo y el estatus de cada paso). En ambos
+ * casos el dashboard recibe los mismos agregados. */
+export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string, fechaCorte: string, kpiAntes: unknown): ResultadoLibroBbva {
   const libro = XLSX.read(bytes, { type: "array", cellDates: true });
+  const leer = (nombre: string): unknown[][] | null => {
+    const n = libro.SheetNames.find((x: string) => x.trim().toUpperCase() === nombre.toUpperCase());
+    return n ? (XLSX.utils.sheet_to_json(libro.Sheets[n], { header: 1, raw: true, defval: null }) as unknown[][]) : null;
+  };
+
+  const mantto = leer("BBVA Mantto");
+  if (mantto && esFormatoControl(mantto)) {
+    const folios = parsearMantto(mantto);
+    const obraMenor = parsearObraMenor(leer("Obra Menor") ?? []);
+    const registros = registrosDesdeControl(folios, obraMenor);
+    if (registros.length === 0) throw new Error("El control no trae ningún trabajo con ID interno.");
+    const datos = agregarRegistros(registros, nombreArchivo, fechaCorte, kpiAntes);
+    return { datos: { ...datos, control: resumirControl(folios, obraMenor) }, folios_control: folios, obra_menor: obraMenor };
+  }
+
   const nombreHoja = libro.SheetNames.find((n: string) => n.trim().toUpperCase() === "DB") ?? libro.SheetNames[0];
   const hoja = libro.Sheets[nombreHoja];
   const filas: unknown[][] = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: true, defval: null });
+  return { datos: agregarRegistros(leerRegistrosMaestro(filas), nombreArchivo, fechaCorte, kpiAntes), folios_control: null, obra_menor: null };
+}
+
+export function leerRegistrosMaestro(filas: unknown[][]): Registro[] {
 
   const idxEncabezado = filas.findIndex((f) => f.some((c) => String(c ?? "").trim().toUpperCase() === "FOLIO"));
   if (idxEncabezado < 0) throw new Error('No se encontró el encabezado "FOLIO" en la hoja -- ¿es el maestro de folios BBVA correcto?');
@@ -148,7 +167,10 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
   }
 
   if (registros.length === 0) throw new Error("No se encontró ningún folio (fila con N° numérico) en la hoja.");
+  return registros;
+}
 
+export function agregarRegistros(registros: Registro[], nombreArchivo: string, fechaCorte: string, kpiAntes: unknown) {
   const fechaRef = new Date(fechaCorte + "T00:00:00");
 
   const kpi = {
