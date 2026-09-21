@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { abrirParaImprimir, htmlAvisoPrivacidad, htmlContrato } from "../lib/documentosRh";
+import { htmlAvisoPrivacidad, htmlContrato } from "../lib/documentosRh";
+import { abrirParaImprimir } from "../lib/imprimir";
 import type { Contratacion, EmpresaPerfilLegal, Personal } from "../types/database";
 
 /** La persona de RH ligada a la cuenta que está entrando (personal.profile_id).

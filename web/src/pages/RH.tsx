@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { PestanaDocumentos } from "./rh/Expediente";
-import { abrirParaImprimir, htmlFiniquito } from "../lib/documentosRh";
+import { htmlFiniquito } from "../lib/documentosRh";
+import { abrirParaImprimir } from "../lib/imprimir";
 import { patronDe } from "./MisDocumentos";
 import type {
   AsignacionDiaria,
