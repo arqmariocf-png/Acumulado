@@ -164,6 +164,9 @@ export interface Personal {
   beneficiario_parentesco: string | null;
   fecha_ingreso: string;
   activo: boolean;
+  /** Baja: cuándo y por qué (renuncia | termino_contrato | despido | abandono | otro[: nota]). NULL si está activo. */
+  fecha_baja: string | null;
+  motivo_baja: string | null;
   created_at: string;
   /** Datos que llegan del expediente (extraídos de los documentos). */
   nss: string | null;

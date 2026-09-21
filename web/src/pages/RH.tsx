@@ -309,6 +309,44 @@ function PestanaPersonal() {
     onError: (err) => setError((err as Error).message),
   });
 
+  // Baja / reactivación: el registro se conserva (expediente, asignaciones y
+  // contrataciones históricas siguen ligadas); solo cambia activo + motivo.
+  const [bajaDe, setBajaDe] = useState<Personal | null>(null);
+  const [mostrarBajas, setMostrarBajas] = useState(false);
+  const cambiarEstado = useMutation({
+    mutationFn: async (p: { id: string; activo: boolean; fecha_baja: string | null; motivo_baja: string | null }) => {
+      const { id, ...cambios } = p;
+      const { data, error } = await supabase.from("personal").update(cambios).eq("id", id).select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No se pudo actualizar (sin permiso o el registro ya no existe)");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rh-personal"] });
+      queryClient.invalidateQueries({ queryKey: ["rh-documentos-faltantes"] });
+      queryClient.invalidateQueries({ queryKey: ["rh-expediente"] });
+      setBajaDe(null);
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  function onSubmitBaja(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!bajaDe) return;
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const motivo = String(fd.get("motivo") ?? "otro");
+    const nota = String(fd.get("nota") ?? "").trim();
+    cambiarEstado.mutate({
+      id: bajaDe.id,
+      activo: false,
+      fecha_baja: String(fd.get("fecha_baja") ?? hoyIso()),
+      motivo_baja: nota ? `${motivo}: ${nota}` : motivo,
+    });
+  }
+
+  const listado = (personal ?? []).filter((p) => mostrarBajas || p.activo);
+  const bajas = (personal ?? []).filter((p) => !p.activo).length;
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -472,6 +510,54 @@ function PestanaPersonal() {
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
 
+      {bajaDe && (
+        <form onSubmit={onSubmitBaja} className="space-y-3 rounded border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-slate-800">Dar de baja a {bajaDe.nombre}</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className={etiquetaCampo}>Fecha de baja</label>
+              <input type="date" name="fecha_baja" required defaultValue={hoyIso()} className={campoTexto} />
+            </div>
+            <div>
+              <label className={etiquetaCampo}>Motivo</label>
+              <select name="motivo" required className={campoTexto}>
+                <option value="renuncia">Renuncia</option>
+                <option value="termino_contrato">Término de contrato</option>
+                <option value="despido">Despido</option>
+                <option value="abandono">Abandono de trabajo</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label className={etiquetaCampo}>Nota (opcional)</label>
+              <input name="nota" className={campoTexto} placeholder="Ej. se va a otra empresa" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-600">
+            El registro no se borra: expediente, asignaciones y contrataciones quedan como historial. Deja de aparecer en asignaciones
+            diarias y en expedientes incompletos, y se puede reactivar si regresa.
+          </p>
+          {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <div className="flex gap-2">
+            <button disabled={cambiarEstado.isPending} className="rounded bg-amber-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              {cambiarEstado.isPending ? "Guardando…" : "Confirmar baja"}
+            </button>
+            <button type="button" onClick={() => setBajaDe(null)} className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!mostrarForm && !bajaDe && error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      {bajas > 0 && (
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={mostrarBajas} onChange={(e) => setMostrarBajas(e.target.checked)} />
+          Mostrar bajas ({bajas})
+        </label>
+      )}
+
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -480,23 +566,53 @@ function PestanaPersonal() {
               <th className="px-3 py-2">Puesto</th>
               <th className="px-3 py-2">Fecha de ingreso</th>
               <th className="px-3 py-2">Teléfono</th>
-              <th className="px-3 py-2">Activo</th>
+              <th className="px-3 py-2">Estatus</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
-            {personal?.map((p) => (
-              <tr key={p.id} className="border-t border-slate-100">
+            {listado.map((p) => (
+              <tr key={p.id} className={`border-t border-slate-100 ${p.activo ? "" : "text-slate-400"}`}>
                 <td className="px-3 py-2">{p.nombre}</td>
                 <td className="px-3 py-2">{p.puesto ?? "—"}</td>
                 <td className="px-3 py-2">{p.fecha_ingreso}</td>
                 <td className="px-3 py-2">{p.telefono ?? "—"}</td>
-                <td className="px-3 py-2">{p.activo ? "Sí" : "No"}</td>
+                <td className="px-3 py-2">
+                  {p.activo ? "Activo" : `Baja ${p.fecha_baja ?? ""}${p.motivo_baja ? ` · ${p.motivo_baja.replace(/_/g, " ")}` : ""}`}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {p.activo ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setMostrarForm(false);
+                        setBajaDe(p);
+                      }}
+                      className="text-xs text-amber-700 hover:underline"
+                    >
+                      Dar de baja
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={cambiarEstado.isPending}
+                      onClick={() => {
+                        setError(null);
+                        cambiarEstado.mutate({ id: p.id, activo: true, fecha_baja: null, motivo_baja: null });
+                      }}
+                      className="text-xs text-slate-700 hover:underline disabled:opacity-50"
+                    >
+                      Reactivar
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
-            {personal?.length === 0 && (
+            {listado.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
-                  Todavía no hay personal registrado.
+                <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                  {personal?.length === 0 ? "Todavía no hay personal registrado." : "No hay personal activo."}
                 </td>
               </tr>
             )}
