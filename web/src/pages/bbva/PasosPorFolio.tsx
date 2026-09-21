@@ -104,21 +104,26 @@ export function PasosPorFolio() {
   const [supervisor, setSupervisor] = useState("todos");
   const [paso, setPaso] = useState("todos");
   const [busqueda, setBusqueda] = useState("");
-  const [ocultarPagados, setOcultarPagados] = useState(true);
+  // Un folio "cerrado" (pagado o cancelado) sale del tablero: ya no hay
+  // nada que empujar. Se pueden ver con "mostrar cerrados" para consulta.
+  const [mostrarCerrados, setMostrarCerrados] = useState(false);
 
   const supervisores = useMemo(() => Array.from(new Set((folios ?? []).map((f) => f.supervisor ?? "Sin asignar"))).sort(), [folios]);
   const conPaso = useMemo(() => (folios ?? []).map((f) => ({ f, paso: pasoActual(f) })), [folios]);
+  const esCerrado = (p: ReturnType<typeof pasoActual>) => p.cancelado || p.etiqueta === "Pago";
+  const abiertos = useMemo(() => conPaso.filter(({ paso: p }) => !esCerrado(p)), [conPaso]);
+  const cerrados = conPaso.length - abiertos.length;
+  const base = mostrarCerrados ? conPaso : abiertos;
 
   const conteoPaso = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const { paso: p } of conPaso) c[p.etiqueta] = (c[p.etiqueta] ?? 0) + 1;
+    for (const { paso: p } of base) c[p.etiqueta] = (c[p.etiqueta] ?? 0) + 1;
     return c;
-  }, [conPaso]);
+  }, [base]);
 
-  const lista = conPaso.filter(({ f, paso: p }) => {
+  const lista = base.filter(({ f, paso: p }) => {
     if (supervisor !== "todos" && (f.supervisor ?? "Sin asignar") !== supervisor) return false;
     if (paso !== "todos" && p.etiqueta !== paso) return false;
-    if (ocultarPagados && paso === "todos" && (p.etiqueta === "Pago" || p.cancelado)) return false;
     if (busqueda && !`${f.folio ?? ""} ${f.sucursal ?? ""} ${f.solicitud ?? ""}`.toLowerCase().includes(busqueda.toLowerCase())) return false;
     return true;
   });
@@ -140,7 +145,9 @@ export function PasosPorFolio() {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Estatus por paso</h2>
-          <p className="text-xs text-slate-500">{folios.length} trabajos en el control · en qué paso va cada folio</p>
+          <p className="text-xs text-slate-500">
+            {abiertos.length} folios abiertos · {cerrados} cerrados (pagados o cancelados) fuera del tablero
+          </p>
         </div>
       </div>
 
@@ -170,7 +177,15 @@ export function PasosPorFolio() {
         </select>
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar folio, sucursal o alcance…" className="w-64 rounded border border-slate-300 px-2 py-1.5 text-sm" />
         <label className="flex items-center gap-1 text-xs text-slate-600">
-          <input type="checkbox" checked={ocultarPagados} onChange={(e) => setOcultarPagados(e.target.checked)} /> ocultar pagados y cancelados
+          <input
+            type="checkbox"
+            checked={mostrarCerrados}
+            onChange={(e) => {
+              setMostrarCerrados(e.target.checked);
+              if (!e.target.checked && (paso === "Pago" || paso === "Cancelado")) setPaso("todos");
+            }}
+          />{" "}
+          mostrar cerrados ({cerrados})
         </label>
         <span className="text-xs text-slate-400">{lista.length} folios</span>
       </div>
@@ -238,7 +253,7 @@ export function PasosPorFolio() {
             {lista.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-2 py-6 text-center text-slate-400">
-                  Sin folios con ese filtro.
+                  {abiertos.length === 0 && !mostrarCerrados ? "Todos los folios del control están cerrados. Nada pendiente." : "Sin folios con ese filtro."}
                 </td>
               </tr>
             )}
