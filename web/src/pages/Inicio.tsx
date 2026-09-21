@@ -278,6 +278,12 @@ export function Inicio() {
       icono: ICONOS.pendientes,
       conteo: foliosPendientes,
     },
+    (veMantenimientoBbva || rol === "rh") && {
+      a: "/bbva/equilibrio",
+      etiqueta: "Punto de equilibrio BBVA",
+      descripcion: "gasto del equipo contra folios generados y cobrados",
+      icono: ICONOS.fiscal,
+    },
     veMantenimientoBbva && {
       a: "/mantenimiento/bbva",
       etiqueta: "Mantenimiento BBVA",

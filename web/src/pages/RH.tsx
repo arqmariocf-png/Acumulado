@@ -455,6 +455,20 @@ function PestanaPersonal() {
     });
   }
 
+  // Área operativa (punto de equilibrio): RH marca quién es del equipo de
+  // mantenimiento BBVA; el gasto de nómina de esas personas se atribuye ahí.
+  const cambiarArea = useMutation({
+    mutationFn: async (p: { id: string; area: string | null }) => {
+      const { error } = await supabase.from("personal").update({ area: p.area }).eq("id", p.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rh-personal"] });
+      queryClient.invalidateQueries({ queryKey: ["bbva-equilibrio-equipo"] });
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
   const listado = (personal ?? []).filter((p) => mostrarBajas || p.activo);
   const bajas = (personal ?? []).filter((p) => !p.activo).length;
 
@@ -752,6 +766,7 @@ function PestanaPersonal() {
               <th className="px-3 py-2">Fecha de ingreso</th>
               <th className="px-3 py-2">Teléfono</th>
               <th className="px-3 py-2">Estatus</th>
+              <th className="px-3 py-2">Área</th>
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
@@ -766,6 +781,18 @@ function PestanaPersonal() {
                   {p.activo
                     ? "Activo"
                     : `Baja ${p.fecha_baja ?? ""}${p.motivo_baja ? ` · ${p.motivo_baja.replace(/_/g, " ")}` : ""}${p.finiquito_entregado_en ? " · finiquito entregado" : " · finiquito pendiente"}`}
+                </td>
+                <td className="px-3 py-2">
+                  <select
+                    value={p.area ?? ""}
+                    disabled={!p.activo || cambiarArea.isPending}
+                    onChange={(e) => cambiarArea.mutate({ id: p.id, area: e.target.value || null })}
+                    className="rounded border border-slate-300 px-1 py-0.5 text-xs"
+                    title="Área para el punto de equilibrio"
+                  >
+                    <option value="">—</option>
+                    <option value="bbva_puebla">Mantenimiento BBVA</option>
+                  </select>
                 </td>
                 <td className="px-3 py-2 text-right">
                   {p.activo ? (
@@ -803,7 +830,7 @@ function PestanaPersonal() {
             ))}
             {listado.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
                   {personal?.length === 0 ? "Todavía no hay personal registrado." : "No hay personal activo."}
                 </td>
               </tr>

@@ -170,6 +170,8 @@ export interface Personal {
   /** Carta finiquito de la baja vigente: NULL = pendiente mientras activo=false. */
   finiquito_entregado_en: string | null;
   finiquito_nota: string | null;
+  /** Área operativa para el punto de equilibrio (bbva_puebla) -- la marca RH. */
+  area: "bbva_puebla" | null;
   created_at: string;
   /** Datos que llegan del expediente (extraídos de los documentos). */
   nss: string | null;
