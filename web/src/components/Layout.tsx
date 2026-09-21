@@ -71,6 +71,7 @@ export function Layout() {
   if (perfil?.rol === "corporativo" || perfil?.rol === "direccion" || perfil?.rol === "rh" || esAdmin || !!perfil?.bbva_mantenimiento) {
     enlacesMenu.push({ a: "/bbva/equilibrio", etiqueta: "Punto de equilibrio BBVA" });
   }
+  if (!!perfil?.bbva_mantenimiento && perfil?.rol !== "rh") enlacesMenu.push({ a: "/bbva/asistencia", etiqueta: "Asistencia del equipo" });
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
   // Nómina externa (APIs de Grupo Loma): solo rh/admin -- rh_documentos
   // sigue acotado únicamente a subir expedientes.

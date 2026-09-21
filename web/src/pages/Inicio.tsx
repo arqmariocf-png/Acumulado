@@ -278,6 +278,12 @@ export function Inicio() {
       icono: ICONOS.pendientes,
       conteo: foliosPendientes,
     },
+    !!perfil?.bbva_mantenimiento && rol !== "rh" && {
+      a: "/bbva/asistencia",
+      etiqueta: "Asistencia del equipo",
+      descripcion: "marcas del checador de tu equipo, con foto y ubicación",
+      icono: ICONOS.rh,
+    },
     (veMantenimientoBbva || rol === "rh") && {
       a: "/bbva/equilibrio",
       etiqueta: "Punto de equilibrio BBVA",
