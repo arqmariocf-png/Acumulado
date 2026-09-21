@@ -4,10 +4,15 @@ import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 
+export type TipoMarca = "entrada" | "salida" | "comida_inicio" | "comida_fin";
+
+export const ETIQUETA_MARCA: Record<TipoMarca, string> = { entrada: "Entrada", salida: "Salida", comida_inicio: "Salió a comer", comida_fin: "Regresó de comer" };
+export const SIMBOLO_MARCA: Record<TipoMarca, string> = { entrada: "→", salida: "←", comida_inicio: "🍽", comida_fin: "↩" };
+
 interface RegistroChecador {
   id: string;
   profile_id: string;
-  tipo: "entrada" | "salida";
+  tipo: TipoMarca;
   created_at: string;
   lat: number | null;
   lng: number | null;
@@ -92,15 +97,29 @@ function useRegistros(profileId: string) {
 /** Empareja entrada->salida en orden y suma la duración en horas. Un
  * "entrada" sin "salida" que le siga (turno abierto, ej. hoy antes de
  * salir) simplemente no cuenta todavía -- no se inventa una hora de salida. */
-function horasTrabajadas(registros: RegistroChecador[]): number {
+/** Horas efectivas: entrada→salida menos las pausas de comida
+ * (comida_inicio→comida_fin). Un turno o una comida abiertos no cuentan
+ * todavía; no se inventan horas. */
+export function horasTrabajadas(registros: { tipo: TipoMarca; created_at: string }[]): number {
   let totalMs = 0;
   let entradaAbierta: string | null = null;
+  let comidaAbierta: string | null = null;
+  let comidaMs = 0;
   for (const r of registros) {
     if (r.tipo === "entrada") {
       entradaAbierta = r.created_at;
+      comidaMs = 0;
+      comidaAbierta = null;
+    } else if (r.tipo === "comida_inicio" && entradaAbierta) {
+      comidaAbierta = r.created_at;
+    } else if (r.tipo === "comida_fin" && comidaAbierta) {
+      comidaMs += new Date(r.created_at).getTime() - new Date(comidaAbierta).getTime();
+      comidaAbierta = null;
     } else if (r.tipo === "salida" && entradaAbierta) {
-      totalMs += new Date(r.created_at).getTime() - new Date(entradaAbierta).getTime();
+      totalMs += new Date(r.created_at).getTime() - new Date(entradaAbierta).getTime() - comidaMs;
       entradaAbierta = null;
+      comidaAbierta = null;
+      comidaMs = 0;
     }
   }
   return totalMs / 3_600_000;
@@ -131,8 +150,8 @@ export function Checador() {
   const { data: registros, isLoading } = useRegistros(perfil?.id ?? "");
 
   const ultimoRegistro = registros?.length ? registros[registros.length - 1] : null;
-  const dentro = ultimoRegistro?.tipo === "entrada";
-  const proximoTipo = dentro ? "salida" : "entrada";
+  const estado: "fuera" | "dentro" | "comida" =
+    !ultimoRegistro || ultimoRegistro.tipo === "salida" ? "fuera" : ultimoRegistro.tipo === "comida_inicio" ? "comida" : "dentro";
 
   const hoyIso = new Date().toISOString().slice(0, 10);
   const registrosHoy = useMemo(() => (registros ?? []).filter((r) => r.created_at.slice(0, 10) === hoyIso), [registros, hoyIso]);
@@ -156,16 +175,17 @@ export function Checador() {
   // inserción directa en la tabla está cerrada para que nadie marque sin
   // evidencia.
   const marcar = useMutation({
-    mutationFn: async (tipo: "entrada" | "salida") => {
-      if (!foto) throw new Error("Primero toma tu foto.");
+    mutationFn: async (tipo: TipoMarca) => {
+      const pideFoto = tipo === "entrada" || tipo === "salida";
+      if (pideFoto && !foto) throw new Error("Primero toma tu foto.");
       setPaso("Obteniendo ubicación…");
       const ubicacion = await obtenerUbicacion();
       setPaso("Preparando foto…");
-      const comprimida = await comprimirFoto(foto);
+      const comprimida = pideFoto && foto ? await comprimirFoto(foto) : new Blob();
       setPaso("Enviando…");
       const fd = new FormData();
       fd.append("tipo", tipo);
-      fd.append("foto", comprimida, "marca.jpg");
+      if (pideFoto) fd.append("foto", comprimida, "marca.jpg");
       fd.append("lat", String(ubicacion.lat));
       fd.append("lng", String(ubicacion.lng));
       fd.append("precision", String(Math.round(ubicacion.precision)));
@@ -195,8 +215,8 @@ export function Checador() {
         <p className="mb-1 text-sm text-slate-500">
           {ultimoRegistro ? `Última marca: ${ultimoRegistro.tipo} a las ${horaCorta(ultimoRegistro.created_at)}` : "Sin marcas todavía"}
         </p>
-        <p className={`mb-4 text-2xl font-semibold ${dentro ? "text-emerald-700" : "text-slate-500"}`}>
-          {dentro ? "Dentro" : "Fuera"}
+        <p className={`mb-4 text-2xl font-semibold ${estado === "dentro" ? "text-emerald-700" : estado === "comida" ? "text-amber-600" : "text-slate-500"}`}>
+          {estado === "dentro" ? "Dentro" : estado === "comida" ? "En comida" : "Fuera"}
         </p>
         <div className="mx-auto mb-4 flex max-w-xs flex-col items-center gap-2">
           <input
@@ -216,14 +236,31 @@ export function Checador() {
             {foto ? "Tomar otra foto" : "1. Tomar foto"}
           </button>
         </div>
-        <button
-          onClick={() => marcar.mutate(proximoTipo)}
-          disabled={marcar.isPending || !foto}
-          className={`rounded px-6 py-3 text-lg font-semibold text-white disabled:opacity-50 ${proximoTipo === "entrada" ? "bg-emerald-700" : "bg-slate-900"}`}
-        >
-          {marcar.isPending ? (paso ?? "Marcando…") : proximoTipo === "entrada" ? "2. Marcar entrada" : "2. Marcar salida"}
-        </button>
-        <p className="mt-2 text-xs text-slate-400">La marca guarda tu foto y tu ubicación. Sin foto o sin ubicación no se registra.</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          {estado === "fuera" && (
+            <button onClick={() => marcar.mutate("entrada")} disabled={marcar.isPending || !foto} className="rounded bg-emerald-700 px-6 py-3 text-lg font-semibold text-white disabled:opacity-50">
+              {marcar.isPending ? (paso ?? "Marcando…") : "2. Marcar entrada"}
+            </button>
+          )}
+          {estado === "dentro" && (
+            <>
+              <button onClick={() => marcar.mutate("comida_inicio")} disabled={marcar.isPending} className="rounded bg-amber-500 px-5 py-3 text-base font-semibold text-white disabled:opacity-50">
+                {marcar.isPending ? (paso ?? "Marcando…") : "Salir a comer"}
+              </button>
+              <button onClick={() => marcar.mutate("salida")} disabled={marcar.isPending || !foto} className="rounded bg-slate-900 px-6 py-3 text-lg font-semibold text-white disabled:opacity-50">
+                {marcar.isPending ? (paso ?? "Marcando…") : "2. Marcar salida"}
+              </button>
+            </>
+          )}
+          {estado === "comida" && (
+            <button onClick={() => marcar.mutate("comida_fin")} disabled={marcar.isPending} className="rounded bg-amber-600 px-6 py-3 text-lg font-semibold text-white disabled:opacity-50">
+              {marcar.isPending ? (paso ?? "Marcando…") : "Regresar de comer"}
+            </button>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Entrada y salida guardan tu foto y tu ubicación; la comida solo la ubicación. La pausa de comida no cuenta como horas trabajadas.
+        </p>
         <p className="mt-4 text-sm text-slate-600">
           Horas trabajadas hoy: <span className="font-medium text-slate-900">{horasHoy.toFixed(1)} h</span>
         </p>
@@ -249,7 +286,7 @@ export function Checador() {
                 <td className="px-3 py-2 text-slate-600">
                   {dia.registros.map((r) => (
                     <span key={r.id} className="mr-3 inline-flex items-center gap-1 whitespace-nowrap">
-                      {r.tipo === "entrada" ? "→" : "←"} {horaCorta(r.created_at)}
+                      <span title={ETIQUETA_MARCA[r.tipo]}>{SIMBOLO_MARCA[r.tipo]}</span> {horaCorta(r.created_at)}
                       {enlaceMapa(r) && (
                         <a href={enlaceMapa(r)!} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:underline" title={`±${Math.round(r.precision_m ?? 0)} m`}>
                           mapa

@@ -3,7 +3,7 @@
 // único camino para insertar en checador_registros -- la policy de insert
 // directo se cerró para que nadie marque sin evidencia.
 //
-// POST multipart/form-data: tipo (entrada|salida), foto (image/*), lat, lng, precision
+// POST multipart/form-data: tipo (entrada|salida|comida_inicio|comida_fin), foto (image/*, obligatoria en entrada/salida), lat, lng, precision
 //   -> { id, tipo, created_at }
 // GET ?registroId=<uuid> -> { url } (signed URL 120 s de la foto; solo el
 //   dueño de la marca, rh o admin)
@@ -41,9 +41,12 @@ Deno.serve(async (req) => {
     const precision = Number(form.get("precision"));
     const dispositivo = String(form.get("dispositivo") ?? "").slice(0, 200) || null;
 
-    if (tipo !== "entrada" && tipo !== "salida") return jsonResponse({ error: "tipo debe ser entrada o salida" }, 400);
-    if (!foto || foto.size === 0) return jsonResponse({ error: "La foto es obligatoria para marcar." }, 400);
-    if (foto.size > FOTO_MAXIMA_BYTES) return jsonResponse({ error: "La foto es demasiado grande (máximo 6 MB)." }, 400);
+    const TIPOS = ["entrada", "salida", "comida_inicio", "comida_fin"];
+    if (!TIPOS.includes(tipo)) return jsonResponse({ error: "tipo debe ser entrada, salida, comida_inicio o comida_fin" }, 400);
+    // Foto obligatoria en entrada y salida; la comida solo pide ubicación.
+    const pideFoto = tipo === "entrada" || tipo === "salida";
+    if (pideFoto && (!foto || foto.size === 0)) return jsonResponse({ error: "La foto es obligatoria para marcar." }, 400);
+    if (foto && foto.size > FOTO_MAXIMA_BYTES) return jsonResponse({ error: "La foto es demasiado grande (máximo 6 MB)." }, 400);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       return jsonResponse({ error: "La ubicación es obligatoria para marcar. Activa el GPS y permite el acceso a tu ubicación." }, 400);
     }
@@ -58,16 +61,27 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const esperado = ultima?.tipo === "entrada" ? "salida" : "entrada";
-    if (tipo !== esperado) return jsonResponse({ error: `Tu siguiente marca debe ser ${esperado}.` }, 409);
+    // Secuencia: entrada -> (comida_inicio -> comida_fin)* -> salida.
+    const permitidos: Record<string, string[]> = {
+      ninguna: ["entrada"],
+      salida: ["entrada"],
+      entrada: ["comida_inicio", "salida"],
+      comida_fin: ["comida_inicio", "salida"],
+      comida_inicio: ["comida_fin"],
+    };
+    const siguientes = permitidos[ultima?.tipo ?? "ninguna"] ?? ["entrada"];
+    if (!siguientes.includes(tipo)) return jsonResponse({ error: `Tu siguiente marca debe ser: ${siguientes.join(" o ")}.` }, 409);
 
     const ahora = new Date();
-    const extension = (foto.type.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "jpg";
-    const ruta = `checador/${perfil.id}/${ahora.toISOString().slice(0, 10)}/${ahora.getTime()}-${tipo}.${extension}`;
-    const { error: errUpload } = await dbServicio.storage.from("cargas").upload(ruta, new Uint8Array(await foto.arrayBuffer()), {
-      contentType: foto.type || "image/jpeg",
-    });
-    if (errUpload) return jsonResponse({ error: `No se pudo guardar la foto: ${errUpload.message}` }, 500);
+    let ruta: string | null = null;
+    if (foto && foto.size > 0) {
+      const extension = (foto.type.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "jpg";
+      ruta = `checador/${perfil.id}/${ahora.toISOString().slice(0, 10)}/${ahora.getTime()}-${tipo}.${extension}`;
+      const { error: errUpload } = await dbServicio.storage.from("cargas").upload(ruta, new Uint8Array(await foto.arrayBuffer()), {
+        contentType: foto.type || "image/jpeg",
+      });
+      if (errUpload) return jsonResponse({ error: `No se pudo guardar la foto: ${errUpload.message}` }, 500);
+    }
 
     const { data: insertado, error: errInsert } = await dbServicio
       .from("checador_registros")

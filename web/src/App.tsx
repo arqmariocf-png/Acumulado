@@ -22,6 +22,7 @@ const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
+const AsistenciaEquipo = lazy(() => import("./pages/bbva/AsistenciaEquipo").then((m) => ({ default: m.AsistenciaEquipo })));
 const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => ({ default: m.Proyectos })));
 const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
@@ -102,6 +103,9 @@ function Enrutador() {
           </Route>
           <Route element={<ProtectedRoute roles={["corporativo", "direccion", "rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
             <Route path="/bbva/equilibrio" element={<Equilibrio />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+            <Route path="/bbva/asistencia" element={<AsistenciaEquipo />} />
           </Route>
           <Route path="/proyectos" element={<Proyectos />} />
           <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
