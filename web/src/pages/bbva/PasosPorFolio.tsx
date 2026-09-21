@@ -59,6 +59,45 @@ function Cadena({ f }: { f: BbvaFolioControl }) {
   );
 }
 
+/** Leyenda de la secuencia: sale de PASOS_BBVA para que la definición y la
+ * regla que pinta el semáforo sean la misma. */
+export function LeyendaPasos({ compacta = false }: { compacta?: boolean }) {
+  const [abierta, setAbierta] = useState(false);
+  return (
+    <div className="rounded border border-slate-200 bg-white">
+      <button type="button" onClick={() => setAbierta((v) => !v)} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-slate-800">
+        ¿Qué significa cada paso?
+        <span className="text-xs text-slate-400">{abierta ? "ocultar" : "ver la secuencia"}</span>
+      </button>
+      {abierta && (
+        <div className="border-t border-slate-100 px-3 py-2">
+          <ol className="space-y-2">
+            {PASOS_BBVA.map((p, i) => (
+              <li key={p.clave} className="flex gap-2 text-xs">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-600 text-[10px] font-semibold text-white">{i + 1}</span>
+                <div>
+                  <p className="font-semibold text-slate-800">{p.etiqueta}</p>
+                  <p className="text-slate-600">{p.que}</p>
+                  {!compacta && (
+                    <p className="text-slate-400">
+                      Se marca cuando: {p.criterio} · Responsable: {p.responsable}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-3 text-xs text-slate-500">
+            <b>Cancelado</b>: el folio se canceló (estatus operativo CANCELADO); no avanza y no cuenta en cobranza. El semáforo de cuadrillas va antes de estos
+            pasos: <b>Pendiente</b> (rojo) es que la cuadrilla aún no llega, <b>En ejecución</b> (amarillo) que está trabajando en la sucursal y{" "}
+            <b>Atendido</b> (verde) es el paso 3, Terminado. Todo lo que sigue es administrativo y de cobranza.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PasosPorFolio() {
   const { data: folios, isLoading, error } = useFoliosControl();
   const { data: semaforo } = useSemaforoCuadrilla();
@@ -104,6 +143,8 @@ export function PasosPorFolio() {
           <p className="text-xs text-slate-500">{folios.length} trabajos en el control · en qué paso va cada folio</p>
         </div>
       </div>
+
+      <LeyendaPasos />
 
       <div className="flex flex-wrap gap-1.5">
         {ordenPasos.filter((e) => conteoPaso[e]).map((e) => (

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { LeyendaPasos } from "./PasosPorFolio";
 
 // Indicador de cuadrillas BBVA para los supervisores (rol supervisor_bbva):
 // capturan el número de folio y lo mueven por el semáforo pendiente (rojo)
@@ -163,6 +164,8 @@ export function FoliosCuadrilla() {
 
       {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+
+      <LeyendaPasos compacta />
 
       <ul className="space-y-2">
         {lista.map((f) => {
