@@ -1,7 +1,8 @@
 // Documentos de RH que se generan desde la app como página imprimible
 // (contrato individual de trabajo, carta finiquito y aviso de privacidad).
-// Todo es puro: reciben datos y regresan HTML; la única función con efectos
-// es abrirParaImprimir. Los montos del finiquito son de REFERENCIA (LFT
+// Todo es puro: reciben datos y regresan HTML (abrirParaImprimir vive en
+// imprimir.ts porque usa window y este módulo se compila también para las
+// pruebas de node, sin DOM). Los montos del finiquito son de REFERENCIA (LFT
 // arts. 76, 80 y 87): RH los revisa antes de firmar.
 
 export interface PersonaDoc {
@@ -293,16 +294,4 @@ export function htmlAvisoPrivacidad(patron: PatronDoc, persona?: Pick<PersonaDoc
     <h2>Cambios al aviso</h2>
     <p>Cualquier modificación se publicará en la aplicación interna del grupo y en el área de Recursos Humanos.</p>
     ${persona ? `<p style="margin-top:32pt">He leído y acepto el presente aviso de privacidad.</p><div class="firmas"><div class="firma">${esc(persona.nombre)}<br>Fecha: ____ / ____ / ______</div><div class="firma">${esc(patron.razon_social)}<br>Recursos Humanos</div></div>` : ""}`);
-}
-
-/** Abre el documento en una pestaña nueva lista para imprimir o guardar
- * como PDF. Si el navegador bloquea la ventana, regresa false para que la
- * pantalla avise. */
-export function abrirParaImprimir(html: string): boolean {
-  const ventana = window.open("", "_blank");
-  if (!ventana) return false;
-  ventana.document.open();
-  ventana.document.write(html);
-  ventana.document.close();
-  return true;
 }
