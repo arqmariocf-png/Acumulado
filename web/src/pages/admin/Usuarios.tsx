@@ -101,6 +101,38 @@ export function Usuarios() {
     onError: (err) => alert((err as Error).message),
   });
 
+  // Alta directa sin correo: el mailer de Supabase rebota "email rate limit
+  // exceeded" en "Crear cuenta" cuando varias personas se registran el
+  // mismo día (Luis Gutiérrez, 21-sep-2026). admin-crear-usuario crea la
+  // cuenta ya confirmada, le pone rol/nombre/teléfono y regresa el link
+  // para definir contraseña, que se manda por WhatsApp igual que arriba.
+  const [mostrarAlta, setMostrarAlta] = useState(false);
+  const crearCuenta = useMutation({
+    mutationFn: async (p: { email: string; nombre: string | null; telefono: string | null; rol: AppRol }) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const respuesta = await fetch(urlFuncion("admin-crear-usuario"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(p),
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+      return json as { link: string; email: string; userId: string };
+    },
+    onSuccess: ({ link, email }, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] });
+      setMostrarAlta(false);
+      navigator.clipboard?.writeText(link).catch(() => {});
+      if (variables.telefono) {
+        const mensaje = `Hola, ya tienes tu cuenta en el sistema de Grupo Loma (${email}). Entra con este link para definir tu contraseña: ${link}`;
+        window.open(`https://wa.me/${numeroWhatsapp(variables.telefono)}?text=${encodeURIComponent(mensaje)}`, "_blank");
+      } else {
+        window.prompt(`Cuenta creada para ${email}. Link para definir contraseña (ya copiado al portapapeles):`, link);
+      }
+    },
+    onError: (err) => alert((err as Error).message),
+  });
+
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
 
   return (
@@ -108,6 +140,48 @@ export function Usuarios() {
       <p className="mb-4 text-sm text-slate-500">
         rol='empresa' requiere una empresa asignada. rol='pendiente' o sin empresa asignada (salvo corporativo/admin) significa sin acceso a datos.
       </p>
+
+      <div className="mb-4">
+        {!mostrarAlta ? (
+          <button type="button" onClick={() => setMostrarAlta(true)} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
+            Crear cuenta sin correo
+          </button>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              crearCuenta.mutate({
+                email: String(fd.get("email") ?? "").trim(),
+                nombre: String(fd.get("nombre") ?? "").trim() || null,
+                telefono: String(fd.get("telefono") ?? "").trim() || null,
+                rol: String(fd.get("rol") ?? "pendiente") as AppRol,
+              });
+            }}
+            className="grid gap-2 rounded border border-slate-200 bg-white p-3 sm:grid-cols-[2fr_2fr_1fr_1fr_auto_auto]"
+          >
+            <input name="email" type="email" required placeholder="correo@grupoloma.mx" className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <input name="nombre" placeholder="Nombre" className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <input name="telefono" placeholder="WhatsApp (10 dígitos)" className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <select name="rol" defaultValue="pendiente" className="rounded border border-slate-300 px-2 py-1.5 text-sm">
+              {ROLES.filter((r) => r !== "admin").map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <button disabled={crearCuenta.isPending} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+              {crearCuenta.isPending ? "Creando…" : "Crear y mandar link"}
+            </button>
+            <button type="button" onClick={() => setMostrarAlta(false)} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700">
+              Cancelar
+            </button>
+          </form>
+        )}
+        <p className="mt-1 text-xs text-slate-500">
+          La cuenta queda confirmada sin pasar por el correo de Supabase. Si pones WhatsApp, se abre el mensaje con el link para definir contraseña.
+        </p>
+      </div>
 
       <input
         type="text"
