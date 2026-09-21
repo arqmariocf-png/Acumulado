@@ -4,7 +4,7 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable" | "rh_documentos" | "produccion";
+export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable" | "rh_documentos" | "produccion" | "supervisor_bbva";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 

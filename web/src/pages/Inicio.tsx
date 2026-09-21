@@ -177,12 +177,15 @@ export function Inicio() {
   const soloRequisicionesYPrecios = rol === "responsable";
   const esAlmacen = rol === "almacen";
   const esRhDocumentos = rol === "rh_documentos";
-  const veFinanzas = !soloRequisicionesYPrecios && !esAlmacen && !esRhDocumentos;
+  // Supervisor de cuadrilla BBVA: solo folios + semáforo (y el checador).
+  const esSupervisorBbva = rol === "supervisor_bbva";
+  const veFinanzas = !soloRequisicionesYPrecios && !esAlmacen && !esRhDocumentos && !esSupervisorBbva;
   const veRH = rol === "rh" || esRhDocumentos || esAdmin;
   const veSaldos = rol === "corporativo" || rol === "direccion" || esAdmin;
   const veInventario = veFinanzas || esAlmacen;
-  const vePrecios = true;
-  const veRequisiciones = true;
+  const vePrecios = !esSupervisorBbva;
+  const veRequisiciones = !esSupervisorBbva;
+  const veFoliosBbva = esSupervisorBbva || rol === "corporativo" || rol === "direccion" || esAdmin;
 
   const etapaPu =
     rol === "responsable"
@@ -254,7 +257,23 @@ export function Inicio() {
     return count ?? 0;
   });
 
+  const foliosPendientes = useConteo("bbva-folios", veFoliosBbva, async () => {
+    const { count, error } = await supabase
+      .from("bbva_folios_cuadrilla")
+      .select("*", { count: "exact", head: true })
+      .neq("estatus", "atendido");
+    if (error) throw error;
+    return count ?? 0;
+  });
+
   const mosaicos = [
+    veFoliosBbva && {
+      a: "/bbva/folios",
+      etiqueta: "Folios BBVA",
+      descripcion: "folios pendientes o en ejecución",
+      icono: ICONOS.pendientes,
+      conteo: foliosPendientes,
+    },
     !!miPersonal && {
       a: "/mis-documentos",
       etiqueta: "Mis documentos",
