@@ -19,6 +19,7 @@ const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
+const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => ({ default: m.Proyectos })));
 const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
@@ -92,6 +93,7 @@ function Enrutador() {
           <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
           <Route path="/pendientes" element={<Pendientes />} />
           <Route path="/checador" element={<Checador />} />
+          <Route path="/mis-documentos" element={<MisDocumentos />} />
           <Route path="/proyectos" element={<Proyectos />} />
           <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
 
