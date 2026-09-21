@@ -27,9 +27,18 @@ function useSemaforoCuadrilla() {
   return useQuery({
     queryKey: ["bbva-folios-cuadrilla-semaforo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("bbva_folios_cuadrilla").select("folio, estatus, supervisor:supervisor_id(nombre)");
+      const [{ data, error }, { data: sups }] = await Promise.all([
+        supabase.from("bbva_folios_cuadrilla").select("folio, estatus, supervisor_id"),
+        supabase.from("v_supervisores_bbva").select("id, nombre"),
+      ]);
       if (error) throw error;
-      return new Map((data as unknown as { folio: string; estatus: EstatusCuadrilla; supervisor: { nombre: string } | null }[]).map((f) => [f.folio.trim(), f]));
+      const nombres = new Map(((sups ?? []) as { id: string; nombre: string }[]).map((s) => [s.id, s.nombre]));
+      return new Map(
+        (data as { folio: string; estatus: EstatusCuadrilla; supervisor_id: string }[]).map((f) => [
+          f.folio.trim(),
+          { estatus: f.estatus, supervisor: nombres.get(f.supervisor_id) ?? null },
+        ]),
+      );
     },
   });
 }
@@ -239,7 +248,7 @@ export function PasosPorFolio() {
                   </td>
                   <td className="px-2 py-1.5">
                     {cuadrilla ? (
-                      <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 ${cuadrilla.chip}`} title={sem?.supervisor?.nombre ?? ""}>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 ${cuadrilla.chip}`} title={sem?.supervisor ?? ""}>
                         <span className={`inline-block h-2 w-2 rounded-full ${cuadrilla.punto}`} /> {cuadrilla.etiqueta}
                       </span>
                     ) : (
