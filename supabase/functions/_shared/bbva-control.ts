@@ -92,17 +92,81 @@ export interface ObraMenorControl {
 
 /** Los pasos del proceso, en orden, con la regla para saber si ya se
  * cumplió en un folio. Un paso "cumplido" no dice nada de los siguientes. */
+/** Los pasos del proceso, en orden, con la regla para saber si ya se
+ * cumplió en un folio y su definición para que todos lean la misma
+ * secuencia (la leyenda de la vista "Estatus por paso" sale de aquí). Un
+ * paso "cumplido" no dice nada de los siguientes. */
 export const PASOS_BBVA = [
-  { clave: "recepcion", etiqueta: "Recepción", cumplido: (f: FolioControl) => !!f.fecha_recepcion },
-  { clave: "programado", etiqueta: "Programado", cumplido: (f: FolioControl) => !!f.fecha_programada || !!f.equipo },
-  { clave: "terminado", etiqueta: "Terminado", cumplido: (f: FolioControl) => (f.estatus_operativo ?? "").toLowerCase() === "terminado" },
-  { clave: "soportes", etiqueta: "Soportes", cumplido: (f: FolioControl) => (f.soportes_completos ?? "").toLowerCase() === "completo" },
-  { clave: "enviado", etiqueta: "Enviado", cumplido: (f: FolioControl) => !!f.fecha_envio_soportes || (f.autorizacion ?? "").toLowerCase() === "autorizado" || (f.accion_fichero ?? "").toLowerCase().startsWith("fichero") },
-  { clave: "autorizado", etiqueta: "Autorizado", cumplido: (f: FolioControl) => (f.autorizacion ?? "").toLowerCase() === "autorizado" },
-  { clave: "fichero", etiqueta: "Fichero", cumplido: (f: FolioControl) => (f.accion_fichero ?? "").toLowerCase().startsWith("fichero") },
-  { clave: "pedido", etiqueta: "Pedido", cumplido: (f: FolioControl) => !!f.pedido },
-  { clave: "factura", etiqueta: "Factura", cumplido: (f: FolioControl) => !!f.factura },
-  { clave: "pago", etiqueta: "Pago", cumplido: (f: FolioControl) => (f.estado_pago ?? "").toLowerCase().startsWith("pago realizado") },
+  {
+    clave: "recepcion", etiqueta: "Recepción",
+    que: "BBVA mandó el folio por correo y se capturó en el control con su sucursal, alcance y fecha de recepción.",
+    criterio: "Fecha de recepción del folio capturada.",
+    responsable: "Coordinación / auxiliar administrativo",
+    cumplido: (f: FolioControl) => !!f.fecha_recepcion,
+  },
+  {
+    clave: "programado", etiqueta: "Programado",
+    que: "Se asignó el equipo ejecutor y la fecha en que la cuadrilla va a la sucursal.",
+    criterio: "Fecha programada de atención o equipo ejecutor capturados.",
+    responsable: "Supervisor de cuadrilla",
+    cumplido: (f: FolioControl) => !!f.fecha_programada || !!f.equipo,
+  },
+  {
+    clave: "terminado", etiqueta: "Terminado",
+    que: "El trabajo en la sucursal quedó concluido. Equivale al verde (\"Atendido\") del semáforo de cuadrillas.",
+    criterio: "Estatus operativo = Terminado.",
+    responsable: "Supervisor de cuadrilla",
+    cumplido: (f: FolioControl) => (f.estatus_operativo ?? "").toLowerCase() === "terminado",
+  },
+  {
+    clave: "soportes", etiqueta: "Soportes",
+    que: "El expediente del folio está completo: generadores, reporte fotográfico, carátula y presupuesto.",
+    criterio: "Soportes completos = Completo (los cuatro documentos entregados).",
+    responsable: "Auxiliar administrativo",
+    cumplido: (f: FolioControl) => (f.soportes_completos ?? "").toLowerCase() === "completo",
+  },
+  {
+    clave: "enviado", etiqueta: "Enviado",
+    que: "Los soportes ya se mandaron a BBVA para su revisión. Tener los soportes no es haberlos enviado.",
+    criterio: "Fecha de envío de soportes capturada (o el folio ya está autorizado / con fichero).",
+    responsable: "Auxiliar administrativo",
+    cumplido: (f: FolioControl) => !!f.fecha_envio_soportes || (f.autorizacion ?? "").toLowerCase() === "autorizado" || (f.accion_fichero ?? "").toLowerCase().startsWith("fichero"),
+  },
+  {
+    clave: "autorizado", etiqueta: "Autorizado",
+    que: "BBVA revisó los soportes y autorizó el trabajo y su monto.",
+    criterio: "Autorización = Autorizado.",
+    responsable: "BBVA (el coordinador da seguimiento)",
+    cumplido: (f: FolioControl) => (f.autorizacion ?? "").toLowerCase() === "autorizado",
+  },
+  {
+    clave: "fichero", etiqueta: "Fichero",
+    que: "Se realizó el fichero: el registro del trabajo autorizado que origina el cobro. Conservar evidencia; no implica facturación ni pago.",
+    criterio: "Acción / fichero = Fichero realizado.",
+    responsable: "Auxiliar administrativo",
+    cumplido: (f: FolioControl) => (f.accion_fichero ?? "").toLowerCase().startsWith("fichero"),
+  },
+  {
+    clave: "pedido", etiqueta: "Pedido",
+    que: "BBVA generó el número de pedido en Adquira para ese trabajo. Se cruza contra la exportación de Adquira que sube Belén.",
+    criterio: "N.º de pedido capturado.",
+    responsable: "BBVA / Adquira; contabilidad concilia",
+    cumplido: (f: FolioControl) => !!f.pedido,
+  },
+  {
+    clave: "factura", etiqueta: "Factura",
+    que: "Se emitió y cargó la factura contra el pedido.",
+    criterio: "N.º de factura capturado.",
+    responsable: "Contabilidad",
+    cumplido: (f: FolioControl) => !!f.factura,
+  },
+  {
+    clave: "pago", etiqueta: "Pago",
+    que: "BBVA pagó la factura; el folio queda cerrado en cobranza.",
+    criterio: "Estado del pago = Pago realizado, con fecha de recepción de factura / pago.",
+    responsable: "Tesorería confirma contra el estado de cuenta",
+    cumplido: (f: FolioControl) => (f.estado_pago ?? "").toLowerCase().startsWith("pago realizado"),
+  },
 ] as const;
 
 export type ClavePaso = (typeof PASOS_BBVA)[number]["clave"];
