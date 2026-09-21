@@ -170,7 +170,12 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
     "Obra Menor": { folios: 0, monto: 0, pagados: 0, monto_pagado: 0, pendientes: 0, monto_pendiente: 0, en_revision_supervisor: 0 },
   };
   const by_month: Record<string, { folios: number; monto: number }> = {};
-  const by_month_proceso: Record<string, Record<string, { folios: number; monto: number }>> = {};
+  // Por mes Y por proceso, con pagado/pendiente y ciclo de cobro propio:
+  // Mantenimiento y Obra Menor se reportan por separado porque tienen
+  // tiempos distintos (pedido 21-sep-2026), así que cada uno lleva su
+  // propio promedio de días folio -> pago.
+  const by_month_proceso: Record<string, Record<string, { folios: number; monto: number; pagados: number; monto_pagado: number; pendientes: number; monto_pendiente: number; ciclo_promedio_dias: number | null; _suma_dias?: number; _n_dias?: number }>> = {};
+  const cicloPorProceso: Record<string, { suma: number; n: number }> = { Mantenimiento: { suma: 0, n: 0 }, "Obra Menor": { suma: 0, n: 0 } };
   const by_especialidad: Record<string, { folios: number; monto: number }> = {};
   const by_supervisor: Record<string, { folios: number; monto: number; pagados: number; en_revision: number }> = {};
   const por_sucursal: Record<string, { folios: number; monto: number }> = {};
@@ -190,6 +195,7 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
     const mesKey = claveMes(r.fecha);
     if (mesKey === "Sin fecha") sinFecha++;
 
+    let diasCiclo: number | null = null;
     if (pagado) {
       kpi.folios_pagados++;
       kpi.monto_pagado += r.monto;
@@ -198,7 +204,7 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
         // Algunos folios traen fecha de pago ANTERIOR a la fecha de
         // apertura -- inconsistencia real del maestro (ver qa_notas), se
         // excluyen del promedio en vez de contaminarlo con días negativos.
-        if (dias >= 0) { sumaDiasPagados += dias; nPagadosConFecha++; } else nFechaPagoInconsistente++;
+        if (dias >= 0) { sumaDiasPagados += dias; nPagadosConFecha++; diasCiclo = dias; } else nFechaPagoInconsistente++;
       }
     } else {
       kpi.folios_pendientes++;
@@ -221,8 +227,14 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
     by_month[mesKey] ??= { folios: 0, monto: 0 };
     by_month[mesKey].folios++; by_month[mesKey].monto += r.monto;
     by_month_proceso[mesKey] ??= {};
-    by_month_proceso[mesKey][r.proceso] ??= { folios: 0, monto: 0 };
-    by_month_proceso[mesKey][r.proceso].folios++; by_month_proceso[mesKey][r.proceso].monto += r.monto;
+    by_month_proceso[mesKey][r.proceso] ??= { folios: 0, monto: 0, pagados: 0, monto_pagado: 0, pendientes: 0, monto_pendiente: 0, ciclo_promedio_dias: null, _suma_dias: 0, _n_dias: 0 };
+    const bmp = by_month_proceso[mesKey][r.proceso];
+    bmp.folios++; bmp.monto += r.monto;
+    if (pagado) { bmp.pagados++; bmp.monto_pagado += r.monto; } else { bmp.pendientes++; bmp.monto_pendiente += r.monto; }
+    if (diasCiclo != null) {
+      bmp._suma_dias! += diasCiclo; bmp._n_dias! += 1;
+      cicloPorProceso[r.proceso].suma += diasCiclo; cicloPorProceso[r.proceso].n += 1;
+    }
 
     const espKey = clasificarEspecialidad(r.descripcion);
     by_especialidad[espKey] ??= { folios: 0, monto: 0 };
@@ -257,6 +269,16 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
 
   kpi.ciclo_promedio_dias = nPagadosConFecha ? Math.round((sumaDiasPagados / nPagadosConFecha) * 10) / 10 : 0;
 
+  for (const mes of Object.values(by_month_proceso)) {
+    for (const v of Object.values(mes)) {
+      v.ciclo_promedio_dias = v._n_dias ? Math.round((v._suma_dias! / v._n_dias) * 10) / 10 : null;
+      v.monto = redondear2(v.monto); v.monto_pagado = redondear2(v.monto_pagado); v.monto_pendiente = redondear2(v.monto_pendiente);
+      delete v._suma_dias; delete v._n_dias;
+    }
+  }
+  const by_proceso_ciclo: Record<string, number | null> = {};
+  for (const [proceso, c] of Object.entries(cicloPorProceso)) by_proceso_ciclo[proceso] = c.n ? Math.round((c.suma / c.n) * 10) / 10 : null;
+
   const redondearMapa = <T extends { monto: number }>(obj: Record<string, T>) => {
     for (const k in obj) obj[k].monto = redondear2(obj[k].monto);
     return obj;
@@ -290,6 +312,7 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
     by_proceso,
     by_month,
     by_month_proceso,
+    by_proceso_ciclo,
     by_especialidad: redondearMapa(by_especialidad),
     by_supervisor: redondearMapa(by_supervisor),
     top_sucursales,
