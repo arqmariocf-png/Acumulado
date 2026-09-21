@@ -40,6 +40,8 @@ const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos"
 const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
 const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
 const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
+const InventarioRemisiones = lazy(() => import("./pages/inventario/Remisiones").then((m) => ({ default: m.Remisiones })));
+const InventarioRemisionDetalle = lazy(() => import("./pages/inventario/RemisionDetalle").then((m) => ({ default: m.RemisionDetalle })));
 const PreciosLayout = lazy(() => import("./pages/precios/PreciosLayout").then((m) => ({ default: m.PreciosLayout })));
 const PreciosAnalisis = lazy(() => import("./pages/precios/Analisis").then((m) => ({ default: m.Analisis })));
 const PreciosPublicados = lazy(() => import("./pages/precios/Publicados").then((m) => ({ default: m.Publicados })));
@@ -126,6 +128,8 @@ function Enrutador() {
             <Route path="existencias" element={<InventarioExistencias />} />
             <Route path="productos" element={<InventarioProductos />} />
             <Route path="match" element={<InventarioMatch />} />
+            <Route path="remisiones" element={<InventarioRemisiones />} />
+            <Route path="remisiones/:id" element={<InventarioRemisionDetalle />} />
           </Route>
 
           <Route path="/requisiciones" element={<RequisicionesLayout />}>

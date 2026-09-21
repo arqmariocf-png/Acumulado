@@ -1049,3 +1049,32 @@ export interface BbvaFolioControl {
   corte_id: string | null;
   actualizado_en: string;
 }
+
+// Remisión de salida de almacén (tabla remisiones_salida / vista
+// v_remisiones_salida): agrupa las líneas de una salida bajo un folio con QR.
+export type EstatusRemision = "emitida" | "entregada";
+
+export interface RemisionSalida {
+  id: string;
+  empresa_id: string;
+  empresa_nombre: string;
+  almacen_id: string;
+  almacen_nombre: string;
+  numero: number;
+  folio: string;
+  fecha: string;
+  entregar_a: string;
+  destino: string | null;
+  orden_venta_id: string | null;
+  observaciones: string | null;
+  estatus: EstatusRemision;
+  emitida_por: string;
+  emitida_por_nombre: string | null;
+  entregada_en: string | null;
+  entregada_por: string | null;
+  entregada_por_nombre: string | null;
+  recibio_nombre: string | null;
+  created_at: string;
+  lineas: number;
+  cantidad_total: number;
+}

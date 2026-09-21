@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
+import { idRemisionDesdeCodigo } from "../../lib/remision";
+import { imprimirRemision } from "./remisionQr";
 import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
 interface FilaCarrito {
@@ -264,7 +267,7 @@ function useMovimientosRecientes(empresaId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("movimientos_inventario")
-        .select("id, tipo, cantidad, costo_unitario, fecha, comentario, orden_compra_id, orden_venta_id, productos(nombre, sku)")
+        .select("id, tipo, cantidad, costo_unitario, fecha, comentario, orden_compra_id, orden_venta_id, remision_id, productos(nombre, sku), remisiones_salida(folio)")
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -386,6 +389,15 @@ export function Movimientos() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [notaEntregaId, setNotaEntregaId] = useState<string | null>(null);
+  // Remisión de salida con QR (pedido de Mario, 21-sep-2026): por omisión
+  // toda salida real genera su remisión; se puede apagar para salidas
+  // internas que no necesitan documento.
+  const [generarRemision, setGenerarRemision] = useState(true);
+  const [entregarA, setEntregarA] = useState("");
+  const [destino, setDestino] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+  const [ultimaRemision, setUltimaRemision] = useState<{ id: string; folio: string } | null>(null);
+  const navigate = useNavigate();
   const [itemsSugeridos, setItemsSugeridos] = useState<ItemSugeridoNota[]>([]);
   const [errorLecturaFoto, setErrorLecturaFoto] = useState<string | null>(null);
   const inputCodigoRef = useRef<HTMLInputElement>(null);
@@ -411,6 +423,13 @@ export function Movimientos() {
 
   async function buscarPorCodigo(valor: string) {
     const limpio = valor.trim();
+    // El QR de una remisión impresa abre la remisión (consulta / confirmar
+    // entrega) en vez de buscar un producto.
+    const remisionEscaneada = idRemisionDesdeCodigo(limpio);
+    if (remisionEscaneada) {
+      navigate(`/inventario/remisiones/${remisionEscaneada}`);
+      return;
+    }
     if (!limpio || !empresaId) return;
     setBuscando(true);
     setError(null);
@@ -522,13 +541,39 @@ export function Movimientos() {
       setError("Todas las líneas necesitan costo unitario para poder vincularse a una orden.");
       return;
     }
+    const conRemision = tipo === "salida" && !esAjuste && generarRemision;
+    if (conRemision && !entregarA.trim()) {
+      setError("Indica a quién se entrega el material para generar la remisión.");
+      return;
+    }
     setEnviando(true);
     setError(null);
     setMensaje(null);
+    setUltimaRemision(null);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
       if (!userId) throw new Error("Sesión expirada, vuelve a iniciar sesión.");
+
+      let remision: { id: string; folio: string } | null = null;
+      if (conRemision) {
+        const { data: rem, error: errRem } = await supabase
+          .from("remisiones_salida")
+          .insert({
+            empresa_id: empresaId,
+            almacen_id: almacen.id,
+            fecha,
+            entregar_a: entregarA.trim(),
+            destino: destino.trim() || null,
+            observaciones: observaciones.trim() || null,
+            orden_venta_id: ordenId || null,
+            emitida_por: userId,
+          })
+          .select("id, folio")
+          .single();
+        if (errRem) throw errRem;
+        remision = rem as { id: string; folio: string };
+      }
 
       const filas = carrito.map((f) => ({
         empresa_id: empresaId,
@@ -543,15 +588,30 @@ export function Movimientos() {
         es_ajuste: esAjuste,
         codigo_escaneado: f.producto.codigo_barras,
         nota_entrega_id: notaEntregaId,
+        remision_id: remision?.id ?? null,
         registrado_por: userId,
       }));
 
       const { error: errInsert } = await supabase.from("movimientos_inventario").insert(filas);
       if (errInsert) throw errInsert;
 
-      setMensaje(`Guardado: ${filas.length} línea(s) de ${tipo === "entrada" ? "entrada" : "salida"}.`);
+      setMensaje(
+        remision
+          ? `Guardado: ${filas.length} línea(s) de salida en la remisión ${remision.folio}.`
+          : `Guardado: ${filas.length} línea(s) de ${tipo === "entrada" ? "entrada" : "salida"}.`,
+      );
       setCarrito([]);
       limpiarFoto();
+      if (remision) {
+        setUltimaRemision(remision);
+        setEntregarA("");
+        setDestino("");
+        setObservaciones("");
+        queryClient.invalidateQueries({ queryKey: ["remisiones-salida"] });
+        // Abre la remisión lista para imprimir con su QR; si el navegador
+        // bloquea la ventana, el botón "Imprimir" de abajo la reabre.
+        imprimirRemision(remision.id).catch(() => undefined);
+      }
       queryClient.invalidateQueries({ queryKey: ["movimientos-inventario-recientes"] });
       queryClient.invalidateQueries({ queryKey: ["existencias"] });
       queryClient.invalidateQueries({ queryKey: ["avance-recepcion-oc"] });
@@ -622,6 +682,48 @@ export function Movimientos() {
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {tipo === "salida" && !esAjuste && empresaId && (
+        <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3">
+          <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+            <input type="checkbox" checked={generarRemision} onChange={(e) => setGenerarRemision(e.target.checked)} />
+            Generar remisión de salida con código QR
+          </label>
+          {generarRemision && (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Entregar a *</label>
+                <input
+                  value={entregarA}
+                  onChange={(e) => setEntregarA(e.target.value)}
+                  placeholder="Cliente, obra o persona"
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Destino / obra</label>
+                <input
+                  value={destino}
+                  onChange={(e) => setDestino(e.target.value)}
+                  placeholder="Dirección u obra"
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Observaciones</label>
+                <input
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            Al guardar se abre la remisión lista para imprimir. El QR abre la remisión en la app para consultarla o confirmar la entrega.
+          </p>
         </div>
       )}
 
@@ -827,7 +929,22 @@ export function Movimientos() {
       )}
 
       {error && <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      {mensaje && <p className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{mensaje}</p>}
+      {mensaje && (
+        <div className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          {mensaje}
+          {ultimaRemision && (
+            <span className="ml-2">
+              <button onClick={() => imprimirRemision(ultimaRemision.id).catch((err) => setError((err as Error).message))} className="underline">
+                Imprimir con QR
+              </button>
+              {" · "}
+              <Link to={`/inventario/remisiones/${ultimaRemision.id}`} className="underline">
+                Ver remisión
+              </Link>
+            </span>
+          )}
+        </div>
+      )}
 
       {empresaId && pendientesOrden && pendientesOrden.length > 0 && (
         <div className="mb-6">
@@ -882,6 +999,7 @@ export function Movimientos() {
                     <th className="px-3 py-2 text-right">Cantidad</th>
                     <th className="px-3 py-2 text-right">Costo unit.</th>
                     <th className="px-3 py-2">Vinculado</th>
+                    <th className="px-3 py-2">Remisión</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -895,11 +1013,20 @@ export function Movimientos() {
                       <td className="px-3 py-2 text-right">{m.cantidad}</td>
                       <td className="px-3 py-2 text-right">{m.costo_unitario ?? "—"}</td>
                       <td className="px-3 py-2">{m.orden_compra_id || m.orden_venta_id ? "Sí" : "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
+                        {m.remision_id ? (
+                          <Link to={`/inventario/remisiones/${m.remision_id}`} className="underline">
+                            {m.remisiones_salida?.folio ?? "Ver"}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {recientes.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                      <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
                         Todavía no hay movimientos de inventario para esta empresa.
                       </td>
                     </tr>
