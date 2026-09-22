@@ -1,15 +1,59 @@
-// Service worker mínimo: sólo existe para que el navegador ofrezca "instalar
-// app" (PWA) y para recibir/mostrar las notificaciones push de recordatorios
-// de tareas -- no cachea nada de la app (los datos son siempre en vivo desde
-// Supabase, cachear el HTML/JS viejo causaría más problemas que beneficios
-// en un sistema que cambia seguido).
+// Service worker: "instalar app" (PWA), notificaciones push y, desde el
+// 22-sep-2026, el cascarón de la app disponible sin señal para que el
+// checador pueda guardar marcas offline (ver Checador.tsx / colaOffline.ts).
+//
+// Qué se cachea y cómo:
+//   - Navegaciones (HTML): red primero; si no hay red, la última copia de
+//     index.html. Así la app nunca se queda con HTML viejo teniendo señal.
+//   - /assets/* (JS/CSS con hash en el nombre): caché primero -- son
+//     inmutables, un nombre nuevo es un archivo nuevo.
+//   - Todo lo demás (Supabase, funciones): siempre red, nunca caché.
+const CACHE = "acumulado-shell-v1";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((claves) => Promise.all(claves.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req)
+        .then((resp) => {
+          const copia = resp.clone();
+          caches.open(CACHE).then((c) => c.put("/index.html", copia)).catch(() => {});
+          return resp;
+        })
+        .catch(() => caches.match("/index.html").then((r) => r ?? new Response("Sin conexión", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }))),
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith("/assets/") || /\.(png|svg|webmanifest|ico)$/.test(url.pathname)) {
+    event.respondWith(
+      caches.match(req).then(
+        (enCache) =>
+          enCache ??
+          fetch(req).then((resp) => {
+            if (resp.ok) {
+              const copia = resp.clone();
+              caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+            }
+            return resp;
+          }),
+      ),
+    );
+  }
 });
 
 self.addEventListener("push", (event) => {

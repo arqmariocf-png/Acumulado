@@ -59,14 +59,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setCargando(true);
+    // Sin señal (checador offline) el perfil no se puede leer; se usa la
+    // última copia guardada en este navegador para que la app no mande a
+    // "cuenta sin acceso". Con señal, la copia se refresca cada vez.
+    const claveCache = `perfil-cache-${session.user.id}`;
     supabase
       .from("profiles")
       .select("id, nombre, rol, empresa_id, activo, bbva_mantenimiento")
       .eq("id", session.user.id)
       .single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!activo) return;
-        setPerfil(data as Profile | null);
+        if (data) {
+          setPerfil(data as Profile);
+          try {
+            localStorage.setItem(claveCache, JSON.stringify(data));
+          } catch {
+            /* sin almacenamiento local */
+          }
+        } else if (error && !navigator.onLine) {
+          let cacheado: Profile | null = null;
+          try {
+            const crudo = localStorage.getItem(claveCache);
+            cacheado = crudo ? (JSON.parse(crudo) as Profile) : null;
+          } catch {
+            cacheado = null;
+          }
+          setPerfil(cacheado);
+        } else {
+          setPerfil(null);
+        }
         setCargando(false);
       });
     return () => {

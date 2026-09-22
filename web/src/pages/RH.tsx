@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { MarcasChecador } from "./rh/MarcasChecador";
+import { UbicacionesChecador } from "./rh/UbicacionesChecador";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
 import { abrirParaImprimir } from "../lib/imprimir";
@@ -17,7 +18,7 @@ import type {
   ProyeccionNominaSemanal,
   TipoContrato, FrecuenciaPago } from "../types/database";
 
-type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina";
+type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "personal", etiqueta: "Personal" },
@@ -25,6 +26,7 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "contrataciones", etiqueta: "Contrataciones" },
   { valor: "documentos", etiqueta: "Documentos / Expediente" },
   { valor: "nomina", etiqueta: "Nómina y asistencia" },
+  { valor: "checador", etiqueta: "Checador" },
 ];
 
 function dinero(n: number | null | undefined): string {
@@ -104,6 +106,7 @@ export function RH() {
       {pestana === "contrataciones" && <PestanaContrataciones />}
       {pestana === "documentos" && <PestanaDocumentos />}
       {pestana === "nomina" && <PestanaNomina />}
+      {pestana === "checador" && <PestanaChecador />}
     </div>
   );
 }
@@ -260,7 +263,7 @@ function PestanaNomina() {
         </table>
       </div>
 
-      <MarcasChecador />
+      <p className="mb-4 text-xs text-slate-500">Las marcas del checador con foto, ubicación y correcciones están en la pestaña "Checador".</p>
 
       <h3 className="mb-2 text-sm font-semibold text-slate-700">Proyección de gasto de nómina (próximas 12 semanas)</h3>
       {cargandoProyeccion && <p className="text-sm text-slate-500">Cargando…</p>}
@@ -1089,6 +1092,19 @@ function PestanaContrataciones() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+
+// ── Checador: marcas, correcciones y sitios ───────────────────────────────
+
+function PestanaChecador() {
+  const [prellenado, setPrellenado] = useState<{ lat: number; lng: number } | null>(null);
+  return (
+    <div>
+      <UbicacionesChecador key={prellenado ? `${prellenado.lat},${prellenado.lng}` : "sin"} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />
+      <MarcasChecador onCrearSitioDesde={(c) => { setPrellenado(c); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
     </div>
   );
 }
