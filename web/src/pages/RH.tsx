@@ -6,13 +6,14 @@ import { MarcasChecador } from "./rh/MarcasChecador";
 import { UbicacionesChecador } from "./rh/UbicacionesChecador";
 import { Vacantes } from "./rh/Vacantes";
 import { Actividades } from "./rh/Actividades";
+import { PerfilesJornada } from "./rh/PerfilesJornada";
+import { NominaChecador } from "./rh/NominaChecador";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
 import { abrirParaImprimir } from "../lib/imprimir";
 import { patronDe } from "./MisDocumentos";
 import type {
   AsignacionDiaria,
-  AsistenciaSemanalPersonal,
   Contratacion,
   EmpresaPerfilLegal,
   DirectorioPerfil,
@@ -131,17 +132,6 @@ function useDirectorio() {
   });
 }
 
-function useAsistenciaSemanal(semanaInicio: string) {
-  return useQuery({
-    queryKey: ["asistencia-semanal", semanaInicio],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_asistencia_semanal_personal").select("*").eq("semana_inicio", semanaInicio);
-      if (error) throw error;
-      return data as AsistenciaSemanalPersonal[];
-    },
-  });
-}
-
 function useProyeccionNomina() {
   return useQuery({
     queryKey: ["proyeccion-nomina"],
@@ -159,7 +149,6 @@ function PestanaNomina() {
   const { data: directorio } = useDirectorio();
   const queryClient = useQueryClient();
   const [semanaInicio, setSemanaInicio] = useState(inicioDeSemana(new Date()));
-  const { data: asistencia, isLoading: cargandoAsistencia } = useAsistenciaSemanal(semanaInicio);
   const { data: proyeccion, isLoading: cargandoProyeccion } = useProyeccionNomina();
   const [error, setError] = useState<string | null>(null);
 
@@ -238,36 +227,9 @@ function PestanaNomina() {
           className="rounded border border-slate-300 px-2 py-1 text-xs"
         />
       </div>
-      {cargandoAsistencia && <p className="text-sm text-slate-500">Cargando…</p>}
-      <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-3 py-2">Persona</th>
-              <th className="px-3 py-2">Empresa</th>
-              <th className="px-3 py-2 text-right">Días checados</th>
-              <th className="px-3 py-2 text-right">Sueldo semanal (sugerido)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {asistencia?.map((a) => (
-              <tr key={`${a.personal_id}-${a.contratacion_id}`} className="border-t border-slate-100">
-                <td className="px-3 py-2">{a.personal_nombre}</td>
-                <td className="px-3 py-2 text-slate-500">{nombreEmpresa.get(a.empresa_id) ?? "—"}</td>
-                <td className="px-3 py-2 text-right">{a.dias_checados}</td>
-                <td className="px-3 py-2 text-right font-medium">{dinero(a.sueldo_semanal)}</td>
-              </tr>
-            ))}
-            {asistencia?.length === 0 && !cargandoAsistencia && (
-              <tr>
-                <td colSpan={4} className="px-3 py-8 text-center text-slate-400">
-                  Sin marcas de checador ligadas a nómina esta semana.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <NominaChecador semanaInicio={semanaInicio} nombreEmpresa={nombreEmpresa} />
+
+      <PerfilesJornada />
 
       <p className="mb-4 text-xs text-slate-500">Las marcas del checador con foto, ubicación y correcciones están en la pestaña "Checador".</p>
 
