@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { MarcasChecador } from "./rh/MarcasChecador";
 import { UbicacionesChecador } from "./rh/UbicacionesChecador";
+import { Vacantes } from "./rh/Vacantes";
+import { Actividades } from "./rh/Actividades";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
 import { abrirParaImprimir } from "../lib/imprimir";
@@ -18,7 +20,7 @@ import type {
   ProyeccionNominaSemanal,
   TipoContrato, FrecuenciaPago } from "../types/database";
 
-type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador";
+type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador" | "vacantes" | "actividades";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "personal", etiqueta: "Personal" },
@@ -27,6 +29,8 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "documentos", etiqueta: "Documentos / Expediente" },
   { valor: "nomina", etiqueta: "Nómina y asistencia" },
   { valor: "checador", etiqueta: "Checador" },
+  { valor: "vacantes", etiqueta: "Vacantes y rotación" },
+  { valor: "actividades", etiqueta: "Actividades" },
 ];
 
 function dinero(n: number | null | undefined): string {
@@ -107,6 +111,8 @@ export function RH() {
       {pestana === "documentos" && <PestanaDocumentos />}
       {pestana === "nomina" && <PestanaNomina />}
       {pestana === "checador" && <PestanaChecador />}
+      {pestana === "vacantes" && <Vacantes />}
+      {pestana === "actividades" && <Actividades />}
     </div>
   );
 }
