@@ -105,6 +105,106 @@ function useDocumentosFaltantes() {
   });
 }
 
+function sumarMeses(fechaIso: string, meses: number): string {
+  const d = new Date(`${fechaIso}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + meses);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Un solo PDF con todo el expediente: se sube una vez y se registra como
+ * entregado cada documento marcado (todos apuntan al mismo archivo). */
+function SubirExpedienteCompleto({ persona, filas, onSubido }: { persona: Personal; filas: ExpedienteFila[]; onSubido: () => void }) {
+  const [abierto, setAbierto] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [marcados, setMarcados] = useState<Set<string>>(() => new Set(filas.filter((f) => f.estado !== "vigente").map((f) => f.tipo_documento_id)));
+
+  function alternar(id: string) {
+    setMarcados((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  }
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const archivo = fd.get("file") as File | null;
+    if (!archivo || archivo.size === 0) return setError("Elige el PDF con el expediente.");
+    if (marcados.size === 0) return setError("Marca al menos un documento que venga en el PDF.");
+    setSubiendo(true);
+    try {
+      const cuerpo = new FormData();
+      cuerpo.append("file", archivo);
+      cuerpo.append("personalId", persona.id);
+      cuerpo.append("tipoDocumentoIds", [...marcados].join(","));
+      cuerpo.append("fechaEntrega", String(fd.get("fechaEntrega") ?? hoyIso()));
+      const respuesta = await fetch(urlFuncion("rh-documentos"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${await tokenSesion()}` },
+        body: cuerpo,
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+      form.reset();
+      setAbierto(false);
+      onSubido();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubiendo(false);
+    }
+  }
+
+  return (
+    <section className="rounded border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-slate-900">Expediente completo en un solo PDF</p>
+          <p className="text-xs text-slate-500">Sube un archivo con toda la documentación y marca qué documentos vienen; cada uno queda como entregado.</p>
+        </div>
+        <button onClick={() => setAbierto((v) => !v)} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+          {abierto ? "Cancelar" : "Subir un solo PDF"}
+        </button>
+      </div>
+      {abierto && (
+        <form onSubmit={onSubmit} className="mt-3 space-y-3 rounded bg-slate-50 p-3">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <div>
+              <label className={etiquetaCampo}>Archivo PDF</label>
+              <input name="file" type="file" accept="application/pdf" required className="w-full text-sm" />
+            </div>
+            <div>
+              <label className={etiquetaCampo}>Fecha de entrega</label>
+              <input name="fechaEntrega" type="date" defaultValue={hoyIso()} className={campoTexto} />
+            </div>
+          </div>
+          <div>
+            <p className={etiquetaCampo}>Documentos que vienen en el PDF</p>
+            <div className="grid gap-1 sm:grid-cols-2">
+              {filas.map((f) => (
+                <label key={f.tipo_documento_id} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={marcados.has(f.tipo_documento_id)} onChange={() => alternar(f.tipo_documento_id)} />
+                  {f.tipo_documento_nombre}
+                  {f.estado === "vigente" && <span className="text-xs text-emerald-600">(ya vigente)</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+          <button disabled={subiendo} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+            {subiendo ? "Subiendo y leyendo…" : `Subir y marcar ${marcados.size} documento(s)`}
+          </button>
+          {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        </form>
+      )}
+    </section>
+  );
+}
+
 async function tokenSesion() {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? "";
@@ -168,6 +268,7 @@ export function PestanaDocumentos() {
 }
 
 function ExpedientePersona({ persona, puedeAplicar }: { persona: Personal; puedeAplicar: boolean }) {
+  const queryClient = useQueryClient();
   const { data: filas, isLoading } = useExpediente(persona.id);
   const completos = (filas ?? []).filter((f) => f.estado === "vigente").length;
 
@@ -195,6 +296,17 @@ function ExpedientePersona({ persona, puedeAplicar }: { persona: Personal; puede
       </section>
 
       {isLoading && <p className="text-sm text-slate-400">Cargando expediente…</p>}
+      {filas && filas.length > 0 && (
+        <SubirExpedienteCompleto
+          key={filas.map((f) => f.documento_id ?? "-").join("|")}
+          persona={persona}
+          filas={filas}
+          onSubido={() => {
+            queryClient.invalidateQueries({ queryKey: ["rh-expediente", persona.id] });
+            queryClient.invalidateQueries({ queryKey: ["rh-documentos-faltantes"] });
+          }}
+        />
+      )}
       {filas?.map((f) => <FilaDocumento key={f.tipo_documento_id} fila={f} persona={persona} puedeAplicar={puedeAplicar} />)}
     </div>
   );
@@ -281,12 +393,50 @@ function FilaDocumento({ fila, persona, puedeAplicar }: { fila: ExpedienteFila; 
     onError: (err) => setError((err as Error).message),
   });
 
+  // Checklist sin archivo: marcar "entregado" registra el documento con la
+  // fecha de hoy (y su vigencia); desmarcarlo quita ese registro. Solo
+  // aplica cuando el registro no trae archivo -- un archivo subido no se
+  // borra desde aquí.
+  const entregado = useMutation({
+    mutationFn: async (marcar: boolean) => {
+      const { data: sesion } = await supabase.auth.getSession();
+      if (marcar) {
+        const hoy = hoyIso();
+        const { error } = await supabase.from("documentos_personal").insert({
+          personal_id: persona.id,
+          tipo_documento_id: fila.tipo_documento_id,
+          fecha_entrega: hoy,
+          fecha_vigencia: fila.vigencia_meses ? sumarMeses(hoy, fila.vigencia_meses) : null,
+          created_by: sesion.session?.user.id,
+        });
+        if (error) throw error;
+      } else if (fila.documento_id) {
+        const { error } = await supabase.from("documentos_personal").delete().eq("id", fila.documento_id).is("storage_path", null);
+        if (error) throw error;
+      }
+    },
+    onSuccess: invalidar,
+    onError: (err) => setError((err as Error).message),
+  });
+
   const estado = ESTADO[fila.estado];
   const tieneArchivo = !!fila.storage_path;
+  const puedeMarcar = puedeAplicar && (!fila.documento_id || !tieneArchivo);
 
   return (
     <section className="rounded border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-2">
+        {puedeMarcar ? (
+          <input
+            type="checkbox"
+            title={fila.documento_id ? "Desmarcar entregado" : "Marcar como entregado (sin archivo)"}
+            checked={fila.estado === "vigente"}
+            disabled={entregado.isPending}
+            onChange={(e) => entregado.mutate(e.target.checked)}
+          />
+        ) : (
+          <input type="checkbox" checked={fila.estado === "vigente"} disabled title="Tiene archivo; sube una versión nueva para renovarlo" />
+        )}
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${estado.clase}`}>{estado.etiqueta}</span>
         <p className="grow text-sm font-medium text-slate-900">{fila.tipo_documento_nombre}</p>
         {fila.documento_id && (

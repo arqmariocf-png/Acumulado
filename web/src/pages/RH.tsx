@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { MarcasChecador } from "./rh/MarcasChecador";
 import { PestanaDocumentos } from "./rh/Expediente";
-import { htmlFiniquito } from "../lib/documentosRh";
+import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
 import { abrirParaImprimir } from "../lib/imprimir";
 import { patronDe } from "./MisDocumentos";
 import type {
@@ -15,8 +15,7 @@ import type {
   DirectorioPerfil,
   Personal,
   ProyeccionNominaSemanal,
-  TipoContrato,
-} from "../types/database";
+  TipoContrato, FrecuenciaPago } from "../types/database";
 
 type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina";
 
@@ -419,6 +418,7 @@ function PestanaPersonal() {
       correo: oVacio(fd, "correo"),
       curp: oVacio(fd, "curp"),
       rfc: oVacio(fd, "rfc"),
+      nss: oVacio(fd, "nss"),
       domicilio_particular: oVacio(fd, "domicilio_particular"),
       domicilio_notificaciones: oVacio(fd, "domicilio_notificaciones"),
       ine_numero_identificacion: oVacio(fd, "ine_numero_identificacion"),
@@ -497,6 +497,10 @@ function PestanaPersonal() {
             <div>
               <label className={etiquetaCampo}>RFC</label>
               <input name="rfc" className={campoTexto} />
+            </div>
+            <div>
+              <label className={etiquetaCampo}>NSS (Número de Seguridad Social)</label>
+              <input name="nss" inputMode="numeric" maxLength={11} placeholder="11 dígitos" className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Domicilio particular</label>
@@ -684,9 +688,11 @@ function PestanaPersonal() {
                     disabled={!p.activo || cambiarArea.isPending}
                     onChange={(e) => cambiarArea.mutate({ id: p.id, area: e.target.value || null })}
                     className="rounded border border-slate-300 px-1 py-0.5 text-xs"
-                    title="Área para el punto de equilibrio"
+                    title="Área. Mantenimiento BBVA alimenta el punto de equilibrio de esa área."
                   >
                     <option value="">—</option>
+                    <option value="operativo">Operativo</option>
+                    <option value="administrativo">Administrativo</option>
                     <option value="bbva_puebla">Mantenimiento BBVA</option>
                   </select>
                 </td>
@@ -763,12 +769,21 @@ function PestanaAsignaciones() {
   const { data: asignaciones, isLoading } = useAsignacionesDelDia(fecha);
   const queryClient = useQueryClient();
 
+  const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+
   const guardar = useMutation({
-    mutationFn: async (payload: { personal_id: string; fecha: string; empresa_id: string; proyecto: string | null }) => {
-      const { error } = await supabase.from("asignaciones_diarias").upsert(payload, { onConflict: "personal_id,fecha" });
+    mutationFn: async (payload: { personal_id: string; fecha: string; empresa_id: string; proyecto: string | null; nombre: string }) => {
+      const { nombre: _nombre, ...fila } = payload;
+      const { error } = await supabase.from("asignaciones_diarias").upsert(fila, { onConflict: "personal_id,fecha" });
       if (error) throw error;
+      return payload.nombre;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] }),
+    onSuccess: (nombre) => {
+      setAviso({ tipo: "ok", texto: `Asignación de ${nombre} guardada.` });
+      queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] });
+      queryClient.invalidateQueries({ queryKey: ["asistencia-semanal"] });
+    },
+    onError: (err) => setAviso({ tipo: "error", texto: `No se guardó: ${(err as Error).message}` }),
   });
 
   const quitar = useMutation({
@@ -776,7 +791,11 @@ function PestanaAsignaciones() {
       const { error } = await supabase.from("asignaciones_diarias").delete().eq("personal_id", personalId).eq("fecha", fecha);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] }),
+    onSuccess: () => {
+      setAviso({ tipo: "ok", texto: "Asignación quitada." });
+      queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] });
+    },
+    onError: (err) => setAviso({ tipo: "error", texto: `No se quitó: ${(err as Error).message}` }),
   });
 
   const personalActivo = personal?.filter((p) => p.activo) ?? [];
@@ -794,6 +813,11 @@ function PestanaAsignaciones() {
       </p>
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+      {aviso && (
+        <p className={`mb-3 rounded border px-3 py-2 text-sm ${aviso.tipo === "ok" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+          {aviso.texto}
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">
@@ -806,17 +830,25 @@ function PestanaAsignaciones() {
             </tr>
           </thead>
           <tbody>
-            {personalActivo.map((p) => (
-              <FilaAsignacion
-                key={p.id}
-                personal={p}
-                fecha={fecha}
-                asignacion={asignacionPorPersonal.get(p.id)}
-                empresas={empresas ?? []}
-                onGuardar={(empresaId, proyecto) => guardar.mutate({ personal_id: p.id, fecha, empresa_id: empresaId, proyecto })}
-                onQuitar={() => quitar.mutate(p.id)}
-              />
-            ))}
+            {/* Las filas se montan hasta que llegan las asignaciones del día y
+                se remontan al cambiar de día o al guardar: antes se quedaban
+                con el valor inicial vacío y parecía que "no guardaba". */}
+            {asignaciones &&
+              personalActivo.map((p) => {
+                const a = asignacionPorPersonal.get(p.id);
+                return (
+                  <FilaAsignacion
+                    key={`${p.id}-${fecha}-${a?.empresa_id ?? ""}-${a?.proyecto ?? ""}`}
+                    personal={p}
+                    fecha={fecha}
+                    asignacion={a}
+                    empresas={empresas ?? []}
+                    guardando={guardar.isPending || quitar.isPending}
+                    onGuardar={(empresaId, proyecto) => guardar.mutate({ personal_id: p.id, fecha, empresa_id: empresaId, proyecto, nombre: p.nombre })}
+                    onQuitar={() => quitar.mutate(p.id)}
+                  />
+                );
+              })}
             {personalActivo.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
@@ -835,6 +867,7 @@ function FilaAsignacion({
   personal,
   asignacion,
   empresas,
+  guardando,
   onGuardar,
   onQuitar,
 }: {
@@ -842,11 +875,13 @@ function FilaAsignacion({
   fecha: string;
   asignacion: AsignacionDiaria | undefined;
   empresas: { id: string; nombre: string }[];
+  guardando: boolean;
   onGuardar: (empresaId: string, proyecto: string | null) => void;
   onQuitar: () => void;
 }) {
   const [empresaId, setEmpresaId] = useState(asignacion?.empresa_id ?? "");
   const [proyecto, setProyecto] = useState(asignacion?.proyecto ?? "");
+  const sinCambios = empresaId === (asignacion?.empresa_id ?? "") && proyecto.trim() === (asignacion?.proyecto ?? "");
 
   return (
     <tr className="border-t border-slate-100">
@@ -867,9 +902,10 @@ function FilaAsignacion({
       <td className="px-3 py-2">
         <button
           onClick={() => (empresaId ? onGuardar(empresaId, proyecto.trim() || null) : onQuitar())}
-          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          disabled={guardando || sinCambios}
+          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
         >
-          Guardar
+          {asignacion && sinCambios ? "Guardado" : "Guardar"}
         </button>
       </td>
     </tr>
@@ -925,11 +961,15 @@ function PestanaContrataciones() {
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
+    const frecuencia = (fd.get("frecuencia_pago") === "quincenal" ? "quincenal" : "semanal") as FrecuenciaPago;
+    const sueldoPeriodo = Number(fd.get("sueldo_periodo"));
     crear.mutate({
       personal_id: fd.get("personal_id"),
       empresa_id: fd.get("empresa_id"),
       puesto: fd.get("puesto"),
-      sueldo_semanal: Number(fd.get("sueldo_semanal")),
+      frecuencia_pago: frecuencia,
+      sueldo_periodo: sueldoPeriodo,
+      sueldo_semanal: sueldoSemanalDesde(frecuencia, sueldoPeriodo),
       fecha_inicio: fd.get("fecha_inicio"),
       duracion_dias: Number(fd.get("duracion_dias")),
       tipo_contrato: fd.get("tipo_contrato"),
@@ -981,8 +1021,15 @@ function PestanaContrataciones() {
           <input name="puesto" required className={campoTexto} />
         </div>
         <div>
-          <label className={etiquetaCampo}>Sueldo semanal *</label>
-          <input type="number" step="0.01" min="0.01" name="sueldo_semanal" required className={campoTexto} />
+          <label className={etiquetaCampo}>Frecuencia de pago *</label>
+          <select name="frecuencia_pago" required className={campoTexto} defaultValue="semanal">
+            <option value="semanal">Semanal</option>
+            <option value="quincenal">Quincenal</option>
+          </select>
+        </div>
+        <div>
+          <label className={etiquetaCampo}>Sueldo por periodo (semana o quincena) *</label>
+          <input type="number" step="0.01" min="0.01" name="sueldo_periodo" required className={campoTexto} />
         </div>
         <div>
           <label className={etiquetaCampo}>Fecha de inicio *</label>
@@ -1010,7 +1057,7 @@ function PestanaContrataciones() {
               <th className="px-3 py-2">Empresa (patrón)</th>
               <th className="px-3 py-2">Tipo de contrato</th>
               <th className="px-3 py-2">Puesto</th>
-              <th className="px-3 py-2 text-right">Sueldo semanal</th>
+              <th className="px-3 py-2 text-right">Sueldo</th>
               <th className="px-3 py-2">Inicio</th>
               <th className="px-3 py-2">Fin</th>
               <th className="px-3 py-2">Estatus</th>
@@ -1023,7 +1070,10 @@ function PestanaContrataciones() {
                 <td className="px-3 py-2">{c.empresa?.nombre ?? "—"}</td>
                 <td className="px-3 py-2">{ETIQUETA_TIPO_CONTRATO[c.tipo_contrato] ?? c.tipo_contrato}</td>
                 <td className="px-3 py-2">{c.puesto}</td>
-                <td className="px-3 py-2 text-right">${c.sueldo_semanal.toLocaleString("es-MX")}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">
+                  ${(c.sueldo_periodo ?? c.sueldo_semanal).toLocaleString("es-MX")} {c.frecuencia_pago === "quincenal" ? "quincenal" : "semanal"}
+                  {c.frecuencia_pago === "quincenal" && <div className="text-xs text-slate-400">≈ ${c.sueldo_semanal.toLocaleString("es-MX")} semanal</div>}
+                </td>
                 <td className="px-3 py-2">{c.fecha_inicio}</td>
                 <td className="px-3 py-2">{c.fecha_fin}</td>
                 <td className="px-3 py-2">{c.estatus}</td>

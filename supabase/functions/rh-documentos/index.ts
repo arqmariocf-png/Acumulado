@@ -9,6 +9,12 @@
 //
 // POST multipart/form-data: file, personalId, tipoDocumentoId, fechaEntrega
 //   -> { documento, extraccion, sugerencias }
+// POST con tipoDocumentoIds (ids separados por coma) en vez de
+//   tipoDocumentoId: un solo PDF con todo el expediente. El archivo se
+//   guarda una vez, se registra un documento por cada tipo marcado (todos
+//   apuntan al mismo archivo) y la IA lee el PDF completo una sola vez; lo
+//   extraído queda en el primer documento de la lista.
+//   -> { documentos, extraccion, sugerencias }
 // GET  ?documentoId=<uuid> -> { url } (signed URL de 60 s para ver el archivo)
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.122.0";
@@ -108,7 +114,7 @@ async function extraerConClaude(apiKey: string, bytes: Uint8Array, mime: string,
             text:
               `Este archivo es un documento del expediente laboral de una persona en México, registrado como "${tipoDocumento}" ` +
               `para la persona "${nombrePersona}". Extrae ÚNICAMENTE los datos que estén escritos literalmente en el documento; ` +
-              "nunca inventes ni completes un dato que no se lea. Normaliza: fechas en formato YYYY-MM-DD (si el documento solo trae " +
+              "nunca inventes ni completes un dato que no se lea. Si el archivo trae varios documentos (expediente completo), lee todos y junta los datos. Normaliza: fechas en formato YYYY-MM-DD (si el documento solo trae " +
               "el año, ponlo como texto en ine_vigencia o fecha_vencimiento), CURP/RFC/NSS/clave de elector en mayúsculas sin espacios, " +
               "domicilio en una sola línea. En una credencial INE: 'ine_clave_elector' es la CLAVE DE ELECTOR (18 caracteres), " +
               "'ine_numero_identificacion' es el número de identificación/CIC u OCR que aparece al reverso, 'ine_vigencia' el año de vigencia. " +
@@ -176,8 +182,14 @@ async function subir(req: Request, perfil: PerfilAutenticado): Promise<Response>
   const archivo = form.get("file") as File | null;
   const personalId = String(form.get("personalId") ?? "");
   const tipoDocumentoId = String(form.get("tipoDocumentoId") ?? "");
+  const tipoDocumentoIds = String(form.get("tipoDocumentoIds") ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const ids = tipoDocumentoIds.length > 0 ? tipoDocumentoIds : tipoDocumentoId ? [tipoDocumentoId] : [];
+  const expedienteCompleto = tipoDocumentoIds.length > 0;
   const fechaEntrega = String(form.get("fechaEntrega") ?? "") || new Date().toISOString().slice(0, 10);
-  if (!archivo || !personalId || !tipoDocumentoId) return jsonResponse({ error: "file, personalId y tipoDocumentoId son requeridos" }, 400);
+  if (!archivo || !personalId || ids.length === 0) return jsonResponse({ error: "file, personalId y tipoDocumentoId(s) son requeridos" }, 400);
   if (archivo.size > TAMANO_MAXIMO_BYTES) return jsonResponse({ error: `El archivo pesa más de ${TAMANO_MAXIMO_BYTES / 1024 / 1024} MB` }, 400);
 
   const mime = archivo.type || "application/octet-stream";
@@ -187,12 +199,14 @@ async function subir(req: Request, perfil: PerfilAutenticado): Promise<Response>
 
   // Lo que el usuario puede ver (RLS) decide si puede subirle a esa persona.
   const cliente = clienteComoUsuario(req);
-  const [{ data: persona }, { data: tipo }] = await Promise.all([
+  const [{ data: persona }, { data: tipos }] = await Promise.all([
     cliente.from("personal").select("*").eq("id", personalId).maybeSingle(),
-    cliente.from("tipos_documento_personal").select("id, nombre, vigencia_meses").eq("id", tipoDocumentoId).maybeSingle(),
+    cliente.from("tipos_documento_personal").select("id, nombre, vigencia_meses").in("id", ids),
   ]);
   if (!persona) return jsonResponse({ error: "Persona no encontrada o sin acceso" }, 404);
-  if (!tipo) return jsonResponse({ error: "Tipo de documento no encontrado" }, 404);
+  const tiposOrdenados = ids.map((id) => (tipos ?? []).find((t) => t.id === id)).filter((t) => !!t) as { id: string; nombre: string; vigencia_meses: number | null }[];
+  if (tiposOrdenados.length !== ids.length) return jsonResponse({ error: "Tipo de documento no encontrado" }, 404);
+  const tipo = tiposOrdenados[0];
 
   const dbServicio = clienteServicio();
   const bytes = new Uint8Array(await archivo.arrayBuffer());
@@ -201,22 +215,24 @@ async function subir(req: Request, perfil: PerfilAutenticado): Promise<Response>
   const { error: errUpload } = await dbServicio.storage.from("cargas").upload(rutaStorage, bytes, { contentType: mime });
   if (errUpload) return jsonResponse({ error: `No se pudo guardar el archivo: ${errUpload.message}` }, 500);
 
-  const { data: documento, error: errInsert } = await dbServicio
+  const { data: documentos, error: errInsert } = await dbServicio
     .from("documentos_personal")
-    .insert({
-      personal_id: personalId,
-      tipo_documento_id: tipoDocumentoId,
-      fecha_entrega: fechaEntrega,
-      fecha_vigencia: tipo.vigencia_meses ? sumarMeses(fechaEntrega, tipo.vigencia_meses) : null,
-      storage_path: rutaStorage,
-      nombre_original: archivo.name,
-      mime_type: mime,
-      created_by: perfil.id,
-      subido_por: perfil.id,
-    })
-    .select("*")
-    .single();
-  if (errInsert) return jsonResponse({ error: errInsert.message }, 500);
+    .insert(
+      tiposOrdenados.map((t) => ({
+        personal_id: personalId,
+        tipo_documento_id: t.id,
+        fecha_entrega: fechaEntrega,
+        fecha_vigencia: t.vigencia_meses ? sumarMeses(fechaEntrega, t.vigencia_meses) : null,
+        storage_path: rutaStorage,
+        nombre_original: archivo.name,
+        mime_type: mime,
+        created_by: perfil.id,
+        subido_por: perfil.id,
+      })),
+    )
+    .select("*");
+  if (errInsert || !documentos || documentos.length === 0) return jsonResponse({ error: errInsert?.message ?? "No se pudo registrar el documento" }, 500);
+  const documento = documentos.find((d) => d.tipo_documento_id === tipo.id) ?? documentos[0];
 
   // Extracción: si falla, el documento ya quedó guardado y se anota el error.
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -225,7 +241,8 @@ async function subir(req: Request, perfil: PerfilAutenticado): Promise<Response>
   if (!apiKey) errorExtraccion = "ANTHROPIC_API_KEY no está configurado";
   else {
     try {
-      extraccion = await extraerConClaude(apiKey, bytes, mime, tipo.nombre, persona.nombre);
+      const etiquetaTipo = expedienteCompleto ? `Expediente completo en un solo archivo (${tiposOrdenados.map((t) => t.nombre).join("; ")})` : tipo.nombre;
+      extraccion = await extraerConClaude(apiKey, bytes, mime, etiquetaTipo, persona.nombre);
     } catch (err) {
       errorExtraccion = (err as Error).message;
     }
@@ -239,6 +256,7 @@ async function subir(req: Request, perfil: PerfilAutenticado): Promise<Response>
 
   return jsonResponse({
     documento: actualizado ?? documento,
+    documentos: documentos.map((d) => (d.id === documento.id ? actualizado ?? d : d)),
     extraccion,
     error_extraccion: errorExtraccion,
     sugerencias: extraccion ? sugerenciasParaPersonal(extraccion.campos, persona) : {},
