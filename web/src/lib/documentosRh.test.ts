@@ -57,3 +57,10 @@ test("los documentos traen los datos clave y escapan HTML", () => {
   assert.match(a, /Ergodinova, S\.A\. de C\.V\./);
   assert.match(a, /Derechos ARCO/);
 });
+
+test("sueldoSemanalDesde: quincenal se convierte a semanal (24 pagos / 52 semanas)", async () => {
+  const { sueldoSemanalDesde } = await import("./documentosRh.ts");
+  assert.equal(sueldoSemanalDesde("semanal", 2500), 2500);
+  assert.equal(sueldoSemanalDesde("quincenal", 5200), 2400);
+  assert.equal(sueldoSemanalDesde("quincenal", 6000), 2769.23);
+});

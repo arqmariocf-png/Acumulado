@@ -213,12 +213,17 @@ export interface AsignacionDiaria {
 
 export type TipoContrato = "confidencialidad" | "laboral_determinado" | "laboral_indeterminado" | "prestacion_servicios";
 
+export type FrecuenciaPago = "semanal" | "quincenal";
+
 export interface Contratacion {
   id: string;
   personal_id: string;
   empresa_id: string;
   puesto: string;
   sueldo_semanal: number;
+  /** Semanal o quincenal; sueldo_periodo es lo que se paga en cada periodo. */
+  frecuencia_pago: FrecuenciaPago;
+  sueldo_periodo: number | null;
   fecha_inicio: string;
   duracion_dias: number;
   fecha_fin: string;

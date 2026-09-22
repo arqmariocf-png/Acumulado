@@ -24,6 +24,8 @@ export interface PersonaDoc {
 export interface ContratacionDoc {
   puesto: string;
   sueldo_semanal: number;
+  frecuencia_pago?: "semanal" | "quincenal";
+  sueldo_periodo?: number | null;
   fecha_inicio: string;
   fecha_fin: string;
   duracion_dias: number;
@@ -53,6 +55,16 @@ export function fechaLarga(iso: string | null | undefined): string {
   const [a, m, d] = iso.slice(0, 10).split("-").map(Number);
   if (!a || !m || !d) return iso;
   return `${d} de ${MESES[m - 1]} de ${a}`;
+}
+
+/** Sueldo semanal equivalente a partir del monto por periodo: una quincena
+ * son 24 pagos al año contra 52 semanas. */
+export function sueldoSemanalDesde(frecuencia: "semanal" | "quincenal", montoPeriodo: number): number {
+  return frecuencia === "quincenal" ? Math.round(((montoPeriodo * 24) / 52) * 100) / 100 : montoPeriodo;
+}
+
+function montoPeriodo(c: ContratacionDoc): number {
+  return c.sueldo_periodo ?? c.sueldo_semanal;
 }
 
 export function moneda(n: number): string {
@@ -183,7 +195,7 @@ export function htmlContrato(persona: PersonaDoc, contratacion: ContratacionDoc,
       <h2>Cláusulas</h2>
       <p><b>Primera. Objeto.</b> "EL PRESTADOR" se obliga a prestar a "EL CLIENTE" los servicios de <b>${esc(contratacion.puesto)}</b>, con sus propios medios y bajo su responsabilidad.</p>
       <p><b>Segunda. Vigencia.</b> Del ${fechaLarga(contratacion.fecha_inicio)} al ${fechaLarga(contratacion.fecha_fin)} (${contratacion.duracion_dias} días). Podrá renovarse por acuerdo escrito de las partes.</p>
-      <p><b>Tercera. Honorarios.</b> "EL CLIENTE" pagará a "EL PRESTADOR" la cantidad de <b>${moneda(contratacion.sueldo_semanal)}</b> por semana de servicios, contra la entrega del comprobante fiscal correspondiente.</p>
+      <p><b>Tercera. Honorarios.</b> "EL CLIENTE" pagará a "EL PRESTADOR" la cantidad de <b>${moneda(montoPeriodo(contratacion))}</b> por ${contratacion.frecuencia_pago === "quincenal" ? "quincena" : "semana"} de servicios, contra la entrega del comprobante fiscal correspondiente.</p>
       <p><b>Cuarta. Relación entre las partes.</b> Este contrato es de naturaleza civil. No existe relación laboral entre "EL CLIENTE" y "EL PRESTADOR", quien es el único responsable de sus obligaciones fiscales y de seguridad social.</p>
       <p><b>Quinta. Confidencialidad.</b> "EL PRESTADOR" guardará confidencialidad sobre la información de "EL CLIENTE" a la que tenga acceso, durante la vigencia del contrato y cinco años después.</p>
       <p><b>Sexta. Terminación.</b> Cualquiera de las partes podrá dar por terminado el contrato con aviso escrito de quince días de anticipación, liquidándose los servicios prestados hasta esa fecha.</p>
@@ -219,7 +231,7 @@ export function htmlContrato(persona: PersonaDoc, contratacion: ContratacionDoc,
     <p><b>Segunda. Duración.</b> ${indeterminado
       ? `Este contrato se celebra por tiempo indeterminado a partir del ${fechaLarga(contratacion.fecha_inicio)}${persona.fecha_ingreso < contratacion.fecha_inicio ? `, reconociéndose la antigüedad desde el ${fechaLarga(persona.fecha_ingreso)}` : ""}.`
       : `Este contrato se celebra por tiempo determinado del ${fechaLarga(contratacion.fecha_inicio)} al ${fechaLarga(contratacion.fecha_fin)} (${contratacion.duracion_dias} días), en virtud de que así lo exige la naturaleza temporal del trabajo a realizar (art. 37 fracción I LFT). Al vencimiento terminará sin responsabilidad para las partes, salvo que subsista la materia del trabajo${persona.fecha_ingreso < contratacion.fecha_inicio ? `. Se reconoce la antigüedad de ${g.trabajador} desde el ${fechaLarga(persona.fecha_ingreso)}` : ""}.`}</p>
-    <p><b>Tercera. Salario.</b> "EL PATRÓN" pagará a ${g.trabajador} un salario de <b>${moneda(contratacion.sueldo_semanal)}</b> semanales (${moneda(Math.round((contratacion.sueldo_semanal / 7) * 100) / 100)} diarios), que incluye el pago del séptimo día, pagadero cada semana en el lugar de trabajo o mediante transferencia a la cuenta que ${g.trabajador} designe, previas las deducciones legales.</p>
+    <p><b>Tercera. Salario.</b> "EL PATRÓN" pagará a ${g.trabajador} un salario de <b>${moneda(montoPeriodo(contratacion))}</b> ${contratacion.frecuencia_pago === "quincenal" ? `quincenales (equivalente a ${moneda(contratacion.sueldo_semanal)} semanales, ${moneda(Math.round((contratacion.sueldo_semanal / 7) * 100) / 100)} diarios)` : `semanales (${moneda(Math.round((contratacion.sueldo_semanal / 7) * 100) / 100)} diarios)`}, que incluye el pago del séptimo día, pagadero cada ${contratacion.frecuencia_pago === "quincenal" ? "quincena" : "semana"} en el lugar de trabajo o mediante transferencia a la cuenta que ${g.trabajador} designe, previas las deducciones legales.</p>
     <p><b>Cuarta. Jornada.</b> La jornada será de 48 horas a la semana, distribuidas de lunes a sábado en el horario que fije "EL PATRÓN" conforme a las necesidades del trabajo, con un día de descanso semanal con goce de salario. El tiempo extraordinario solo se laborará con autorización escrita.</p>
     <p><b>Quinta. Días de descanso y vacaciones.</b> ${g.trabajador} disfrutará de los días de descanso obligatorio del artículo 74 de la LFT, y de vacaciones anuales conforme al artículo 76 (doce días laborables al cumplir el primer año, aumentando conforme a la ley), con prima vacacional del 25 %.</p>
     <p><b>Sexta. Aguinaldo.</b> ${g.trabajador} recibirá un aguinaldo anual de quince días de salario, pagadero antes del 20 de diciembre, o la parte proporcional al tiempo trabajado.</p>
