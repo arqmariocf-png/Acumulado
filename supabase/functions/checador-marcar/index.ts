@@ -4,6 +4,9 @@
 // directo se cerró para que nadie marque sin evidencia.
 //
 // POST multipart/form-data: tipo (entrada|salida|comida_inicio|comida_fin), foto (image/*, obligatoria en entrada/salida), lat, lng, precision
+//   marcadaEn (ISO, opcional): hora real en que se marcó cuando la app
+//   estaba sin señal y guardó la marca en el teléfono; se acepta hasta 7
+//   días atrás y la marca queda con esa hora y sincronizada_offline = true.
 //   -> { id, tipo, created_at }
 // GET ?registroId=<uuid> -> { url } (signed URL 120 s de la foto; solo el
 //   dueño de la marca, rh o admin)
@@ -40,6 +43,15 @@ Deno.serve(async (req) => {
     const lng = Number(form.get("lng"));
     const precision = Number(form.get("precision"));
     const dispositivo = String(form.get("dispositivo") ?? "").slice(0, 200) || null;
+    const marcadaEnCrudo = String(form.get("marcadaEn") ?? "").trim();
+    let marcadaEn: Date | null = null;
+    if (marcadaEnCrudo) {
+      marcadaEn = new Date(marcadaEnCrudo);
+      const ahoraMs = Date.now();
+      if (Number.isNaN(marcadaEn.getTime())) return jsonResponse({ error: "marcadaEn inválida" }, 400);
+      if (marcadaEn.getTime() > ahoraMs + 5 * 60 * 1000) return jsonResponse({ error: "La hora de la marca no puede estar en el futuro." }, 400);
+      if (marcadaEn.getTime() < ahoraMs - 7 * 24 * 60 * 60 * 1000) return jsonResponse({ error: "La marca pendiente tiene más de 7 días; pide a RH que la registre a mano." }, 400);
+    }
 
     const TIPOS = ["entrada", "salida", "comida_inicio", "comida_fin"];
     if (!TIPOS.includes(tipo)) return jsonResponse({ error: "tipo debe ser entrada, salida, comida_inicio o comida_fin" }, 400);
@@ -53,14 +65,17 @@ Deno.serve(async (req) => {
 
     const dbServicio = clienteServicio();
 
-    // Misma regla que la pantalla: entrada y salida se alternan.
-    const { data: ultima } = await dbServicio
+    // Misma regla que la pantalla: entrada y salida se alternan. Para una
+    // marca offline se valida contra la última marca ANTERIOR a su hora.
+    let consultaUltima = dbServicio
       .from("checador_registros")
       .select("tipo")
       .eq("profile_id", perfil.id)
+      .is("anulada_en", null)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    if (marcadaEn) consultaUltima = consultaUltima.lt("created_at", marcadaEn.toISOString());
+    const { data: ultima } = await consultaUltima.maybeSingle();
     // Secuencia: entrada -> (comida_inicio -> comida_fin)* -> salida.
     const permitidos: Record<string, string[]> = {
       ninguna: ["entrada"],
@@ -72,7 +87,7 @@ Deno.serve(async (req) => {
     const siguientes = permitidos[ultima?.tipo ?? "ninguna"] ?? ["entrada"];
     if (!siguientes.includes(tipo)) return jsonResponse({ error: `Tu siguiente marca debe ser: ${siguientes.join(" o ")}.` }, 409);
 
-    const ahora = new Date();
+    const ahora = marcadaEn ?? new Date();
     let ruta: string | null = null;
     if (foto && foto.size > 0) {
       const extension = (foto.type.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "jpg";
@@ -85,7 +100,18 @@ Deno.serve(async (req) => {
 
     const { data: insertado, error: errInsert } = await dbServicio
       .from("checador_registros")
-      .insert({ profile_id: perfil.id, tipo, lat, lng, precision_m: Number.isFinite(precision) ? precision : null, foto_path: ruta, dispositivo })
+      .insert({
+        profile_id: perfil.id,
+        tipo,
+        lat,
+        lng,
+        precision_m: Number.isFinite(precision) ? precision : null,
+        foto_path: ruta,
+        dispositivo,
+        created_at: ahora.toISOString(),
+        marcada_en: ahora.toISOString(),
+        sincronizada_offline: !!marcadaEn,
+      })
       .select("id, tipo, created_at")
       .single();
     if (errInsert) return jsonResponse({ error: errInsert.message }, 500);
