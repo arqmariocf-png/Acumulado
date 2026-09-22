@@ -8,6 +8,7 @@ import { Vacantes } from "./rh/Vacantes";
 import { Actividades } from "./rh/Actividades";
 import { PerfilesJornada } from "./rh/PerfilesJornada";
 import { NominaChecador } from "./rh/NominaChecador";
+import { SolicitudesNda } from "./rh/SolicitudesNda";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
 import { abrirParaImprimir } from "../lib/imprimir";
@@ -416,6 +417,8 @@ function PestanaPersonal() {
           {mostrarForm ? "Cancelar" : "+ Dar de alta"}
         </button>
       </div>
+
+      <SolicitudesNda personal={personal ?? []} />
 
       {mostrarForm && (
         <form onSubmit={onSubmit} className="mb-6 max-w-3xl space-y-4 rounded border border-slate-200 bg-white p-4">

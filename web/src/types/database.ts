@@ -1083,3 +1083,24 @@ export interface RemisionSalida {
   lineas: number;
   cantidad_total: number;
 }
+
+
+// Solicitud de firma electrónica (tabla solicitudes_firma): hoy solo NDA.
+export interface SolicitudFirma {
+  id: string;
+  personal_id: string;
+  empresa_id: string;
+  tipo: "nda";
+  puesto: string | null;
+  fecha_convenio: string;
+  mensaje: string | null;
+  estatus: "pendiente" | "firmado" | "cancelado";
+  solicitado_por: string | null;
+  solicitado_en: string;
+  firmado_en: string | null;
+  firma_nombre: string | null;
+  firma_imagen: string | null;
+  firma_dispositivo: string | null;
+  cancelado_en: string | null;
+  created_at: string;
+}

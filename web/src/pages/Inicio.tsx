@@ -299,7 +299,7 @@ export function Inicio() {
     !!miPersonal && {
       a: "/mis-documentos",
       etiqueta: "Mis documentos",
-      descripcion: "mi contrato y el aviso de privacidad",
+      descripcion: "mi contrato, el aviso de privacidad y documentos por firmar",
       icono: ICONOS.rh,
     },
     veRequisiciones && {
