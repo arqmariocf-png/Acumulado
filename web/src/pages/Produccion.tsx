@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
+import { DespieceBalken } from "./produccion/DespieceBalken";
 import type {
   CosteoMensualPlanta,
   CosteoOrdenProduccion,
@@ -75,7 +76,7 @@ interface Empresa {
   nombre: string;
 }
 
-type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo";
+type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo" | "despiece";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "catalogo", etiqueta: "Catálogo" },
@@ -83,6 +84,10 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "ordenes", etiqueta: "Órdenes de producción" },
   { valor: "costeo", etiqueta: "Costeo" },
 ];
+
+// Solo Balken: despiece de losa de vigueta y bovedilla para cotizar rápido
+// (pedido de Mario, 22-sep-2026).
+const PESTANA_DESPIECE: { valor: Pestana; etiqueta: string } = { valor: "despiece", etiqueta: "Despiece y cotización" };
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -138,7 +143,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       <p className="mb-4 text-sm text-slate-500">{empresa.nombre}</p>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {PESTANAS.map((p) => (
+        {[...PESTANAS, ...(planta.codigo === "VBB" ? [PESTANA_DESPIECE] : [])].map((p) => (
           <button
             key={p.valor}
             onClick={() => setPestana(p.valor)}
@@ -153,6 +158,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       {pestana === "inventario" && <PestanaInventario empresa={empresa} planta={planta} />}
       {pestana === "ordenes" && <PestanaOrdenes empresa={empresa} />}
       {pestana === "costeo" && <PestanaCosteo empresa={empresa} />}
+      {pestana === "despiece" && planta.codigo === "VBB" && <DespieceBalken empresaNombre={empresa.nombre} />}
     </div>
   );
 }
