@@ -161,6 +161,47 @@ function articulo(sexo: "M" | "F" | null): { el: string; trabajador: string; sr:
   return sexo === "F" ? { el: "LA", trabajador: "LA TRABAJADORA", sr: "la C." } : { el: "EL", trabajador: "EL TRABAJADOR", sr: "el C." };
 }
 
+export interface FirmaElectronica {
+  nombre: string;
+  /** PNG en data URL dibujado en la app. */
+  imagen: string;
+  firmado_en: string;
+  dispositivo: string | null;
+}
+
+function parrafoGenerales(persona: PersonaDoc): string {
+  return `<p><b>${esc(persona.nombre)}</b>, ${esc(persona.nacionalidad || "mexicana")}, ` +
+    `${persona.fecha_nacimiento ? `nacid${persona.sexo === "F" ? "a" : "o"} el ${fechaLarga(persona.fecha_nacimiento)}, ` : ""}` +
+    `${persona.estado_civil ? `${esc(persona.estado_civil)}, ` : ""}` +
+    `con domicilio en ${esc(persona.domicilio_particular ?? "________________________")}` +
+    `${persona.curp ? `, CURP ${esc(persona.curp)}` : ""}${persona.rfc ? `, RFC ${esc(persona.rfc)}` : ""}${persona.nss ? `, NSS ${esc(persona.nss)}` : ""}.</p>`;
+}
+
+/** Convenio de confidencialidad (NDA). Con `firma` incluye la firma
+ * electrónica dibujada en la app y su rastro (fecha, dispositivo) en lugar
+ * de la línea en blanco. */
+export function htmlConvenioConfidencialidad(persona: PersonaDoc, patron: PatronDoc, puesto: string | null, fechaIso: string, firma: FirmaElectronica | null): string {
+  const g = articulo(persona.sexo);
+  const bloque = firma
+    ? `<div class="firmas">
+    <div class="firma">${esc(patron.razon_social)}<br>${esc(patron.representante_legal_nombre)}<br>${esc(patron.representante_legal_puesto)}</div>
+    <div class="firma"><img src="${firma.imagen}" alt="Firma" style="max-height:70pt;max-width:100%;display:block;margin:0 auto 4pt"><br>"${esc(g.trabajador)}"<br>${esc(firma.nombre)}</div>
+  </div>
+  <p class="nota">Firmado electrónicamente en la aplicación de Grupo Loma el ${new Date(firma.firmado_en).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" })} por ${esc(firma.nombre)}${firma.dispositivo ? ` desde ${esc(firma.dispositivo)}` : ""}, previa lectura y aceptación expresa del contenido.</p>`
+    : bloqueFirmas(patron, persona, `"${g.trabajador}"`);
+  return documento(`Convenio de confidencialidad - ${persona.nombre}`, `
+      <h1>Convenio de confidencialidad</h1>
+      <p class="centro">Que celebran <b>${esc(patron.razon_social)}</b>, representada por ${esc(patron.representante_legal_nombre)}, en lo sucesivo "LA EMPRESA", y <b>${esc(persona.nombre)}</b>, en lo sucesivo "${g.trabajador}".</p>
+      ${parrafoGenerales(persona)}
+      <h2>Cláusulas</h2>
+      <p><b>Primera.</b> ${g.trabajador} reconoce que con motivo de sus funciones como ${esc(puesto ?? persona.puesto ?? "colaborador")} tendrá acceso a información confidencial de "LA EMPRESA": clientes, proveedores, precios, costos, procesos, planos, análisis de precios unitarios, información financiera y cualquier otra no pública.</p>
+      <p><b>Segunda.</b> Se obliga a no divulgar, copiar ni usar dicha información para fines distintos a los de su trabajo, durante la relación y por cinco años después de terminada, y a devolver toda la documentación y accesos al concluir.</p>
+      <p><b>Tercera.</b> El incumplimiento dará lugar a la rescisión sin responsabilidad para "LA EMPRESA" (art. 47 fracción IX de la Ley Federal del Trabajo) y a las acciones civiles y penales que procedan.</p>
+      <p><b>Cuarta.</b> Vigencia a partir del ${fechaLarga(fechaIso)}.</p>
+      <p class="centro">Se firma en ${esc(patron.ciudad_firma)}, el ${fechaLarga(fechaIso)}.</p>
+      ${bloque}`);
+}
+
 function bloqueFirmas(patron: PatronDoc, persona: PersonaDoc, etiquetaPersona: string): string {
   return `<div class="firmas">
     <div class="firma">${esc(patron.razon_social)}<br>${esc(patron.representante_legal_nombre)}<br>${esc(patron.representante_legal_puesto)}</div>
@@ -205,17 +246,7 @@ export function htmlContrato(persona: PersonaDoc, contratacion: ContratacionDoc,
   }
 
   if (contratacion.tipo_contrato === "confidencialidad") {
-    return documento(`Convenio de confidencialidad - ${persona.nombre}`, `
-      <h1>Convenio de confidencialidad</h1>
-      <p class="centro">Que celebran <b>${esc(patron.razon_social)}</b>, representada por ${esc(patron.representante_legal_nombre)}, en lo sucesivo "LA EMPRESA", y <b>${esc(persona.nombre)}</b>, en lo sucesivo "${g.trabajador}".</p>
-      ${generales}
-      <h2>Cláusulas</h2>
-      <p><b>Primera.</b> ${g.trabajador} reconoce que con motivo de sus funciones como ${esc(contratacion.puesto)} tendrá acceso a información confidencial de "LA EMPRESA": clientes, proveedores, precios, costos, procesos, planos, análisis de precios unitarios, información financiera y cualquier otra no pública.</p>
-      <p><b>Segunda.</b> Se obliga a no divulgar, copiar ni usar dicha información para fines distintos a los de su trabajo, durante la relación y por cinco años después de terminada, y a devolver toda la documentación y accesos al concluir.</p>
-      <p><b>Tercera.</b> El incumplimiento dará lugar a la rescisión sin responsabilidad para "LA EMPRESA" (art. 47 fracción IX de la Ley Federal del Trabajo) y a las acciones civiles y penales que procedan.</p>
-      <p><b>Cuarta.</b> Vigencia a partir del ${fechaLarga(contratacion.fecha_inicio)}.</p>
-      <p class="centro">Se firma en ${esc(patron.ciudad_firma)}, el ${fechaLarga(contratacion.fecha_inicio)}.</p>
-      ${bloqueFirmas(patron, persona, `"${g.trabajador}"`)}`);
+    return htmlConvenioConfidencialidad(persona, patron, contratacion.puesto, contratacion.fecha_inicio, null);
   }
 
   return documento(`Contrato individual de trabajo - ${persona.nombre}`, `

@@ -64,3 +64,22 @@ test("sueldoSemanalDesde: quincenal se convierte a semanal (24 pagos / 52 semana
   assert.equal(sueldoSemanalDesde("quincenal", 5200), 2400);
   assert.equal(sueldoSemanalDesde("quincenal", 6000), 2769.23);
 });
+
+
+test("htmlConvenioConfidencialidad: sin firma deja líneas; con firma incluye imagen y rastro", async () => {
+  const { htmlConvenioConfidencialidad } = await import("./documentosRh.ts");
+  const persona = { nombre: "Ana <Pérez>", puesto: "Auxiliar", curp: null, rfc: null, nss: null, domicilio_particular: null, fecha_ingreso: "2026-01-01", fecha_baja: null, motivo_baja: null, sexo: "F" as const, nacionalidad: "mexicana", estado_civil: null, fecha_nacimiento: null };
+  const patron = { razon_social: "Empresa SA", representante_legal_nombre: "Rep", representante_legal_puesto: "Apoderado", domicilio_legal: "Calle 1", ciudad_firma: "Puebla, Pue." } as never;
+  const sinFirma = htmlConvenioConfidencialidad(persona, patron, "Supervisora", "2026-09-22", null);
+  assert.match(sinFirma, /Convenio de confidencialidad/);
+  assert.match(sinFirma, /Ana &lt;Pérez&gt;/);
+  assert.match(sinFirma, /LA TRABAJADORA/);
+  assert.match(sinFirma, /Supervisora/);
+  assert.match(sinFirma, /Testigo/);
+  const conFirma = htmlConvenioConfidencialidad(persona, patron, null, "2026-09-22", { nombre: "Ana Pérez", imagen: "data:image/png;base64,AAAA", firmado_en: "2026-09-22T18:00:00Z", dispositivo: "iPhone" });
+  assert.match(conFirma, /data:image\/png;base64,AAAA/);
+  assert.match(conFirma, /Firmado electrónicamente/);
+  assert.match(conFirma, /iPhone/);
+  assert.doesNotMatch(conFirma, /Testigo/);
+  assert.match(conFirma, /como Auxiliar/);
+});

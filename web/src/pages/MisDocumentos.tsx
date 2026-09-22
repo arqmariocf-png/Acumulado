@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { htmlAvisoPrivacidad, htmlContrato } from "../lib/documentosRh";
+import { htmlAvisoPrivacidad, htmlContrato, htmlConvenioConfidencialidad } from "../lib/documentosRh";
 import { abrirParaImprimir } from "../lib/imprimir";
-import type { Contratacion, EmpresaPerfilLegal, Personal } from "../types/database";
+import { FirmaCanvas } from "../components/FirmaCanvas";
+import type { Contratacion, EmpresaPerfilLegal, Personal, SolicitudFirma } from "../types/database";
 
 /** La persona de RH ligada a la cuenta que está entrando (personal.profile_id).
  * RLS solo deja ver el propio renglón, sus contrataciones y el perfil legal
@@ -71,13 +72,72 @@ const ETIQUETA_TIPO: Record<Contratacion["tipo_contrato"], string> = {
   confidencialidad: "Convenio de confidencialidad",
 };
 
+function useMisSolicitudes(personalId: string | undefined) {
+  return useQuery({
+    queryKey: ["mis-solicitudes-firma", personalId],
+    enabled: !!personalId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("solicitudes_firma").select("*, empresa:empresa_id(nombre)").eq("personal_id", personalId!).neq("estatus", "cancelado").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as (SolicitudFirma & { empresa: { nombre: string } | null })[];
+    },
+  });
+}
+
+/** Lectura y firma de un documento solicitado por RH: se muestra el texto
+ * completo, se dibuja la firma y se acepta expresamente. */
+function FirmarSolicitud({ solicitud, persona, patron, onFirmado }: { solicitud: SolicitudFirma; persona: Personal; patron: ReturnType<typeof patronDe>; onFirmado: () => void }) {
+  const [firma, setFirma] = useState<string | null>(null);
+  const [nombre, setNombre] = useState(persona.nombre);
+  const [acepta, setAcepta] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const html = htmlConvenioConfidencialidad(persona, patron, solicitud.puesto, solicitud.fecha_convenio, null);
+
+  const firmar = useMutation({
+    mutationFn: async () => {
+      if (!firma) throw new Error("Dibuja tu firma.");
+      if (!acepta) throw new Error("Marca que leíste y aceptas el convenio.");
+      const { error: err } = await supabase.rpc("firmar_solicitud", { p_id: solicitud.id, p_nombre: nombre.trim(), p_firma_imagen: firma, p_dispositivo: navigator.userAgent.slice(0, 200) });
+      if (err) throw err;
+    },
+    onSuccess: onFirmado,
+    onError: (err) => setError((err as Error).message),
+  });
+
+  return (
+    <div className="mt-3 space-y-3 rounded border border-amber-200 bg-amber-50 p-3">
+      {solicitud.mensaje && <p className="text-sm text-amber-900">Mensaje de RH: {solicitud.mensaje}</p>}
+      <iframe title="Convenio" srcDoc={html.replace(/<button class="boton"[^>]*>.*?<\/button>/, "")} className="h-80 w-full rounded border border-slate-300 bg-white" />
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-700">Tu firma</label>
+        <FirmaCanvas onCambio={setFirma} />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-700">Nombre completo</label>
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+      </div>
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input type="checkbox" checked={acepta} onChange={(e) => setAcepta(e.target.checked)} className="mt-1" />
+        <span>Leí el convenio completo y lo acepto. Entiendo que esta firma electrónica tiene el mismo valor que mi firma autógrafa y que queda registrada con fecha, hora y dispositivo.</span>
+      </label>
+      {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <button onClick={() => firmar.mutate()} disabled={firmar.isPending || !firma || !acepta} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        {firmar.isPending ? "Firmando…" : "Firmar convenio"}
+      </button>
+    </div>
+  );
+}
+
 export function MisDocumentos() {
   const { perfil } = useAuth();
+  const queryClient = useQueryClient();
   const { data: persona, isLoading } = useMiPersonal(perfil?.id);
   const { data: contrataciones } = useMisContrataciones(persona?.id);
-  const empresaIds = Array.from(new Set((contrataciones ?? []).map((c) => c.empresa_id)));
+  const { data: solicitudes } = useMisSolicitudes(persona?.id);
+  const empresaIds = Array.from(new Set([...(contrataciones ?? []).map((c) => c.empresa_id), ...(solicitudes ?? []).map((s) => s.empresa_id)]));
   const { data: perfiles } = usePerfilesLegales(empresaIds);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [firmando, setFirmando] = useState<string | null>(null);
 
   function abrir(html: string) {
     setAviso(abrirParaImprimir(html) ? null : "El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio e inténtalo de nuevo.");
@@ -108,6 +168,54 @@ export function MisDocumentos() {
       </div>
 
       {aviso && <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{aviso}</p>}
+
+      {solicitudes && solicitudes.length > 0 && (
+        <section className="rounded border border-slate-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Documentos por firmar</h2>
+          <ul className="space-y-2">
+            {solicitudes.map((s) => {
+              const patron = patronDe(perfiles, s.empresa_id, s.empresa?.nombre ?? null);
+              return (
+                <li key={s.id} className="text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium text-slate-800">Convenio de confidencialidad</span>
+                      <span className="text-slate-500"> · {s.empresa?.nombre ?? "empresa"} · solicitado el {new Date(s.solicitado_en).toLocaleDateString("es-MX")}</span>
+                      {s.estatus === "firmado" && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">Firmado {s.firmado_en ? new Date(s.firmado_en).toLocaleDateString("es-MX") : ""}</span>}
+                      {s.estatus === "pendiente" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Pendiente de tu firma</span>}
+                    </span>
+                    {s.estatus === "firmado" ? (
+                      <button
+                        type="button"
+                        onClick={() => abrir(htmlConvenioConfidencialidad(persona, patron, s.puesto, s.fecha_convenio, s.firma_imagen && s.firmado_en ? { nombre: s.firma_nombre ?? persona.nombre, imagen: s.firma_imagen, firmado_en: s.firmado_en, dispositivo: s.firma_dispositivo } : null))}
+                        className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+                      >
+                        Ver / imprimir
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setFirmando((f) => (f === s.id ? null : s.id))} className="rounded bg-amber-600 px-3 py-1.5 text-xs font-medium text-white">
+                        {firmando === s.id ? "Cerrar" : "Leer y firmar"}
+                      </button>
+                    )}
+                  </div>
+                  {firmando === s.id && s.estatus === "pendiente" && (
+                    <FirmarSolicitud
+                      solicitud={s}
+                      persona={persona}
+                      patron={patron}
+                      onFirmado={() => {
+                        setFirmando(null);
+                        setAviso("Convenio firmado. Ya puedes verlo o imprimirlo desde aquí.");
+                        queryClient.invalidateQueries({ queryKey: ["mis-solicitudes-firma", persona.id] });
+                      }}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <section className="rounded border border-slate-200 bg-white p-4">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Mi contrato</h2>
