@@ -589,7 +589,7 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
         .in("materia_prima_id", materiaIds)
         .order("fecha", { ascending: false });
       if (error) throw error;
-      return data as { id: string; materia_prima_id: string; cantidad: number; costo_unitario: number; fecha: string; materias_primas: { nombre: string } | null }[];
+      return data as unknown as { id: string; materia_prima_id: string; cantidad: number; costo_unitario: number; fecha: string; materias_primas: { nombre: string } | null }[];
     },
   });
 
