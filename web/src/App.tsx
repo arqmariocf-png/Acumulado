@@ -43,6 +43,7 @@ const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias"
 const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
 const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
 const InventarioRemisiones = lazy(() => import("./pages/inventario/Remisiones").then((m) => ({ default: m.Remisiones })));
+const PanoramaClavicon = lazy(() => import("./pages/produccion/PanoramaClavicon").then((m) => ({ default: m.PanoramaClavicon })));
 const RemisionProduccionDetalle = lazy(() => import("./pages/produccion/RemisionProduccionDetalle").then((m) => ({ default: m.RemisionProduccionDetalle })));
 const InventarioRemisionDetalle = lazy(() => import("./pages/inventario/RemisionDetalle").then((m) => ({ default: m.RemisionDetalle })));
 const PreciosLayout = lazy(() => import("./pages/precios/PreciosLayout").then((m) => ({ default: m.PreciosLayout })));
@@ -163,6 +164,10 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["rh"]} />}>
             <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
             <Route path="/rh/agenda-pagos" element={<AgendaPagos />} />
+          </Route>
+
+          <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/clavicon" element={<PanoramaClavicon />} />
           </Route>
 
           <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable"]} />}>

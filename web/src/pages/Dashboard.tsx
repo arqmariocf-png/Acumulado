@@ -227,6 +227,16 @@ export function Dashboard() {
         {veTodasLasEmpresas ? "Consolidado — las 8 empresas" : `Empresa asignada`} · {perfil?.rol}
       </p>
 
+      {perfil?.rol === "admin" && (
+        <Link to="/clavicon" className="mb-6 flex items-center justify-between rounded border border-red-200 bg-red-50 px-4 py-3 hover:bg-red-100">
+          <span>
+            <span className="block text-sm font-semibold text-red-800">Clavicón · panorama de planta</span>
+            <span className="text-xs text-red-700">Lotes, calendario de procesos por máquina, inventario y costeo, con el reporte oficial para imprimir.</span>
+          </span>
+          <span className="rounded bg-red-800 px-3 py-1.5 text-xs font-medium text-white">Abrir</span>
+        </Link>
+      )}
+
       {estadoCarga && estadoCarga.length > 0 && (
         <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
           <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">1. Estado de carga por empresa (global)</p>
