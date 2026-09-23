@@ -833,7 +833,21 @@ function SalidaProductoTerminado({ empresaId, proyecto, productos }: { empresaId
 
 // ── Órdenes de producción (costeo por lote) ─────────────────────────────
 
-type OrdenConProducto = OrdenProduccion & { productos_produccion: { nombre: string } };
+type OrdenConProducto = OrdenProduccion & { productos_produccion: { nombre: string }; proyectos: { nombre: string } | null };
+
+/** Proyectos activos de la empresa de la planta (catálogo compartido con
+ * requisiciones y precios). Producción puede dar de alta uno nuevo desde
+ * el formulario del lote. */
+function useProyectosPlanta(empresaId: string) {
+  return useQuery({
+    queryKey: ["proyectos-planta", empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("proyectos").select("id, nombre, cliente").eq("empresa_id", empresaId).eq("activo", true).order("nombre");
+      if (error) throw error;
+      return data as { id: string; nombre: string; cliente: string | null }[];
+    },
+  });
+}
 
 function useOrdenesProduccion(empresaId: string) {
   return useQuery({
@@ -841,7 +855,7 @@ function useOrdenesProduccion(empresaId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_produccion")
-        .select("*, productos_produccion(nombre)")
+        .select("*, productos_produccion(nombre), proyectos(nombre)")
         .eq("empresa_id", empresaId)
         .order("fecha_inicio", { ascending: false });
       if (error) throw error;
@@ -853,14 +867,31 @@ function useOrdenesProduccion(empresaId: string) {
 function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
   const { data: ordenes } = useOrdenesProduccion(empresa.id);
   const { data: productos } = useProductos(empresa.id);
+  const { data: proyectos } = useProyectosPlanta(empresa.id);
   const queryClient = useQueryClient();
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [proyectoId, setProyectoId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [seleccionada, setSeleccionada] = useState<string | null>(null);
 
   const crear = useMutation({
-    mutationFn: async (payload: Record<string, unknown>) => {
-      const { error } = await supabase.from("ordenes_produccion").insert({ ...payload, empresa_id: empresa.id });
+    mutationFn: async (payload: Record<string, unknown> & { nuevo_proyecto?: string | null; nuevo_cliente?: string | null }) => {
+      const { nuevo_proyecto, nuevo_cliente, ...orden } = payload;
+      let proyecto_id = (orden.proyecto_id as string | null) ?? null;
+      // "+ Nuevo proyecto": se da de alta en el catálogo de la empresa y el
+      // lote queda ligado a él.
+      if (proyecto_id === "__nuevo__") {
+        if (!nuevo_proyecto) throw new Error("Escribe el nombre del proyecto nuevo.");
+        const { data: creado, error: errProyecto } = await supabase
+          .from("proyectos")
+          .insert({ empresa_id: empresa.id, nombre: nuevo_proyecto, cliente: nuevo_cliente ?? null, tipo: "produccion" })
+          .select("id")
+          .single();
+        if (errProyecto) throw errProyecto;
+        proyecto_id = creado.id;
+        queryClient.invalidateQueries({ queryKey: ["proyectos-planta", empresa.id] });
+      }
+      const { error } = await supabase.from("ordenes_produccion").insert({ ...orden, proyecto_id, empresa_id: empresa.id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -880,7 +911,11 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
       fecha_inicio: fd.get("fecha_inicio"),
       cantidad_planeada: fd.get("cantidad_planeada"),
       notas: oVacio(fd, "notas"),
+      proyecto_id: proyectoId || null,
+      nuevo_proyecto: oVacio(fd, "nuevo_proyecto"),
+      nuevo_cliente: oVacio(fd, "nuevo_cliente"),
     });
+    setProyectoId("");
   }
 
   const ordenSeleccionada = seleccionada ? ordenes?.find((o) => o.id === seleccionada) : undefined;
@@ -922,6 +957,31 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
               <label className={etiquetaCampo}>Cantidad planeada *</label>
               <input type="number" step="0.0001" min="0.0001" name="cantidad_planeada" required className={campoTexto} />
             </div>
+            <div>
+              <label className={etiquetaCampo}>Proyecto (a quién va el producto)</label>
+              <select value={proyectoId} onChange={(e) => setProyectoId(e.target.value)} className={campoTexto}>
+                <option value="">Sin proyecto</option>
+                {proyectos?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                    {p.cliente ? ` · ${p.cliente}` : ""}
+                  </option>
+                ))}
+                <option value="__nuevo__">+ Nuevo proyecto…</option>
+              </select>
+            </div>
+            {proyectoId === "__nuevo__" && (
+              <>
+                <div>
+                  <label className={etiquetaCampo}>Nombre del proyecto nuevo *</label>
+                  <input name="nuevo_proyecto" required className={campoTexto} placeholder="Ej. Obra Lomas de Angelópolis" />
+                </div>
+                <div>
+                  <label className={etiquetaCampo}>Cliente (opcional)</label>
+                  <input name="nuevo_cliente" className={campoTexto} />
+                </div>
+              </>
+            )}
           </div>
           <div>
             <label className={etiquetaCampo}>Notas</label>
@@ -940,6 +1000,7 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
             <tr>
               <th className="px-3 py-2">Folio</th>
               <th className="px-3 py-2">Producto</th>
+              <th className="px-3 py-2">Proyecto</th>
               <th className="px-3 py-2">Inicio</th>
               <th className="px-3 py-2">Estado</th>
               <th className="px-3 py-2 text-right">Planeada</th>
@@ -952,6 +1013,7 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
               <tr key={o.id} className="border-t border-slate-100">
                 <td className="px-3 py-2 font-medium">{o.folio}</td>
                 <td className="px-3 py-2">{o.productos_produccion?.nombre}</td>
+                <td className="px-3 py-2 text-slate-600">{o.proyectos?.nombre ?? "—"}</td>
                 <td className="px-3 py-2">{o.fecha_inicio}</td>
                 <td className="px-3 py-2">
                   <span
@@ -977,7 +1039,7 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
             ))}
             {ordenes?.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
                   Sin lotes de producción todavía.
                 </td>
               </tr>
