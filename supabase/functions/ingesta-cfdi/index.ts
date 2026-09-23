@@ -10,7 +10,7 @@
 // fijo para todo el archivo era, en el mejor caso, redundante con lo que ya
 // trae cada fila, y en el peor, una fuente de error si no coincidía.
 
-import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { todasLasHojas } from "../_shared/ingesta/xlsx-cargador.ts";
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     if (!empresaId || !archivo || (tipo !== "recibido" && tipo !== "emitido")) {
       return jsonResponse({ error: "empresaId, file y tipo ('recibido'|'emitido') son requeridos" }, 400);
     }
-    if (!puedeEscribirEnEmpresa(perfil, empresaId)) {
+    if (!puedeEscribirEnEmpresa(perfil, empresaId) || !(await empresaOperableEnModulo(req, empresaId, "conciliacion"))) {
       return jsonResponse({ error: "Sin permiso para cargar archivos de esta empresa" }, 403);
     }
     if (archivo.size > TAMANO_MAXIMO_BYTES) {

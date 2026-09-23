@@ -42,8 +42,11 @@ export function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
       <form onSubmit={onSubmit} className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-lg font-semibold text-slate-900">Acumulado · Grupo Loma</h1>
-        <p className="mb-6 text-sm text-slate-500">Conciliación bancaria</p>
+        {/* Antes de entrar no se sabe a qué organización pertenece el usuario
+            (eso vive en su profile), así que el login es neutro: la marca del
+            grupo aparece ya dentro, en el encabezado. */}
+        <h1 className="mb-1 text-lg font-semibold text-slate-900">Acumulado</h1>
+        <p className="mb-6 text-sm text-slate-500">Backoffice de operación</p>
 
         <div className="mb-4 flex gap-2 text-sm">
           <button

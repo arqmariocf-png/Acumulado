@@ -6,10 +6,41 @@
 
 export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh";
 
+// Organizaciones (tenants). Acumulado es la plataforma maestra: cada cliente
+// es un `grupo` con sus propias empresas, usuarios y módulos abiertos.
+// Ver supabase/migrations/20260923090001_grupos_modulos.sql.
+
+export type ModuloClave = "conciliacion" | "inventario" | "rh";
+
+export interface Grupo {
+  id: string;
+  nombre: string;
+  codigo: string;
+  marca_comercial: string | null;
+  es_maestro: boolean;
+  activo: boolean;
+}
+
+export interface Modulo {
+  clave: ModuloClave;
+  nombre: string;
+  descripcion: string | null;
+  orden: number;
+}
+
+export interface GrupoModulo {
+  grupo_id: string;
+  modulo_clave: ModuloClave;
+  habilitado: boolean;
+  habilitado_at: string | null;
+  habilitado_por: string | null;
+}
+
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
 export interface Empresa {
   id: string;
+  grupo_id: string;
   nombre: string;
   codigo: string;
   rfc: string | null;
@@ -20,6 +51,7 @@ export interface Profile {
   id: string;
   nombre: string;
   rol: AppRol;
+  grupo_id: string | null;
   empresa_id: string | null;
   activo: boolean;
 }

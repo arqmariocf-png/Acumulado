@@ -1,13 +1,14 @@
 import { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider } from "./lib/auth";
+import { AuthProvider, useAuth } from "./lib/auth";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 // Cada página en su propio chunk: nadie necesita el código de Admin o Carga
 // en la carga inicial del Dashboard, y viceversa.
 const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
+const Inicio = lazy(() => import("./pages/Inicio").then((m) => ({ default: m.Inicio })));
 const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ default: m.Movimientos })));
 const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga })));
@@ -15,6 +16,8 @@ const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then(
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
+const Empresas = lazy(() => import("./pages/admin/Empresas").then((m) => ({ default: m.Empresas })));
+const Organizaciones = lazy(() => import("./pages/admin/Organizaciones").then((m) => ({ default: m.Organizaciones })));
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
@@ -30,6 +33,14 @@ function Cargando() {
   return <div className="p-8 text-center text-sm text-slate-500">Cargando…</div>;
 }
 
+// La raíz depende de lo que la organización tenga abierto: con conciliación
+// (el caso de Grupo Loma) la portada sigue siendo el Dashboard de siempre;
+// sin ella, la portada es Inicio -- la base que toda organización tiene.
+function Raiz() {
+  const { tieneModulo } = useAuth();
+  return tieneModulo("conciliacion") ? <Dashboard /> : <Navigate to="/inicio" replace />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -41,26 +52,34 @@ export default function App() {
 
               <Route element={<ProtectedRoute />}>
                 <Route element={<Layout />}>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/movimientos" element={<Movimientos />} />
-                  <Route path="/carga" element={<Carga />} />
-                  <Route path="/reportes" element={<ReportesEspeciales />} />
-                  <Route path="/pendientes" element={<Pendientes />} />
+                  <Route path="/" element={<Raiz />} />
+                  <Route path="/inicio" element={<Inicio />} />
 
-                  <Route path="/inventario" element={<InventarioLayout />}>
-                    <Route index element={<InventarioMovimientos />} />
-                    <Route path="existencias" element={<InventarioExistencias />} />
-                    <Route path="productos" element={<InventarioProductos />} />
-                    <Route path="match" element={<InventarioMatch />} />
+                  <Route element={<ProtectedRoute modulo="conciliacion" />}>
+                    <Route path="/movimientos" element={<Movimientos />} />
+                    <Route path="/carga" element={<Carga />} />
+                    <Route path="/reportes" element={<ReportesEspeciales />} />
+                    <Route path="/pendientes" element={<Pendientes />} />
                   </Route>
 
-                  <Route element={<ProtectedRoute roles={["rh"]} />}>
+                  <Route element={<ProtectedRoute modulo="inventario" />}>
+                    <Route path="/inventario" element={<InventarioLayout />}>
+                      <Route index element={<InventarioMovimientos />} />
+                      <Route path="existencias" element={<InventarioExistencias />} />
+                      <Route path="productos" element={<InventarioProductos />} />
+                      <Route path="match" element={<InventarioMatch />} />
+                    </Route>
+                  </Route>
+
+                  <Route element={<ProtectedRoute roles={["rh"]} modulo="rh" />}>
                     <Route path="/rh" element={<RH />} />
                   </Route>
 
                   <Route element={<ProtectedRoute soloAdmin />}>
                     <Route path="/admin" element={<AdminLayout />}>
                       <Route index element={<Usuarios />} />
+                      <Route path="empresas" element={<Empresas />} />
+                      <Route path="organizaciones" element={<Organizaciones />} />
                       <Route path="reglas" element={<Reglas />} />
                       <Route path="excepciones" element={<Excepciones />} />
                     </Route>

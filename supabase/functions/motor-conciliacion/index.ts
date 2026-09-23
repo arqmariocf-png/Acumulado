@@ -13,7 +13,7 @@
 // este archivo es deliberadamente mecánico: cargar, mapear, llamar al motor
 // puro, escribir.
 
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { clasificarLote } from "../_shared/motor/motor.ts";
 import type { ContextoConciliacion, MovimientoEntrada } from "../_shared/motor/types.ts";
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
-    if (!puedeEscribirEnEmpresa(perfil, empresaId)) {
+    if (!puedeEscribirEnEmpresa(perfil, empresaId) || !(await empresaOperableEnModulo(req, empresaId, "conciliacion"))) {
       return jsonResponse({ error: "Sin permiso para reclasificar movimientos de esta empresa" }, 403);
     }
 

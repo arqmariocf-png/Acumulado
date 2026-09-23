@@ -212,3 +212,88 @@ solo la vista de avance tendría que ganar granularidad.
   (impuestos, fletes incluidos en el total de la OC pero no en el costo del
   producto, etc.) el % de avance puede no cuadrar exactamente contra el
   total de la orden aunque físicamente ya se haya recibido/embarcado todo.
+
+---
+
+## 11. Organizaciones (multi-tenant) — Acumulado como plataforma maestra, agregado 2026-09-23
+
+**Objetivo:** que Acumulado deje de ser la app de un solo grupo y pase a ser
+el backoffice maestro donde vive cada cliente como una organización propia,
+con el mismo concepto ya probado con Grupo Loma. El primer cliente nuevo es
+**ARSSA**, marca comercial del grupo que se va a operar.
+
+### 11.1 Modelo
+
+- **`grupos`** es el tenant: nombre, código, marca comercial y la bandera
+  `es_maestro`. Grupo Loma es la organización maestra (opera la plataforma);
+  ARSSA entra como organización cliente.
+- **`empresas`** (razones sociales) cuelga de un grupo. `nombre` y `codigo`
+  dejaron de ser únicos globalmente y pasaron a ser únicos **dentro** del
+  grupo: dos clientes pueden tener una empresa con el mismo código sin
+  pisarse.
+- **`profiles`** cuelga de un grupo. Un usuario recién registrado sigue
+  entrando en rol `pendiente` y ahora además sin organización; el admin le
+  asigna ambas cosas. Si tiene `empresa_id`, esa empresa **tiene** que ser de
+  su mismo grupo (lo fuerza un trigger, no solo la interfaz).
+- Las tablas que no cuelgan de una empresa ganaron `grupo_id`:
+  `archivos_cargados` (su `empresa_id` es nullable), `reglas_clasificacion`,
+  `excepciones_proveedor`, `personal`, `tipos_documento_personal` y
+  `audit_log`. Todo lo demás ya cuelga de `empresa_id`, y empresa pertenece a
+  un grupo — con eso alcanza para aislar.
+
+Las reglas de clasificación y las excepciones de proveedor (secciones 4.3 y
+4.4) **dejaron de ser globales**: cada organización tiene las suyas. Las 13
+reglas y 3 excepciones sembradas originalmente quedaron como las de Loma.
+
+### 11.2 Aislamiento
+
+Es la sección 7.3 llevada un nivel más arriba: antes "un usuario de una
+empresa nunca ve datos de otra, salvo el rol corporativo"; ahora, además, **un
+usuario de una organización nunca ve datos de otra, ni siquiera siendo
+corporativo**. `auth_ve_todas_empresas()` pasó a significar "todas las
+empresas de MI organización".
+
+La única excepción es el **admin de la organización maestra**: es el operador
+de la plataforma (da de alta clientes, les abre módulos y da soporte), y es el
+único rol que cruza organizaciones. Un admin de organización cliente es admin
+solo de la suya.
+
+Las escrituras de los edge functions van con la `service_role` key, que
+bypassa RLS, así que la frontera de organización se pregunta explícitamente
+antes de escribir (`empresaOperableEnModulo` en
+`supabase/functions/_shared/supabase-clients.ts`).
+
+### 11.3 Módulos que se abren conforme se ocupen
+
+La **base** —organización, entidades, usuarios/roles y panel de
+administración— existe para toda organización y no es un módulo. Los módulos
+operativos viven en `modulos` y se abren por organización en `grupo_modulos`:
+
+| Módulo | Qué incluye |
+|---|---|
+| `conciliacion` | Dashboard, Movimientos, Carga, Reportes especiales, Pendientes, reglas y excepciones (secciones 2–5) |
+| `inventario` | Sección 10 |
+| `rh` | Personal, asignaciones, contrataciones y expediente documental |
+
+El interruptor es real en los tres niveles: RLS no responde si el módulo está
+cerrado, los edge functions lo validan, y el frontend no arma ni el menú ni
+las rutas. Abrirlo y cerrarlo es de la organización maestra — un admin de
+organización cliente no se abre módulos solo.
+
+**Estado actual:** Grupo Loma con los tres módulos abiertos (opera igual que
+antes de este cambio); ARSSA con los tres cerrados, solo la base, y sin
+razones sociales dadas de alta todavía — se cargan desde Admin → Entidades
+cuando el cliente las defina.
+
+### 11.4 Pendiente de validar
+
+- Igual que el resto del proyecto, esto se validó contra un Postgres local con
+  las migraciones aplicadas (`supabase/tests/aislamiento_organizaciones.sql`,
+  9 casos), no contra un proyecto Supabase real: falta correr los advisors de
+  seguridad/rendimiento después del despliegue, como se hizo en
+  `20260817090001` y `20260817090002`.
+- Un usuario recién registrado (rol `pendiente`, todavía sin organización) es
+  visible para el admin de cualquier organización hasta que alguno lo asigna a
+  la suya. Es el único camino de alta por autoservicio y un profile sin
+  asignar no expone más que el nombre; si se quiere cerrar, hay que sustituirlo
+  por alta por invitación.

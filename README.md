@@ -1,8 +1,14 @@
 # Acumulado
 
-App de conciliación bancaria de Grupo Loma. El detalle funcional completo
-está en [`SPEC.md`](./SPEC.md) — este archivo es la guía técnica de cómo
-está armado el proyecto y cómo desplegarlo.
+Backoffice maestro donde cada cliente vive como una **organización** propia,
+con sus entidades, usuarios y datos aislados, y con los módulos que se le van
+abriendo conforme los ocupe. Hoy operan dos: **Grupo Loma** (organización
+maestra, con conciliación bancaria, inventario y RH abiertos) y **ARSSA**
+(organización cliente, por ahora solo con la base).
+
+El detalle funcional completo está en [`SPEC.md`](./SPEC.md) — la sección 11
+describe el modelo de organizaciones y el interruptor de módulos; este archivo
+es la guía técnica de cómo está armado el proyecto y cómo desplegarlo.
 
 ## Arquitectura
 
@@ -17,10 +23,22 @@ supabase/functions/    Edge functions (Deno) + módulos puros compartidos
   ingesta-oc-ov/          Carga manual de Excel para OC/OV (respaldo)
   proxy-backoffice/       Integración con la API de OC/OV del backoffice
 web/                    Frontend (Vite + React + Tailwind + Supabase)
+  src/pages/Inicio.tsx      Portada base de una organización: entidades y qué
+                            módulos tiene abiertos (SPEC.md sección 11)
+  src/pages/admin/          Usuarios, entidades, organizaciones (interruptor de
+                            módulos), reglas y excepciones
   src/pages/inventario/     Entradas/salidas de almacén (con escaneo de código de
                             barras), existencias, catálogo de productos, y match
                             de recepción/embarque contra OC/OV (SPEC.md sección 10)
+supabase/tests/         Pruebas SQL que necesitan un Postgres con las migraciones
+                        aplicadas (aislamiento entre organizaciones)
 ```
+
+La frontera entre organizaciones está en tres capas, y las tres tienen que
+estar de acuerdo: RLS en la base (`grupo_en_alcance`, `empresa_en_alcance`,
+`auth_modulo_habilitado`), la validación explícita de los edge functions
+(`empresaOperableEnModulo`, porque escriben con la `service_role` key que
+bypassa RLS), y el armado de menú y rutas en el frontend.
 
 Los módulos en `_shared/motor` y `_shared/ingesta` son TypeScript puro sin
 dependencias de Deno ni de Node — por eso se pueden probar directo con
@@ -53,10 +71,15 @@ Secrets que los edge functions necesitan (`npx supabase secrets set NOMBRE=valor
 
 Después de crear el proyecto, hay que dar de alta al primer usuario `admin`
 a mano (el trigger `handle_new_user` deja a todo usuario nuevo en rol
-`pendiente`, sin acceso — es intencional, ver sección 6 del spec):
+`pendiente` y sin organización, sin acceso — es intencional, ver sección 6 del
+spec). Tiene que quedar en la organización **maestra**: es la única que puede
+dar de alta clientes y abrirles módulos.
 
 ```sql
-update public.profiles set rol = 'admin' where id = '<uuid del usuario en auth.users>';
+update public.profiles
+   set rol = 'admin',
+       grupo_id = (select id from public.grupos where es_maestro)
+ where id = '<uuid del usuario en auth.users>';
 ```
 
 ## Frontend
@@ -71,8 +94,16 @@ npm run dev
 ## Pruebas
 
 ```bash
-npm test          # motor de conciliación + parsers de ingesta (35 pruebas)
+npm test          # motor de conciliación + parsers de ingesta (90 pruebas)
 cd web && npm run build   # type-check + build del frontend
+```
+
+Las pruebas de aislamiento entre organizaciones son SQL y necesitan un
+Postgres con las migraciones aplicadas, así que van aparte de `npm test` (el
+propio archivo explica cómo correrlas):
+
+```bash
+psql -d <base_con_migraciones> -f supabase/tests/aislamiento_organizaciones.sql
 ```
 
 Los edge functions (Deno) no se pueden ejecutar en este flujo de pruebas —

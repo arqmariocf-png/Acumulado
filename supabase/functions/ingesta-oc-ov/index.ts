@@ -4,7 +4,7 @@
 //
 // POST multipart/form-data: file, empresaId, recurso ('oc'|'ov')
 
-import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
@@ -27,7 +27,9 @@ Deno.serve(async (req) => {
     if (!empresaId || !archivo || (recurso !== "oc" && recurso !== "ov")) {
       return jsonResponse({ error: "empresaId, file y recurso ('oc'|'ov') son requeridos" }, 400);
     }
-    if (!puedeEscribirEnEmpresa(perfil, empresaId)) return jsonResponse({ error: "Sin permiso" }, 403);
+    if (!puedeEscribirEnEmpresa(perfil, empresaId) || !(await empresaOperableEnModulo(req, empresaId, "conciliacion"))) {
+      return jsonResponse({ error: "Sin permiso" }, 403);
+    }
     if (archivo.size > TAMANO_MAXIMO_BYTES) {
       return jsonResponse({ error: `El archivo excede el tamaño máximo permitido (${TAMANO_MAXIMO_BYTES / 1024 / 1024} MB)` }, 400);
     }
