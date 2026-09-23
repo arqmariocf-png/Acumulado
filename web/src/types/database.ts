@@ -837,6 +837,8 @@ export interface OrdenProduccion {
   cantidad_merma: number;
   estado: EstadoOrdenProduccion;
   notas: string | null;
+  /** Proyecto (catálogo de proyectos de la empresa) al que se destina el lote. */
+  proyecto_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
