@@ -36,7 +36,7 @@ export function Layout() {
               {logoUrl ? (
                 // El logotipo sustituye al nombre: dentro de su propia
                 // aplicación, el cliente se ve a sí mismo, no a la plataforma.
-                <img src={logoUrl} alt={marca ?? "Organización"} className="h-8 w-auto max-w-[160px] object-contain" />
+                <img src={logoUrl} alt={marca ?? "Organización"} className="h-9 w-auto max-w-[180px] object-contain" />
               ) : (
                 <span>Acumulado{marca ? ` · ${marca}` : ""}</span>
               )}

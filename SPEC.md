@@ -409,3 +409,14 @@ propia organización.
 
 La pantalla de login es neutra a propósito: antes de entrar no se sabe a qué
 organización pertenece el usuario.
+
+Hay dos caminos para cargarlo, y los dos hacen lo mismo: el admin de una
+organización sube el suyo en **Admin → Marca**, y el admin de la organización
+maestra sube el de cualquier cliente desde **Admin → Organizaciones**. El
+segundo es el que permite dar de alta a un cliente llave en mano sin tener que
+entrar con un usuario suyo.
+
+Los archivos de origen viven en `marca/` (ver `marca/README.md`). Un logotipo
+entregado en blanco sobre negro no sirve tal cual: el encabezado es claro y se
+vería como un recuadro negro — hay que dejarlo con fondo transparente y trazo
+oscuro.

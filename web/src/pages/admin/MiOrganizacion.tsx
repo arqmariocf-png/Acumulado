@@ -2,9 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
-
-const TIPOS_PERMITIDOS = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
-const TAMANO_MAXIMO = 1024 * 1024; // 1 MB: es un logotipo de encabezado, no un render
+import { TIPOS_LOGOTIPO, quitarLogotipo, subirLogotipo } from "../../lib/marca";
 
 // Marca de la organización: el nombre con el que se identifica en la interfaz
 // y su logotipo. El archivo va al bucket público `branding`, bajo la carpeta
@@ -42,45 +40,25 @@ export function MiOrganizacion() {
   async function subirLogo(archivo: File) {
     setError(null);
     setMensaje(null);
-
-    if (!TIPOS_PERMITIDOS.includes(archivo.type)) {
-      setError("El logotipo tiene que ser PNG, JPG, SVG o WebP.");
-      return;
-    }
-    if (archivo.size > TAMANO_MAXIMO) {
-      setError("El logotipo no puede pesar más de 1 MB.");
-      return;
-    }
-
     setSubiendo(true);
-    const extension = archivo.name.split(".").pop()?.toLowerCase() ?? "png";
-    // Ruta fija por organización: subir un logotipo nuevo reemplaza al
-    // anterior en vez de ir dejando archivos huérfanos en el bucket.
-    const ruta = `${org.id}/logo.${extension}`;
-
-    const { error: errSubida } = await supabase.storage.from("branding").upload(ruta, archivo, {
-      upsert: true,
-      contentType: archivo.type,
-    });
-    if (errSubida) {
-      setError(errSubida.message);
-      setSubiendo(false);
-      return;
+    try {
+      await subirLogotipo(org.id, archivo);
+      setMensaje("Logotipo actualizado");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo subir el logotipo");
     }
-
-    const { error: errGrupo } = await supabase.from("grupos").update({ logo_path: ruta }).eq("id", org.id);
-    if (errGrupo) setError(errGrupo.message);
-    else setMensaje("Logotipo actualizado");
-
     await recargarOrganizacion();
     setSubiendo(false);
   }
 
   async function quitarLogo() {
     setError(null);
-    const { error: err } = await supabase.from("grupos").update({ logo_path: null }).eq("id", org.id);
-    if (err) setError(err.message);
-    else setMensaje("Se quitó el logotipo");
+    try {
+      await quitarLogotipo(org.id);
+      setMensaje("Se quitó el logotipo");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo quitar el logotipo");
+    }
     await recargarOrganizacion();
   }
 
@@ -122,7 +100,7 @@ export function MiOrganizacion() {
               {subiendo ? "Subiendo…" : "Subir logotipo"}
               <input
                 type="file"
-                accept={TIPOS_PERMITIDOS.join(",")}
+                accept={TIPOS_LOGOTIPO.join(",")}
                 className="hidden"
                 onChange={(e) => {
                   const archivo = e.target.files?.[0];

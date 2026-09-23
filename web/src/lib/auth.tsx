@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { urlPublicaDelLogo } from "./marca";
 import type { Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
 
 interface AuthState {
@@ -131,9 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // espejo de lo que ya impone RLS (suscripcion_permite_escribir) -- aquí
   // sirve para no ofrecer botones que la base va a rechazar.
   const suscripcionPermiteEscribir = esAdminGlobal || (suscripcion?.puede_escribir ?? false);
-  const logoUrl = grupo?.logo_path
-    ? supabase.storage.from("branding").getPublicUrl(grupo.logo_path).data.publicUrl
-    : null;
+  const logoUrl = urlPublicaDelLogo(grupo?.logo_path);
 
   function puedeEscribirEnEmpresa(empresaId: string): boolean {
     if (!suscripcionPermiteEscribir) return false;

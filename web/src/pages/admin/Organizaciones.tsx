@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { TIPOS_LOGOTIPO, subirLogotipo, urlPublicaDelLogo } from "../../lib/marca";
 import type { Grupo, Modulo, ModuloClave } from "../../types/database";
 
 // Panel de la organización maestra: dar de alta clientes y abrirles módulos
@@ -12,7 +13,7 @@ import type { Grupo, Modulo, ModuloClave } from "../../types/database";
 // ruta a mano).
 export function Organizaciones() {
   const queryClient = useQueryClient();
-  const { esAdminGlobal, perfil, grupo: miGrupo } = useAuth();
+  const { esAdminGlobal, perfil, grupo: miGrupo, recargarOrganizacion } = useAuth();
   const [nombre, setNombre] = useState("");
   const [codigo, setCodigo] = useState("");
   const [marca, setMarca] = useState("");
@@ -69,6 +70,22 @@ export function Organizaciones() {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["admin-grupos"] });
       queryClient.invalidateQueries({ queryKey: ["admin-grupo-modulos"] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  // El logotipo de un cliente lo sube la organización maestra: el admin del
+  // cliente puede hacerlo desde Admin → Marca, pero esa pantalla solo edita SU
+  // organización -- sin esto, dar de alta a un cliente llave en mano obligaba
+  // a entrar con un usuario suyo.
+  const cambiarLogo = useMutation({
+    mutationFn: async ({ grupoId, archivo }: { grupoId: string; archivo: File }) => {
+      await subirLogotipo(grupoId, archivo);
+    },
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-grupos"] });
+      void recargarOrganizacion();
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -166,6 +183,7 @@ export function Organizaciones() {
             <tr>
               <th className="px-3 py-2">Organización</th>
               <th className="px-3 py-2">Código</th>
+              <th className="px-3 py-2">Logotipo</th>
               {modulos?.map((m) => (
                 <th key={m.clave} className="px-3 py-2" title={m.descripcion ?? undefined}>
                   {m.nombre}
@@ -182,6 +200,31 @@ export function Organizaciones() {
                   {g.es_maestro && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">maestra</span>}
                 </td>
                 <td className="px-3 py-2 font-mono text-xs">{g.codigo}</td>
+                <td className="px-3 py-2">
+                  <label className="flex cursor-pointer items-center gap-2" title="Subir o reemplazar el logotipo">
+                    {g.logo_path ? (
+                      <img
+                        src={urlPublicaDelLogo(g.logo_path) ?? ""}
+                        alt={`Logotipo de ${g.marca_comercial ?? g.nombre}`}
+                        className="h-8 w-8 object-contain"
+                      />
+                    ) : (
+                      <span className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-slate-300 text-[10px] text-slate-400">
+                        —
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-500 underline">{g.logo_path ? "Cambiar" : "Subir"}</span>
+                    <input
+                      type="file"
+                      accept={TIPOS_LOGOTIPO.join(",")}
+                      className="hidden"
+                      onChange={(e) => {
+                        const archivo = e.target.files?.[0];
+                        if (archivo) cambiarLogo.mutate({ grupoId: g.id, archivo });
+                      }}
+                    />
+                  </label>
+                </td>
                 {modulos?.map((m) => (
                   <td key={m.clave} className="px-3 py-2">
                     <input
