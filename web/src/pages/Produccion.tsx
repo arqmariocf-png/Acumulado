@@ -571,7 +571,36 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
 function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: string; proyecto?: string; materias: MateriaPrima[] }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [ocId, setOcId] = useState<string>("__nueva__");
+  // La OC es opcional (pedido de Mario, 23-sep-2026): la planta puede
+  // registrar la entrada y vincularla después; mientras tanto queda en la
+  // lista de "pendientes de vincular" de abajo.
+  const [ocId, setOcId] = useState<string>("__pendiente__");
+  const materiaIds = materias.map((m) => m.id);
+
+  const { data: pendientesOc } = useQuery({
+    queryKey: ["entradas-mp-sin-oc", empresaId, materiaIds.join(",")],
+    enabled: materiaIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("movimientos_materia_prima")
+        .select("id, materia_prima_id, cantidad, costo_unitario, fecha, materias_primas(nombre)")
+        .eq("tipo", "entrada")
+        .is("orden_compra_id", null)
+        .in("materia_prima_id", materiaIds)
+        .order("fecha", { ascending: false });
+      if (error) throw error;
+      return data as { id: string; materia_prima_id: string; cantidad: number; costo_unitario: number; fecha: string; materias_primas: { nombre: string } | null }[];
+    },
+  });
+
+  const vincular = useMutation({
+    mutationFn: async (p: { id: string; ocId: string }) => {
+      const { error } = await supabase.from("movimientos_materia_prima").update({ orden_compra_id: p.ocId }).eq("id", p.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["entradas-mp-sin-oc", empresaId] }),
+    onError: (err) => setError((err as Error).message),
+  });
 
   const { data: ordenesCompra } = useQuery({
     queryKey: ["ordenes-compra-planta", empresaId, proyecto ?? null],
@@ -586,7 +615,7 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
 
   const registrar = useMutation({
     mutationFn: async (fd: FormData) => {
-      let orden_compra_id = ocId;
+      let orden_compra_id: string | null = ocId === "__pendiente__" ? null : ocId;
       if (ocId === "__nueva__") {
         const { data, error } = await supabase
           .from("ordenes_compra")
@@ -618,7 +647,8 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stock-materia-prima", empresaId] });
       queryClient.invalidateQueries({ queryKey: ["ordenes-compra-planta", empresaId] });
-      setOcId("__nueva__");
+      queryClient.invalidateQueries({ queryKey: ["entradas-mp-sin-oc", empresaId] });
+      setOcId("__pendiente__");
     },
     onError: (err) => setError((err as Error).message),
   });
@@ -662,8 +692,9 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
           </div>
         </div>
         <div>
-          <label className={etiquetaCampo}>Orden de compra (OC) *</label>
+          <label className={etiquetaCampo}>Orden de compra (OC)</label>
           <select value={ocId} onChange={(e) => setOcId(e.target.value)} className={campoTexto}>
+            <option value="__pendiente__">Pendiente de vincular (la ligo después)</option>
             <option value="__nueva__">+ Dar de alta una OC nueva (manual)</option>
             {ordenesCompra?.map((oc) => (
               <option key={oc.id} value={oc.id}>
@@ -675,6 +706,11 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
             Usa una OC ya cargada por tesorería cuando exista — así el mismo folio que concilia el motor de bancos
             queda ligado a esta entrada de inventario, sin capturarla dos veces.
           </p>
+          {ocId === "__pendiente__" && (
+            <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Esta entrada quedará <b>pendiente de vincular</b> con su orden de compra. Puedes seguir capturando; abajo aparece la lista de pendientes para ligarlas cuando tengas el folio.
+            </p>
+          )}
         </div>
         {ocId === "__nueva__" && (
           <div className="grid grid-cols-1 gap-3 rounded border border-dashed border-slate-300 p-3 sm:grid-cols-2">
@@ -693,6 +729,51 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
           {registrar.isPending ? "Guardando…" : "Registrar entrada"}
         </button>
       </form>
+
+      {pendientesOc && pendientesOc.length > 0 && (
+        <div className="mt-4 rounded border border-amber-200 bg-white">
+          <p className="border-b border-amber-100 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+            {pendientesOc.length} entrada(s) pendiente(s) de vincular con orden de compra
+          </p>
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Fecha</th>
+                <th className="px-3 py-2">Materia prima</th>
+                <th className="px-3 py-2 text-right">Cantidad</th>
+                <th className="px-3 py-2 text-right">Costo unit.</th>
+                <th className="px-3 py-2">Vincular a OC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendientesOc.map((m) => (
+                <tr key={m.id} className="border-t border-slate-100">
+                  <td className="whitespace-nowrap px-3 py-2">{m.fecha}</td>
+                  <td className="px-3 py-2">{m.materias_primas?.nombre ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">{formatoNumero(m.cantidad)}</td>
+                  <td className="px-3 py-2 text-right">{formatoMoneda(m.costo_unitario)}</td>
+                  <td className="px-3 py-2">
+                    <select
+                      defaultValue=""
+                      disabled={vincular.isPending}
+                      onChange={(e) => e.target.value && vincular.mutate({ id: m.id, ocId: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="">Elegir OC…</option>
+                      {ordenesCompra?.map((oc) => (
+                        <option key={oc.id} value={oc.id}>
+                          OC {oc.id_orden} — {oc.proveedor ?? "sin proveedor"} {oc.total ? `(${formatoMoneda(oc.total)})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="px-3 py-2 text-xs text-slate-500">Si la OC todavía no aparece, se sincroniza sola cada mañana desde el backoffice; también puedes darla de alta manual con "+ Dar de alta una OC nueva".</p>
+        </div>
+      )}
     </div>
   );
 }
