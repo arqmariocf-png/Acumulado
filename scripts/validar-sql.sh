@@ -58,6 +58,13 @@ sleep 2
 
 PSQL="psql -h $TRABAJO -p $PUERTO -U postgres -v ON_ERROR_STOP=1 -q"
 
+# Algunas migraciones piden extensiones que no existen en un Postgres normal
+# (`http` vive solo en Supabase). Se comentan al copiar y sus funciones se
+# sustituyen por stubs en el shim: lo que se está validando aquí es el esquema
+# y RLS, no la integración con una API externa. Lo que SÍ está disponible
+# (unaccent, pgcrypto) se instala de verdad.
+sed -i 's/^\(create extension if not exists http .*\)$/-- [validar-sql] extensión no disponible localmente: \1/' "$TRABAJO"/migrations/*.sql
+
 cat > "$TRABAJO/shim.sql" <<'SQL'
 -- Los roles son del CLUSTER, no de la base: al crear la segunda base de
 -- pruebas ya existen. Por eso el alta es condicional.
@@ -76,6 +83,29 @@ create schema if not exists auth;
 create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb);
 create or replace function auth.uid() returns uuid language sql stable
   as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+-- Supabase pone las extensiones en su propio esquema.
+create schema if not exists extensions;
+create extension if not exists unaccent with schema extensions;
+
+-- Stubs de lo que no se puede instalar aquí. Devuelven vacío a propósito: si
+-- alguna migración llegara a DEPENDER del resultado de una llamada HTTP para
+-- construir el esquema, esto lo haría evidente en vez de esconderlo.
+create type extensions.http_response as (status integer, content_type text, content text);
+create or replace function extensions.http_get(text) returns extensions.http_response
+  language sql immutable as $$ select (200, 'application/json', '[]')::extensions.http_response $$;
+
+create schema if not exists net;
+create or replace function net.http_post(url text, body jsonb default '{}'::jsonb, params jsonb default '{}'::jsonb,
+                                         headers jsonb default '{}'::jsonb, timeout_milliseconds integer default 5000)
+  returns bigint language sql as $$ select 0::bigint $$;
+
+create schema if not exists cron;
+create table if not exists cron.job (jobid bigserial primary key, jobname text, schedule text, command text);
+create or replace function cron.schedule(jobname text, schedule text, command text)
+  returns bigint language sql as $$
+    insert into cron.job (jobname, schedule, command) values (jobname, schedule, command) returning jobid
+  $$;
+
 create schema if not exists storage;
 create table storage.buckets (id text primary key, name text, public boolean default false);
 create table storage.objects (id uuid primary key default gen_random_uuid(),
@@ -92,6 +122,10 @@ for prueba in "$TRABAJO"/*.sql; do
   # usuarios y datos, y dos pruebas en la misma base se pisarían.
   ejecutar "$PSQL -d postgres -c 'drop database if exists acumulado_validacion'" >/dev/null 2>&1 || true
   ejecutar "$PSQL -d postgres -c 'create database acumulado_validacion'" >/dev/null
+  # Supabase trae `extensions` en el search_path por default y varias
+  # migraciones llaman a unaccent() sin calificar. Se replica aquí para que el
+  # validador vea el mismo entorno que producción.
+  ejecutar "$PSQL -d postgres -c 'alter database acumulado_validacion set search_path to \"\$user\", public, extensions'" >/dev/null 2>&1
   ejecutar "$PSQL -d acumulado_validacion -f '$TRABAJO/shim.sql'" >/dev/null 2>&1
 
   for migracion in $(ls "$TRABAJO"/migrations/*.sql | sort); do
@@ -106,6 +140,8 @@ for prueba in "$TRABAJO"/*.sql; do
   if ejecutar "psql -h $TRABAJO -p $PUERTO -U postgres -d acumulado_validacion -v ON_ERROR_STOP=1 -f '$prueba'" > "$salida" 2>&1; then
     echo "✓ $(basename "$prueba")"
     grep -E "^(NOTICE|psql.*NOTICE)" "$salida" | sed 's/.*NOTICE: */  /' || true
+    # Un archivo que empiece por zz_ es diagnóstico, no prueba: se imprime tal cual.
+    case "$(basename "$prueba")" in zz_*) sed 's/^/  /' "$salida" ;; esac
   else
     echo "✗ $(basename "$prueba")"
     grep -E "ERROR|FALLA" "$salida" | head -5

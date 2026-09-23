@@ -1,0 +1,24 @@
+-- NOTA: este archivo y los 5 que le siguen (produccion_catalogos/ordenes/
+-- inventario/integra_oc_ov/vistas) ya estaban APLICADOS en el proyecto
+-- Supabase real desde el 24-ago-2026 -- los aplicó otra sesión de trabajo,
+-- en una rama de git (claude/clavicon-produccion) que nunca se mergeó a
+-- main y quedó desconectada de los ~100 commits posteriores de este
+-- repo. Se re-agregan aquí tal cual (sin volver a ejecutarlos -- ya están
+-- vivos en la base) solo para cerrar el hueco de tracking en git, mismo
+-- criterio que ya se había señalado antes en este proyecto para otras
+-- piezas de esquema aplicadas fuera de banda.
+--
+-- Nuevo rol para el módulo de Producción y Costeo (planta de Mallas y
+-- Clavos Clavicón: malla armex y clavos de dos calibres). Va en su propia
+-- migración porque Postgres no permite usar un valor de enum recién
+-- agregado (ALTER TYPE ... ADD VALUE) dentro de la misma transacción en la
+-- que se agregó -- mismo motivo que 20260821090001_rh_rol_enum.sql.
+--
+-- 'produccion' es deliberadamente un rol NUEVO y no una bandera sobre
+-- 'empresa': el área de planta no debe ver movimientos bancarios ni CFDI
+-- de ninguna empresa -- solo lo que vive en las tablas de este módulo
+-- (materias primas, productos, recetas, inventario, órdenes de
+-- producción) y, de forma acotada, el catálogo de OC/OV de Clavicón para
+-- poder vincular sus compras/ventas reales (ver
+-- 20260824090005_produccion_integra_oc_ov.sql).
+alter type public.app_rol add value 'produccion';

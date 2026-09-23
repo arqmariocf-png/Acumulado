@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
+import { SaldosEmpresas } from "./finanzas/SaldosEmpresas";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -39,6 +40,21 @@ interface FilaKpiAnual {
   pct_factura_ajustado: number | null;
   total_cargo: number;
   total_abono: number;
+}
+
+interface FilaCosteoMensualPlanta {
+  empresa_id: string;
+  empresa_codigo: string;
+  empresa_nombre: string;
+  producto_id: string;
+  producto_nombre: string;
+  producto_tipo: string;
+  anio: number;
+  mes: number;
+  lotes: number;
+  cantidad_producida: number;
+  costo_total: number;
+  costo_unitario_promedio: number | null;
 }
 
 function formatoMoneda(v: number): string {
@@ -130,6 +146,25 @@ export function Dashboard() {
     },
   });
 
+  // Costos de producción de las plantas (Clavicón, Balken y Carpintería) junto a los
+  // KPIs financieros de las 8 empresas -- "intercomunicado con Acumulado"
+  // pedía verlo aquí, no solo dentro del módulo. RLS de las tablas de
+  // producción ya limita a produccion/admin/corporativo: para el resto de
+  // los roles la consulta simplemente vuelve vacía, sin chequeo de rol aquí.
+  const { data: costeoPlantas } = useQuery({
+    queryKey: ["costeo-mensual-planta-dashboard"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_costeo_mensual_planta")
+        .select("*")
+        .order("empresa_nombre")
+        .order("anio", { ascending: false })
+        .order("mes", { ascending: false });
+      if (error) throw error;
+      return data as FilaCosteoMensualPlanta[];
+    },
+  });
+
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
 
   // Agrupado por empresa (en vez de una tabla plana ordenada solo por fecha)
@@ -172,12 +207,35 @@ export function Dashboard() {
     );
   }
 
+  // Finanzas (rol dirección, ej. Laura): solo saldos de inicio y cierre por
+  // empresa y el acceso a programación de pagos, sin el resto del tablero
+  // (pedido de Mario, 23-sep-2026).
+  if (perfil?.rol === "direccion") {
+    return (
+      <div>
+        <h1 className="mb-1 text-xl font-semibold text-slate-900">Dashboard de finanzas</h1>
+        <p className="mb-4 text-sm text-slate-500">Saldos de las empresas del grupo al día. Cambia la fecha para revisar otro día.</p>
+        <SaldosEmpresas compacto />
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Dashboard</h1>
       <p className="mb-6 text-sm text-slate-500">
         {veTodasLasEmpresas ? "Consolidado — las 8 empresas" : `Empresa asignada`} · {perfil?.rol}
       </p>
+
+      {perfil?.rol === "admin" && (
+        <Link to="/clavicon" className="mb-6 flex items-center justify-between rounded border border-red-200 bg-red-50 px-4 py-3 hover:bg-red-100">
+          <span>
+            <span className="block text-sm font-semibold text-red-800">Clavicón · panorama de planta</span>
+            <span className="text-xs text-red-700">Lotes, calendario de procesos por máquina, inventario y costeo, con el reporte oficial para imprimir.</span>
+          </span>
+          <span className="rounded bg-red-800 px-3 py-1.5 text-xs font-medium text-white">Abrir</span>
+        </Link>
+      )}
 
       {estadoCarga && estadoCarga.length > 0 && (
         <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
@@ -381,6 +439,42 @@ export function Dashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {costeoPlantas && costeoPlantas.length > 0 && (
+        <div className="mt-6 overflow-x-auto rounded border border-slate-200 bg-white">
+          <p className="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+            Producción — costo mensual por producto (lotes terminados)
+          </p>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Planta</th>
+                <th className="px-3 py-2">Producto</th>
+                <th className="px-3 py-2">Periodo</th>
+                <th className="px-3 py-2 text-right">Lotes</th>
+                <th className="px-3 py-2 text-right">Cant. producida</th>
+                <th className="px-3 py-2 text-right">Costo total</th>
+                <th className="px-3 py-2 text-right">Costo unitario prom.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {costeoPlantas.map((c) => (
+                <tr key={`${c.producto_id}-${c.anio}-${c.mes}`} className="border-t border-slate-100">
+                  <td className="px-3 py-2 font-medium text-slate-800">{c.empresa_nombre}</td>
+                  <td className="px-3 py-2">{c.producto_nombre}</td>
+                  <td className="px-3 py-2">
+                    {MESES[c.mes - 1]} {c.anio}
+                  </td>
+                  <td className="px-3 py-2 text-right">{c.lotes}</td>
+                  <td className="px-3 py-2 text-right">{Number(c.cantidad_producida).toLocaleString("es-MX", { maximumFractionDigits: 4 })}</td>
+                  <td className="px-3 py-2 text-right">{formatoMoneda(Number(c.costo_total))}</td>
+                  <td className="px-3 py-2 text-right">{c.costo_unitario_promedio != null ? formatoMoneda(Number(c.costo_unitario_promedio)) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

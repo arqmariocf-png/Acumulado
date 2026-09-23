@@ -1,14 +1,209 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../../lib/supabase";
+import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
-import type { Producto, TipoMovimientoInventario } from "../../types/database";
+import { idRemisionDesdeCodigo } from "../../lib/remision";
+import { imprimirRemision } from "./remisionQr";
+import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
 interface FilaCarrito {
   producto: Producto;
   cantidad: number;
   costoUnitario: number | null;
+}
+
+// Tres formas de decidir qué producto va al carrito: escanear (físico o
+// cámara), buscar por nombre a mano (proveedores sin QR/código), o subir la
+// foto de la nota/remisión de papel y dejar que la IA sugiera los conceptos
+// -- las tres terminan agregando filas al mismo `carrito` de abajo.
+type ModoCaptura = "codigo" | "nombre" | "foto";
+
+const MODOS_CAPTURA: { valor: ModoCaptura; etiqueta: string }[] = [
+  { valor: "codigo", etiqueta: "Código de barras" },
+  { valor: "nombre", etiqueta: "Buscar por nombre" },
+  { valor: "foto", etiqueta: "Foto de la nota" },
+];
+
+/** Buscador reutilizable por nombre -- lo usa tanto el modo "Buscar por
+ * nombre" como cada concepto sugerido por la foto (ahí sirve para mapear la
+ * descripción leída por la IA a un producto real del catálogo). */
+function BuscadorProducto({
+  empresaId,
+  placeholder,
+  onSeleccionar,
+}: {
+  empresaId: string;
+  placeholder?: string;
+  onSeleccionar: (producto: Producto) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState<Producto[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
+
+  async function buscar() {
+    const limpio = query.trim();
+    if (!limpio || !empresaId) return;
+    setBuscando(true);
+    try {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("*")
+        .eq("empresa_id", empresaId)
+        .eq("activo", true)
+        .ilike("nombre", `%${limpio}%`)
+        .order("nombre")
+        .limit(10);
+      if (error) throw error;
+      setResultados(data as Producto[]);
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              buscar();
+            }
+          }}
+          placeholder={placeholder ?? "Buscar producto por nombre…"}
+          className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+        />
+        <button
+          type="button"
+          onClick={buscar}
+          disabled={buscando}
+          className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          {buscando ? "Buscando…" : "Buscar"}
+        </button>
+      </div>
+      {resultados && (
+        <ul className="mt-1 max-h-40 overflow-y-auto rounded border border-slate-200 bg-white text-sm">
+          {resultados.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  onSeleccionar(p);
+                  setResultados(null);
+                  setQuery("");
+                }}
+                className="block w-full px-2 py-1 text-left hover:bg-slate-100"
+              >
+                {p.nombre} <span className="text-xs text-slate-400">({p.sku})</span>
+              </button>
+            </li>
+          ))}
+          {resultados.length === 0 && <li className="px-2 py-1 text-slate-400">Sin resultados.</li>}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Tarjeta de un concepto sugerido por la foto: primero intenta que el
+ * usuario lo mapee a un producto existente (BuscadorProducto); si el
+ * material todavía no está dado de alta en el catálogo, ofrece crearlo ahí
+ * mismo precargado con lo que ya leyó la IA (descripción/unidad), igual que
+ * el modo de código de barras ya hace cuando el código no matchea nada. */
+function ItemSugeridoCard({
+  item,
+  empresaId,
+  onAgregado,
+}: {
+  item: ItemSugeridoNota;
+  empresaId: string;
+  onAgregado: (producto: Producto) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [creando, setCreando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onCrear(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const nombre = String(form.get("nombre") ?? "").trim();
+    const sku = String(form.get("sku") ?? "").trim();
+    const unidad = String(form.get("unidad") ?? "PZA").trim() || "PZA";
+    if (!nombre || !sku) return;
+    setError(null);
+    try {
+      const { data, error: errInsert } = await supabase
+        .from("productos")
+        .insert({ empresa_id: empresaId, sku, nombre, unidad_medida: unidad })
+        .select("*")
+        .single();
+      if (errInsert) throw errInsert;
+      onAgregado(data as Producto);
+      queryClient.invalidateQueries({ queryKey: ["productos"] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <div className="rounded border border-blue-100 bg-white p-2">
+      <p className="mb-1 text-sm text-slate-800">
+        {item.descripcion || "(sin descripción legible)"}
+        {item.cantidad != null && (
+          <span className="text-slate-500">
+            {" "}
+            — cantidad sugerida: {item.cantidad}
+            {item.unidad ? ` ${item.unidad}` : ""}
+          </span>
+        )}
+      </p>
+
+      {!creando ? (
+        <>
+          <BuscadorProducto empresaId={empresaId} placeholder="Buscar el producto correspondiente…" onSeleccionar={onAgregado} />
+          <button type="button" onClick={() => setCreando(true)} className="mt-1 text-xs text-blue-700 hover:underline">
+            No existe en el catálogo -- crear producto nuevo
+          </button>
+        </>
+      ) : (
+        <form onSubmit={onCrear} className="mt-1 space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+          <input
+            name="nombre"
+            required
+            defaultValue={item.descripcion}
+            placeholder="Nombre del producto"
+            className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+          />
+          <div className="flex gap-2">
+            <input name="sku" required placeholder="SKU" className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <input
+              name="unidad"
+              defaultValue={item.unidad ?? "PZA"}
+              placeholder="Unidad (default PZA)"
+              className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Crear y agregar</button>
+            <button
+              type="button"
+              onClick={() => setCreando(false)}
+              className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+            >
+              Cancelar
+            </button>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </form>
+      )}
+    </div>
+  );
 }
 
 function useEmpresas() {
@@ -72,7 +267,7 @@ function useMovimientosRecientes(empresaId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("movimientos_inventario")
-        .select("id, tipo, cantidad, costo_unitario, fecha, comentario, orden_compra_id, orden_venta_id, productos(nombre, sku)")
+        .select("id, tipo, cantidad, costo_unitario, fecha, comentario, orden_compra_id, orden_venta_id, remision_id, productos(nombre, sku), remisiones_salida(folio)")
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -80,6 +275,97 @@ function useMovimientosRecientes(empresaId: string) {
       return data;
     },
   });
+}
+
+// Entradas/salidas que se guardaron sin orden porque todavía no se sabía a
+// cuál correspondían (ver asignar_orden_movimiento_inventario()) -- se
+// resuelven después sin tener que reescribir el movimiento a mano.
+function usePendientesAsignarOrden(empresaId: string, tipo: TipoMovimientoInventario) {
+  return useQuery({
+    queryKey: ["pendientes-asignar-orden", empresaId, tipo],
+    enabled: !!empresaId,
+    queryFn: async () => {
+      const columnaOrden = tipo === "entrada" ? "orden_compra_id" : "orden_venta_id";
+      const { data, error } = await supabase
+        .from("movimientos_inventario")
+        .select("id, cantidad, fecha, productos(nombre, sku)")
+        .eq("empresa_id", empresaId)
+        .eq("tipo", tipo)
+        .eq("es_ajuste", false)
+        .is(columnaOrden, null)
+        .order("fecha", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Fila de un movimiento sin orden vinculada, con su propio selector para
+ * asignarla -- no reutiliza el selector de "vincular a orden" de arriba
+ * porque ese aplica al movimiento que se está por CREAR, este a uno que ya
+ * existe. */
+function AsignarOrdenFila({
+  movimiento,
+  ordenes,
+  onAsignado,
+}: {
+  movimiento: { id: string; cantidad: number; fecha: string; productos: { nombre: string; sku: string } | null };
+  ordenes: { id: string; etiqueta: string }[] | undefined;
+  onAsignado: () => void;
+}) {
+  const [ordenId, setOrdenId] = useState("");
+  const [asignando, setAsignando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onAsignar() {
+    if (!ordenId) return;
+    setAsignando(true);
+    setError(null);
+    try {
+      const { error: errRpc } = await supabase.rpc("asignar_orden_movimiento_inventario", {
+        p_movimiento_id: movimiento.id,
+        p_orden_id: ordenId,
+      });
+      if (errRpc) throw errRpc;
+      onAsignado();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAsignando(false);
+    }
+  }
+
+  return (
+    <tr className="border-t border-slate-100">
+      <td className="whitespace-nowrap px-3 py-2">{movimiento.fecha}</td>
+      <td className="px-3 py-2">
+        {movimiento.productos?.nombre} <span className="text-xs text-slate-400">({movimiento.productos?.sku})</span>
+      </td>
+      <td className="px-3 py-2 text-right">{movimiento.cantidad}</td>
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-2">
+          <select value={ordenId} onChange={(e) => setOrdenId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
+            <option value="">Selecciona la orden…</option>
+            {ordenes?.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.etiqueta}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onAsignar}
+            disabled={!ordenId || asignando}
+            className="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {asignando ? "Asignando…" : "Asignar"}
+          </button>
+        </div>
+        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      </td>
+    </tr>
+  );
 }
 
 export function Movimientos() {
@@ -93,6 +379,7 @@ export function Movimientos() {
   const [esAjuste, setEsAjuste] = useState(false);
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [carrito, setCarrito] = useState<FilaCarrito[]>([]);
+  const [modo, setModo] = useState<ModoCaptura>("codigo");
   const [codigo, setCodigo] = useState("");
   const [mostrarCamara, setMostrarCamara] = useState(false);
   const [codigoSinProducto, setCodigoSinProducto] = useState<string | null>(null);
@@ -100,28 +387,48 @@ export function Movimientos() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [notaEntregaId, setNotaEntregaId] = useState<string | null>(null);
+  // Remisión de salida con QR (pedido de Mario, 21-sep-2026): por omisión
+  // toda salida real genera su remisión; se puede apagar para salidas
+  // internas que no necesitan documento.
+  const [generarRemision, setGenerarRemision] = useState(true);
+  const [entregarA, setEntregarA] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+  const [ultimaRemision, setUltimaRemision] = useState<{ id: string; folio: string } | null>(null);
+  const navigate = useNavigate();
+  const [itemsSugeridos, setItemsSugeridos] = useState<ItemSugeridoNota[]>([]);
+  const [errorLecturaFoto, setErrorLecturaFoto] = useState<string | null>(null);
   const inputCodigoRef = useRef<HTMLInputElement>(null);
 
   const { data: almacen } = useAlmacen(empresaId);
   const { data: ordenes } = useOrdenes(empresaId, tipo);
   const { data: recientes, isLoading: cargandoRecientes } = useMovimientosRecientes(empresaId);
+  const { data: pendientesOrden } = usePendientesAsignarOrden(empresaId, tipo);
 
   useEffect(() => {
     setOrdenId("");
   }, [tipo, empresaId]);
 
-  function agregarAlCarrito(producto: Producto) {
+  function agregarAlCarrito(producto: Producto, cantidadSugerida?: number) {
     setCarrito((prev) => {
       const existente = prev.find((f) => f.producto.id === producto.id);
       if (existente) {
-        return prev.map((f) => (f.producto.id === producto.id ? { ...f, cantidad: f.cantidad + 1 } : f));
+        return prev.map((f) => (f.producto.id === producto.id ? { ...f, cantidad: f.cantidad + (cantidadSugerida ?? 1) } : f));
       }
-      return [...prev, { producto, cantidad: 1, costoUnitario: producto.costo_referencia }];
+      return [...prev, { producto, cantidad: cantidadSugerida ?? 1, costoUnitario: producto.costo_referencia }];
     });
   }
 
   async function buscarPorCodigo(valor: string) {
     const limpio = valor.trim();
+    // El QR de una remisión impresa abre la remisión (consulta / confirmar
+    // entrega) en vez de buscar un producto.
+    const remisionEscaneada = idRemisionDesdeCodigo(limpio);
+    if (remisionEscaneada) {
+      navigate(`/inventario/remisiones/${remisionEscaneada}`);
+      return;
+    }
     if (!limpio || !empresaId) return;
     setBuscando(true);
     setError(null);
@@ -180,6 +487,45 @@ export function Movimientos() {
     }
   }
 
+  function limpiarFoto() {
+    setNotaEntregaId(null);
+    setItemsSugeridos([]);
+    setErrorLecturaFoto(null);
+  }
+
+  async function onSubirFoto(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!empresaId) return;
+    setError(null);
+    limpiarFoto();
+    setSubiendoFoto(true);
+    // Se guarda la referencia del <form> antes del primer await: React pone
+    // en null e.currentTarget en cuanto termina la parte síncrona del
+    // manejador, así que usarlo después de un await (para el .reset() de
+    // abajo) revienta con "No se pueden leer las propiedades de null".
+    const formEl = e.currentTarget;
+    try {
+      const form = new FormData(formEl);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const respuesta = await fetch(urlFuncion("ocr-nota-entrega"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+      setNotaEntregaId(json.notaEntregaId);
+      setItemsSugeridos(json.itemsSugeridos ?? []);
+      setErrorLecturaFoto(json.errorLectura ?? null);
+      formEl.reset();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubiendoFoto(false);
+    }
+  }
+
   function actualizarFila(productoId: string, campo: "cantidad" | "costoUnitario", valor: number) {
     setCarrito((prev) => prev.map((f) => (f.producto.id === productoId ? { ...f, [campo]: valor } : f)));
   }
@@ -194,13 +540,38 @@ export function Movimientos() {
       setError("Todas las líneas necesitan costo unitario para poder vincularse a una orden.");
       return;
     }
+    const conRemision = tipo === "salida" && !esAjuste && generarRemision;
+    if (conRemision && !entregarA.trim()) {
+      setError("Indica a quién se entrega el material para generar la remisión.");
+      return;
+    }
     setEnviando(true);
     setError(null);
     setMensaje(null);
+    setUltimaRemision(null);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
       if (!userId) throw new Error("Sesión expirada, vuelve a iniciar sesión.");
+
+      let remision: { id: string; folio: string } | null = null;
+      if (conRemision) {
+        const { data: rem, error: errRem } = await supabase
+          .from("remisiones_salida")
+          .insert({
+            empresa_id: empresaId,
+            almacen_id: almacen.id,
+            fecha,
+            entregar_a: entregarA.trim(),
+            observaciones: observaciones.trim() || null,
+            orden_venta_id: ordenId || null,
+            emitida_por: userId,
+          })
+          .select("id, folio")
+          .single();
+        if (errRem) throw errRem;
+        remision = rem as { id: string; folio: string };
+      }
 
       const filas = carrito.map((f) => ({
         empresa_id: empresaId,
@@ -214,14 +585,30 @@ export function Movimientos() {
         orden_venta_id: !esAjuste && tipo === "salida" && ordenId ? ordenId : null,
         es_ajuste: esAjuste,
         codigo_escaneado: f.producto.codigo_barras,
+        nota_entrega_id: notaEntregaId,
+        remision_id: remision?.id ?? null,
         registrado_por: userId,
       }));
 
       const { error: errInsert } = await supabase.from("movimientos_inventario").insert(filas);
       if (errInsert) throw errInsert;
 
-      setMensaje(`Guardado: ${filas.length} línea(s) de ${tipo === "entrada" ? "entrada" : "salida"}.`);
+      setMensaje(
+        remision
+          ? `Guardado: ${filas.length} línea(s) de salida en la remisión ${remision.folio}.`
+          : `Guardado: ${filas.length} línea(s) de ${tipo === "entrada" ? "entrada" : "salida"}.`,
+      );
       setCarrito([]);
+      limpiarFoto();
+      if (remision) {
+        setUltimaRemision(remision);
+        setEntregarA("");
+        setObservaciones("");
+        queryClient.invalidateQueries({ queryKey: ["remisiones-salida"] });
+        // Abre la remisión lista para imprimir con su QR; si el navegador
+        // bloquea la ventana, el botón "Imprimir" de abajo la reabre.
+        imprimirRemision(remision.id).catch(() => undefined);
+      }
       queryClient.invalidateQueries({ queryKey: ["movimientos-inventario-recientes"] });
       queryClient.invalidateQueries({ queryKey: ["existencias"] });
       queryClient.invalidateQueries({ queryKey: ["avance-recepcion-oc"] });
@@ -282,7 +669,7 @@ export function Movimientos() {
       {!esAjuste && empresaId && (
         <div className="mb-4 max-w-md">
           <label className="mb-1 block text-xs font-medium text-slate-600">
-            Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Acumulado)" : "orden de venta (match con Acumulado)"}
+            Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Grupo Loma)" : "orden de venta (match con Grupo Loma)"}
           </label>
           <select value={ordenId} onChange={(e) => setOrdenId(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
             <option value="">Sin vincular</option>
@@ -295,66 +682,179 @@ export function Movimientos() {
         </div>
       )}
 
+      {tipo === "salida" && !esAjuste && empresaId && (
+        <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3">
+          <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+            <input type="checkbox" checked={generarRemision} onChange={(e) => setGenerarRemision(e.target.checked)} />
+            Generar remisión de salida con código QR
+          </label>
+          {generarRemision && (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Entregar a *</label>
+                <input
+                  value={entregarA}
+                  onChange={(e) => setEntregarA(e.target.value)}
+                  placeholder="Cliente o persona que recibe"
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Observaciones</label>
+                <input
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            Al guardar se abre la remisión lista para imprimir. El QR abre la remisión en la app para consultarla o confirmar la entrega.
+          </p>
+        </div>
+      )}
+
       {!empresaId && <p className="text-sm text-slate-500">Selecciona una empresa para continuar.</p>}
 
       {empresaId && !almacen && <p className="text-sm text-amber-600">Esta empresa no tiene un almacén activo configurado.</p>}
 
       {empresaId && almacen && (
         <>
-          <div className="mb-4 flex max-w-md items-center gap-2">
-            <input
-              ref={inputCodigoRef}
-              autoFocus
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              onKeyDown={onKeyDownCodigo}
-              placeholder="Escanea o escribe el código de barras y presiona Enter"
-              disabled={buscando}
-              className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => setMostrarCamara(true)}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
-            >
-              Usar cámara
-            </button>
+          <div className="mb-4">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Cómo vas a capturar</label>
+            <div className="flex overflow-hidden rounded border border-slate-300">
+              {MODOS_CAPTURA.map((m) => (
+                <button
+                  key={m.valor}
+                  type="button"
+                  onClick={() => setModo(m.valor)}
+                  className={`px-3 py-1.5 text-sm ${modo === m.valor ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+                >
+                  {m.etiqueta}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {codigoSinProducto && (
-            <form onSubmit={onCrearProductoRapido} className="mb-4 max-w-md space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
-              <p className="text-sm font-medium text-blue-900">
-                No hay ningún producto con el código <code>{codigoSinProducto}</code> en esta empresa. Créalo para continuar:
-              </p>
-              <input name="nombre" required placeholder="Nombre del producto" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
-              <div className="flex gap-2">
-                <input name="sku" placeholder={`SKU (default: ${codigoSinProducto})`} className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
-                <input name="unidad" placeholder="Unidad (default PZA)" className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
-              </div>
-              <div className="flex gap-2">
-                <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Crear y agregar</button>
+          {modo === "codigo" && (
+            <>
+              <div className="mb-4 flex max-w-md items-center gap-2">
+                <input
+                  ref={inputCodigoRef}
+                  autoFocus
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  onKeyDown={onKeyDownCodigo}
+                  placeholder="Escanea o escribe el código de barras y presiona Enter"
+                  disabled={buscando}
+                  className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    setCodigoSinProducto(null);
-                    setCodigo("");
-                  }}
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+                  onClick={() => setMostrarCamara(true)}
+                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
                 >
-                  Cancelar
+                  Usar cámara
                 </button>
               </div>
-            </form>
+
+              {codigoSinProducto && (
+                <form onSubmit={onCrearProductoRapido} className="mb-4 max-w-md space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-sm font-medium text-blue-900">
+                    No hay ningún producto con el código{" "}
+                    <code className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-blue-900">{codigoSinProducto}</code> en esta
+                    empresa. Créalo para continuar:
+                  </p>
+                  <input name="nombre" required placeholder="Nombre del producto" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  <div className="flex gap-2">
+                    <input name="sku" placeholder={`SKU (default: ${codigoSinProducto})`} className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                    <input name="unidad" placeholder="Unidad (default PZA)" className="w-1/2 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Crear y agregar</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCodigoSinProducto(null);
+                        setCodigo("");
+                      }}
+                      className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {mostrarCamara && (
+                <BarcodeScanner
+                  onDetectado={(c) => {
+                    setMostrarCamara(false);
+                    buscarPorCodigo(c);
+                  }}
+                  onCerrar={() => setMostrarCamara(false)}
+                />
+              )}
+            </>
           )}
 
-          {mostrarCamara && (
-            <BarcodeScanner
-              onDetectado={(c) => {
-                setMostrarCamara(false);
-                buscarPorCodigo(c);
-              }}
-              onCerrar={() => setMostrarCamara(false)}
-            />
+          {modo === "nombre" && (
+            <div className="mb-4 max-w-md">
+              <p className="mb-1 text-xs text-slate-500">Para proveedores sin QR ni código de barras: busca el producto por su nombre y agrégalo al carrito.</p>
+              <BuscadorProducto empresaId={empresaId} onSeleccionar={(p) => agregarAlCarrito(p)} />
+            </div>
+          )}
+
+          {modo === "foto" && (
+            <div className="mb-4 max-w-xl space-y-3">
+              <p className="text-xs text-slate-500">
+                Sube la foto de la nota o remisión de papel del proveedor -- la IA intentará leer los conceptos, cantidades y proveedor
+                automáticamente. La foto aplica a todo el movimiento (todas las líneas que agregues quedan vinculadas a ella).
+              </p>
+              <form onSubmit={onSubirFoto} className="flex items-center gap-2">
+                <input type="hidden" name="empresaId" value={empresaId} />
+                <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required disabled={subiendoFoto} className="flex-1 text-sm" />
+                <button
+                  disabled={subiendoFoto}
+                  className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {subiendoFoto ? "Leyendo…" : "Subir y leer"}
+                </button>
+              </form>
+
+              {notaEntregaId && (
+                <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+                  Foto guardada.{" "}
+                  <button type="button" onClick={limpiarFoto} className="underline">
+                    Quitar y subir otra
+                  </button>
+                </div>
+              )}
+
+              {errorLecturaFoto && (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">⚠️ {errorLecturaFoto}</p>
+              )}
+
+              {itemsSugeridos.length > 0 && (
+                <div className="space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-sm font-medium text-blue-900">
+                    Conceptos detectados -- confírmalos buscando el producto correspondiente para agregarlos al carrito:
+                  </p>
+                  {itemsSugeridos.map((item, i) => (
+                    <ItemSugeridoCard
+                      key={i}
+                      item={item}
+                      empresaId={empresaId}
+                      onAgregado={(p) => {
+                        agregarAlCarrito(p, item.cantidad ?? 1);
+                        setItemsSugeridos((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {carrito.length > 0 && (
@@ -419,7 +919,60 @@ export function Movimientos() {
       )}
 
       {error && <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      {mensaje && <p className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{mensaje}</p>}
+      {mensaje && (
+        <div className="mb-4 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          {mensaje}
+          {ultimaRemision && (
+            <span className="ml-2">
+              <button onClick={() => imprimirRemision(ultimaRemision.id).catch((err) => setError((err as Error).message))} className="underline">
+                Imprimir con QR
+              </button>
+              {" · "}
+              <Link to={`/inventario/remisiones/${ultimaRemision.id}`} className="underline">
+                Ver remisión
+              </Link>
+            </span>
+          )}
+        </div>
+      )}
+
+      {empresaId && pendientesOrden && pendientesOrden.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">
+            Pendientes por asignar {tipo === "entrada" ? "orden de compra" : "orden de venta"}
+          </h2>
+          <p className="mb-2 text-xs text-slate-500">
+            Se guardaron sin vincular porque todavía no se sabía a qué orden correspondían -- asígnala en cuanto la confirmes.
+          </p>
+          <div className="overflow-x-auto rounded border border-amber-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-amber-50 text-left text-xs uppercase text-amber-800">
+                <tr>
+                  <th className="px-3 py-2">Fecha</th>
+                  <th className="px-3 py-2">Producto</th>
+                  <th className="px-3 py-2 text-right">Cantidad</th>
+                  <th className="px-3 py-2">Asignar orden</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendientesOrden.map((m) => (
+                  <AsignarOrdenFila
+                    key={m.id}
+                    movimiento={m as any}
+                    ordenes={ordenes}
+                    onAsignado={() => {
+                      queryClient.invalidateQueries({ queryKey: ["pendientes-asignar-orden"] });
+                      queryClient.invalidateQueries({ queryKey: ["movimientos-inventario-recientes"] });
+                      queryClient.invalidateQueries({ queryKey: ["avance-recepcion-oc"] });
+                      queryClient.invalidateQueries({ queryKey: ["avance-embarque-ov"] });
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {empresaId && (
         <div className="mt-6">
@@ -436,6 +989,7 @@ export function Movimientos() {
                     <th className="px-3 py-2 text-right">Cantidad</th>
                     <th className="px-3 py-2 text-right">Costo unit.</th>
                     <th className="px-3 py-2">Vinculado</th>
+                    <th className="px-3 py-2">Remisión</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -449,11 +1003,20 @@ export function Movimientos() {
                       <td className="px-3 py-2 text-right">{m.cantidad}</td>
                       <td className="px-3 py-2 text-right">{m.costo_unitario ?? "—"}</td>
                       <td className="px-3 py-2">{m.orden_compra_id || m.orden_venta_id ? "Sí" : "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">
+                        {m.remision_id ? (
+                          <Link to={`/inventario/remisiones/${m.remision_id}`} className="underline">
+                            {m.remisiones_salida?.folio ?? "Ver"}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {recientes.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                      <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
                         Todavía no hay movimientos de inventario para esta empresa.
                       </td>
                     </tr>

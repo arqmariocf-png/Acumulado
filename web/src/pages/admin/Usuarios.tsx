@@ -1,51 +1,27 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
-import type { AppRol, Empresa, Grupo, PlanEscalon, Profile } from "../../types/database";
+import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
+import type { AppRol, Empresa, Profile } from "../../types/database";
 
-const ROLES: AppRol[] = ["pendiente", "empresa", "direccion", "corporativo", "rh", "admin"];
+const ROLES: AppRol[] = ["pendiente", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "admin"];
 
-/** Los que un admin puede asignar al invitar. 'pendiente' no se ofrece: darlo
- * de alta así sería invitarlo a una cuenta que no puede entrar a nada. */
-const ROLES_ALTA: AppRol[] = ["empresa", "direccion", "corporativo", "rh", "admin"];
-
-const dinero = (centavos: number, moneda = "MXN") =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda }).format(centavos / 100);
-
-/** Lo que costaría el siguiente usuario. No es el precio unitario cuando ese
- * usuario cruza a un paquete más barato: ahí el alta puede costar mucho menos.
- * Mismo criterio que costoDeAgregarUsuario() en _shared/pagos/precios.ts. */
-function costoDelSiguienteUsuario(escalones: PlanEscalon[], usuarios: number): number | null {
-  if (escalones.length === 0) return null;
-  const precioPara = (n: number) =>
-    [...escalones]
-      .sort((a, b) => a.desde_usuarios - b.desde_usuarios)
-      .filter((e) => e.desde_usuarios <= Math.max(n, 1))
-      .pop()?.precio_unitario_centavos ?? 0;
-  return (usuarios + 1) * precioPara(usuarios + 1) - usuarios * precioPara(usuarios);
+/** Deja sólo dígitos y, si parece un celular mexicano de 10 dígitos sin
+ * código de país, le antepone 52 -- lo que necesita el link wa.me. Si ya
+ * trae más dígitos (con código de país) se respeta tal cual. */
+function numeroWhatsapp(telefono: string): string {
+  const digitos = telefono.replace(/\D/g, "");
+  return digitos.length === 10 ? `52${digitos}` : digitos;
 }
 
-// Admin de usuarios (SPEC.md sección 6): asignar organización, rol y empresa
-// es lo único que determina qué puede ver/hacer cada usuario -- nunca se
-// hardcodea en código. Un usuario nuevo entra en 'pendiente' y sin
-// organización (sin acceso) hasta que un admin lo configura aquí.
-// profiles.nombre no siempre es un email real: solo lo es por default hasta
-// que alguien lo cambie (ver trigger handle_new_user).
-//
-// Un admin de organización cliente solo ve y edita usuarios de la suya (más
-// los recién registrados que todavía no tienen organización); el admin de la
-// organización maestra los ve todos. Eso lo decide RLS, no esta pantalla.
+// Admin de usuarios (SPEC.md sección 6): asignar rol y empresa es lo único
+// que determina qué puede ver/hacer cada usuario -- nunca se hardcodea en
+// código. Un usuario nuevo entra en 'pendiente' (sin acceso) hasta que un
+// admin lo configura aquí. profiles.nombre no siempre es un email real: solo
+// lo es por default hasta que alguien lo cambie (ver trigger handle_new_user).
 export function Usuarios() {
   const queryClient = useQueryClient();
-  const { esAdminGlobal, grupo: miGrupo, suscripcion, recargarOrganizacion } = useAuth();
-  const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
-  const [alta, setAlta] = useState(false);
-  const [correo, setCorreo] = useState("");
-  const [nombreNuevo, setNombreNuevo] = useState("");
-  const [rolNuevo, setRolNuevo] = useState<AppRol>("empresa");
-  const [empresaNueva, setEmpresaNueva] = useState("");
+  const [busqueda, setBusqueda] = useState("");
 
   const { data: perfiles, isLoading } = useQuery({
     queryKey: ["admin-usuarios"],
@@ -59,286 +35,258 @@ export function Usuarios() {
   const { data: empresas } = useQuery({
     queryKey: ["empresas"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre, grupo_id").order("nombre");
+      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
       if (error) throw error;
-      return data as Pick<Empresa, "id" | "nombre" | "grupo_id">[];
+      return data as Pick<Empresa, "id" | "nombre">[];
     },
   });
 
-  const { data: grupos } = useQuery({
-    queryKey: ["admin-grupos"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("grupos").select("*").order("nombre");
-      if (error) throw error;
-      return data as Grupo[];
-    },
-  });
-
-  const { data: escalones } = useQuery({
-    queryKey: ["plan-escalones", suscripcion?.plan_clave],
-    enabled: !!suscripcion,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("plan_escalones")
-        .select("*")
-        .eq("plan_clave", suscripcion!.plan_clave)
-        .order("desde_usuarios");
-      if (error) throw error;
-      return data as PlanEscalon[];
-    },
-  });
-
-  // Activar, desactivar o cambiar el rol de alguien mueve cuántos usuarios se
-  // cobran, y eso hay que avisárselo a la pasarela. El alta lo hace sola
-  // (usuarios-alta); estos movimientos pasan directo por RLS, así que la
-  // sincronización se pide aparte.
-  async function sincronizarCobro() {
-    const { data, error } = await supabase.functions.invoke("usuarios-sincronizar", { body: {} });
-    await recargarOrganizacion();
-    if (error) return;
-    if (data?.aviso) setAviso(`Usuarios cobrados: ${data.usuariosFacturables}. ${data.aviso}`);
-    else setAviso(null);
-  }
-
-  const invitar = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("usuarios-alta", {
-        body: {
-          correo: correo.trim().toLowerCase(),
-          nombre: nombreNuevo.trim(),
-          rol: rolNuevo,
-          empresaId: empresaNueva || null,
-        },
-      });
-      if (error) throw new Error(data?.error ?? error.message);
-      if (data?.error) throw new Error(data.error);
-      return data as { usuariosFacturables: number; avisoCobro?: string };
-    },
-    onSuccess: (data) => {
-      setCorreo("");
-      setNombreNuevo("");
-      setEmpresaNueva("");
-      setAlta(false);
-      setError(null);
-      setAviso(
-        data.avisoCobro
-          ? `Invitación enviada. Usuarios cobrados: ${data.usuariosFacturables}. ${data.avisoCobro}`
-          : "Invitación enviada. El usuario define su contraseña desde el correo que le llegó.",
-      );
-      queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] });
-      void recargarOrganizacion();
-    },
-    onError: (e: Error) => setError(e.message),
-  });
+  const perfilesFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return perfiles;
+    return perfiles?.filter((p) => p.nombre.toLowerCase().includes(q) || p.rol.toLowerCase().includes(q));
+  }, [perfiles, busqueda]);
 
   const actualizar = useMutation({
-    mutationFn: async ({ id, campos }: { id: string; campos: Partial<Profile> }) => {
-      const { error } = await supabase.from("profiles").update(campos).eq("id", id);
+    mutationFn: async ({
+      id,
+      rol,
+      empresa_id,
+      telefono,
+    }: {
+      id: string;
+      rol?: AppRol;
+      empresa_id?: string | null;
+      telefono?: string | null;
+    }) => {
+      const { error } = await supabase.from("profiles").update({ rol, empresa_id, telefono }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      setError(null);
-      queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] });
-      void sincronizarCobro();
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }),
+  });
+
+  // Desbloqueo cuando el correo no le llega a alguien (caso real: el mailer
+  // compartido de Supabase reporta "enviado" pero el servidor de correo del
+  // destinatario lo filtra, o se topa con el límite de envíos por hora) --
+  // genera un link de acceso directo. Si hay teléfono guardado, se abre
+  // WhatsApp con el mensaje y el link ya listos para mandar en un clic; si
+  // no, cae al flujo anterior (copiar y pegar a mano en cualquier canal).
+  // tipo "magiclink": entra directo con la sesión que ya tenía.
+  // tipo "recovery": entra a definir una contraseña nueva (ver
+  // NuevaContrasena.tsx) -- caso real Mario Contreras, 1-sep-2026: nunca
+  // tuvo una que recordara, siempre entraba por magic link.
+  const generarLink = useMutation({
+    mutationFn: async ({ userId, tipo }: { userId: string; tipo: "magiclink" | "recovery"; telefono: string | null }) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const respuesta = await fetch(urlFuncion("generar-link-acceso"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, tipo }),
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+      return json as { link: string; email: string };
     },
-    // La base rechaza combinaciones incoherentes (rol='empresa' sin empresa,
-    // empresa de otra organización): sin mostrar el motivo, el cambio se veía
-    // simplemente "no pasar".
-    onError: (e: Error) => setError(e.message),
+    onSuccess: ({ link, email }, variables) => {
+      navigator.clipboard?.writeText(link).catch(() => {});
+      if (variables.telefono) {
+        const mensaje =
+          variables.tipo === "recovery"
+            ? `Hola, aquí tienes tu link para definir tu contraseña de Grupo Loma: ${link}`
+            : `Hola, aquí tienes tu link de acceso a Grupo Loma: ${link}`;
+        window.open(`https://wa.me/${numeroWhatsapp(variables.telefono)}?text=${encodeURIComponent(mensaje)}`, "_blank");
+      } else {
+        window.prompt(`Link de acceso para ${email} (ya copiado al portapapeles) -- mándaselo por WhatsApp u otro canal:`, link);
+      }
+    },
+    onError: (err) => alert((err as Error).message),
+  });
+
+  // Alta directa sin correo: el mailer de Supabase rebota "email rate limit
+  // exceeded" en "Crear cuenta" cuando varias personas se registran el
+  // mismo día (Luis Gutiérrez, 21-sep-2026). admin-crear-usuario crea la
+  // cuenta ya confirmada, le pone rol/nombre/teléfono y regresa el link
+  // para definir contraseña, que se manda por WhatsApp igual que arriba.
+  const [mostrarAlta, setMostrarAlta] = useState(false);
+  const crearCuenta = useMutation({
+    mutationFn: async (p: { email: string; nombre: string | null; telefono: string | null; rol: AppRol }) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const respuesta = await fetch(urlFuncion("admin-crear-usuario"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(p),
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+      return json as { link: string; email: string; userId: string };
+    },
+    onSuccess: ({ link, email }, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] });
+      setMostrarAlta(false);
+      navigator.clipboard?.writeText(link).catch(() => {});
+      if (variables.telefono) {
+        const mensaje = `Hola, ya tienes tu cuenta en el sistema de Grupo Loma (${email}). Entra con este link para definir tu contraseña: ${link}`;
+        window.open(`https://wa.me/${numeroWhatsapp(variables.telefono)}?text=${encodeURIComponent(mensaje)}`, "_blank");
+      } else {
+        window.prompt(`Cuenta creada para ${email}. Link para definir contraseña (ya copiado al portapapeles):`, link);
+      }
+    },
+    onError: (err) => alert((err as Error).message),
   });
 
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
 
-  const siguienteCuesta = escalones ? costoDelSiguienteUsuario(escalones, suscripcion?.usuarios_facturables ?? 0) : null;
-  const empresasDeMiOrganizacion = (empresas ?? []).filter((e) => e.grupo_id === miGrupo?.id);
-
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-2xl text-sm text-slate-500">
-          Un usuario sin organización no ve nada. rol='empresa' requiere además una empresa asignada, que tiene que ser de su
-          misma organización. rol='pendiente' o sin empresa asignada (salvo corporativo/admin) significa sin acceso a datos.
-        </p>
-        {!esAdminGlobal && (
-          <button onClick={() => setAlta((v) => !v)} className="shrink-0 rounded bg-slate-900 px-3 py-1.5 text-sm text-white">
-            {alta ? "Cancelar" : "Invitar usuario"}
+      <p className="mb-4 text-sm text-slate-500">
+        rol='empresa' requiere una empresa asignada. rol='pendiente' o sin empresa asignada (salvo corporativo/admin) significa sin acceso a datos.
+      </p>
+
+      <div className="mb-4">
+        {!mostrarAlta ? (
+          <button type="button" onClick={() => setMostrarAlta(true)} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
+            Crear cuenta sin correo
           </button>
-        )}
-      </div>
-
-      {suscripcion && (
-        <p className="mb-4 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          Se cobran <strong>{suscripcion.usuarios_facturables}</strong>{" "}
-          {suscripcion.usuarios_facturables === 1 ? "usuario" : "usuarios"} a{" "}
-          {dinero(suscripcion.precio_unitario_centavos, suscripcion.moneda)} c/u ={" "}
-          <strong>{dinero(suscripcion.total_mensual_centavos, suscripcion.moneda)}</strong> al mes.
-          {siguienteCuesta !== null && (
-            <> El siguiente usuario cuesta {dinero(siguienteCuesta, suscripcion.moneda)} más al mes.</>
-          )}{" "}
-          Solo cuentan los activos con rol asignado: desactivar a alguien baja la factura.
-        </p>
-      )}
-
-      {alta && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            invitar.mutate();
-          }}
-          className="mb-4 flex flex-wrap items-end gap-3 rounded border border-slate-200 bg-white p-4"
-        >
-          <label className="flex flex-col text-xs text-slate-500">
-            Correo
-            <input
-              type="email"
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              required
-              className="mt-1 w-64 rounded border border-slate-300 px-2 py-1 text-sm text-slate-900"
-            />
-          </label>
-          <label className="flex flex-col text-xs text-slate-500">
-            Nombre
-            <input
-              value={nombreNuevo}
-              onChange={(e) => setNombreNuevo(e.target.value)}
-              required
-              className="mt-1 w-56 rounded border border-slate-300 px-2 py-1 text-sm text-slate-900"
-            />
-          </label>
-          <label className="flex flex-col text-xs text-slate-500">
-            Rol
-            <select
-              value={rolNuevo}
-              onChange={(e) => setRolNuevo(e.target.value as AppRol)}
-              className="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
-            >
-              {ROLES_ALTA.map((r) => (
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              crearCuenta.mutate({
+                email: String(fd.get("email") ?? "").trim(),
+                nombre: String(fd.get("nombre") ?? "").trim() || null,
+                telefono: String(fd.get("telefono") ?? "").trim() || null,
+                rol: String(fd.get("rol") ?? "pendiente") as AppRol,
+              });
+            }}
+            className="grid gap-2 rounded border border-slate-200 bg-white p-3 sm:grid-cols-[2fr_2fr_1fr_1fr_auto_auto]"
+          >
+            <input name="email" type="email" required placeholder="correo@grupoloma.mx" className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <input name="nombre" placeholder="Nombre" className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <input name="telefono" placeholder="WhatsApp (10 dígitos)" className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <select name="rol" defaultValue="pendiente" className="rounded border border-slate-300 px-2 py-1.5 text-sm">
+              {ROLES.filter((r) => r !== "admin").map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
               ))}
             </select>
-          </label>
-          <label className="flex flex-col text-xs text-slate-500">
-            Empresa {rolNuevo === "empresa" && <span className="text-red-500">*</span>}
-            <select
-              value={empresaNueva}
-              onChange={(e) => setEmpresaNueva(e.target.value)}
-              required={rolNuevo === "empresa"}
-              className="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
-            >
-              <option value="">— (todas, si corporativo/admin)</option>
-              {empresasDeMiOrganizacion.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            disabled={invitar.isPending}
-            className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          >
-            {invitar.isPending ? "Enviando…" : "Enviar invitación"}
-          </button>
-          <p className="w-full text-xs text-slate-500">
-            Le llega un correo para que defina su contraseña. Nunca se le manda una contraseña hecha por alguien más.
-          </p>
-        </form>
-      )}
+            <button disabled={crearCuenta.isPending} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+              {crearCuenta.isPending ? "Creando…" : "Crear y mandar link"}
+            </button>
+            <button type="button" onClick={() => setMostrarAlta(false)} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700">
+              Cancelar
+            </button>
+          </form>
+        )}
+        <p className="mt-1 text-xs text-slate-500">
+          La cuenta queda confirmada sin pasar por el correo de Supabase. Si pones WhatsApp, se abre el mensaje con el link para definir contraseña.
+        </p>
+      </div>
 
-      {aviso && <p className="mb-3 text-sm text-emerald-700">{aviso}</p>}
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      <input
+        type="text"
+        placeholder="Buscar por nombre o rol…"
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        className="mb-3 w-full max-w-xs rounded border border-slate-300 px-3 py-2 text-sm"
+      />
 
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
-              <th className="px-3 py-2">Nombre</th>
-              <th className="px-3 py-2">Organización</th>
-              <th className="px-3 py-2">Rol</th>
-              <th className="px-3 py-2">Empresa</th>
-              <th className="px-3 py-2">Activo</th>
+              <th className="px-2 py-2">Nombre</th>
+              <th className="px-2 py-2">Rol</th>
+              <th className="px-2 py-2">Empresa</th>
+              <th className="px-2 py-2">Activo</th>
+              <th className="px-2 py-2">Teléfono (WhatsApp)</th>
+              <th className="px-2 py-2">Acceso</th>
             </tr>
           </thead>
           <tbody>
-            {perfiles?.map((p) => {
-              // Al cambiar de organización hay que soltar la empresa: la
-              // anterior es de otra organización y la base lo rechaza
-              // (trigger profiles_valida_empresa_grupo).
-              const empresasDelUsuario = (empresas ?? []).filter((e) => e.grupo_id === p.grupo_id);
-              return (
-                <tr key={p.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">{p.nombre}</td>
-                  <td className="px-3 py-2">
-                    {esAdminGlobal ? (
-                      <select
-                        value={p.grupo_id ?? ""}
-                        onChange={(e) =>
-                          actualizar.mutate({ id: p.id, campos: { grupo_id: e.target.value || null, empresa_id: null } })
-                        }
-                        className="rounded border border-slate-300 px-2 py-1 text-sm"
-                      >
-                        <option value="">— sin organización</option>
-                        {grupos?.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.marca_comercial ?? g.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    ) : p.grupo_id ? (
-                      (grupos?.find((g) => g.id === p.grupo_id)?.marca_comercial ?? miGrupo?.marca_comercial ?? miGrupo?.nombre)
-                    ) : (
-                      <button
-                        onClick={() =>
-                          miGrupo && actualizar.mutate({ id: p.id, campos: { grupo_id: miGrupo.id, empresa_id: null } })
-                        }
-                        className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
-                      >
-                        Asignar a mi organización
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      value={p.rol}
-                      onChange={(e) => actualizar.mutate({ id: p.id, campos: { rol: e.target.value as AppRol } })}
-                      className="rounded border border-slate-300 px-2 py-1 text-sm"
+            {perfilesFiltrados?.map((p) => (
+              <tr key={p.id} className="border-t border-slate-100">
+                <td className="max-w-[140px] truncate px-2 py-2" title={p.nombre}>
+                  {p.nombre}
+                </td>
+                <td className="px-2 py-2">
+                  <select
+                    value={p.rol}
+                    onChange={(e) => actualizar.mutate({ id: p.id, rol: e.target.value as AppRol })}
+                    className="max-w-[110px] rounded border border-slate-300 px-1 py-1 text-sm"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-2 py-2">
+                  <select
+                    value={p.empresa_id ?? ""}
+                    onChange={(e) => actualizar.mutate({ id: p.id, empresa_id: e.target.value || null })}
+                    className="max-w-[110px] rounded border border-slate-300 px-1 py-1 text-sm"
+                  >
+                    <option value="">— (todas)</option>
+                    {empresas?.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-2 py-2">
+                  <input
+                    type="checkbox"
+                    checked={p.activo}
+                    onChange={(e) =>
+                      supabase
+                        .from("profiles")
+                        .update({ activo: e.target.checked })
+                        .eq("id", p.id)
+                        .then(() => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }))
+                    }
+                  />
+                </td>
+                <td className="px-2 py-2">
+                  <input
+                    type="tel"
+                    key={p.telefono ?? ""}
+                    defaultValue={p.telefono ?? ""}
+                    placeholder="10 dígitos"
+                    onBlur={(e) => {
+                      const valor = e.target.value.trim() || null;
+                      if (valor !== (p.telefono ?? null)) actualizar.mutate({ id: p.id, telefono: valor });
+                    }}
+                    className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                  />
+                </td>
+                <td className="px-2 py-2">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      disabled={generarLink.isPending}
+                      onClick={() => generarLink.mutate({ userId: p.id, tipo: "magiclink", telefono: p.telefono })}
+                      className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      title="Genera un link de acceso directo (sin correo). Con teléfono guardado, abre WhatsApp listo para enviar; si no, lo copia para pegarlo en cualquier canal."
                     >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <select
-                      value={p.empresa_id ?? ""}
-                      onChange={(e) => actualizar.mutate({ id: p.id, campos: { empresa_id: e.target.value || null } })}
-                      disabled={!p.grupo_id}
-                      className="rounded border border-slate-300 px-2 py-1 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                      Generar link
+                    </button>
+                    <button
+                      type="button"
+                      disabled={generarLink.isPending}
+                      onClick={() => generarLink.mutate({ userId: p.id, tipo: "recovery", telefono: p.telefono })}
+                      className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      title="Genera un link para que la persona defina una contraseña nueva. Con teléfono guardado, abre WhatsApp listo para enviar; si no, lo copia para pegarlo en cualquier canal."
                     >
-                      <option value="">— (todas, si corporativo/admin)</option>
-                      {empresasDelUsuario.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={p.activo}
-                      onChange={(e) => actualizar.mutate({ id: p.id, campos: { activo: e.target.checked } })}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
+                      Nueva contraseña
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

@@ -3,7 +3,7 @@
 // toda función debe responder a preflight OPTIONS con esto.
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-ops-secret",
 };
 
 export function respuestaCors(): Response {

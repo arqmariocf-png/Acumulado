@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parsearPdfEstadoCuentaSantander } from "./pdf-estado-cuenta-santander.ts";
 import { TEXTO_REAL_SANTANDER_BALKEN_JULIO_2026 } from "./pdf-estado-cuenta-santander.fixture.ts";
+import { TEXTO_REAL_SANTANDER_CONSULTA_BALKEN_AGOSTO_2026 } from "./pdf-estado-cuenta-santander-consulta.fixture.ts";
 
 test("parsea el PDF real de Santander (Balken, julio 2026, Cuenta de cheques): 19 movimientos, cuadra exacto con lo que el banco declara", () => {
   const r = parsearPdfEstadoCuentaSantander(TEXTO_REAL_SANTANDER_BALKEN_JULIO_2026);
@@ -92,4 +93,43 @@ test("si el saldo final calculado no cuadra con el declarado, bloquea todo el do
 test("un PDF sin el marcador de saldo anterior reporta errorDocumento", () => {
   const r = parsearPdfEstadoCuentaSantander("cualquier otro texto sin el marcador");
   assert.match(r.errorDocumento ?? "", /No se encontró el marcador/);
+});
+
+test('parsea el SEGUNDO formato de Santander -- "Consulta de Movimientos de la Cuenta de Cheques" (misma cuenta Balken 8617, agosto 2026): 15 movimientos, cuadra exacto con Número/Importe Total de Abonos y Cargos, y con Saldo Final', () => {
+  const r = parsearPdfEstadoCuentaSantander(TEXTO_REAL_SANTANDER_CONSULTA_BALKEN_AGOSTO_2026);
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.erroresPorFila.length, 0);
+  assert.equal(r.movimientos.length, 15);
+
+  const cargos = r.movimientos.filter((m) => m.cargoTotal != null);
+  const abonos = r.movimientos.filter((m) => m.abonoTotal != null);
+  assert.equal(cargos.length, 9);
+  assert.equal(abonos.length, 6);
+
+  const sumaCargos = Math.round(cargos.reduce((a, m) => a + (m.cargoTotal ?? 0), 0) * 100) / 100;
+  const sumaAbonos = Math.round(abonos.reduce((a, m) => a + (m.abonoTotal ?? 0), 0) * 100) / 100;
+  assert.equal(sumaCargos, 76649.34);
+  assert.equal(sumaAbonos, 66568.65);
+
+  // Los movimientos vienen en orden cronológico ASCENDENTE (más antiguo
+  // primero) -- a diferencia del formato "Cuenta de cheques".
+  const primero = r.movimientos[0];
+  assert.equal(primero.fechaPago, "2026-08-03");
+  assert.equal(primero.abonoTotal, 488.4);
+  assert.equal(primero.saldo, 12359.29);
+
+  const ultimo = r.movimientos[r.movimientos.length - 1];
+  assert.equal(ultimo.fechaPago, "2026-08-31");
+  assert.equal(ultimo.saldo, 1790.2);
+});
+
+test('en el formato "Consulta de Movimientos", la fecha DDMMAAAA partida por unpdf en dos líneas (ej. "03082\\n026") se reconstruye a ISO sin perder ningún movimiento entre páginas', () => {
+  const r = parsearPdfEstadoCuentaSantander(TEXTO_REAL_SANTANDER_CONSULTA_BALKEN_AGOSTO_2026);
+  const fechas = r.movimientos.map((m) => m.fechaPago);
+  assert.ok(fechas.every((f) => /^\d{4}-\d{2}-\d{2}$/.test(f)));
+  // Movimientos de la página 2 (26-ago y 31-ago) deben seguir presentes --
+  // el pie de página + encabezado repetido entre páginas no debe cortar la
+  // tabla a la mitad.
+  assert.ok(fechas.includes("2026-08-26"));
+  assert.ok(fechas.includes("2026-08-31"));
 });

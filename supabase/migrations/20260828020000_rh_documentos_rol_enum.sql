@@ -1,0 +1,12 @@
+-- Nuevo rol restringido dentro de RH: puede subir documentos al expediente
+-- de cualquier persona activa, pero NO puede ver/editar sueldos
+-- (contrataciones), asignaciones diarias, ni datos de personal, y NO puede
+-- marcar un documento como verificado -- eso se queda exclusivamente para
+-- 'rh'/'admin' (ver 20260828020001_rh_documentos_rol_rls.sql). Primer caso
+-- real: Raúl Molina, encargado de captura de expedientes, bajo supervisión
+-- de Eréndira (rol 'rh').
+--
+-- Va en su propia migración por el mismo motivo que 'rh' en
+-- 20260821090001_rh_rol_enum.sql: Postgres no permite usar un valor de enum
+-- recién agregado dentro de la misma transacción en la que se agregó.
+alter type public.app_rol add value 'rh_documentos';

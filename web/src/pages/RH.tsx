@@ -1,16 +1,52 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
-import type { AsignacionDiaria, Contratacion, DocumentoFaltante, Personal, TipoDocumentoPersonal } from "../types/database";
+import { useAuth } from "../lib/auth";
+import { MarcasChecador } from "./rh/MarcasChecador";
+import { UbicacionesChecador } from "./rh/UbicacionesChecador";
+import { Vacantes } from "./rh/Vacantes";
+import { Actividades } from "./rh/Actividades";
+import { PerfilesJornada } from "./rh/PerfilesJornada";
+import { NominaChecador } from "./rh/NominaChecador";
+import { SolicitudesNda } from "./rh/SolicitudesNda";
+import { PestanaDocumentos } from "./rh/Expediente";
+import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
+import { abrirParaImprimir } from "../lib/imprimir";
+import { patronDe } from "./MisDocumentos";
+import type {
+  AsignacionDiaria,
+  Contratacion,
+  EmpresaPerfilLegal,
+  DirectorioPerfil,
+  Personal,
+  ProyeccionNominaSemanal,
+  TipoContrato, FrecuenciaPago } from "../types/database";
 
-type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos";
+type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador" | "vacantes" | "actividades";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "personal", etiqueta: "Personal" },
   { valor: "asignaciones", etiqueta: "Asignaciones diarias" },
   { valor: "contrataciones", etiqueta: "Contrataciones" },
   { valor: "documentos", etiqueta: "Documentos / Expediente" },
+  { valor: "nomina", etiqueta: "Nómina y asistencia" },
+  { valor: "checador", etiqueta: "Checador" },
+  { valor: "vacantes", etiqueta: "Vacantes y rotación" },
+  { valor: "actividades", etiqueta: "Actividades" },
 ];
+
+function dinero(n: number | null | undefined): string {
+  return Number(n ?? 0).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
+}
+
+/** Lunes de la semana ISO que contiene `d`, en formato YYYY-MM-DD. */
+function inicioDeSemana(d: Date): string {
+  const copia = new Date(d);
+  const diaSemana = (copia.getDay() + 6) % 7; // lunes = 0
+  copia.setDate(copia.getDate() - diaSemana);
+  copia.setHours(0, 0, 0, 0);
+  return copia.toISOString().slice(0, 10);
+}
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -46,14 +82,21 @@ function usePersonal() {
 }
 
 export function RH() {
-  const [pestana, setPestana] = useState<Pestana>("personal");
+  const { perfil } = useAuth();
+  // 'rh_documentos' (ej. Raúl) solo captura expedientes, bajo supervisión de
+  // 'rh' (ej. Eréndira) -- no debe ver ni las otras pestañas (sueldos,
+  // asignaciones diarias, datos de personal editables) aunque RLS ya se lo
+  // bloquee del lado del dato, ver 20260828020000_rh_documentos_rol_enum.sql.
+  const soloDocumentos = perfil?.rol === "rh_documentos";
+  const pestanas = soloDocumentos ? PESTANAS.filter((p) => p.valor === "documentos") : PESTANAS;
+  const [pestana, setPestana] = useState<Pestana>(soloDocumentos ? "documentos" : "personal");
 
   return (
     <div>
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {PESTANAS.map((p) => (
+        {pestanas.map((p) => (
           <button
             key={p.valor}
             onClick={() => setPestana(p.valor)}
@@ -68,6 +111,158 @@ export function RH() {
       {pestana === "asignaciones" && <PestanaAsignaciones />}
       {pestana === "contrataciones" && <PestanaContrataciones />}
       {pestana === "documentos" && <PestanaDocumentos />}
+      {pestana === "nomina" && <PestanaNomina />}
+      {pestana === "checador" && <PestanaChecador />}
+      {pestana === "vacantes" && <Vacantes />}
+      {pestana === "actividades" && <Actividades />}
+    </div>
+  );
+}
+
+// ── Nómina y asistencia ──────────────────────────────────────────────────
+
+function useDirectorio() {
+  return useQuery({
+    queryKey: ["directorio"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_directorio").select("*").eq("activo", true).order("nombre");
+      if (error) throw error;
+      return data as DirectorioPerfil[];
+    },
+  });
+}
+
+function useProyeccionNomina() {
+  return useQuery({
+    queryKey: ["proyeccion-nomina"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_proyeccion_nomina_semanal").select("*").order("semana_inicio");
+      if (error) throw error;
+      return data as ProyeccionNominaSemanal[];
+    },
+  });
+}
+
+function PestanaNomina() {
+  const { data: personal } = usePersonal();
+  const { data: empresas } = useEmpresas();
+  const { data: directorio } = useDirectorio();
+  const queryClient = useQueryClient();
+  const [semanaInicio, setSemanaInicio] = useState(inicioDeSemana(new Date()));
+  const { data: proyeccion, isLoading: cargandoProyeccion } = useProyeccionNomina();
+  const [error, setError] = useState<string | null>(null);
+
+  const nombreEmpresa = new Map((empresas ?? []).map((e) => [e.id, e.nombre]));
+
+  const vincular = useMutation({
+    mutationFn: async ({ personalId, profileId }: { personalId: string; profileId: string | null }) => {
+      const { error: err } = await supabase.from("personal").update({ profile_id: profileId }).eq("id", personalId);
+      if (err) throw err;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-personal"] }),
+    onError: (err) => setError((err as Error).message),
+  });
+
+  const personalActivo = (personal ?? []).filter((p) => p.activo);
+  const pendientesDeVincular = personalActivo.filter((p) => !p.profile_id).length;
+
+  return (
+    <div>
+      {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      <p className="mb-4 max-w-2xl text-xs text-slate-500">
+        El checador (entrada/salida) es una señal aparte de "Asignaciones diarias" -- todavía no se concilian automáticamente,
+        compáralas a mano al armar la nómina real. El monto sugerido es el sueldo semanal completo de su contratación
+        vigente; ajústalo por faltas o incidencias antes de pagar.
+      </p>
+
+      <h3 className="mb-2 text-sm font-semibold text-slate-700">
+        Vincular cuenta para poder checar {pendientesDeVincular > 0 && <span className="font-normal text-amber-600">({pendientesDeVincular} sin vincular)</span>}
+      </h3>
+      <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Persona</th>
+              <th className="px-3 py-2">Cuenta vinculada</th>
+            </tr>
+          </thead>
+          <tbody>
+            {personalActivo.map((p) => (
+              <tr key={p.id} className="border-t border-slate-100">
+                <td className="px-3 py-2">{p.nombre}</td>
+                <td className="px-3 py-2">
+                  <select
+                    value={p.profile_id ?? ""}
+                    onChange={(e) => vincular.mutate({ personalId: p.id, profileId: e.target.value || null })}
+                    className="rounded border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    <option value="">Sin vincular</option>
+                    {directorio?.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+            {personalActivo.length === 0 && (
+              <tr>
+                <td colSpan={2} className="px-3 py-6 text-center text-slate-400">
+                  Sin personal activo.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mb-2 flex items-center gap-3">
+        <h3 className="text-sm font-semibold text-slate-700">Lista de nómina de la semana</h3>
+        <input
+          type="date"
+          value={semanaInicio}
+          onChange={(e) => setSemanaInicio(inicioDeSemana(new Date(e.target.value + "T00:00:00")))}
+          className="rounded border border-slate-300 px-2 py-1 text-xs"
+        />
+      </div>
+      <NominaChecador semanaInicio={semanaInicio} nombreEmpresa={nombreEmpresa} />
+
+      <PerfilesJornada />
+
+      <p className="mb-4 text-xs text-slate-500">Las marcas del checador con foto, ubicación y correcciones están en la pestaña "Checador".</p>
+
+      <h3 className="mb-2 text-sm font-semibold text-slate-700">Proyección de gasto de nómina (próximas 12 semanas)</h3>
+      {cargandoProyeccion && <p className="text-sm text-slate-500">Cargando…</p>}
+      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Semana</th>
+              <th className="px-3 py-2">Empresa</th>
+              <th className="px-3 py-2 text-right">Monto proyectado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {proyeccion?.map((p, i) => (
+              <tr key={i} className="border-t border-slate-100">
+                <td className="px-3 py-2">{new Date(p.semana_inicio + "T00:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</td>
+                <td className="px-3 py-2 text-slate-500">{nombreEmpresa.get(p.empresa_id) ?? "—"}</td>
+                <td className="px-3 py-2 text-right font-medium">{dinero(p.monto_proyectado)}</td>
+              </tr>
+            ))}
+            {proyeccion?.length === 0 && !cargandoProyeccion && (
+              <tr>
+                <td colSpan={3} className="px-3 py-8 text-center text-slate-400">
+                  Sin contrataciones vigentes para proyectar.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -92,6 +287,95 @@ function PestanaPersonal() {
     onError: (err) => setError((err as Error).message),
   });
 
+  // Baja / reactivación: el registro se conserva (expediente, asignaciones y
+  // contrataciones históricas siguen ligadas); solo cambia activo + motivo.
+  const [bajaDe, setBajaDe] = useState<Personal | null>(null);
+  const [mostrarBajas, setMostrarBajas] = useState(false);
+  const cambiarEstado = useMutation({
+    mutationFn: async (p: { id: string; activo: boolean; fecha_baja: string | null; motivo_baja: string | null; finiquito_entregado_en?: null }) => {
+      const { id, ...cambios } = p;
+      const { data, error } = await supabase.from("personal").update(cambios).eq("id", id).select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No se pudo actualizar (sin permiso o el registro ya no existe)");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rh-personal"] });
+      queryClient.invalidateQueries({ queryKey: ["rh-documentos-faltantes"] });
+      queryClient.invalidateQueries({ queryKey: ["rh-expediente"] });
+      setBajaDe(null);
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  function onSubmitBaja(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!bajaDe) return;
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const motivo = String(fd.get("motivo") ?? "otro");
+    const nota = String(fd.get("nota") ?? "").trim();
+    cambiarEstado.mutate({
+      id: bajaDe.id,
+      activo: false,
+      fecha_baja: String(fd.get("fecha_baja") ?? hoyIso()),
+      motivo_baja: nota ? `${motivo}: ${nota}` : motivo,
+    });
+  }
+
+  // Área operativa (punto de equilibrio): RH marca quién es del equipo de
+  // mantenimiento BBVA; el gasto de nómina de esas personas se atribuye ahí.
+  const cambiarArea = useMutation({
+    mutationFn: async (p: { id: string; area: string | null }) => {
+      const { error } = await supabase.from("personal").update({ area: p.area }).eq("id", p.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rh-personal"] });
+      queryClient.invalidateQueries({ queryKey: ["bbva-equilibrio-equipo"] });
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  const listado = (personal ?? []).filter((p) => mostrarBajas || p.activo);
+  const bajas = (personal ?? []).filter((p) => !p.activo).length;
+
+  // Carta finiquito: toda baja la necesita. Se genera desde aquí con la
+  // última contratación (patrón, puesto, sueldo) y se marca cuando se entregó.
+  const finiquitosPendientes = (personal ?? []).filter((p) => !p.activo && !p.finiquito_entregado_en);
+  const { data: contratacionesTodas } = useContrataciones();
+  const empresaIds = Array.from(new Set((contratacionesTodas ?? []).map((c) => c.empresa_id)));
+  const { data: perfilesLegales } = useQuery({
+    queryKey: ["perfil-legal", empresaIds],
+    enabled: empresaIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("empresas_perfil_legal").select("*").in("empresa_id", empresaIds);
+      if (error) throw error;
+      return data as EmpresaPerfilLegal[];
+    },
+  });
+  const [avisoVentana, setAvisoVentana] = useState<string | null>(null);
+  function generarFiniquito(p: Personal) {
+    const contratacion = (contratacionesTodas ?? []).find((c) => c.personal_id === p.id) ?? null; // ya vienen ordenadas por fecha_inicio desc
+    const patron = contratacion
+      ? patronDe(perfilesLegales, contratacion.empresa_id, contratacion.empresa?.nombre ?? null)
+      : patronDe(undefined, "", null);
+    const ok = abrirParaImprimir(htmlFiniquito(p, contratacion, patron));
+    setAvisoVentana(ok ? null : "El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio e inténtalo de nuevo.");
+  }
+  const marcarFiniquito = useMutation({
+    mutationFn: async (p: { id: string; entregado: boolean }) => {
+      const { data, error } = await supabase
+        .from("personal")
+        .update({ finiquito_entregado_en: p.entregado ? new Date().toISOString() : null })
+        .eq("id", p.id)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No se pudo actualizar");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-personal"] }),
+    onError: (err) => setError((err as Error).message),
+  });
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -106,6 +390,7 @@ function PestanaPersonal() {
       correo: oVacio(fd, "correo"),
       curp: oVacio(fd, "curp"),
       rfc: oVacio(fd, "rfc"),
+      nss: oVacio(fd, "nss"),
       domicilio_particular: oVacio(fd, "domicilio_particular"),
       domicilio_notificaciones: oVacio(fd, "domicilio_notificaciones"),
       ine_numero_identificacion: oVacio(fd, "ine_numero_identificacion"),
@@ -132,6 +417,8 @@ function PestanaPersonal() {
           {mostrarForm ? "Cancelar" : "+ Dar de alta"}
         </button>
       </div>
+
+      <SolicitudesNda personal={personal ?? []} />
 
       {mostrarForm && (
         <form onSubmit={onSubmit} className="mb-6 max-w-3xl space-y-4 rounded border border-slate-200 bg-white p-4">
@@ -184,6 +471,10 @@ function PestanaPersonal() {
             <div>
               <label className={etiquetaCampo}>RFC</label>
               <input name="rfc" className={campoTexto} />
+            </div>
+            <div>
+              <label className={etiquetaCampo}>NSS (Número de Seguridad Social)</label>
+              <input name="nss" inputMode="numeric" maxLength={11} placeholder="11 dígitos" className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Domicilio particular</label>
@@ -255,6 +546,91 @@ function PestanaPersonal() {
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
 
+      {bajaDe && (
+        <form onSubmit={onSubmitBaja} className="space-y-3 rounded border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-slate-800">Dar de baja a {bajaDe.nombre}</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className={etiquetaCampo}>Fecha de baja</label>
+              <input type="date" name="fecha_baja" required defaultValue={hoyIso()} className={campoTexto} />
+            </div>
+            <div>
+              <label className={etiquetaCampo}>Motivo</label>
+              <select name="motivo" required className={campoTexto}>
+                <option value="renuncia">Renuncia</option>
+                <option value="termino_contrato">Término de contrato</option>
+                <option value="despido">Despido</option>
+                <option value="abandono">Abandono de trabajo</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label className={etiquetaCampo}>Nota (opcional)</label>
+              <input name="nota" className={campoTexto} placeholder="Ej. se va a otra empresa" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-600">
+            El registro no se borra: expediente, asignaciones y contrataciones quedan como historial. Deja de aparecer en asignaciones
+            diarias y en expedientes incompletos, y se puede reactivar si regresa. <b>Al confirmar, recuerda elaborar la carta finiquito</b>:
+            queda como pendiente aquí mismo hasta que la marques entregada.
+          </p>
+          {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <div className="flex gap-2">
+            <button disabled={cambiarEstado.isPending} className="rounded bg-amber-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              {cambiarEstado.isPending ? "Guardando…" : "Confirmar baja"}
+            </button>
+            <button type="button" onClick={() => setBajaDe(null)} className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!mostrarForm && !bajaDe && error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      {finiquitosPendientes.length > 0 && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            Carta finiquito pendiente ({finiquitosPendientes.length}): al dar de baja hay que elaborarla, firmarla y guardarla en el expediente.
+          </p>
+          {avisoVentana && <p className="mt-1 text-xs text-amber-800">{avisoVentana}</p>}
+          <ul className="mt-2 space-y-1">
+            {finiquitosPendientes.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>
+                  {p.nombre}
+                  <span className="text-slate-500">
+                    {" "}
+                    · baja {p.fecha_baja ?? ""}
+                    {p.motivo_baja ? ` · ${p.motivo_baja.replace(/_/g, " ")}` : ""}
+                  </span>
+                </span>
+                <span className="flex gap-3">
+                  <button type="button" onClick={() => generarFiniquito(p)} className="text-xs font-medium text-amber-800 hover:underline">
+                    Generar carta finiquito
+                  </button>
+                  <button
+                    type="button"
+                    disabled={marcarFiniquito.isPending}
+                    onClick={() => marcarFiniquito.mutate({ id: p.id, entregado: true })}
+                    className="text-xs text-slate-700 hover:underline disabled:opacity-50"
+                  >
+                    Ya se entregó
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {bajas > 0 && (
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={mostrarBajas} onChange={(e) => setMostrarBajas(e.target.checked)} />
+          Mostrar bajas ({bajas})
+        </label>
+      )}
+
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -263,23 +639,75 @@ function PestanaPersonal() {
               <th className="px-3 py-2">Puesto</th>
               <th className="px-3 py-2">Fecha de ingreso</th>
               <th className="px-3 py-2">Teléfono</th>
-              <th className="px-3 py-2">Activo</th>
+              <th className="px-3 py-2">Estatus</th>
+              <th className="px-3 py-2">Área</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
-            {personal?.map((p) => (
-              <tr key={p.id} className="border-t border-slate-100">
+            {listado.map((p) => (
+              <tr key={p.id} className={`border-t border-slate-100 ${p.activo ? "" : "text-slate-400"}`}>
                 <td className="px-3 py-2">{p.nombre}</td>
                 <td className="px-3 py-2">{p.puesto ?? "—"}</td>
                 <td className="px-3 py-2">{p.fecha_ingreso}</td>
                 <td className="px-3 py-2">{p.telefono ?? "—"}</td>
-                <td className="px-3 py-2">{p.activo ? "Sí" : "No"}</td>
+                <td className="px-3 py-2">
+                  {p.activo
+                    ? "Activo"
+                    : `Baja ${p.fecha_baja ?? ""}${p.motivo_baja ? ` · ${p.motivo_baja.replace(/_/g, " ")}` : ""}${p.finiquito_entregado_en ? " · finiquito entregado" : " · finiquito pendiente"}`}
+                </td>
+                <td className="px-3 py-2">
+                  <select
+                    value={p.area ?? ""}
+                    disabled={!p.activo || cambiarArea.isPending}
+                    onChange={(e) => cambiarArea.mutate({ id: p.id, area: e.target.value || null })}
+                    className="rounded border border-slate-300 px-1 py-0.5 text-xs"
+                    title="Área. Mantenimiento BBVA alimenta el punto de equilibrio de esa área."
+                  >
+                    <option value="">—</option>
+                    <option value="operativo">Operativo</option>
+                    <option value="administrativo">Administrativo</option>
+                    <option value="bbva_puebla">Mantenimiento BBVA</option>
+                  </select>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {p.activo ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setMostrarForm(false);
+                        setBajaDe(p);
+                      }}
+                      className="text-xs text-amber-700 hover:underline"
+                    >
+                      Dar de baja
+                    </button>
+                  ) : (
+                    <span className="flex justify-end gap-3">
+                      <button type="button" onClick={() => generarFiniquito(p)} className="text-xs text-amber-800 hover:underline">
+                        Carta finiquito
+                      </button>
+                      <button
+                        type="button"
+                        disabled={cambiarEstado.isPending}
+                        onClick={() => {
+                          setError(null);
+                          cambiarEstado.mutate({ id: p.id, activo: true, fecha_baja: null, motivo_baja: null, finiquito_entregado_en: null });
+                        }}
+                        className="text-xs text-slate-700 hover:underline disabled:opacity-50"
+                      >
+                        Reactivar
+                      </button>
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
-            {personal?.length === 0 && (
+            {listado.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
-                  Todavía no hay personal registrado.
+                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                  {personal?.length === 0 ? "Todavía no hay personal registrado." : "No hay personal activo."}
                 </td>
               </tr>
             )}
@@ -315,12 +743,21 @@ function PestanaAsignaciones() {
   const { data: asignaciones, isLoading } = useAsignacionesDelDia(fecha);
   const queryClient = useQueryClient();
 
+  const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+
   const guardar = useMutation({
-    mutationFn: async (payload: { personal_id: string; fecha: string; empresa_id: string; proyecto: string | null }) => {
-      const { error } = await supabase.from("asignaciones_diarias").upsert(payload, { onConflict: "personal_id,fecha" });
+    mutationFn: async (payload: { personal_id: string; fecha: string; empresa_id: string; proyecto: string | null; nombre: string }) => {
+      const { nombre: _nombre, ...fila } = payload;
+      const { error } = await supabase.from("asignaciones_diarias").upsert(fila, { onConflict: "personal_id,fecha" });
       if (error) throw error;
+      return payload.nombre;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] }),
+    onSuccess: (nombre) => {
+      setAviso({ tipo: "ok", texto: `Asignación de ${nombre} guardada.` });
+      queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] });
+      queryClient.invalidateQueries({ queryKey: ["asistencia-semanal"] });
+    },
+    onError: (err) => setAviso({ tipo: "error", texto: `No se guardó: ${(err as Error).message}` }),
   });
 
   const quitar = useMutation({
@@ -328,7 +765,11 @@ function PestanaAsignaciones() {
       const { error } = await supabase.from("asignaciones_diarias").delete().eq("personal_id", personalId).eq("fecha", fecha);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] }),
+    onSuccess: () => {
+      setAviso({ tipo: "ok", texto: "Asignación quitada." });
+      queryClient.invalidateQueries({ queryKey: ["rh-asignaciones", fecha] });
+    },
+    onError: (err) => setAviso({ tipo: "error", texto: `No se quitó: ${(err as Error).message}` }),
   });
 
   const personalActivo = personal?.filter((p) => p.activo) ?? [];
@@ -346,6 +787,11 @@ function PestanaAsignaciones() {
       </p>
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+      {aviso && (
+        <p className={`mb-3 rounded border px-3 py-2 text-sm ${aviso.tipo === "ok" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+          {aviso.texto}
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">
@@ -358,17 +804,25 @@ function PestanaAsignaciones() {
             </tr>
           </thead>
           <tbody>
-            {personalActivo.map((p) => (
-              <FilaAsignacion
-                key={p.id}
-                personal={p}
-                fecha={fecha}
-                asignacion={asignacionPorPersonal.get(p.id)}
-                empresas={empresas ?? []}
-                onGuardar={(empresaId, proyecto) => guardar.mutate({ personal_id: p.id, fecha, empresa_id: empresaId, proyecto })}
-                onQuitar={() => quitar.mutate(p.id)}
-              />
-            ))}
+            {/* Las filas se montan hasta que llegan las asignaciones del día y
+                se remontan al cambiar de día o al guardar: antes se quedaban
+                con el valor inicial vacío y parecía que "no guardaba". */}
+            {asignaciones &&
+              personalActivo.map((p) => {
+                const a = asignacionPorPersonal.get(p.id);
+                return (
+                  <FilaAsignacion
+                    key={`${p.id}-${fecha}-${a?.empresa_id ?? ""}-${a?.proyecto ?? ""}`}
+                    personal={p}
+                    fecha={fecha}
+                    asignacion={a}
+                    empresas={empresas ?? []}
+                    guardando={guardar.isPending || quitar.isPending}
+                    onGuardar={(empresaId, proyecto) => guardar.mutate({ personal_id: p.id, fecha, empresa_id: empresaId, proyecto, nombre: p.nombre })}
+                    onQuitar={() => quitar.mutate(p.id)}
+                  />
+                );
+              })}
             {personalActivo.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
@@ -387,6 +841,7 @@ function FilaAsignacion({
   personal,
   asignacion,
   empresas,
+  guardando,
   onGuardar,
   onQuitar,
 }: {
@@ -394,11 +849,13 @@ function FilaAsignacion({
   fecha: string;
   asignacion: AsignacionDiaria | undefined;
   empresas: { id: string; nombre: string }[];
+  guardando: boolean;
   onGuardar: (empresaId: string, proyecto: string | null) => void;
   onQuitar: () => void;
 }) {
   const [empresaId, setEmpresaId] = useState(asignacion?.empresa_id ?? "");
   const [proyecto, setProyecto] = useState(asignacion?.proyecto ?? "");
+  const sinCambios = empresaId === (asignacion?.empresa_id ?? "") && proyecto.trim() === (asignacion?.proyecto ?? "");
 
   return (
     <tr className="border-t border-slate-100">
@@ -419,9 +876,10 @@ function FilaAsignacion({
       <td className="px-3 py-2">
         <button
           onClick={() => (empresaId ? onGuardar(empresaId, proyecto.trim() || null) : onQuitar())}
-          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          disabled={guardando || sinCambios}
+          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
         >
-          Guardar
+          {asignacion && sinCambios ? "Guardado" : "Guardar"}
         </button>
       </td>
     </tr>
@@ -429,6 +887,17 @@ function FilaAsignacion({
 }
 
 // ── Contrataciones ───────────────────────────────────────────────────────
+
+const TIPOS_CONTRATO: { valor: TipoContrato; etiqueta: string }[] = [
+  { valor: "laboral_determinado", etiqueta: "Contrato laboral (tiempo determinado)" },
+  { valor: "laboral_indeterminado", etiqueta: "Contrato laboral (tiempo indeterminado)" },
+  { valor: "prestacion_servicios", etiqueta: "Prestación de servicios" },
+  { valor: "confidencialidad", etiqueta: "Confidencialidad" },
+];
+
+const ETIQUETA_TIPO_CONTRATO: Record<TipoContrato, string> = Object.fromEntries(
+  TIPOS_CONTRATO.map((t) => [t.valor, t.etiqueta]),
+) as Record<TipoContrato, string>;
 
 function useContrataciones() {
   return useQuery({
@@ -466,13 +935,18 @@ function PestanaContrataciones() {
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
+    const frecuencia = (fd.get("frecuencia_pago") === "quincenal" ? "quincenal" : "semanal") as FrecuenciaPago;
+    const sueldoPeriodo = Number(fd.get("sueldo_periodo"));
     crear.mutate({
       personal_id: fd.get("personal_id"),
       empresa_id: fd.get("empresa_id"),
       puesto: fd.get("puesto"),
-      sueldo_semanal: Number(fd.get("sueldo_semanal")),
+      frecuencia_pago: frecuencia,
+      sueldo_periodo: sueldoPeriodo,
+      sueldo_semanal: sueldoSemanalDesde(frecuencia, sueldoPeriodo),
       fecha_inicio: fd.get("fecha_inicio"),
       duracion_dias: Number(fd.get("duracion_dias")),
+      tipo_contrato: fd.get("tipo_contrato"),
     });
     (e.target as HTMLFormElement).reset();
   }
@@ -507,12 +981,29 @@ function PestanaContrataciones() {
           </select>
         </div>
         <div>
+          <label className={etiquetaCampo}>Tipo de contrato *</label>
+          <select name="tipo_contrato" required className={campoTexto} defaultValue="laboral_determinado">
+            {TIPOS_CONTRATO.map((t) => (
+              <option key={t.valor} value={t.valor}>
+                {t.etiqueta}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className={etiquetaCampo}>Puesto *</label>
           <input name="puesto" required className={campoTexto} />
         </div>
         <div>
-          <label className={etiquetaCampo}>Sueldo semanal *</label>
-          <input type="number" step="0.01" min="0.01" name="sueldo_semanal" required className={campoTexto} />
+          <label className={etiquetaCampo}>Frecuencia de pago *</label>
+          <select name="frecuencia_pago" required className={campoTexto} defaultValue="semanal">
+            <option value="semanal">Semanal</option>
+            <option value="quincenal">Quincenal</option>
+          </select>
+        </div>
+        <div>
+          <label className={etiquetaCampo}>Sueldo por periodo (semana o quincena) *</label>
+          <input type="number" step="0.01" min="0.01" name="sueldo_periodo" required className={campoTexto} />
         </div>
         <div>
           <label className={etiquetaCampo}>Fecha de inicio *</label>
@@ -538,8 +1029,9 @@ function PestanaContrataciones() {
             <tr>
               <th className="px-3 py-2">Persona</th>
               <th className="px-3 py-2">Empresa (patrón)</th>
+              <th className="px-3 py-2">Tipo de contrato</th>
               <th className="px-3 py-2">Puesto</th>
-              <th className="px-3 py-2 text-right">Sueldo semanal</th>
+              <th className="px-3 py-2 text-right">Sueldo</th>
               <th className="px-3 py-2">Inicio</th>
               <th className="px-3 py-2">Fin</th>
               <th className="px-3 py-2">Estatus</th>
@@ -550,8 +1042,12 @@ function PestanaContrataciones() {
               <tr key={c.id} className="border-t border-slate-100">
                 <td className="px-3 py-2">{c.personal?.nombre ?? "—"}</td>
                 <td className="px-3 py-2">{c.empresa?.nombre ?? "—"}</td>
+                <td className="px-3 py-2">{ETIQUETA_TIPO_CONTRATO[c.tipo_contrato] ?? c.tipo_contrato}</td>
                 <td className="px-3 py-2">{c.puesto}</td>
-                <td className="px-3 py-2 text-right">${c.sueldo_semanal.toLocaleString("es-MX")}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">
+                  ${(c.sueldo_periodo ?? c.sueldo_semanal).toLocaleString("es-MX")} {c.frecuencia_pago === "quincenal" ? "quincenal" : "semanal"}
+                  {c.frecuencia_pago === "quincenal" && <div className="text-xs text-slate-400">≈ ${c.sueldo_semanal.toLocaleString("es-MX")} semanal</div>}
+                </td>
                 <td className="px-3 py-2">{c.fecha_inicio}</td>
                 <td className="px-3 py-2">{c.fecha_fin}</td>
                 <td className="px-3 py-2">{c.estatus}</td>
@@ -559,7 +1055,7 @@ function PestanaContrataciones() {
             ))}
             {contrataciones?.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
                   Todavía no hay contrataciones registradas.
                 </td>
               </tr>
@@ -571,143 +1067,15 @@ function PestanaContrataciones() {
   );
 }
 
-// ── Documentos / Expediente ──────────────────────────────────────────────
 
-function useTiposDocumento() {
-  return useQuery({
-    queryKey: ["rh-tipos-documento"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("tipos_documento_personal").select("*").eq("activo", true).order("orden");
-      if (error) throw error;
-      return data as TipoDocumentoPersonal[];
-    },
-  });
-}
+// ── Checador: marcas, correcciones y sitios ───────────────────────────────
 
-function useDocumentosFaltantes() {
-  return useQuery({
-    queryKey: ["rh-documentos-faltantes"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_documentos_faltantes_personal").select("*");
-      if (error) throw error;
-      return data as DocumentoFaltante[];
-    },
-  });
-}
-
-/** fecha_entrega + N meses, en ISO -- el cálculo real vive aquí porque
- * fecha_vigencia depende de tipos_documento_personal.vigencia_meses, y eso
- * no se puede resolver en una columna generada de SQL (ver comentario de la
- * migración). */
-function sumarMeses(fechaIso: string, meses: number): string {
-  const d = new Date(fechaIso + "T00:00:00");
-  d.setMonth(d.getMonth() + meses);
-  return d.toISOString().slice(0, 10);
-}
-
-function PestanaDocumentos() {
-  const { data: personal } = usePersonal();
-  const { data: tipos } = useTiposDocumento();
-  const { data: faltantes, isLoading: cargandoFaltantes } = useDocumentosFaltantes();
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-
-  const registrar = useMutation({
-    mutationFn: async (payload: { personal_id: string; tipo_documento_id: string; fecha_entrega: string; fecha_vigencia: string | null }) => {
-      const { error } = await supabase.from("documentos_personal").insert(payload);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["rh-documentos-faltantes"] });
-    },
-    onError: (err) => setError((err as Error).message),
-  });
-
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    const fd = new FormData(e.currentTarget);
-    const tipoId = fd.get("tipo_documento_id") as string;
-    const fechaEntrega = fd.get("fecha_entrega") as string;
-    const tipo = tipos?.find((t) => t.id === tipoId);
-    registrar.mutate({
-      personal_id: fd.get("personal_id") as string,
-      tipo_documento_id: tipoId,
-      fecha_entrega: fechaEntrega,
-      fecha_vigencia: tipo?.vigencia_meses ? sumarMeses(fechaEntrega, tipo.vigencia_meses) : null,
-    });
-    (e.target as HTMLFormElement).reset();
-  }
-
-  const faltantesPorPersona = new Map<string, DocumentoFaltante[]>();
-  for (const f of faltantes ?? []) {
-    const lista = faltantesPorPersona.get(f.personal_nombre) ?? [];
-    lista.push(f);
-    faltantesPorPersona.set(f.personal_nombre, lista);
-  }
-
+function PestanaChecador() {
+  const [prellenado, setPrellenado] = useState<{ lat: number; lng: number } | null>(null);
   return (
     <div>
-      <form onSubmit={onSubmit} className="mb-6 grid max-w-2xl grid-cols-1 gap-3 rounded border border-slate-200 bg-white p-4 sm:grid-cols-3">
-        <div>
-          <label className={etiquetaCampo}>Persona *</label>
-          <select name="personal_id" required className={campoTexto} defaultValue="">
-            <option value="" disabled>
-              Selecciona…
-            </option>
-            {personal?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={etiquetaCampo}>Documento *</label>
-          <select name="tipo_documento_id" required className={campoTexto} defaultValue="">
-            <option value="" disabled>
-              Selecciona…
-            </option>
-            {tipos?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={etiquetaCampo}>Fecha de entrega *</label>
-          <input type="date" name="fecha_entrega" required defaultValue={hoyIso()} className={campoTexto} />
-        </div>
-        <div className="sm:col-span-3">
-          <p className="mb-2 text-xs text-slate-500">
-            La subida del archivo físico (PDF/foto) todavía no está conectada a Storage -- por ahora esto solo registra que
-            el documento se entregó y calcula su vigencia.
-          </p>
-          {error && <p className="mb-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <button disabled={registrar.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-            {registrar.isPending ? "Guardando…" : "Registrar documento entregado"}
-          </button>
-        </div>
-      </form>
-
-      <h2 className="mb-2 text-sm font-semibold text-slate-700">Expediente incompleto</h2>
-      {cargandoFaltantes && <p className="text-sm text-slate-400">Cargando…</p>}
-
-      {faltantesPorPersona.size === 0 && !cargandoFaltantes && (
-        <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-          Todo el personal activo tiene su expediente completo.
-        </p>
-      )}
-
-      <div className="space-y-3">
-        {[...faltantesPorPersona.entries()].map(([nombre, docs]) => (
-          <div key={nombre} className="rounded border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm font-medium text-amber-900">{nombre}</p>
-            <p className="text-xs text-amber-800">Falta: {docs.map((d) => d.tipo_documento_nombre).join(", ")}</p>
-          </div>
-        ))}
-      </div>
+      <UbicacionesChecador key={prellenado ? `${prellenado.lat},${prellenado.lng}` : "sin"} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />
+      <MarcasChecador onCrearSitioDesde={(c) => { setPrellenado(c); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
     </div>
   );
 }

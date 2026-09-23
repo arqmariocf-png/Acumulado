@@ -1,15 +1,24 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import "./index.css";
-import App from "./App.tsx";
-import { registrarServiceWorker } from "./lib/instalable";
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.tsx'
 
-// El service worker solo existe para que la aplicación se pueda instalar en el
-// teléfono; no cachea nada (ver public/sw.js).
-registrarServiceWorker();
+// Habilita "instalar app" (PWA) y la recepción de notificaciones push de
+// recordatorios -- sin esto registrado, el navegador nunca ofrece
+// instalarla ni puede entregar un push aunque el usuario ya se haya
+// suscrito.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Si falla el registro (navegador viejo, etc.) la app sigue
+      // funcionando normal en pestaña de navegador, solo sin poder
+      // instalarse ni recibir push.
+    })
+  })
+}
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
-);
+)

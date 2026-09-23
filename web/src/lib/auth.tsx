@@ -1,31 +1,29 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import { urlPublicaDelLogo } from "./marca";
-import { aplicarMarcaInstalable } from "./instalable";
 import type { Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
+import { urlPublicaDelLogo } from "./marca";
 
 interface AuthState {
   cargando: boolean;
   session: Session | null;
   perfil: Profile | null;
-  /** Organización (tenant) del usuario. null mientras su rol es 'pendiente'. */
+  puedeEscribirEnEmpresa: (empresaId: string) => boolean;
+  veTodasLasEmpresas: boolean;
+  /** Organización (tenant) del usuario. null mientras no tenga una asignada. */
   grupo: Grupo | null;
-  /** Módulos abiertos para la organización del usuario. */
   modulos: ModuloClave[];
   tieneModulo: (clave: ModuloClave) => boolean;
   /** Admin de la organización maestra: opera la plataforma, cruza organizaciones. */
   esAdminGlobal: boolean;
-  /** Suscripción de la organización. null mientras no hay organización. */
   suscripcion: Suscripcion | null;
   /** false cuando la suscripción venció: se consulta y exporta, pero no se captura. */
   suscripcionPermiteEscribir: boolean;
-  /** URL pública del logotipo de la organización, si subió uno. */
   logoUrl: string | null;
   recargarOrganizacion: () => Promise<void>;
-  puedeEscribirEnEmpresa: (empresaId: string) => boolean;
-  veTodasLasEmpresas: boolean;
   cerrarSesion: () => Promise<void>;
+  recuperandoContrasena: boolean;
+  terminarRecuperacion: () => void;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -33,20 +31,32 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [perfil, setPerfil] = useState<Profile | null>(null);
+  const [cargando, setCargando] = useState(true);
   const [grupo, setGrupo] = useState<Grupo | null>(null);
   const [modulos, setModulos] = useState<ModuloClave[]>([]);
   const [suscripcion, setSuscripcion] = useState<Suscripcion | null>(null);
-  const [cargando, setCargando] = useState(true);
+  // Se activa cuando el link viene de generar-link-acceso con tipo
+  // "recovery" (ver Usuarios.tsx / NuevaContrasena.tsx): supabase-js detecta
+  // el token en el hash de la URL al cargar, sin importar en qué ruta cayó,
+  // y dispara este evento en vez de un login normal.
+  const [recuperandoContrasena, setRecuperandoContrasena] = useState(false);
 
   useEffect(() => {
     let activo = true;
 
+    // Sesión "zombi": el token sigue guardado pero Supabase ya no la
+    // reconoce (cambio de contraseña en otro dispositivo, sesión revocada).
+    // getSession no lo detecta porque no consulta al servidor; getUser sí.
+    supabase.auth.getUser().then(({ error }) => {
+      if (error && (error.status === 401 || error.status === 403)) supabase.auth.signOut().catch(() => {});
+    });
     supabase.auth.getSession().then(({ data }) => {
       if (!activo) return;
       setSession(data.session);
     });
 
-    const { data: suscripcion } = supabase.auth.onAuthStateChange((_evento, nuevaSession) => {
+    const { data: suscripcion } = supabase.auth.onAuthStateChange((evento, nuevaSession) => {
+      if (evento === "PASSWORD_RECOVERY") setRecuperandoContrasena(true);
       setSession(nuevaSession);
     });
 
@@ -67,44 +77,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setCargando(true);
-
-    // El perfil trae la organización; con ella se resuelven la marca que se
-    // muestra en la interfaz y los módulos abiertos, que son los que deciden
-    // qué rutas y qué menú existen para este usuario. RLS ya acota ambas
-    // consultas a su propia organización.
-    (async () => {
-      const { data: perfilData } = await supabase
-        .from("profiles")
-        .select("id, nombre, rol, grupo_id, empresa_id, activo")
-        .eq("id", session.user.id)
-        .single();
-      if (!activo) return;
-
-      const perfilCargado = (perfilData as Profile | null) ?? null;
-      setPerfil(perfilCargado);
-
-      if (!perfilCargado?.grupo_id) {
-        setGrupo(null);
-        setModulos([]);
-        setSuscripcion(null);
+    // Sin señal (checador offline) el perfil no se puede leer; se usa la
+    // última copia guardada en este navegador para que la app no mande a
+    // "cuenta sin acceso". Con señal, la copia se refresca cada vez.
+    const claveCache = `perfil-cache-${session.user.id}`;
+    supabase
+      .from("profiles")
+      .select("id, nombre, rol, grupo_id, empresa_id, activo, bbva_mantenimiento")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!activo) return;
+        if (data) {
+          setPerfil(data as Profile);
+          // La organización se carga aparte y sin bloquear: sin señal (el
+          // checador trabaja offline) el perfil sale del caché local y esto
+          // simplemente no resuelve -- la app sigue funcionando, nada más sin
+          // la marca ni el aviso de suscripción.
+          void cargarOrganizacion((data as Profile).grupo_id);
+          try {
+            localStorage.setItem(claveCache, JSON.stringify(data));
+          } catch {
+            /* sin almacenamiento local */
+          }
+        } else if (error && !navigator.onLine) {
+          let cacheado: Profile | null = null;
+          try {
+            const crudo = localStorage.getItem(claveCache);
+            cacheado = crudo ? (JSON.parse(crudo) as Profile) : null;
+          } catch {
+            cacheado = null;
+          }
+          setPerfil(cacheado);
+        } else {
+          setPerfil(null);
+        }
         setCargando(false);
-        return;
-      }
-
-      await cargarOrganizacion(perfilCargado.grupo_id);
-      if (activo) setCargando(false);
-    })();
-
+      });
     return () => {
       activo = false;
     };
   }, [session]);
 
-  // La organización se recarga aparte del perfil: al volver de la pasarela de
-  // pago hay que refrescar la suscripción sin obligar a cerrar sesión.
-  async function cargarOrganizacion(grupoId: string) {
+  async function cargarOrganizacion(grupoId: string | null) {
+    if (!grupoId) {
+      setGrupo(null);
+      setModulos([]);
+      setSuscripcion(null);
+      return;
+    }
+
     const [{ data: grupoData }, { data: modulosData }, { data: suscripcionData }] = await Promise.all([
-      supabase.from("grupos").select("*").eq("id", grupoId).single(),
+      supabase.from("grupos").select("*").eq("id", grupoId).maybeSingle(),
       supabase.from("grupo_modulos").select("modulo_clave, habilitado").eq("grupo_id", grupoId).eq("habilitado", true),
       supabase.from("v_suscripcion").select("*").eq("grupo_id", grupoId).maybeSingle(),
     ]);
@@ -115,32 +139,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function recargarOrganizacion() {
-    if (perfil?.grupo_id) await cargarOrganizacion(perfil.grupo_id);
+    await cargarOrganizacion(perfil?.grupo_id ?? null);
   }
 
   const veTodasLasEmpresas = perfil ? (perfil.rol === "corporativo" || perfil.rol === "admin" || perfil.empresa_id === null) && perfil.rol !== "pendiente" : false;
+
   const esAdminGlobal = perfil?.rol === "admin" && grupo?.es_maestro === true;
-
-  // El admin de la organización maestra ve todos los módulos: es quien los
-  // abre y quien da soporte (mismo criterio que auth_modulo_habilitado() en
-  // la base — ver 20260923090001_grupos_modulos.sql).
-  function tieneModulo(clave: ModuloClave): boolean {
-    return esAdminGlobal || modulos.includes(clave);
-  }
-
-  // La suscripción vencida no quita permisos de rol: quita la escritura. Un
-  // corporativo sigue siendo corporativo, pero en solo lectura. Esto es un
-  // espejo de lo que ya impone RLS (suscripcion_permite_escribir) -- aquí
-  // sirve para no ofrecer botones que la base va a rechazar.
-  const suscripcionPermiteEscribir = esAdminGlobal || (suscripcion?.puede_escribir ?? false);
   const logoUrl = urlPublicaDelLogo(grupo?.logo_path);
 
-  // Lo que quede instalado en el teléfono tiene que ser la aplicación de la
-  // organización, no la de la plataforma: en cuanto se sabe quién entró, se
-  // reemplaza el manifiesto y el ícono.
-  useEffect(() => {
-    if (grupo) aplicarMarcaInstalable({ nombre: grupo.marca_comercial ?? grupo.nombre, logoUrl });
-  }, [grupo, logoUrl]);
+  // El admin de la organización maestra ve todos los módulos: es quien los
+  // abre y quien da soporte (mismo criterio que auth_modulo_habilitado() en la
+  // base). Mientras la organización no haya cargado -- sin señal, o un usuario
+  // al que todavía no se le asigna -- no se esconde nada: esto es comodidad de
+  // interfaz, y quien manda es RLS.
+  function tieneModulo(clave: ModuloClave): boolean {
+    if (esAdminGlobal || !grupo) return true;
+    return modulos.includes(clave);
+  }
+
+  // La suscripción vencida no quita permisos de rol: quita la escritura. Es un
+  // espejo de lo que ya impone RLS (suscripcion_permite_escribir) -- aquí sirve
+  // para no ofrecer botones que la base va a rechazar. Sin organización
+  // cargada se deja pasar, por lo mismo de arriba.
+  const suscripcionPermiteEscribir = esAdminGlobal || !suscripcion || suscripcion.puede_escribir;
 
   function puedeEscribirEnEmpresa(empresaId: string): boolean {
     if (!suscripcionPermiteEscribir) return false;
@@ -153,12 +174,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  function terminarRecuperacion() {
+    setRecuperandoContrasena(false);
+  }
+
   return (
     <AuthContext.Provider
       value={{
         cargando,
         session,
         perfil,
+        puedeEscribirEnEmpresa,
+        veTodasLasEmpresas,
         grupo,
         modulos,
         tieneModulo,
@@ -167,9 +194,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         suscripcionPermiteEscribir,
         logoUrl,
         recargarOrganizacion,
-        puedeEscribirEnEmpresa,
-        veTodasLasEmpresas,
         cerrarSesion,
+        recuperandoContrasena,
+        terminarRecuperacion,
       }}
     >
       {children}

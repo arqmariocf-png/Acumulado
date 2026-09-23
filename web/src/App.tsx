@@ -8,45 +8,64 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 // Cada página en su propio chunk: nadie necesita el código de Admin o Carga
 // en la carga inicial del Dashboard, y viceversa.
 const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
+const NuevaContrasena = lazy(() => import("./pages/NuevaContrasena").then((m) => ({ default: m.NuevaContrasena })));
 const Inicio = lazy(() => import("./pages/Inicio").then((m) => ({ default: m.Inicio })));
 const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ default: m.Movimientos })));
 const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga })));
 const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then((m) => ({ default: m.ReportesEspeciales })));
+const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ default: m.SaldosDiarios })));
+const SaldosEmpresas = lazy(() => import("./pages/finanzas/SaldosEmpresas").then((m) => ({ default: m.SaldosEmpresas })));
+const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
+const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
+const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
+const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
+const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
+const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
+const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
+const AsistenciaEquipo = lazy(() => import("./pages/bbva/AsistenciaEquipo").then((m) => ({ default: m.AsistenciaEquipo })));
+const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => ({ default: m.Proyectos })));
+const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
-const Empresas = lazy(() => import("./pages/admin/Empresas").then((m) => ({ default: m.Empresas })));
-const MiOrganizacion = lazy(() => import("./pages/admin/MiOrganizacion").then((m) => ({ default: m.MiOrganizacion })));
-const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m) => ({ default: m.Suscripcion })));
-const Organizaciones = lazy(() => import("./pages/admin/Organizaciones").then((m) => ({ default: m.Organizaciones })));
+const Cuentas = lazy(() => import("./pages/admin/Cuentas").then((m) => ({ default: m.Cuentas })));
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
+const AdminProyectos = lazy(() => import("./pages/admin/Proyectos").then((m) => ({ default: m.Proyectos })));
+const AdminEmpresas = lazy(() => import("./pages/admin/Empresas").then((m) => ({ default: m.Empresas })));
+const MiOrganizacion = lazy(() => import("./pages/admin/MiOrganizacion").then((m) => ({ default: m.MiOrganizacion })));
+const Organizaciones = lazy(() => import("./pages/admin/Organizaciones").then((m) => ({ default: m.Organizaciones })));
+const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m) => ({ default: m.Suscripcion })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
+const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
+const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
+const Resolucion = lazy(() => import("./pages/requisiciones/Resolucion").then((m) => ({ default: m.Resolucion })));
 const InventarioLayout = lazy(() => import("./pages/inventario/InventarioLayout").then((m) => ({ default: m.InventarioLayout })));
 const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos").then((m) => ({ default: m.Movimientos })));
 const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
 const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
 const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
-const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => ({ default: m.Proyectos })));
-const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
+const InventarioRemisiones = lazy(() => import("./pages/inventario/Remisiones").then((m) => ({ default: m.Remisiones })));
+const PanoramaClavicon = lazy(() => import("./pages/produccion/PanoramaClavicon").then((m) => ({ default: m.PanoramaClavicon })));
+const RemisionProduccionDetalle = lazy(() => import("./pages/produccion/RemisionProduccionDetalle").then((m) => ({ default: m.RemisionProduccionDetalle })));
+const InventarioRemisionDetalle = lazy(() => import("./pages/inventario/RemisionDetalle").then((m) => ({ default: m.RemisionDetalle })));
+const PreciosLayout = lazy(() => import("./pages/precios/PreciosLayout").then((m) => ({ default: m.PreciosLayout })));
+const PreciosAnalisis = lazy(() => import("./pages/precios/Analisis").then((m) => ({ default: m.Analisis })));
+const PreciosPublicados = lazy(() => import("./pages/precios/Publicados").then((m) => ({ default: m.Publicados })));
+const PreciosCatalogo = lazy(() => import("./pages/precios/Catalogo").then((m) => ({ default: m.Catalogo })));
+const PreciosDetalle = lazy(() => import("./pages/precios/Detalle").then((m) => ({ default: m.Detalle })));
+const Tableros = lazy(() => import("./pages/tareas/Tableros").then((m) => ({ default: m.Tableros })));
+const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((m) => ({ default: m.TableroDetalle })));
+const BbvaMantenimiento = lazy(() => import("./pages/bbva/BbvaMantenimiento").then((m) => ({ default: m.BbvaMantenimiento })));
+const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ default: m.ManoDeObra })));
+const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
+const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
 
 const queryClient = new QueryClient();
 
 function Cargando() {
   return <div className="p-8 text-center text-sm text-slate-500">Cargando…</div>;
-}
-
-// La raíz depende de lo que la organización tenga abierto: con conciliación
-// (el caso de Grupo Loma) la portada sigue siendo el Dashboard de siempre;
-// sin ella, la portada es Inicio -- la base que toda organización tiene.
-function Raiz() {
-  const { tieneModulo } = useAuth();
-  if (tieneModulo("conciliacion")) return <Dashboard />;
-  // Una organización que solo trae Proyectos entra directo a lo suyo; si no
-  // tiene ningún módulo abierto, a la portada de la organización.
-  if (tieneModulo("proyectos")) return <Navigate to="/proyectos" replace />;
-  return <Navigate to="/inicio" replace />;
 }
 
 export default function App() {
@@ -55,56 +74,136 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Suspense fallback={<Cargando />}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-
-              <Route element={<ProtectedRoute />}>
-                <Route element={<Layout />}>
-                  <Route path="/" element={<Raiz />} />
-                  <Route path="/inicio" element={<Inicio />} />
-
-                  <Route element={<ProtectedRoute modulo="conciliacion" />}>
-                    <Route path="/movimientos" element={<Movimientos />} />
-                    <Route path="/carga" element={<Carga />} />
-                    <Route path="/reportes" element={<ReportesEspeciales />} />
-                    <Route path="/pendientes" element={<Pendientes />} />
-                  </Route>
-
-                  <Route element={<ProtectedRoute modulo="proyectos" />}>
-                    <Route path="/proyectos" element={<Proyectos />} />
-                    <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
-                  </Route>
-
-                  <Route element={<ProtectedRoute modulo="inventario" />}>
-                    <Route path="/inventario" element={<InventarioLayout />}>
-                      <Route index element={<InventarioMovimientos />} />
-                      <Route path="existencias" element={<InventarioExistencias />} />
-                      <Route path="productos" element={<InventarioProductos />} />
-                      <Route path="match" element={<InventarioMatch />} />
-                    </Route>
-                  </Route>
-
-                  <Route element={<ProtectedRoute roles={["rh"]} modulo="rh" />}>
-                    <Route path="/rh" element={<RH />} />
-                  </Route>
-
-                  <Route element={<ProtectedRoute soloAdmin />}>
-                    <Route path="/admin" element={<AdminLayout />}>
-                      <Route index element={<Usuarios />} />
-                      <Route path="empresas" element={<Empresas />} />
-                      <Route path="organizacion" element={<MiOrganizacion />} />
-                      <Route path="suscripcion" element={<SuscripcionAdmin />} />
-                      <Route path="organizaciones" element={<Organizaciones />} />
-                      <Route path="reglas" element={<Reglas />} />
-                      <Route path="excepciones" element={<Excepciones />} />
-                    </Route>
-                  </Route>
-                </Route>
-              </Route>
-            </Routes>
+            <Enrutador />
           </Suspense>
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
+  );
+}
+
+function Enrutador() {
+  const { recuperandoContrasena } = useAuth();
+
+  // El link de tipo "recovery" (Admin -> Usuarios -> Generar link) puede
+  // caer en cualquier ruta -- supabase-js detecta el token apenas carga la
+  // página. Mientras esté activo, se muestra sólo el formulario de
+  // contraseña nueva y nada más de la app, sin importar en qué URL llegó.
+  if (recuperandoContrasena) return <NuevaContrasena />;
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Inicio />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/movimientos" element={<Movimientos />} />
+          <Route path="/carga" element={<Carga />} />
+          <Route path="/reportes" element={<ReportesEspeciales />} />
+          <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
+          <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
+          <Route path="/pendientes" element={<Pendientes />} />
+          <Route path="/checador" element={<Checador />} />
+          <Route path="/mis-documentos" element={<MisDocumentos />} />
+
+          <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+            <Route path="/bbva/folios" element={<FoliosCuadrilla />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["corporativo", "direccion", "rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+            <Route path="/bbva/equilibrio" element={<Equilibrio />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+            <Route path="/bbva/asistencia" element={<AsistenciaEquipo />} />
+          </Route>
+          <Route path="/proyectos" element={<Proyectos />} />
+          <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
+
+          <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
+            <Route path="/saldos" element={<SaldosDiarios />} />
+            <Route path="/finanzas/saldos" element={<SaldosEmpresas />} />
+            <Route path="/finanzas/pagos" element={<ProgramacionPagos />} />
+          </Route>
+
+          {/* Sin roles restringidos aquí a propósito: además de admin/corporativo/
+              dirección, alguien con el permiso acotado profiles.bbva_mantenimiento
+              (ej. Christian Bonifacio) también debe entrar, y ese permiso no es
+              un rol de ProtectedRoute -- la visibilidad real la da RLS sobre
+              bbva_mantenimiento_snapshots. */}
+          <Route path="/mantenimiento/bbva" element={<BbvaMantenimiento />} />
+
+          <Route path="/inventario" element={<InventarioLayout />}>
+            <Route index element={<InventarioMovimientos />} />
+            <Route path="existencias" element={<InventarioExistencias />} />
+            <Route path="productos" element={<InventarioProductos />} />
+            <Route path="match" element={<InventarioMatch />} />
+            <Route path="remisiones" element={<InventarioRemisiones />} />
+            <Route path="remisiones/:id" element={<InventarioRemisionDetalle />} />
+          </Route>
+
+          <Route path="/requisiciones" element={<RequisicionesLayout />}>
+            <Route index element={<MisRequisiciones />} />
+            <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>
+              <Route path="resolucion" element={<Resolucion />} />
+            </Route>
+          </Route>
+
+          <Route path="/tareas" element={<Tableros />} />
+          <Route path="/tareas/:tableroId" element={<TableroDetalle />} />
+
+          {/* El detalle vive fuera del layout de pestanas: es una
+              tarjeta completa y ahi las pestanas estorban. */}
+          <Route path="/precios/:id" element={<PreciosDetalle />} />
+          <Route path="/precios" element={<PreciosLayout />}>
+            <Route index element={<PreciosAnalisis />} />
+            <Route path="publicados" element={<PreciosPublicados />} />
+            <Route path="catalogo" element={<PreciosCatalogo />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>
+            <Route path="/rh" element={<RH />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["rh"]} />}>
+            <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
+            <Route path="/rh/agenda-pagos" element={<AgendaPagos />} />
+          </Route>
+
+          <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/clavicon" element={<PanoramaClavicon />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable"]} />}>
+            <Route path="/produccion/remisiones/:id" element={<RemisionProduccionDetalle />} />
+          </Route>
+
+          <Route element={<ProtectedRoute roles={["produccion"]} />}>
+            {/* Una sola pantalla para las plantas del grupo, parametrizada
+                por la planta en la URL (clavicon | balken | carpinteria). */}
+            <Route path="/produccion" element={<Navigate to="/produccion/clavicon" replace />} />
+            <Route path="/produccion/:planta" element={<Produccion />} />
+          </Route>
+
+          <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Usuarios />} />
+              <Route path="cuentas" element={<Cuentas />} />
+              <Route path="reglas" element={<Reglas />} />
+              <Route path="excepciones" element={<Excepciones />} />
+              <Route path="proyectos" element={<AdminProyectos />} />
+              <Route path="empresas" element={<AdminEmpresas />} />
+              <Route path="organizacion" element={<MiOrganizacion />} />
+              <Route path="organizaciones" element={<Organizaciones />} />
+              <Route path="suscripcion" element={<SuscripcionAdmin />} />
+            </Route>
+          </Route>
+        </Route>
+      </Route>
+
+      {/* Cualquier ruta que no exista (link viejo, typo, etc.) regresa al
+          inicio en vez de mostrar una pantalla en blanco. */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

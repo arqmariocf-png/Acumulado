@@ -28,9 +28,12 @@ export function clienteServicio(): SupabaseClient {
 
 export interface PerfilAutenticado {
   id: string;
+  nombre: string | null;
   rol: string;
+  /** Organización (tenant) del usuario. null mientras no tenga una asignada. */
   grupoId: string | null;
   empresaId: string | null;
+  bbvaMantenimiento: boolean;
 }
 
 /** Lee el profile del usuario autenticado usando su propio JWT (así RLS ya
@@ -44,10 +47,17 @@ export async function obtenerPerfilAutenticado(req: Request): Promise<PerfilAute
   } = await cliente.auth.getUser();
   if (!user) return null;
 
-  const { data: perfil, error } = await cliente.from("profiles").select("id, rol, grupo_id, empresa_id").eq("id", user.id).single();
+  const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, grupo_id, empresa_id, bbva_mantenimiento").eq("id", user.id).single();
   if (error || !perfil) return null;
 
-  return { id: perfil.id, rol: perfil.rol, grupoId: perfil.grupo_id, empresaId: perfil.empresa_id };
+  return {
+    id: perfil.id,
+    nombre: perfil.nombre,
+    rol: perfil.rol,
+    grupoId: perfil.grupo_id,
+    empresaId: perfil.empresa_id,
+    bbvaMantenimiento: !!perfil.bbva_mantenimiento,
+  };
 }
 
 export function puedeEscribirEnEmpresa(perfil: PerfilAutenticado, empresaId: string): boolean {
@@ -56,26 +66,13 @@ export function puedeEscribirEnEmpresa(perfil: PerfilAutenticado, empresaId: str
   return perfil.empresaId === empresaId;
 }
 
-/** Las dos fronteras que el chequeo de rol de arriba NO cubre:
- *
- *   - Organización: "corporativo" y "admin" pueden escribir en *todas* las
- *     empresas, pero solo las de SU organización. Sin esto, un corporativo de
- *     una organización podría cargar archivos o correr el motor contra la
- *     empresa de otra pasando su UUID a mano -- las escrituras de estas
- *     funciones van con la service_role key, que bypassa RLS, así que la
- *     frontera hay que preguntarla explícitamente.
- *   - Módulo: la organización tiene que tener abierto el módulo al que
- *     pertenece la operación (ver grupo_modulos en
- *     20260923090001_grupos_modulos.sql).
- *
- * Las dos las sabe la base (RLS sobre `empresas` y `auth_modulo_habilitado`),
- * así que se preguntan con el cliente del usuario en vez de reimplementarlas
- * aquí -- una sola fuente de verdad. */
-export async function empresaOperableEnModulo(req: Request, empresaId: string, modulo: string): Promise<boolean> {
-  const cliente = clienteComoUsuario(req);
-  const [{ data: empresa }, { data: moduloAbierto }] = await Promise.all([
-    cliente.from("empresas").select("id").eq("id", empresaId).maybeSingle(),
-    cliente.rpc("auth_modulo_habilitado", { p_clave: modulo }),
-  ]);
-  return !!empresa && moduloAbierto === true;
+/** La frontera que el chequeo de rol de arriba NO cubre: "corporativo" y
+ * "admin" pueden escribir en *todas* las empresas, pero solo las de SU
+ * organización. Estas funciones escriben con la service_role key, que bypassa
+ * RLS, así que la frontera hay que preguntarla explícitamente -- y se pregunta
+ * con el cliente del usuario, para no reimplementar aquí lo que ya decide RLS
+ * sobre `empresas`. */
+export async function empresaEnMiOrganizacion(req: Request, empresaId: string): Promise<boolean> {
+  const { data } = await clienteComoUsuario(req).from("empresas").select("id").eq("id", empresaId).maybeSingle();
+  return !!data;
 }

@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const TABS = [
   { a: "/inventario", etiqueta: "Registrar movimiento", end: true },
+  { a: "/inventario/remisiones", etiqueta: "Remisiones" },
   { a: "/inventario/existencias", etiqueta: "Existencias" },
   { a: "/inventario/productos", etiqueta: "Productos" },
   { a: "/inventario/match", etiqueta: "Match con OC/OV" },

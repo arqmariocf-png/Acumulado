@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parsearPaginasBBVA } from "./pdf-estado-cuenta-bbva.ts";
+import { extraerNumeroCuentaBBVA, parsearPaginasBBVA } from "./pdf-estado-cuenta-bbva.ts";
 import { PAGINAS_REALES_BBVA_ACEROS_JULIO_2026 } from "./pdf-estado-cuenta-bbva.fixture.ts";
 import { PAGINAS_REALES_BBVA_MARIO_JULIO_2026 } from "./pdf-estado-cuenta-bbva-mario.fixture.ts";
 import { POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026 } from "./pdf-estado-cuenta-bbva-web.fixture.ts";
+import { PAGINAS_REALES_BBVA_WEB_ACEROS_31_AGOSTO_2026 } from "./pdf-estado-cuenta-bbva-web-nomina.fixture.ts";
+import { PAGINAS_REALES_BBVA_APP_MARIO_AGOSTO_2026 } from "./pdf-estado-cuenta-bbva-app-mario.fixture.ts";
 
 test("parsea el PDF real de BBVA (Aceros, julio 2026, formato MAESTRA PYME BBVA): 139 movimientos clasificados por columna, cuadra exacto con lo que el banco declara", () => {
   const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026);
@@ -194,4 +196,70 @@ test('en el formato "Detalle de movimientos", el aviso legal de pie de página n
   const ultimo = r.movimientos[r.movimientos.length - 1];
   assert.equal(ultimo.nombreRazonSocial, "SPEI RECIBIDOSTP/0171440815 646 0375372");
   assert.doesNotMatch(ultimo.nombreRazonSocial ?? "", /En cumplimiento|Cerrar|Imprimir/);
+});
+
+test('en el formato "Detalle de movimientos", si "Saldo disponible" no coincide con el movimiento más reciente pero la cadena de saldos de TODOS los movimientos sí encadena perfecto, no bloquea el documento -- inserta todo y agrega una advertencia de fila 0 (caso real: nómina el mismo día, Aceros cuenta 5859, 31-ago-2026)', () => {
+  const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_WEB_ACEROS_31_AGOSTO_2026);
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos.length, 152);
+
+  // El movimiento más reciente (nómina) SÍ se inserta con su saldo real,
+  // aunque no coincida con "Saldo disponible" del encabezado.
+  assert.equal(r.movimientos[0].saldo, 14775.0);
+  assert.equal(r.movimientos[0].nombreRazonSocial, "PAGO DE NOMINA/IN 4205095328 ACEROS Y ENVASADOS DE PUEBLA SA DE CV");
+
+  const advertenciaDocumento = r.erroresPorFila.find((e) => e.fila === 0);
+  assert.ok(advertenciaDocumento, "debe traer una advertencia de fila 0 (documento completo)");
+  assert.match(advertenciaDocumento!.errores[0], /Saldo disponible de 23845\.14.*saldo 14775/);
+});
+
+test('parsea el TERCER formato de BBVA -- "app/personal" (Mario Contreras, cuenta 2047, agosto 2026): 20 movimientos con montos partidos en 3 items (signo + entero + centavos superíndice), Abono antes que Cargo en el encabezado, fecha con año en letras', () => {
+  const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_APP_MARIO_AGOSTO_2026);
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.erroresPorFila.length, 0);
+  assert.equal(r.movimientos.length, 20);
+
+  const cargos = r.movimientos.filter((m) => m.cargoTotal != null);
+  const abonos = r.movimientos.filter((m) => m.abonoTotal != null);
+  assert.equal(cargos.length, 15);
+  assert.equal(abonos.length, 5);
+
+  // El más reciente (primero de la lista) debe cuadrar con "Saldo
+  // disponible" del encabezado ($638,014.09) sin ninguna advertencia.
+  assert.equal(r.movimientos[0].fechaPago, "2026-08-31");
+  assert.equal(r.movimientos[0].saldo, 638014.09);
+  assert.equal(r.movimientos[0].cargoTotal, 59448.28);
+  assert.equal(r.movimientos[0].nombreRazonSocial, "PAGO CUENTA DE TERCERO / 0092620024 RFC:AEL131013CS1 IVA:8199.76");
+
+  // Un movimiento de abono real (signo "$" sin "-"), para confirmar que la
+  // clasificación por signo también funciona del lado positivo.
+  const abono = r.movimientos.find((m) => m.fechaPago === "2026-08-24" && m.abonoTotal === 17000);
+  assert.ok(abono, "debe existir el abono de Santander del 24-ago");
+  assert.equal(abono!.saldo, 782382.2);
+
+  const ultimo = r.movimientos[r.movimientos.length - 1];
+  assert.equal(ultimo.fechaPago, "2026-08-17");
+  assert.doesNotMatch(ultimo.nombreRazonSocial ?? "", /En cumplimiento|Cerrar|Imprimir/);
+});
+
+test("lee la cuenta que declara el PDF (MAESTRA PYME: 'No. de Cuenta' + CLABE; web: 'Número de cuenta:'; app: enmascarada -> null)", () => {
+  assert.deepEqual(extraerNumeroCuentaBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026), { numeroCuenta: "0194615859", clabe: "012650001946158592" });
+  assert.equal(extraerNumeroCuentaBBVA(PAGINAS_REALES_BBVA_MARIO_JULIO_2026).numeroCuenta, "0469952047");
+  assert.equal(extraerNumeroCuentaBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026).numeroCuenta, "0194615859");
+  assert.equal(extraerNumeroCuentaBBVA(PAGINAS_REALES_BBVA_APP_MARIO_AGOSTO_2026).numeroCuenta, null);
+});
+
+test("bloquea el PDF si es de otra cuenta que la seleccionada (caso real: PDF de 7382 subido como 9954)", () => {
+  const r = parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026, "9954");
+  assert.equal(r.movimientos.length, 0);
+  assert.match(r.errorDocumento ?? "", /terminación 5859, no de la cuenta terminación 9954/);
+  const w = parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026, "9954");
+  assert.match(w.errorDocumento ?? "", /terminación 5859/);
+});
+
+test("no bloquea cuando la terminación coincide con la cuenta o con la CLABE, ni cuando el PDF no declara la cuenta completa (app)", () => {
+  assert.equal(parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026, "5859").errorDocumento, null);
+  assert.equal(parsearPaginasBBVA(PAGINAS_REALES_BBVA_ACEROS_JULIO_2026, "8592").errorDocumento, null);
+  assert.equal(parsearPaginasBBVA(POSICIONES_REAL_BBVA_WEB_ACEROS_AGOSTO_2026, "5859").errorDocumento, null);
+  assert.equal(parsearPaginasBBVA(PAGINAS_REALES_BBVA_APP_MARIO_AGOSTO_2026, "9999").errorDocumento, null);
 });

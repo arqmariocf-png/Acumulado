@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Movimiento } from "../types/database";
 
@@ -13,13 +14,28 @@ const CATEGORIAS = [
   { valor: "N/A - DEVOLUCION", etiqueta: "Devoluciones" },
 ];
 
+const CATEGORIA_PRESTAMOS = "N/A - PRESTAMO INTERCOMPAÑIA";
+
 function formatoMoneda(v: number | null): string {
   if (v == null) return "—";
   return v.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 }
 
+function useEmpresas() {
+  return useQuery({
+    queryKey: ["empresas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function ReportesEspeciales() {
   const [categoria, setCategoria] = useState(CATEGORIAS[0].valor);
+  const queryClient = useQueryClient();
+  const { data: empresas } = useEmpresas();
 
   const { data: movimientos, isLoading } = useQuery({
     queryKey: ["reporte-especial", categoria],
@@ -34,7 +50,26 @@ export function ReportesEspeciales() {
     },
   });
 
+  // Solo aplica a Préstamos: el banco no dice a nombre de qué empresa del
+  // grupo es la transferencia, así que se captura a mano cuál es la
+  // contraparte -- necesario para poder calcular después quién le debe a
+  // quién entre las empresas (ver página "Préstamos entre empresas").
+  const asignarContraparte = useMutation({
+    mutationFn: async ({ movimientoId, empresaContraparteId }: { movimientoId: string; empresaContraparteId: string }) => {
+      const { error } = await supabase
+        .from("movimientos")
+        .update({ empresa_contraparte_id: empresaContraparteId || null })
+        .eq("id", movimientoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reporte-especial", CATEGORIA_PRESTAMOS] });
+      queryClient.invalidateQueries({ queryKey: ["prestamos-intercompania"] });
+    },
+  });
+
   const total = movimientos?.reduce((acc, m) => acc + (m.cargo_total ?? 0) + (m.abono_total ?? 0), 0) ?? 0;
+  const esPrestamos = categoria === CATEGORIA_PRESTAMOS;
 
   return (
     <div>
@@ -52,6 +87,17 @@ export function ReportesEspeciales() {
         ))}
       </div>
 
+      {esPrestamos && (
+        <p className="mb-3 max-w-2xl text-xs text-slate-500">
+          El estado de cuenta no dice a nombre de qué empresa del grupo es cada transferencia -- selecciona la
+          empresa contraparte en cada fila para que se pueda calcular el saldo entre empresas. Ver{" "}
+          <Link to="/prestamos-intercompania" className="underline">
+            Préstamos entre empresas
+          </Link>
+          .
+        </p>
+      )}
+
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
       {movimientos && (
@@ -68,6 +114,7 @@ export function ReportesEspeciales() {
                   <th className="px-3 py-2 text-right">Cargo</th>
                   <th className="px-3 py-2 text-right">Abono</th>
                   <th className="px-3 py-2">Comentarios</th>
+                  {esPrestamos && <th className="px-3 py-2">Empresa contraparte (¿a quién se le prestó?)</th>}
                 </tr>
               </thead>
               <tbody>
@@ -78,11 +125,28 @@ export function ReportesEspeciales() {
                     <td className="px-3 py-2 text-right">{formatoMoneda(m.cargo_total)}</td>
                     <td className="px-3 py-2 text-right">{formatoMoneda(m.abono_total)}</td>
                     <td className="px-3 py-2">{m.comentarios}</td>
+                    {esPrestamos && (
+                      <td className="px-3 py-2">
+                        <select
+                          value={m.empresa_contraparte_id ?? ""}
+                          onChange={(e) => asignarContraparte.mutate({ movimientoId: m.id, empresaContraparteId: e.target.value })}
+                          disabled={asignarContraparte.isPending}
+                          className="rounded border border-slate-300 px-2 py-1 text-xs"
+                        >
+                          <option value="">— Sin clasificar —</option>
+                          {empresas?.filter((e) => e.id !== m.empresa_id).map((e) => (
+                            <option key={e.id} value={e.id}>
+                              {e.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {movimientos.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-slate-400">
+                    <td colSpan={esPrestamos ? 6 : 5} className="px-3 py-8 text-center text-slate-400">
                       Sin movimientos en esta categoría.
                     </td>
                   </tr>

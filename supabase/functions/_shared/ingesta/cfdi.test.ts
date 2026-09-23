@@ -20,6 +20,7 @@ test("mapea un CFDI normal (hoja Sheet1) usando el UUID como identificador, no e
   assert.equal(r.registro!.total, 28683.6);
   assert.equal(r.registro!.rfcContraparte, "VBB180123665");
   assert.equal(r.registro!.nombreContraparte, "VIGUETA BOVEDILLA Y BLOQUES BALKEN");
+  assert.equal(r.registro!.esComplementoPago, false);
 });
 
 test("una factura real con Total=0 se acepta -- no todo 0 es un complemento de pago", () => {
@@ -39,6 +40,7 @@ test("un complemento de pago (hoja RecibosDePago) usa ImpPagado, no la columna T
   assert.deepEqual(r.errores, []);
   assert.equal(r.registro!.total, 1690);
   assert.equal(r.registro!.fecha, "2026-07-09");
+  assert.equal(r.registro!.esComplementoPago, true);
 });
 
 test("ImpPagado manda sobre Total cuando ambas columnas existen en la misma hoja", () => {
@@ -91,12 +93,20 @@ test('un complemento de pago EMITIDO (hoja "Pago20") usa "Imp Pagado DR", no "Mo
   const [r] = procesar(csv, "emitido");
   assert.deepEqual(r.errores, []);
   assert.equal(r.registro!.total, 35627.43);
+  assert.equal(r.registro!.esComplementoPago, true);
 });
 
 test('"Imp Pagado DR" manda sobre "Monto Total" igual que ImpPagado manda sobre Total', () => {
   const csv = "UUID,Monto Total,Imp Pagado DR\nAAA,0,1690.00";
   const [r] = procesar(csv, "recibido");
   assert.equal(r.registro!.total, 1690);
+});
+
+test("esComplementoPago se marca por hoja, no por fila: una hoja con columna ImpPagado marca TODAS sus filas, aunque una fila individual la traiga vacía", () => {
+  const csv = "UUID,Total,ImpPagado\nAAA,500,";
+  const [r] = procesar(csv, "recibido");
+  assert.equal(r.registro!.total, 500); // sin ImpPagado en esta fila, Total manda
+  assert.equal(r.registro!.esComplementoPago, true); // pero la hoja SÍ es de complementos de pago
 });
 
 test("encabezadosFaltantesCfdi reconoce Monto Total / Imp Pagado DR como columnas de monto válidas", () => {

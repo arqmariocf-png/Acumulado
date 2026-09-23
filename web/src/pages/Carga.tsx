@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
+import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 
 type Pestana = "estado_cuenta" | "cfdi" | "oc_ov";
@@ -85,7 +86,7 @@ async function llamarFuncion(nombre: string, formData: FormData) {
     body: formData,
   });
   const json = await respuesta.json();
-  if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+  if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
   return json;
 }
 
@@ -98,7 +99,7 @@ async function llamarFuncionJson(nombre: string, body: Record<string, unknown>) 
     body: JSON.stringify(body),
   });
   const json = await respuesta.json();
-  if (!respuesta.ok) throw new Error(json.error ?? `Error ${respuesta.status}`);
+  if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
   return json;
 }
 
@@ -120,10 +121,20 @@ export function Carga() {
     setError(null);
     setResultado(null);
     setEnviando(true);
+    // Se captura antes del await: React recicla e.currentTarget al terminar
+    // el handler y después del fetch ya viene null.
+    const formulario = e.currentTarget;
     try {
-      const form = new FormData(e.currentTarget);
+      const form = new FormData(formulario);
+      const cuentaElegida = cuentas?.find((c) => c.id === String(form.get("cuentaId") ?? ""));
       const json = await llamarFuncion("ingesta-estado-cuenta", form);
-      setResultado(json);
+      setResultado({ ...json, cuentaEtiqueta: cuentaElegida ? `${cuentaElegida.banco} ····${cuentaElegida.ultimos_4}` : null });
+      // Limpia el archivo y la cuenta después de una carga exitosa: si el
+      // input de archivo se queda con el PDF anterior, al cambiar de cuenta y
+      // volver a "Cargar" se sube el MISMO PDF a la otra cuenta (caso real
+      // 17-sep-2026: el PDF de BBVA 7382 quedó cargado también en BBVA 9954,
+      // y el 25-ago el de BBVA 4239 en BBVA 1226).
+      formulario.reset();
       if (json.archivoId) {
         // Dispara la clasificación automáticamente tras una ingesta exitosa.
         const { data: sessionData } = await supabase.auth.getSession();
@@ -147,13 +158,20 @@ export function Carga() {
     }
   }
 
-  async function onDiagnosticoBackoffice(recurso: "oc" | "ov") {
+  // Trae el catálogo de OC/OS y OV directo de la API del backoffice para
+  // LAS 8 EMPRESAS DE UNA SOLA VEZ (sync-catalogo-oc-ov -> RPC
+  // sincronizar_catalogo_oc_ov) -- no hace falta elegir una empresa primero,
+  // a diferencia de la carga de Excel de abajo, que sigue siendo por
+  // empresa como respaldo manual.
+  async function onSincronizarCatalogo() {
     setError(null);
     setResultado(null);
     setEnviando(true);
     try {
-      const json = await llamarFuncionJson("proxy-backoffice", { recurso, empresaId, modo: "diagnostico" });
+      const json = await llamarFuncionJson("sync-catalogo-oc-ov", {});
       setResultado(json);
+      queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
+      queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -232,7 +250,7 @@ export function Carga() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Archivo (CSV o Excel, formato canónico -- o PDF si es un estado de cuenta de BanBajío o BBVA)
+              Archivo (CSV o Excel, formato canónico -- o PDF si es un estado de cuenta de BanBajío, BBVA, Banorte o Santander)
             </label>
             <input type="file" name="file" accept=".csv,.xlsx,.xls,.pdf" required className="w-full text-sm" />
           </div>
@@ -263,6 +281,24 @@ export function Carga() {
         </form>
       )}
 
+      {pestana === "oc_ov" && (perfil?.rol === "corporativo" || perfil?.rol === "admin") && (
+        <div className="mb-4 max-w-md space-y-2 rounded border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-sm font-medium text-emerald-900">Sincronizar con el backoffice (todas las empresas)</p>
+          <p className="text-xs text-emerald-800">
+            Trae el catálogo de OC/OS y OV directo de reports.grupoloma.mx para las 8 empresas de un solo clic — no
+            hace falta elegir una empresa ni subir un archivo.
+          </p>
+          <button
+            type="button"
+            disabled={enviando}
+            onClick={onSincronizarCatalogo}
+            className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+          >
+            {enviando ? "Sincronizando…" : "Sincronizar catálogo OC/OV"}
+          </button>
+        </div>
+      )}
+
       {pestana === "oc_ov" && empresaId && (
         <form onSubmit={onSubmitGenerico("ingesta-oc-ov")} className="max-w-md space-y-3 rounded border border-slate-200 bg-white p-4">
           <input type="hidden" name="empresaId" value={empresaId} />
@@ -277,41 +313,11 @@ export function Carga() {
             <label className="mb-1 block text-sm font-medium text-slate-700">Archivo</label>
             <input type="file" name="file" accept=".csv,.xlsx,.xls" required className="w-full text-sm" />
           </div>
-          <p className="text-xs text-slate-500">
-            Carga de respaldo mientras se confirma la integración directa con la API del backoffice.
-          </p>
+          <p className="text-xs text-slate-500">Respaldo manual por si la sincronización automática de arriba no aplica (ej. un dato que el backoffice no trae todavía).</p>
           <button disabled={enviando} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
             {enviando ? "Cargando…" : "Cargar catálogo"}
           </button>
         </form>
-      )}
-
-      {pestana === "oc_ov" && empresaId && (
-        <div className="mt-4 max-w-md space-y-2 rounded border border-dashed border-slate-300 bg-slate-50 p-4">
-          <p className="text-sm font-medium text-slate-700">API del backoffice (en construcción)</p>
-          <p className="text-xs text-slate-500">
-            Todavía no se confirma el formato exacto de la respuesta de la API real. Este botón no guarda nada — solo
-            hace la llamada real y muestra la respuesta cruda, para poder ajustar el mapeo con datos reales.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={enviando}
-              onClick={() => onDiagnosticoBackoffice("oc")}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            >
-              Probar API — OC/OS
-            </button>
-            <button
-              type="button"
-              disabled={enviando}
-              onClick={() => onDiagnosticoBackoffice("ov")}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            >
-              Probar API — OV
-            </button>
-          </div>
-        </div>
       )}
 
       {!empresaId && <p className="text-sm text-slate-500">Selecciona una empresa para continuar.</p>}
@@ -322,25 +328,21 @@ export function Carga() {
         </p>
       )}
 
-      {resultado && !error && resultado.diagnostico && (
-        <div className="mt-4 max-w-2xl space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
-          <p className="text-sm font-medium text-blue-900">
-            Diagnóstico: la API respondió {resultado.statusHttp} {resultado.pareceJson ? `(JSON, ${resultado.cantidadDeRegistros ?? "?"} registro(s))` : "(no parece JSON)"}
+      {resultado && !error && resultado.sincronizado && (
+        <div className="mt-4 max-w-2xl space-y-2 rounded border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-sm font-medium text-emerald-900">
+            Sincronizado: {resultado.oc_guardadas}/{resultado.oc_procesadas} OC/OS y {resultado.ov_guardadas}/{resultado.ov_procesadas} OV guardadas (todas las empresas).
           </p>
-          <p className="text-xs text-blue-800">URL llamada: {resultado.urlLlamada}</p>
-          {resultado.camposDelPrimerRegistro && (
-            <p className="text-xs text-blue-800">Campos detectados: {resultado.camposDelPrimerRegistro.join(", ")}</p>
+          {(resultado.oc_empresas_no_encontradas?.length > 0 || resultado.ov_empresas_no_encontradas?.length > 0) && (
+            <p className="text-xs text-amber-800">
+              ⚠️ Empresas del backoffice sin equivalente en Grupo Loma (revisa el nombre exacto en la tabla "empresas"):{" "}
+              {[...(resultado.oc_empresas_no_encontradas ?? []), ...(resultado.ov_empresas_no_encontradas ?? [])].join(", ")}
+            </p>
           )}
-          <details className="text-xs text-blue-700">
-            <summary className="cursor-pointer">Ver respuesta cruda</summary>
-            <pre className="mt-2 max-w-2xl overflow-x-auto rounded border border-blue-200 bg-white p-3 text-slate-700">
-              {JSON.stringify(resultado, null, 2)}
-            </pre>
-          </details>
         </div>
       )}
 
-      {resultado && !error && !resultado.diagnostico && (
+      {resultado && !error && !resultado.sincronizado && (
         <div className="mt-4 max-w-2xl space-y-2">
           <div className="flex items-center gap-2">
             <span
@@ -350,7 +352,8 @@ export function Carga() {
               title="Listo"
             />
             <span className="text-sm font-medium text-slate-800">
-              Listo{typeof resultado.filasProcesadas === "number" ? ` — ${resultado.filasProcesadas} fila(s) guardadas` : ""}
+              Listo{resultado.cuentaEtiqueta ? ` en ${resultado.cuentaEtiqueta}` : ""}
+              {typeof resultado.filasProcesadas === "number" ? ` — ${resultado.filasProcesadas} fila(s) guardadas` : ""}
               {typeof resultado.filasConError === "number" && resultado.filasConError > 0 ? `, ${resultado.filasConError} pendiente(s)` : ""}
             </span>
           </div>

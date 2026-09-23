@@ -215,121 +215,54 @@ solo la vista de avance tendría que ganar granularidad.
 
 ---
 
-## 11. Organizaciones (multi-tenant) — Acumulado como plataforma maestra, agregado 2026-09-23
+## 11. Organizaciones (multi-tenant), agregado 2026-09-23
 
-**Objetivo:** que Acumulado deje de ser la app de un solo grupo y pase a ser
-el backoffice maestro donde vive cada cliente como una organización propia,
-con el mismo concepto ya probado con Grupo Loma. El primer cliente nuevo es
-**ARSSA**, marca comercial del grupo que se va a operar.
+Acumulado deja de ser la app de un solo grupo: es el backoffice maestro donde
+cada cliente vive como una **organización** propia. Grupo Loma es la
+organización **maestra** (opera la plataforma); ARSSA es el primer cliente.
 
-### 11.1 Modelo
-
-- **`grupos`** es el tenant: nombre, código, marca comercial y la bandera
-  `es_maestro`. Grupo Loma es la organización maestra (opera la plataforma);
-  ARSSA entra como organización cliente.
-- **`empresas`** (razones sociales) cuelga de un grupo. `nombre` y `codigo`
-  dejaron de ser únicos globalmente y pasaron a ser únicos **dentro** del
-  grupo: dos clientes pueden tener una empresa con el mismo código sin
-  pisarse.
-- **`profiles`** cuelga de un grupo. Un usuario recién registrado sigue
-  entrando en rol `pendiente` y ahora además sin organización; el admin le
-  asigna ambas cosas. Si tiene `empresa_id`, esa empresa **tiene** que ser de
-  su mismo grupo (lo fuerza un trigger, no solo la interfaz).
+- **`grupos`** es el tenant: nombre, código, marca comercial, logotipo y la
+  bandera `es_maestro`.
+- **`empresas`** y **`profiles`** cuelgan de un grupo. `nombre`/`codigo` de
+  empresa dejaron de ser únicos globalmente y pasaron a serlo dentro del grupo.
+  Si un profile tiene `empresa_id`, esa empresa tiene que ser de su mismo grupo
+  (lo fuerza un trigger, no solo la interfaz).
 - Las tablas que no cuelgan de una empresa ganaron `grupo_id`:
-  `archivos_cargados` (su `empresa_id` es nullable), `reglas_clasificacion`,
-  `excepciones_proveedor`, `personal`, `tipos_documento_personal` y
-  `audit_log`. Todo lo demás ya cuelga de `empresa_id`, y empresa pertenece a
-  un grupo — con eso alcanza para aislar.
+  `archivos_cargados`, `reglas_clasificacion`, `excepciones_proveedor`,
+  `personal`, `tipos_documento_personal` y `audit_log`.
+- **`modulos` + `grupo_modulos`** es el interruptor por organización: una
+  organización nueva arranca solo con la base (entidades, usuarios,
+  administración) y se le abren módulos conforme los ocupe. Abrirlos es de la
+  organización maestra.
 
-Las reglas de clasificación y las excepciones de proveedor (secciones 4.3 y
-4.4) **dejaron de ser globales**: cada organización tiene las suyas. Las 13
-reglas y 3 excepciones sembradas originalmente quedaron como las de Loma.
+`auth_ve_todas_empresas()` pasó a significar "todas las empresas de MI
+organización" en las policies reescritas por
+`20260923090002_grupos_rls.sql`, vía `empresa_en_alcance()`.
 
-### 11.2 Aislamiento
+### 11.1 Frontera incompleta — pendiente conocido
 
-Es la sección 7.3 llevada un nivel más arriba: antes "un usuario de una
-empresa nunca ve datos de otra, salvo el rol corporativo"; ahora, además, **un
-usuario de una organización nunca ve datos de otra, ni siquiera siendo
-corporativo**. `auth_ve_todas_empresas()` pasó a significar "todas las
-empresas de MI organización".
+**29 policies de los módulos más nuevos siguen usando el patrón viejo**
+(`auth_ve_todas_empresas() or empresa_id = auth_empresa_id()`), que devuelve
+true para *todas* las filas cuando el usuario es corporativo o admin. En esas
+tablas un corporativo de una organización vería datos de otra:
 
-La única excepción es el **admin de la organización maestra**: es el operador
-de la plataforma (da de alta clientes, les abre módulos y da soporte), y es el
-único rol que cruza organizaciones. Un admin de organización cliente es admin
-solo de la suya.
+`proyectos`, `proyecto_planos`, `requisiciones`, `requisicion_lineas`,
+`pu_*` (Precios Unitarios), `remisiones_salida`, `remisiones_produccion`,
+`notas_entrega`, `necesidades_compra`, `necesidades_entrega`,
+`equipos_produccion`, `pagos_programados`, `perfil_fiscal_parametros`.
 
-Las escrituras de los edge functions van con la `service_role` key, que
-bypassa RLS, así que la frontera de organización se pregunta explícitamente
-antes de escribir (`empresaOperableEnModulo` en
-`supabase/functions/_shared/supabase-clients.ts`).
-
-### 11.3 Módulos que se abren conforme se ocupen
-
-La **base** —organización, entidades, usuarios/roles y panel de
-administración— existe para toda organización y no es un módulo. Los módulos
-operativos viven en `modulos` y se abren por organización en `grupo_modulos`:
-
-| Módulo | Qué incluye |
-|---|---|
-| `conciliacion` | Dashboard, Movimientos, Carga, Reportes especiales, Pendientes, reglas y excepciones (secciones 2–5) |
-| `inventario` | Sección 10 |
-| `rh` | Personal, asignaciones, contrataciones y expediente documental |
-
-El interruptor es real en los tres niveles: RLS no responde si el módulo está
-cerrado, los edge functions lo validan, y el frontend no arma ni el menú ni
-las rutas. Abrirlo y cerrarlo es de la organización maestra — un admin de
-organización cliente no se abre módulos solo.
-
-**Estado actual:** Grupo Loma con los tres módulos abiertos (opera igual que
-antes de este cambio); ARSSA con los tres cerrados, solo la base, y sin
-razones sociales dadas de alta todavía — se cargan desde Admin → Entidades
-cuando el cliente las defina.
-
-### 11.4 Pendiente de validar
-
-- Igual que el resto del proyecto, esto se validó contra un Postgres local con
-  las migraciones aplicadas (`supabase/tests/aislamiento_organizaciones.sql`,
-  9 casos), no contra un proyecto Supabase real: falta correr los advisors de
-  seguridad/rendimiento después del despliegue, como se hizo en
-  `20260817090001` y `20260817090002`.
-- Un usuario recién registrado (rol `pendiente`, todavía sin organización) es
-  visible para el admin de cualquier organización hasta que alguno lo asigna a
-  la suya. Es el único camino de alta por autoservicio y un profile sin
-  asignar no expone más que el nombre; si se quiere cerrar, hay que sustituirlo
-  por alta por invitación.
+Hoy **no hay fuga real** porque ARSSA todavía no tiene usuarios ni datos, y
+esos módulos no están abiertos para nadie más que Loma. Pero hay que cerrarlo
+**antes** de que un segundo cliente opere cualquiera de esos módulos. La lista
+viva se obtiene con `supabase/tests/zz_cobertura_frontera.sql`, que corre con
+`./scripts/validar-sql.sh`.
 
 ---
 
-## 12. Módulo de Proyectos, agregado 2026-09-23
+## 12. Suscripción: cobro por usuario, agregado 2026-09-23
 
-Es el módulo con el que entra ARSSA. Tres cosas encadenadas: **proyecto →
-planos → cotizaciones**.
-
-- **Proyectos**: clave (única dentro de la organización), nombre, cliente,
-  responsable, ubicación, fechas y estatus (prospecto, en diseño, en revisión,
-  aprobado, en obra, terminado, cancelado). `empresa_id` es **opcional** a
-  propósito: una organización puede estar trabajando proyectos antes de tener
-  dadas de alta sus razones sociales — que es justo el caso de ARSSA hoy.
-- **Planos**: cada revisión de una lámina es un renglón propio
-  (`unique (proyecto_id, clave, revision)`), con disciplina, escala, estatus y
-  el archivo en un bucket privado. El historial de diseño se agrega, no se
-  reescribe: es el mismo criterio que ya usa el proyecto para el saldo bancario
-  y las existencias.
-- **Cotizaciones**: folio, vigencia, moneda, tasa de IVA y estatus, con
-  partidas (concepto, unidad, cantidad, precio unitario). El importe de la
-  partida y los totales de la cotización se **calculan** (columna generada y
-  vista `v_cotizacion_totales`), nunca se capturan.
-
-Los archivos de planos viven en el bucket privado `proyectos`, bajo
-`<grupo_id>/<proyecto_id>/...`. El primer folder de la ruta es la frontera que
-revisan las policies de Storage; se descargan con URL firmada, no expuestos.
-
----
-
-## 13. Suscripción y cobro, agregado 2026-09-23
-
-Acumulado se cobra **por usuario**, y eso es lo que mantiene encendida la
-captura. La organización maestra no se cobra a sí misma.
+Se cobra **por usuario**, y eso es lo que mantiene encendida la captura. La
+organización maestra no se cobra a sí misma.
 
 | Usuarios | Precio por usuario |
 |---|---|
@@ -338,165 +271,39 @@ captura. La organización maestra no se cobra a sí misma.
 | 10 a 19 | $1,100 |
 | 20 o más | $900 |
 
-El precio del escalón aplica a **todos** los usuarios, no solo a los
-adicionales: con 5 usuarios, los cinco pagan $1,300 ($6,500 al mes, no
-4×$1,500 + 1×$1,300). Es un paquete, no una tarifa marginal como los
-impuestos. En Stripe es una tarifa escalonada con `tiers_mode=volume`: la app
-solo manda la cantidad de usuarios y la pasarela aplica el escalón.
+El precio del escalón aplica a **todos** los usuarios: con 5 son 5×$1,300 =
+$6,500, no 4×$1,500 + 1×$1,300. Es un paquete, no una tarifa marginal. En
+Stripe es una tarifa escalonada con `tiers_mode=volume`; la app solo manda la
+cantidad. Los escalones son datos (`plan_escalones`), no código.
 
-Los escalones son **datos** (`plan_escalones`), no código: cambiar un precio o
-agregar un paquete es un renglón, no una migración de lógica.
+Se cobran los usuarios **activos con rol asignado**: un recién registrado que
+nadie autorizó no cuenta, y desactivar a alguien baja la factura. El conteo
+real vive en `usuarios_facturables_interno()`, revocada de `public` — sin eso,
+cualquier usuario autenticado podría preguntar cuánta gente tiene otra
+organización, o sea cuánto le están cobrando a la competencia.
 
-**Qué usuario se cobra:** los activos con rol asignado. Un usuario recién
-registrado que nadie ha autorizado (`pendiente`) no se cobra — si no,
-cualquiera que se registre solo le subiría la cuenta al cliente — y desactivar
-a alguien baja la factura, que es la única forma que tiene el cliente de dejar
-de pagar por quien ya no trabaja ahí.
+**La tarjeta nunca toca esta base.** Se captura en el dominio de la pasarela;
+de ella solo se guardan marca y últimos 4. Ver `_shared/pagos/` (reglas puras
++ adaptador de Stripe) y los edge functions `suscripcion-checkout`,
+`suscripcion-webhook` y `usuarios-sincronizar`.
 
-El conteo vive en `usuarios_facturables_interno()`, que **no está expuesta**:
-Supabase publica por RPC toda función de `public`, y sin eso cualquier usuario
-autenticado podría preguntar cuánta gente tiene otra organización — es decir,
-cuánto le están cobrando a la competencia. La versión pública responde solo de
-la organización propia.
+Falta de pago: **gracia y luego solo lectura**. 7 días por default; después se
+consulta y exporta, pero no se captura. La administración de la cuenta no se
+bloquea nunca — si no, el cliente no podría actualizar su tarjeta.
 
-### 13.1.1 Alta de usuarios por el cliente
+### 12.1 Pendiente
 
-El admin de la organización da de alta a su gente desde su propio panel
-(Admin → Usuarios → *Invitar usuario*). Se manda una **invitación**, no una
-contraseña: el usuario la define él desde el correo, así ninguna contraseña
-viaja por WhatsApp ni queda escrita en la bitácora de nadie.
-
-Crear usuarios necesita la Admin API de Auth (service_role, que bypassa RLS),
-así que el permiso se valida a mano en `usuarios-alta`: solo admin, solo
-dentro de su organización, y la empresa que asigne tiene que ser de esa misma
-organización (se comprueba con el cliente del usuario, no con el de servicio).
-
-Cada alta o baja mueve la cantidad que se le cobra a la pasarela. El alta la
-sincroniza sola; desactivar o cambiar de rol pasa directo por RLS, así que la
-pantalla pide la sincronización aparte (`usuarios-sincronizar`). La
-sincronización es **tolerante a fallas a propósito**: si la pasarela no
-responde, el alta no se deshace — prefiero una cantidad que se corrige en el
-siguiente movimiento a un administrador que no puede trabajar porque Stripe
-tuvo un mal minuto.
-
-### 13.1 La tarjeta no pasa por aquí
-
-Los datos de la tarjeta (PAN, CVV) **nunca** tocan esta base ni los edge
-functions: se capturan en el formulario de la pasarela. De la tarjeta solo se
-guardan marca y últimos 4 dígitos —lo que la propia pasarela devuelve— para que
-el cliente la reconozca en pantalla. Guardar un PAN nos metería en alcance PCI
-sin ninguna necesidad.
-
-La pasarela implementada es **Stripe**, detrás de un adaptador
-(`_shared/pagos/stripe.ts`). Las reglas de negocio viven aparte
-(`_shared/pagos/suscripcion.ts`) y no mencionan a Stripe: cambiar a Mercado
-Pago o Conekta es escribir otro adaptador, no rehacer el módulo.
-
-Domiciliación: lo que se domicilia es la **tarjeta** (queda registrada y el
-cobro sale solo cada mes). La domiciliación bancaria a CLABE no la ofrece
-ninguna de estas pasarelas — eso se contrata directo con el banco.
-
-### 13.2 Estados y qué permite cada uno
-
-| Estado | Qué significa | Captura |
-|---|---|---|
-| `prueba` | Sin tarjeta todavía, con fecha límite | Sí, hasta la fecha |
-| `activa` | Al corriente | Sí |
-| `periodo_gracia` | Falló el cobro; 7 días por default (configurable por organización) | Sí, hasta `gracia_hasta` |
-| `suspendida` | Se acabó la gracia | No |
-| `cancelada` | Se dio de baja | No |
-
-"No captura" significa **solo lectura**, no bloqueo: se sigue consultando y
-exportando la información propia. Y la **administración de la cuenta nunca se
-bloquea** — si se le bloquea el panel al cliente, no puede actualizar su
-tarjeta para ponerse al corriente.
-
-Dos decisiones que no son obvias:
-
-- **Los reintentos no reinician la gracia.** La pasarela reintenta el mismo
-  cobro varios días y manda un evento por intento; si cada uno reiniciara el
-  contador, quien nunca paga nunca se suspendería. La gracia se cuenta desde el
-  primer fallo.
-- **Una `activa` con el periodo vencido hace rato deja de escribir.** Es la red
-  por si se pierde un webhook: sin eso, una tarjeta cancelada seguiría
-  escribiendo para siempre porque nadie nos avisó.
-
-### 13.3 Idempotencia del webhook
-
-El webhook es un endpoint público: verifica la firma HMAC de la pasarela
-**antes** de leer el cuerpo, con tolerancia de tiempo contra reenvío. Cada
-evento se registra en `eventos_pasarela` y la unicidad de
-`(pasarela, evento_id)` es lo que hace idempotente el procesamiento. Un evento
-repetido que ya se procesó bien se descarta; uno que falló a medias sí se
-vuelve a procesar, que es justo para lo que la pasarela reintenta.
-
-### 13.4 Pendiente de validar
-
-- **Nunca se ha ejecutado un cobro real.** La lógica está probada
-  (`_shared/pagos/*.test.ts`: reglas de gracia, verificación de firma,
-  traducción de eventos) pero la conexión con Stripe necesita llaves de API y
-  una URL de webhook pública, que no existen en el entorno de desarrollo.
-- Falta dar de alta en Stripe el producto con una **tarifa escalonada por
-  volumen** (`billing_scheme=tiered`, `tiers_mode=volume`) con los cuatro
-  escalones de la tabla de arriba, y poner su id en `STRIPE_PRECIO_ID`. Los
-  escalones de Stripe y los de `plan_escalones` tienen que decir lo mismo: la
-  base calcula lo que se le **muestra** al cliente y Stripe calcula lo que se
-  le **cobra**.
-- El estado guardado puede quedarse atrás del efectivo (una gracia vencida
-  sigue diciendo `periodo_gracia` hasta que llegue otro evento). No afecta el
-  bloqueo —`suscripcion_permite_escribir()` calcula el efectivo— pero conviene
-  un barrido programado que normalice la etiqueta.
+Nunca se ha ejecutado un cobro real: falta dar de alta en Stripe el producto
+con la tarifa escalonada y configurar `STRIPE_SECRET_KEY`, `STRIPE_PRECIO_ID`
+y `STRIPE_WEBHOOK_SECRET`.
 
 ---
 
-## 14. Marca por organización, agregado 2026-09-23
+## 13. Marca por organización, agregado 2026-09-23
 
-Cada cliente entra a "su" aplicación: su logotipo en el encabezado, y su marca
-comercial donde no hay logotipo. El archivo vive en el bucket **público**
-`branding` bajo `<grupo_id>/logo.<ext>` — un logotipo no es información
-reservada, y así se sirve por URL directa sin firmar nada en cada carga. Lo que
-sí está acotado es quién lo sube: solo un admin, y solo en la carpeta de su
-propia organización.
-
-La pantalla de login es neutra a propósito: antes de entrar no se sabe a qué
-organización pertenece el usuario.
-
-Hay dos caminos para cargarlo, y los dos hacen lo mismo: el admin de una
-organización sube el suyo en **Admin → Marca**, y el admin de la organización
-maestra sube el de cualquier cliente desde **Admin → Organizaciones**. El
-segundo es el que permite dar de alta a un cliente llave en mano sin tener que
-entrar con un usuario suyo.
-
-El logotipo vive **solo en el bucket**, no en el repositorio: es material del
-cliente y el repositorio es público. Un logotipo entregado en blanco sobre
-negro no sirve tal cual — el encabezado es claro y se vería como un recuadro
-negro; hay que subirlo con fondo transparente y trazo oscuro.
-
-
----
-
-## 15. La aplicación en el teléfono, agregado 2026-09-23
-
-No hay tienda de aplicaciones de por medio: se instala desde el navegador
-("Agregar a pantalla de inicio"), y lo que queda en el teléfono es la
-aplicación **de la organización** — su nombre y su logotipo.
-
-El manifiesto estático (`web/public/manifest.webmanifest`) es neutro a
-propósito: antes de iniciar sesión no hay forma de saber de quién es la
-aplicación. En cuanto se sabe, `src/lib/instalable.ts` lo reemplaza en
-caliente por uno generado con los datos de la organización, y cambia también
-el `apple-touch-icon` (iOS no lee el manifiesto para "Agregar a pantalla de
-inicio").
-
-El service worker (`web/public/sw.js`) existe por una sola razón: el navegador
-no ofrece instalar una aplicación que no tenga uno con manejador de `fetch`.
-**No cachea nada**, y es deliberado — un caché mal invalidado en una
-aplicación que maneja dinero es peor que no tener caché: el usuario ve saldos
-viejos sin saberlo, o se queda con la versión anterior tras un despliegue.
-
-### 15.1 Limitación conocida
-
-Quien instale **antes** de iniciar sesión se queda con el ícono de la
-plataforma hasta que vuelva a instalar. Para que cada cliente tenga su ícono
-desde la primera visita haría falta un subdominio por organización
-(`arssa.<dominio>`), que implica DNS y dominios — no está hecho.
+Cada cliente ve su logotipo en el encabezado. El archivo vive en el bucket
+público `branding` bajo `<grupo_id>/logo.<ext>` — el primer folder de la ruta
+es la frontera que revisan las policies de Storage. Lo sube el admin de la
+organización (Admin → Marca) o el de la maestra para cualquier cliente
+(Admin → Organizaciones). El logotipo **no** se versiona en el repositorio: es
+material del cliente y el repositorio es público.

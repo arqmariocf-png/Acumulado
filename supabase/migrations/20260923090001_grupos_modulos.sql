@@ -234,6 +234,27 @@ as $$
       )
 $$;
 
+-- Extrae la organización del primer folder de una ruta de Storage. Devolver
+-- NULL en vez de castear directo es lo seguro: una policy sobre
+-- storage.objects se evalúa contra objetos de TODOS los buckets, y Postgres no
+-- garantiza evaluar antes la condición de bucket_id -- un cast a uuid
+-- reventaría la consulta con cualquier objeto cuya ruta no empiece por uno.
+create or replace function public.grupo_de_ruta(p_nombre text)
+returns uuid
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  primer_folder text := split_part(coalesce(p_nombre, ''), '/', 1);
+begin
+  if primer_folder ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
+    return primer_folder::uuid;
+  end if;
+  return null;
+end;
+$$;
+
 -- ── grupo_id en las tablas que no cuelgan de una empresa ────────────────
 -- archivos_cargados.empresa_id es nullable (una carga que falló antes de
 -- resolver la empresa), así que necesita su propio grupo_id para no quedar

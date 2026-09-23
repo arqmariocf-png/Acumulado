@@ -75,6 +75,14 @@ test("4.3 — DEVOLUCION ERROR se distingue de DEVOLUCION genérica por priorida
   assert.equal(r2.factura, "N/A - DEVOLUCION");
 });
 
+test("4.3 — TRASPASO también se detecta en nombreRazonSocial (así llega desde los parsers de PDF, que nunca llenan comentarios)", () => {
+  const contexto = { ...contextoVacio(), reglas: reglasBase() };
+  const mov = movBase({ nombreRazonSocial: "TRASPASO CUENTAS PROPIAS", cargoTotal: 20000 });
+  const r = clasificarMovimiento(mov, contexto);
+  assert.equal(r.factura, "N/A - TRASPASO ENTRE CUENTAS PROPIAS");
+  assert.equal(r.estadoClasificacion, "resuelto");
+});
+
 test("4.1 — cruce de OC completa Proyecto y Nombre cuando el movimiento no los trae", () => {
   const contexto: ContextoConciliacion = {
     ...contextoVacio(),

@@ -6,7 +6,8 @@ que se abren conforme los ocupa. Grupo Loma es la organización **maestra**
 (opera la plataforma); ARSSA es el primer cliente y paga suscripción por
 usuario, con escalones por volumen.
 
-El detalle funcional está en `SPEC.md` (sección 11: organizaciones y módulos).
+El detalle funcional está en `SPEC.md` (secciones 11 a 13: organizaciones,
+suscripción y marca).
 `README.md` explica cómo desplegar. Este archivo es lo que hay que saber
 **antes de tocar código**.
 
@@ -17,7 +18,9 @@ Todo cambio tiene que respetarlas, y las tres tienen que estar de acuerdo:
 1. **Organización.** Ningún usuario ve datos de otra organización, ni siquiera
    siendo corporativo. La excepción es el admin de la organización maestra.
 2. **Módulo.** Si la organización no tiene el módulo abierto, sus tablas no
-   responden.
+   responden. Cubre conciliación, inventario y RH; los módulos más nuevos
+   (producción, requisiciones, precios unitarios, remisiones) todavía **no**
+   están acotados — ver SPEC.md 11.1.
 3. **Suscripción.** Sin pago al corriente se consulta y se exporta, pero no se
    captura ("gracia y luego solo lectura").
 
@@ -68,6 +71,15 @@ Se imponen en tres capas, y **la de la base es la que manda**:
 - **Tipos del frontend** a mano en `web/src/types/database.ts`, sincronizados
   con las migraciones.
 
+## Antes de construir, busca si ya existe
+
+Este repositorio lo tocan varias sesiones a la vez. Ya pasó una vez: se
+construyeron dos módulos de Inventario, dos de Proyectos y dos PWA en paralelo,
+y el esquema combinado ni siquiera aplicaba. **Antes de agregar un módulo,
+revisa `supabase/migrations/` y `web/src/pages/` a ver si ya está.** Y trabaja
+en cambios chicos partiendo de `main`, mezclando pronto: el problema no fue el
+código, fue una rama que vivió semanas aparte.
+
 ## Validar antes de dar algo por hecho
 
 ```bash
@@ -78,9 +90,17 @@ cd web && npm run lint
 ```
 
 `./scripts/validar-sql.sh` es el que importa para cualquier cambio de esquema o
-de policies: aplica todas las migraciones desde cero y corre `supabase/tests/`.
-**Toda frontera nueva necesita una prueba ahí** que demuestre que bloquea, no
-solo que permite.
+de policies: aplica todas las migraciones **desde cero** y corre
+`supabase/tests/`. **Toda frontera nueva necesita una prueba ahí** que
+demuestre que bloquea, no solo que permite. Los archivos `zz_*` son
+diagnósticos: imprimen estado, no afirman nada.
+
+Que aplique desde cero no es un detalle: es lo que permite restaurar la base el
+día que haga falta y probar RLS sin tocar producción. Si una migración depende
+de algo que alguien creó a mano en el proyecto de Supabase, el repositorio ya
+no sabe reconstruir el sistema. Pasó con Precios Unitarios (6 tablas y 5
+funciones que ninguna migración creaba) y se reparó en
+`20260909125957/125958`.
 
 Lo que **no** se puede validar en este entorno, y hay que decirlo al reportar:
 no hay Deno (los edge functions solo se revisan sintácticamente), no hay
