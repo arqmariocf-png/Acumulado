@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { DespieceBalken } from "./produccion/DespieceBalken";
 import { RemisionProduccionModal } from "./produccion/RemisionProduccionModal";
+import { CalendarioMaquinas } from "./produccion/CalendarioMaquinas";
 import type {
   CosteoMensualPlanta,
   CosteoOrdenProduccion,
@@ -78,13 +79,14 @@ interface Empresa {
   nombre: string;
 }
 
-type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo" | "despiece";
+type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo" | "despiece" | "calendario";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "catalogo", etiqueta: "Catálogo" },
   { valor: "inventario", etiqueta: "Inventario" },
   { valor: "ordenes", etiqueta: "Órdenes de producción" },
   { valor: "costeo", etiqueta: "Costeo" },
+  { valor: "calendario", etiqueta: "Calendario de máquinas" },
 ];
 
 // Solo Balken: despiece de losa de vigueta y bovedilla para cotizar rápido
@@ -161,6 +163,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       {pestana === "ordenes" && <PestanaOrdenes empresa={empresa} />}
       {pestana === "costeo" && <PestanaCosteo empresa={empresa} />}
       {pestana === "despiece" && planta.codigo === "VBB" && <DespieceBalken empresaNombre={empresa.nombre} />}
+      {pestana === "calendario" && <CalendarioMaquinas empresaId={empresa.id} />}
     </div>
   );
 }
