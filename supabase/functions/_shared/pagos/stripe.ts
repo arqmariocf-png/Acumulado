@@ -190,6 +190,38 @@ async function llamar(ruta: string, llave: string, datos: Record<string, string 
   return cuerpo;
 }
 
+async function consultar(ruta: string, llave: string) {
+  const respuesta = await fetch(`${API}${ruta}`, { headers: { Authorization: `Bearer ${llave}` } });
+  const cuerpo = await respuesta.json();
+  if (!respuesta.ok) throw new Error(cuerpo?.error?.message ?? `Stripe respondió ${respuesta.status}`);
+  return cuerpo;
+}
+
+/** Pone la cantidad de usuarios en la suscripción. Con una tarifa escalonada
+ * por volumen (tiers_mode=volume), Stripe se encarga de aplicar el precio del
+ * escalón a todos los usuarios -- nosotros solo mandamos cuántos son, y el
+ * cálculo de este lado (`precios.ts`) es para mostrarlo en pantalla, no para
+ * decidir el cobro.
+ *
+ * `proration_behavior: none` a propósito: dar de alta a alguien a media
+ * quincena no genera un cargo prorrateado suelto; la cantidad nueva entra
+ * completa en el siguiente recibo mensual. Es más fácil de explicar y evita
+ * cargos chiquitos cada vez que el cliente mueve a su gente. */
+export async function actualizarCantidadUsuarios(
+  llave: string,
+  suscripcionId: string,
+  cantidad: number,
+): Promise<void> {
+  const suscripcion = await consultar(`/subscriptions/${suscripcionId}`, llave);
+  const renglon = suscripcion?.items?.data?.[0];
+  if (!renglon?.id) throw new Error("La suscripción de la pasarela no tiene renglones");
+
+  await llamar(`/subscription_items/${renglon.id}`, llave, {
+    quantity: Math.max(cantidad, 0),
+    proration_behavior: "none",
+  });
+}
+
 export async function crearCliente(llave: string, nombre: string, grupoId: string): Promise<string> {
   const cliente = await llamar("/customers", llave, { name: nombre, "metadata[grupo_id]": grupoId });
   return String(cliente.id);

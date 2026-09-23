@@ -328,9 +328,56 @@ revisan las policies de Storage; se descargan con URL firmada, no expuestos.
 
 ## 13. Suscripción y cobro, agregado 2026-09-23
 
-Acumulado se cobra **por organización**: una mensualidad por cliente, y eso es
-lo que mantiene encendida la captura. La organización maestra no se cobra a sí
-misma. El plan `estandar` está sembrado en **$1,500.00 MXN al mes**.
+Acumulado se cobra **por usuario**, y eso es lo que mantiene encendida la
+captura. La organización maestra no se cobra a sí misma.
+
+| Usuarios | Precio por usuario |
+|---|---|
+| 1 a 4 | $1,500 |
+| 5 a 9 | $1,300 |
+| 10 a 19 | $1,100 |
+| 20 o más | $900 |
+
+El precio del escalón aplica a **todos** los usuarios, no solo a los
+adicionales: con 5 usuarios, los cinco pagan $1,300 ($6,500 al mes, no
+4×$1,500 + 1×$1,300). Es un paquete, no una tarifa marginal como los
+impuestos. En Stripe es una tarifa escalonada con `tiers_mode=volume`: la app
+solo manda la cantidad de usuarios y la pasarela aplica el escalón.
+
+Los escalones son **datos** (`plan_escalones`), no código: cambiar un precio o
+agregar un paquete es un renglón, no una migración de lógica.
+
+**Qué usuario se cobra:** los activos con rol asignado. Un usuario recién
+registrado que nadie ha autorizado (`pendiente`) no se cobra — si no,
+cualquiera que se registre solo le subiría la cuenta al cliente — y desactivar
+a alguien baja la factura, que es la única forma que tiene el cliente de dejar
+de pagar por quien ya no trabaja ahí.
+
+El conteo vive en `usuarios_facturables_interno()`, que **no está expuesta**:
+Supabase publica por RPC toda función de `public`, y sin eso cualquier usuario
+autenticado podría preguntar cuánta gente tiene otra organización — es decir,
+cuánto le están cobrando a la competencia. La versión pública responde solo de
+la organización propia.
+
+### 13.1.1 Alta de usuarios por el cliente
+
+El admin de la organización da de alta a su gente desde su propio panel
+(Admin → Usuarios → *Invitar usuario*). Se manda una **invitación**, no una
+contraseña: el usuario la define él desde el correo, así ninguna contraseña
+viaja por WhatsApp ni queda escrita en la bitácora de nadie.
+
+Crear usuarios necesita la Admin API de Auth (service_role, que bypassa RLS),
+así que el permiso se valida a mano en `usuarios-alta`: solo admin, solo
+dentro de su organización, y la empresa que asigne tiene que ser de esa misma
+organización (se comprueba con el cliente del usuario, no con el de servicio).
+
+Cada alta o baja mueve la cantidad que se le cobra a la pasarela. El alta la
+sincroniza sola; desactivar o cambiar de rol pasa directo por RLS, así que la
+pantalla pide la sincronización aparte (`usuarios-sincronizar`). La
+sincronización es **tolerante a fallas a propósito**: si la pasarela no
+responde, el alta no se deshace — prefiero una cantidad que se corrige en el
+siguiente movimiento a un administrador que no puede trabajar porque Stripe
+tuvo un mal minuto.
 
 ### 13.1 La tarjeta no pasa por aquí
 
@@ -389,8 +436,12 @@ vuelve a procesar, que es justo para lo que la pasarela reintenta.
   (`_shared/pagos/*.test.ts`: reglas de gracia, verificación de firma,
   traducción de eventos) pero la conexión con Stripe necesita llaves de API y
   una URL de webhook pública, que no existen en el entorno de desarrollo.
-- Falta dar de alta en Stripe el producto y el precio recurrente de $1,500 MXN
-  y poner su id en `STRIPE_PRECIO_ID`.
+- Falta dar de alta en Stripe el producto con una **tarifa escalonada por
+  volumen** (`billing_scheme=tiered`, `tiers_mode=volume`) con los cuatro
+  escalones de la tabla de arriba, y poner su id en `STRIPE_PRECIO_ID`. Los
+  escalones de Stripe y los de `plan_escalones` tienen que decir lo mismo: la
+  base calcula lo que se le **muestra** al cliente y Stripe calcula lo que se
+  le **cobra**.
 - El estado guardado puede quedarse atrás del efectivo (una gracia vencida
   sigue diciendo `periodo_gracia` hasta que llegue otro evento). No afecta el
   bloqueo —`suscripcion_permite_escribir()` calcula el efectivo— pero conviene
@@ -416,7 +467,36 @@ maestra sube el de cualquier cliente desde **Admin → Organizaciones**. El
 segundo es el que permite dar de alta a un cliente llave en mano sin tener que
 entrar con un usuario suyo.
 
-Los archivos de origen viven en `marca/` (ver `marca/README.md`). Un logotipo
-entregado en blanco sobre negro no sirve tal cual: el encabezado es claro y se
-vería como un recuadro negro — hay que dejarlo con fondo transparente y trazo
-oscuro.
+El logotipo vive **solo en el bucket**, no en el repositorio: es material del
+cliente y el repositorio es público. Un logotipo entregado en blanco sobre
+negro no sirve tal cual — el encabezado es claro y se vería como un recuadro
+negro; hay que subirlo con fondo transparente y trazo oscuro.
+
+
+---
+
+## 15. La aplicación en el teléfono, agregado 2026-09-23
+
+No hay tienda de aplicaciones de por medio: se instala desde el navegador
+("Agregar a pantalla de inicio"), y lo que queda en el teléfono es la
+aplicación **de la organización** — su nombre y su logotipo.
+
+El manifiesto estático (`web/public/manifest.webmanifest`) es neutro a
+propósito: antes de iniciar sesión no hay forma de saber de quién es la
+aplicación. En cuanto se sabe, `src/lib/instalable.ts` lo reemplaza en
+caliente por uno generado con los datos de la organización, y cambia también
+el `apple-touch-icon` (iOS no lee el manifiesto para "Agregar a pantalla de
+inicio").
+
+El service worker (`web/public/sw.js`) existe por una sola razón: el navegador
+no ofrece instalar una aplicación que no tenga uno con manejador de `fetch`.
+**No cachea nada**, y es deliberado — un caché mal invalidado en una
+aplicación que maneja dinero es peor que no tener caché: el usuario ve saldos
+viejos sin saberlo, o se queda con la versión anterior tras un despliegue.
+
+### 15.1 Limitación conocida
+
+Quien instale **antes** de iniciar sesión se queda con el ícono de la
+plataforma hasta que vuelva a instalar. Para que cada cliente tenga su ícono
+desde la primera visita haría falta un subdominio por organización
+(`arssa.<dominio>`), que implica DNS y dominios — no está hecho.

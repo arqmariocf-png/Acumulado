@@ -29,12 +29,21 @@ export interface Grupo {
 
 export type EstadoSuscripcion = "prueba" | "activa" | "periodo_gracia" | "suspendida" | "cancelada";
 
+export interface PlanEscalon {
+  plan_clave: string;
+  desde_usuarios: number;
+  precio_unitario_centavos: number;
+}
+
 export interface Suscripcion {
   grupo_id: string;
   plan_clave: string;
   plan_nombre: string;
-  precio_mensual_centavos: number;
   moneda: string;
+  /** Usuarios activos con rol asignado: los que se cobran. */
+  usuarios_facturables: number;
+  precio_unitario_centavos: number;
+  total_mensual_centavos: number;
   estado: EstadoSuscripcion;
   periodo_fin: string | null;
   gracia_hasta: string | null;

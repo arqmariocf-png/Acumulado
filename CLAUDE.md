@@ -3,7 +3,8 @@
 Backoffice maestro multi-organización. Cada cliente es una **organización**
 (tabla `grupos`) con sus entidades, usuarios y datos aislados, y con módulos
 que se abren conforme los ocupa. Grupo Loma es la organización **maestra**
-(opera la plataforma); ARSSA es el primer cliente y paga suscripción.
+(opera la plataforma); ARSSA es el primer cliente y paga suscripción por
+usuario, con escalones por volumen.
 
 El detalle funcional está en `SPEC.md` (sección 11: organizaciones y módulos).
 `README.md` explica cómo desplegar. Este archivo es lo que hay que saber
@@ -37,7 +38,12 @@ Se imponen en tres capas, y **la de la base es la que manda**:
 - **Nunca** debilitar el aislamiento entre organizaciones "para que sea más
   fácil". Si algo no se ve, es que falta `grupo_id`, no que sobre una policy.
 - Los **totales se calculan**, no se capturan: saldo bancario, existencias,
-  importes de cotización. Un total guardado a mano se desincroniza.
+  importes de cotización, mensualidad de la suscripción. Un total guardado a
+  mano se desincroniza.
+- **Nada que cuente dinero o usuarios de otra organización se expone por RPC.**
+  Supabase publica toda función de `public`: si una función responde datos de
+  un grupo arbitrario, o se acota por dentro o se revoca de `public` y se le
+  da `execute` solo a `service_role`.
 - Los **roles y permisos son datos**, no código: se asignan desde el panel de
   admin. Nunca hardcodear un usuario, un rol ni una empresa.
 - Una policy `for all` que sea la **única** de su tabla impide el "solo

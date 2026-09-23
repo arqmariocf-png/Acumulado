@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { urlPublicaDelLogo } from "./marca";
+import { aplicarMarcaInstalable } from "./instalable";
 import type { Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
 
 interface AuthState {
@@ -133,6 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // sirve para no ofrecer botones que la base va a rechazar.
   const suscripcionPermiteEscribir = esAdminGlobal || (suscripcion?.puede_escribir ?? false);
   const logoUrl = urlPublicaDelLogo(grupo?.logo_path);
+
+  // Lo que quede instalado en el teléfono tiene que ser la aplicación de la
+  // organización, no la de la plataforma: en cuanto se sabe quién entró, se
+  // reemplaza el manifiesto y el ícono.
+  useEffect(() => {
+    if (grupo) aplicarMarcaInstalable({ nombre: grupo.marca_comercial ?? grupo.nombre, logoUrl });
+  }, [grupo, logoUrl]);
 
   function puedeEscribirEnEmpresa(empresaId: string): boolean {
     if (!suscripcionPermiteEscribir) return false;

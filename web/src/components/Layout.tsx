@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { AvisoSuscripcion } from "./AvisoSuscripcion";
+import { useInstalable } from "../lib/useInstalable";
 import type { ModuloClave } from "../types/database";
 
 // Cada enlace declara de qué módulo depende; el menú se arma con los módulos
@@ -23,6 +24,7 @@ const CLASE_ENLACE = ({ isActive }: { isActive: boolean }) =>
 
 export function Layout() {
   const { perfil, grupo, logoUrl, tieneModulo, cerrarSesion } = useAuth();
+  const { sePuedeInstalar, instalar } = useInstalable();
   const esAdmin = perfil?.rol === "admin";
   const veRH = (perfil?.rol === "rh" || esAdmin) && tieneModulo("rh");
   const marca = grupo?.marca_comercial ?? grupo?.nombre;
@@ -60,6 +62,15 @@ export function Layout() {
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
+            {sePuedeInstalar && (
+              <button
+                onClick={instalar}
+                className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100"
+                title="Deja la aplicación en la pantalla de inicio de tu teléfono"
+              >
+                Instalar app
+              </button>
+            )}
             <span>
               {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol}</span>
             </span>

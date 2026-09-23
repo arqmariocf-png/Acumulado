@@ -4,7 +4,8 @@ Backoffice maestro donde cada cliente vive como una **organización** propia,
 con sus entidades, usuarios y datos aislados, y con los módulos que se le van
 abriendo conforme los ocupe. Hoy operan dos: **Grupo Loma** (organización
 maestra, con conciliación bancaria, inventario y RH abiertos) y **ARSSA**
-(organización cliente, con el módulo de Proyectos y suscripción de pago).
+(organización cliente, con el módulo de Proyectos y suscripción de pago por
+usuario).
 
 El detalle funcional completo está en [`SPEC.md`](./SPEC.md) — la sección 11
 describe el modelo de organizaciones y el interruptor de módulos; este archivo
@@ -21,6 +22,8 @@ supabase/functions/    Edge functions (Deno) + módulos puros compartidos
   motor-conciliacion/     Corre el motor sobre un lote de movimientos
   suscripcion-checkout/   Manda al admin a capturar/cambiar tarjeta en la pasarela
   suscripcion-webhook/    Recibe los avisos de cobro y mueve el estado de la suscripción
+  usuarios-alta/          El admin de una organización invita a su gente
+  usuarios-sincronizar/   Reporta a la pasarela cuántos usuarios se están cobrando
   ingesta-estado-cuenta/  Sube y parsea un estado de cuenta
   ingesta-cfdi/           Sube y parsea CFDI Recibidos/Emitidos
   ingesta-oc-ov/          Carga manual de Excel para OC/OV (respaldo)
@@ -73,7 +76,7 @@ Secrets que los edge functions necesitan (`npx supabase secrets set NOMBRE=valor
 | `BACKOFFICE_API_BASE_URL` | `proxy-backoffice` | URL base de la API del backoffice (`reports.grupoloma.mx` o la que corresponda) |
 | `BACKOFFICE_API_TOKEN` | `proxy-backoffice` | Token una vez que se corrija la falta de autenticación de la API (sección 7.1 del spec) |
 | `STRIPE_SECRET_KEY` | `suscripcion-checkout` | Llave secreta de Stripe (`sk_...`) |
-| `STRIPE_PRECIO_ID` | `suscripcion-checkout` | Id del precio recurrente de $1,500 MXN dado de alta en Stripe (`price_...`) |
+| `STRIPE_PRECIO_ID` | `suscripcion-checkout` | Id del precio recurrente en Stripe (`price_...`), con tarifa **escalonada por volumen** (ver SPEC.md sección 13) |
 | `STRIPE_WEBHOOK_SECRET` | `suscripcion-webhook` | Secreto de firma del webhook (`whsec_...`), que da Stripe al registrar la URL de la función |
 
 Para que el cobro corra hay que, además, dar de alta en Stripe el producto con

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
-import type { EstadoSuscripcion, Pago } from "../../types/database";
+import type { EstadoSuscripcion, Pago, PlanEscalon } from "../../types/database";
 
 const dinero = (centavos: number, moneda: string) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: moneda }).format(centavos / 100);
@@ -41,6 +41,20 @@ export function Suscripcion() {
       void recargarOrganizacion();
     }
   }, [recargarOrganizacion]);
+
+  const { data: escalones } = useQuery({
+    queryKey: ["plan-escalones", suscripcion?.plan_clave],
+    enabled: !!suscripcion,
+    queryFn: async () => {
+      const { data, error: err } = await supabase
+        .from("plan_escalones")
+        .select("*")
+        .eq("plan_clave", suscripcion!.plan_clave)
+        .order("desde_usuarios");
+      if (err) throw err;
+      return data as PlanEscalon[];
+    },
+  });
 
   const { data: pagos } = useQuery({
     queryKey: ["pagos", grupo?.id],
@@ -86,8 +100,13 @@ export function Suscripcion() {
               </span>
             </div>
             <p className="mt-1 text-2xl font-semibold text-slate-900">
-              {dinero(suscripcion.precio_mensual_centavos, suscripcion.moneda)}
+              {dinero(suscripcion.total_mensual_centavos, suscripcion.moneda)}
               <span className="ml-1 text-sm font-normal text-slate-500">al mes</span>
+            </p>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {suscripcion.usuarios_facturables}{" "}
+              {suscripcion.usuarios_facturables === 1 ? "usuario" : "usuarios"} ×{" "}
+              {dinero(suscripcion.precio_unitario_centavos, suscripcion.moneda)} c/u
             </p>
             <p className="mt-2 max-w-xl text-sm text-slate-600">{DESCRIPCION_ESTADO[suscripcion.estado]}</p>
           </div>
@@ -124,9 +143,7 @@ export function Suscripcion() {
           </div>
           <div>
             <dt className="text-xs uppercase text-slate-500">Captura</dt>
-            <dd className="mt-1 text-slate-900">
-              {suscripcion.puede_escribir ? "Habilitada" : "Solo lectura"}
-            </dd>
+            <dd className="mt-1 text-slate-900">{suscripcion.puede_escribir ? "Habilitada" : "Solo lectura"}</dd>
           </div>
         </dl>
 
@@ -134,6 +151,39 @@ export function Suscripcion() {
           Los datos de la tarjeta se capturan y se guardan en la pasarela de pago, nunca en Acumulado. Aquí solo se conservan la
           marca y los últimos cuatro dígitos para que puedas reconocerla.
         </p>
+      </section>
+
+      <section className="rounded border border-slate-200 bg-white p-4">
+        <h2 className="mb-1 font-medium text-slate-900">Paquetes</h2>
+        <p className="mb-3 text-sm text-slate-500">
+          El precio del paquete aplica a todos los usuarios, no solo a los adicionales: al llegar a 5, los cinco bajan de precio.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full max-w-lg text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Usuarios</th>
+                <th className="px-3 py-2 text-right">Precio por usuario</th>
+              </tr>
+            </thead>
+            <tbody>
+              {escalones?.map((e, i) => {
+                const siguiente = escalones[i + 1];
+                const rango = siguiente ? `${e.desde_usuarios} a ${siguiente.desde_usuarios - 1}` : `${e.desde_usuarios} o más`;
+                const vigente = suscripcion.precio_unitario_centavos === e.precio_unitario_centavos;
+                return (
+                  <tr key={e.desde_usuarios} className={`border-t border-slate-100 ${vigente ? "bg-emerald-50/60" : ""}`}>
+                    <td className="px-3 py-2">
+                      {rango}
+                      {vigente && <span className="ml-2 text-xs text-emerald-700">tu paquete</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right">{dinero(e.precio_unitario_centavos, suscripcion.moneda)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="rounded border border-slate-200 bg-white p-4">
