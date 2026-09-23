@@ -839,6 +839,10 @@ export interface OrdenProduccion {
   notas: string | null;
   /** Proyecto (catálogo de proyectos de la empresa) al que se destina el lote. */
   proyecto_id: string | null;
+  /** Tiempo planeado de entrega en días hábiles (lunes a sábado). */
+  dias_planeados: number | null;
+  /** fecha_inicio + dias_planeados, calculada en la base. */
+  fecha_estimada_embarque: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

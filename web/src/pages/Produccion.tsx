@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../lib/auth";
 import { DespieceBalken } from "./produccion/DespieceBalken";
 import { RemisionProduccionModal } from "./produccion/RemisionProduccionModal";
 import type {
@@ -947,6 +948,19 @@ function SalidaProductoTerminado({ empresaId, proyecto, productos }: { empresaId
 
 type OrdenConProducto = OrdenProduccion & { productos_produccion: { nombre: string }; proyectos: { nombre: string } | null };
 
+/** Personal de RH con costo por hora (sueldo semanal ÷ horas de su
+ * jornada) y horas por día, para la mano de obra del lote. */
+function usePersonalProduccion() {
+  return useQuery({
+    queryKey: ["personal-produccion"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_personal_produccion").select("*").order("nombre");
+      if (error) throw error;
+      return data as { id: string; nombre: string; puesto: string | null; horas_dia: number; costo_hora: number | null; sueldo_semanal: number | null }[];
+    },
+  });
+}
+
 /** Proyectos activos de la empresa de la planta (catálogo compartido con
  * requisiciones y precios). Producción puede dar de alta uno nuevo desde
  * el formulario del lote. */
@@ -1023,6 +1037,7 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
       fecha_inicio: fd.get("fecha_inicio"),
       cantidad_planeada: fd.get("cantidad_planeada"),
       notas: oVacio(fd, "notas"),
+      dias_planeados: oVacio(fd, "dias_planeados"),
       proyecto_id: proyectoId || null,
       nuevo_proyecto: oVacio(fd, "nuevo_proyecto"),
       nuevo_cliente: oVacio(fd, "nuevo_cliente"),
@@ -1070,6 +1085,10 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
               <input type="number" step="0.0001" min="0.0001" name="cantidad_planeada" required className={campoTexto} />
             </div>
             <div>
+              <label className={etiquetaCampo}>Tiempo planeado de entrega (días hábiles)</label>
+              <input type="number" step="0.5" min="0.5" name="dias_planeados" className={campoTexto} placeholder="Ej. 5 → fecha estimada de embarque" />
+            </div>
+            <div>
               <label className={etiquetaCampo}>Proyecto (a quién va el producto)</label>
               <select value={proyectoId} onChange={(e) => setProyectoId(e.target.value)} className={campoTexto}>
                 <option value="">Sin proyecto</option>
@@ -1114,6 +1133,7 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
               <th className="px-3 py-2">Producto</th>
               <th className="px-3 py-2">Proyecto</th>
               <th className="px-3 py-2">Inicio</th>
+              <th className="px-3 py-2">Embarque est.</th>
               <th className="px-3 py-2">Estado</th>
               <th className="px-3 py-2 text-right">Planeada</th>
               <th className="px-3 py-2 text-right">Producida</th>
@@ -1127,6 +1147,7 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
                 <td className="px-3 py-2">{o.productos_produccion?.nombre}</td>
                 <td className="px-3 py-2 text-slate-600">{o.proyectos?.nombre ?? "—"}</td>
                 <td className="px-3 py-2">{o.fecha_inicio}</td>
+                <td className={`px-3 py-2 ${o.fecha_estimada_embarque && o.estado !== "terminada" && o.estado !== "cancelada" && o.fecha_estimada_embarque < hoyIso() ? "text-red-700" : "text-slate-600"}`}>{o.fecha_estimada_embarque ?? "—"}</td>
                 <td className="px-3 py-2">
                   <span
                     className={`rounded px-2 py-0.5 text-xs ${
@@ -1151,7 +1172,7 @@ function PestanaOrdenes({ empresa }: { empresa: Empresa }) {
             ))}
             {ordenes?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
                   Sin lotes de producción todavía.
                 </td>
               </tr>
@@ -1178,9 +1199,40 @@ function useCosteoOrden(ordenId: string) {
 
 function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: OrdenConProducto; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const { perfil } = useAuth();
+  const esAdmin = perfil?.rol === "admin";
   const { data: materias } = useMateriasPrimas(empresa.id);
+  const { data: productosCatalogo } = useProductos(empresa.id);
+  const { data: proyectosEmpresa } = useProyectosPlanta(empresa.id);
+  const { data: personalRh } = usePersonalProduccion();
   const { data: costeo } = useCosteoOrden(orden.id);
   const [error, setError] = useState<string | null>(null);
+  const [editando, setEditando] = useState(false);
+
+  // Solo admin (Mario) edita los datos del lote; la base lo refuerza con
+  // un trigger. La planta solo cierra el lote.
+  const editarLote = useMutation({
+    mutationFn: async (fd: FormData) => {
+      const { error } = await supabase
+        .from("ordenes_produccion")
+        .update({
+          folio: fd.get("folio"),
+          producto_id: fd.get("producto_id"),
+          fecha_inicio: fd.get("fecha_inicio"),
+          cantidad_planeada: fd.get("cantidad_planeada"),
+          dias_planeados: oVacio(fd, "dias_planeados"),
+          proyecto_id: oVacio(fd, "proyecto_id"),
+          notas: oVacio(fd, "notas"),
+        })
+        .eq("id", orden.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditando(false);
+      queryClient.invalidateQueries({ queryKey: ["ordenes-produccion", empresa.id] });
+    },
+    onError: (err) => setError((err as Error).message),
+  });
 
   const { data: consumo } = useQuery({
     queryKey: ["consumo-materia-prima", orden.id],
@@ -1239,9 +1291,12 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
 
   const agregarManoObra = useMutation({
     mutationFn: async (fd: FormData) => {
+      const personalId = oVacio(fd, "personal_id");
+      const persona = personalRh?.find((p) => p.id === personalId);
       const { error } = await supabase.from("mano_de_obra_produccion").insert({
         orden_produccion_id: orden.id,
-        descripcion: oVacio(fd, "descripcion"),
+        personal_id: personalId,
+        descripcion: oVacio(fd, "descripcion") ?? persona?.nombre ?? null,
         horas: fd.get("horas"),
         costo_hora: fd.get("costo_hora"),
       });
@@ -1316,13 +1371,93 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
   return (
     <div className="mt-6 rounded border border-slate-300 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">
-          {orden.folio} — {orden.productos_produccion?.nombre}
-        </h2>
-        <button onClick={onClose} className="text-xs text-slate-500 hover:underline">
-          Cerrar panel
-        </button>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800">
+            {orden.folio} — {orden.productos_produccion?.nombre}
+          </h2>
+          <p className="text-xs text-slate-500">
+            Inicio {orden.fecha_inicio}
+            {orden.dias_planeados != null && ` · ${formatoNumero(orden.dias_planeados)} día(s) hábiles planeados`}
+            {orden.fecha_estimada_embarque && (
+              <>
+                {" · "}
+                <span className={orden.estado !== "terminada" && orden.estado !== "cancelada" && orden.fecha_estimada_embarque < hoyIso() ? "font-medium text-red-700" : "font-medium text-slate-700"}>
+                  embarque estimado {orden.fecha_estimada_embarque}
+                </span>
+              </>
+            )}
+            {orden.proyectos?.nombre && ` · ${orden.proyectos.nombre}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {esAdmin && (
+            <button onClick={() => setEditando((v) => !v)} className="text-xs text-slate-700 underline">
+              {editando ? "Cancelar edición" : "Editar lote"}
+            </button>
+          )}
+          <button onClick={onClose} className="text-xs text-slate-500 hover:underline">
+            Cerrar panel
+          </button>
+        </div>
       </div>
+
+      {editando && esAdmin && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setError(null);
+            editarLote.mutate(new FormData(e.currentTarget));
+          }}
+          className="mb-4 grid grid-cols-1 gap-3 rounded border border-sky-200 bg-sky-50 p-3 sm:grid-cols-3"
+        >
+          <div>
+            <label className={etiquetaCampo}>Folio</label>
+            <input name="folio" required defaultValue={orden.folio} className={campoTexto} />
+          </div>
+          <div>
+            <label className={etiquetaCampo}>Producto</label>
+            <select name="producto_id" required defaultValue={orden.producto_id} className={campoTexto}>
+              {productosCatalogo?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={etiquetaCampo}>Fecha de inicio</label>
+            <input type="date" name="fecha_inicio" required defaultValue={orden.fecha_inicio} className={campoTexto} />
+          </div>
+          <div>
+            <label className={etiquetaCampo}>Cantidad planeada</label>
+            <input type="number" step="0.0001" min="0.0001" name="cantidad_planeada" required defaultValue={orden.cantidad_planeada} className={campoTexto} />
+          </div>
+          <div>
+            <label className={etiquetaCampo}>Tiempo planeado (días hábiles)</label>
+            <input type="number" step="0.5" min="0.5" name="dias_planeados" defaultValue={orden.dias_planeados ?? ""} className={campoTexto} />
+          </div>
+          <div>
+            <label className={etiquetaCampo}>Proyecto</label>
+            <select name="proyecto_id" defaultValue={orden.proyecto_id ?? ""} className={campoTexto}>
+              <option value="">Sin proyecto</option>
+              {proyectosEmpresa?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className={etiquetaCampo}>Notas</label>
+            <input name="notas" defaultValue={orden.notas ?? ""} className={campoTexto} />
+          </div>
+          <div className="flex items-end">
+            <button disabled={editarLote.isPending} className={botonPrimario}>
+              {editarLote.isPending ? "Guardando…" : "Guardar cambios"}
+            </button>
+          </div>
+        </form>
+      )}
 
       {costeo && (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -1338,7 +1473,7 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <SeccionConsumo consumo={consumo ?? []} materias={materias ?? []} disabled={cerrada} onSubmit={(fd) => agregarConsumo.mutate(fd)} />
-        <SeccionManoObra manoObra={manoObra ?? []} disabled={cerrada} onSubmit={(fd) => agregarManoObra.mutate(fd)} />
+        <SeccionManoObra manoObra={manoObra ?? []} personal={personalRh ?? []} diasPlaneados={orden.dias_planeados} disabled={cerrada} onSubmit={(fd) => agregarManoObra.mutate(fd)} />
         <SeccionIndirectos indirectos={indirectos ?? []} disabled={cerrada} onSubmit={(fd) => agregarIndirecto.mutate(fd)} />
       </div>
 
@@ -1434,13 +1569,33 @@ function SeccionConsumo({
 
 function SeccionManoObra({
   manoObra,
+  personal,
+  diasPlaneados,
   disabled,
   onSubmit,
 }: {
   manoObra: ManoDeObraProduccion[];
+  personal: { id: string; nombre: string; puesto: string | null; horas_dia: number; costo_hora: number | null; sueldo_semanal: number | null }[];
+  diasPlaneados: number | null;
   disabled: boolean;
   onSubmit: (fd: FormData) => void;
 }) {
+  // Al elegir a alguien de RH se calculan solas las horas (días planeados
+  // del lote × horas por día de su jornada) y el costo por hora (sueldo
+  // semanal ÷ horas de la jornada). Se pueden ajustar antes de guardar.
+  const [personaId, setPersonaId] = useState("");
+  const [horas, setHoras] = useState("");
+  const [costoHora, setCostoHora] = useState("");
+  const nombrePersona = new Map(personal.map((p) => [p.id, p.nombre]));
+
+  function elegir(id: string) {
+    setPersonaId(id);
+    const p = personal.find((x) => x.id === id);
+    if (!p) return;
+    if (diasPlaneados) setHoras(String(Math.round(Number(diasPlaneados) * Number(p.horas_dia) * 100) / 100));
+    setCostoHora(p.costo_hora != null ? String(p.costo_hora) : "");
+  }
+
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase text-slate-600">Mano de obra</h3>
@@ -1448,7 +1603,7 @@ function SeccionManoObra({
         {manoObra.map((m) => (
           <li key={m.id} className="flex justify-between border-b border-slate-100 pb-1">
             <span>
-              {m.descripcion ?? "Operador"} — {formatoNumero(m.horas)} h
+              {(m.personal_id && nombrePersona.get(m.personal_id)) || m.descripcion || "Operador"} — {formatoNumero(m.horas)} h × {formatoMoneda(m.costo_hora)}
             </span>
             <span className="text-slate-500">{formatoMoneda(m.costo_total)}</span>
           </li>
@@ -1464,11 +1619,25 @@ function SeccionManoObra({
           }}
           className="space-y-2 rounded border border-slate-200 p-2"
         >
-          <input name="descripcion" placeholder="Descripción / operador" className={campoTexto} />
+          <select name="personal_id" value={personaId} onChange={(e) => elegir(e.target.value)} className={campoTexto}>
+            <option value="">Personal de RH…</option>
+            {personal.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+                {p.puesto ? ` · ${p.puesto}` : ""}
+                {p.costo_hora != null ? ` · ${formatoMoneda(p.costo_hora)}/h` : " · sin contratación"}
+              </option>
+            ))}
+          </select>
+          <input name="descripcion" placeholder="Descripción (opcional si eliges persona)" className={campoTexto} />
           <div className="flex gap-2">
-            <input type="number" step="0.01" min="0.01" name="horas" placeholder="Horas" required className={campoTexto} />
-            <input type="number" step="0.01" min="0" name="costo_hora" placeholder="Costo/hora" required className={campoTexto} />
+            <input type="number" step="0.01" min="0.01" name="horas" value={horas} onChange={(e) => setHoras(e.target.value)} placeholder="Horas" required className={campoTexto} />
+            <input type="number" step="0.01" min="0" name="costo_hora" value={costoHora} onChange={(e) => setCostoHora(e.target.value)} placeholder="Costo/hora" required className={campoTexto} />
           </div>
+          <p className="text-[11px] text-slate-500">
+            {diasPlaneados ? `Horas = ${formatoNumero(diasPlaneados)} día(s) planeados × horas por día de su jornada.` : "Captura el tiempo planeado del lote para calcular las horas solas."}{" "}
+            Costo/hora = sueldo semanal ÷ horas de su jornada.
+          </p>
           <button className="w-full rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white">+ Agregar mano de obra</button>
         </form>
       )}
