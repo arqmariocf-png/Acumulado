@@ -3,6 +3,7 @@ import { Navigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { DespieceBalken } from "./produccion/DespieceBalken";
+import { RemisionProduccionModal } from "./produccion/RemisionProduccionModal";
 import type {
   CosteoMensualPlanta,
   CosteoOrdenProduccion,
@@ -575,6 +576,7 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
   // registrar la entrada y vincularla después; mientras tanto queda en la
   // lista de "pendientes de vincular" de abajo.
   const [ocId, setOcId] = useState<string>("__pendiente__");
+  const [remisionAbierta, setRemisionAbierta] = useState(false);
   const materiaIds = materias.map((m) => m.id);
 
   const { data: pendientesOc } = useQuery({
@@ -725,10 +727,24 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
           </div>
         )}
         {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        <button disabled={registrar.isPending} className={botonPrimario}>
-          {registrar.isPending ? "Guardando…" : "Registrar entrada"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button disabled={registrar.isPending} className={botonPrimario}>
+            {registrar.isPending ? "Guardando…" : "Registrar entrada"}
+          </button>
+          <button type="button" onClick={() => setRemisionAbierta(true)} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            Generar remisión con QR
+          </button>
+        </div>
       </form>
+      {remisionAbierta && (
+        <RemisionProduccionModal
+          empresaId={empresaId}
+          tipo="entrada"
+          items={materias.map((m) => ({ id: m.id, nombre: m.nombre, unidad_medida: m.unidad_medida }))}
+          referencias={(ordenesCompra ?? []).map((oc) => ({ id: oc.id, folio: `OC ${oc.id_orden}`, contraparte: oc.proveedor }))}
+          onCerrar={() => setRemisionAbierta(false)}
+        />
+      )}
 
       {pendientesOc && pendientesOc.length > 0 && (
         <div className="mt-4 rounded border border-amber-200 bg-white">
@@ -784,6 +800,7 @@ function SalidaProductoTerminado({ empresaId, proyecto, productos }: { empresaId
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [ovId, setOvId] = useState<string>("__nueva__");
+  const [remisionAbierta, setRemisionAbierta] = useState(false);
 
   const { data: ordenesVenta } = useQuery({
     queryKey: ["ordenes-venta-planta", empresaId, proyecto ?? null],
@@ -904,10 +921,24 @@ function SalidaProductoTerminado({ empresaId, proyecto, productos }: { empresaId
           </div>
         )}
         {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        <button disabled={registrar.isPending} className={botonPrimario}>
-          {registrar.isPending ? "Guardando…" : "Registrar salida"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button disabled={registrar.isPending} className={botonPrimario}>
+            {registrar.isPending ? "Guardando…" : "Registrar salida"}
+          </button>
+          <button type="button" onClick={() => setRemisionAbierta(true)} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            Generar remisión con QR
+          </button>
+        </div>
       </form>
+      {remisionAbierta && (
+        <RemisionProduccionModal
+          empresaId={empresaId}
+          tipo="salida"
+          items={productos.map((p) => ({ id: p.id, nombre: p.nombre, unidad_medida: p.unidad_medida }))}
+          referencias={(ordenesVenta ?? []).map((ov) => ({ id: ov.id, folio: `OV ${ov.id_ov}`, contraparte: ov.cliente }))}
+          onCerrar={() => setRemisionAbierta(false)}
+        />
+      )}
     </div>
   );
 }
