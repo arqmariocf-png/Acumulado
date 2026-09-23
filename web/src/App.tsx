@@ -15,6 +15,8 @@ const Movimientos = lazy(() => import("./pages/Movimientos").then((m) => ({ defa
 const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga })));
 const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then((m) => ({ default: m.ReportesEspeciales })));
 const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ default: m.SaldosDiarios })));
+const SaldosEmpresas = lazy(() => import("./pages/finanzas/SaldosEmpresas").then((m) => ({ default: m.SaldosEmpresas })));
+const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
@@ -114,6 +116,8 @@ function Enrutador() {
 
           <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
             <Route path="/saldos" element={<SaldosDiarios />} />
+            <Route path="/finanzas/saldos" element={<SaldosEmpresas />} />
+            <Route path="/finanzas/pagos" element={<ProgramacionPagos />} />
           </Route>
 
           {/* Sin roles restringidos aquí a propósito: además de admin/corporativo/

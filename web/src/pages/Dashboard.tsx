@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
+import { SaldosEmpresas } from "./finanzas/SaldosEmpresas";
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -203,6 +204,19 @@ export function Dashboard() {
         <td className="px-3 py-2 text-right">{formatoMoneda(Number(kpi?.total_abono ?? 0))}</td>
         <td className="px-3 py-2 text-right">{kpi?.pct_factura_ajustado ?? "—"}%</td>
       </>
+    );
+  }
+
+  // Finanzas (rol dirección, ej. Laura): solo saldos de inicio y cierre por
+  // empresa y el acceso a programación de pagos, sin el resto del tablero
+  // (pedido de Mario, 23-sep-2026).
+  if (perfil?.rol === "direccion") {
+    return (
+      <div>
+        <h1 className="mb-1 text-xl font-semibold text-slate-900">Dashboard de finanzas</h1>
+        <p className="mb-4 text-sm text-slate-500">Saldos de las empresas del grupo al día. Cambia la fecha para revisar otro día.</p>
+        <SaldosEmpresas compacto />
+      </div>
     );
   }
 
