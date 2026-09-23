@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { AvisoSuscripcion } from "./AvisoSuscripcion";
 import type { ModuloClave } from "../types/database";
 
 // Cada enlace declara de qué módulo depende; el menú se arma con los módulos
@@ -8,6 +9,7 @@ import type { ModuloClave } from "../types/database";
 // base que toda organización tiene.
 const ENLACES: { a: string; etiqueta: string; modulo?: ModuloClave; end?: boolean }[] = [
   { a: "/inicio", etiqueta: "Inicio" },
+  { a: "/proyectos", etiqueta: "Proyectos", modulo: "proyectos" },
   { a: "/", etiqueta: "Dashboard", modulo: "conciliacion", end: true },
   { a: "/movimientos", etiqueta: "Movimientos", modulo: "conciliacion" },
   { a: "/inventario", etiqueta: "Inventario", modulo: "inventario" },
@@ -20,7 +22,7 @@ const CLASE_ENLACE = ({ isActive }: { isActive: boolean }) =>
   `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`;
 
 export function Layout() {
-  const { perfil, grupo, tieneModulo, cerrarSesion } = useAuth();
+  const { perfil, grupo, logoUrl, tieneModulo, cerrarSesion } = useAuth();
   const esAdmin = perfil?.rol === "admin";
   const veRH = (perfil?.rol === "rh" || esAdmin) && tieneModulo("rh");
   const marca = grupo?.marca_comercial ?? grupo?.nombre;
@@ -30,7 +32,15 @@ export function Layout() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
-            <span className="text-lg font-semibold text-slate-900">Acumulado{marca ? ` · ${marca}` : ""}</span>
+            <span className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+              {logoUrl ? (
+                // El logotipo sustituye al nombre: dentro de su propia
+                // aplicación, el cliente se ve a sí mismo, no a la plataforma.
+                <img src={logoUrl} alt={marca ?? "Organización"} className="h-8 w-auto max-w-[160px] object-contain" />
+              ) : (
+                <span>Acumulado{marca ? ` · ${marca}` : ""}</span>
+              )}
+            </span>
             <nav className="flex gap-4 text-sm">
               {ENLACES.filter((e) => !e.modulo || tieneModulo(e.modulo)).map((e) => (
                 <NavLink key={e.a} to={e.a} end={e.end} className={CLASE_ENLACE}>
@@ -59,6 +69,7 @@ export function Layout() {
           </div>
         </div>
       </header>
+      <AvisoSuscripcion />
       <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>

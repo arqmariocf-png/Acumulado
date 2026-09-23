@@ -17,6 +17,8 @@ const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ defaul
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
 const Empresas = lazy(() => import("./pages/admin/Empresas").then((m) => ({ default: m.Empresas })));
+const MiOrganizacion = lazy(() => import("./pages/admin/MiOrganizacion").then((m) => ({ default: m.MiOrganizacion })));
+const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m) => ({ default: m.Suscripcion })));
 const Organizaciones = lazy(() => import("./pages/admin/Organizaciones").then((m) => ({ default: m.Organizaciones })));
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
@@ -26,6 +28,8 @@ const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos"
 const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
 const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
 const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
+const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => ({ default: m.Proyectos })));
+const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
 
 const queryClient = new QueryClient();
 
@@ -38,7 +42,11 @@ function Cargando() {
 // sin ella, la portada es Inicio -- la base que toda organización tiene.
 function Raiz() {
   const { tieneModulo } = useAuth();
-  return tieneModulo("conciliacion") ? <Dashboard /> : <Navigate to="/inicio" replace />;
+  if (tieneModulo("conciliacion")) return <Dashboard />;
+  // Una organización que solo trae Proyectos entra directo a lo suyo; si no
+  // tiene ningún módulo abierto, a la portada de la organización.
+  if (tieneModulo("proyectos")) return <Navigate to="/proyectos" replace />;
+  return <Navigate to="/inicio" replace />;
 }
 
 export default function App() {
@@ -62,6 +70,11 @@ export default function App() {
                     <Route path="/pendientes" element={<Pendientes />} />
                   </Route>
 
+                  <Route element={<ProtectedRoute modulo="proyectos" />}>
+                    <Route path="/proyectos" element={<Proyectos />} />
+                    <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
+                  </Route>
+
                   <Route element={<ProtectedRoute modulo="inventario" />}>
                     <Route path="/inventario" element={<InventarioLayout />}>
                       <Route index element={<InventarioMovimientos />} />
@@ -79,6 +92,8 @@ export default function App() {
                     <Route path="/admin" element={<AdminLayout />}>
                       <Route index element={<Usuarios />} />
                       <Route path="empresas" element={<Empresas />} />
+                      <Route path="organizacion" element={<MiOrganizacion />} />
+                      <Route path="suscripcion" element={<SuscripcionAdmin />} />
                       <Route path="organizaciones" element={<Organizaciones />} />
                       <Route path="reglas" element={<Reglas />} />
                       <Route path="excepciones" element={<Excepciones />} />

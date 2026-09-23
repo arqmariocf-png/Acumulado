@@ -12,7 +12,7 @@
 --
 -- Lo que verifica, en orden: (1) un corporativo de Loma sigue viendo sus 8
 -- empresas y ninguna de ARSSA; (2) tesorería de ARSSA no ve movimientos,
--- cuentas ni reglas de Loma; (3) ARSSA arranca con los 3 módulos cerrados;
+-- cuentas ni reglas de Loma; (3) ARSSA solo tiene abierto el módulo con el que entró (proyectos);
 -- (4) el admin de la organización maestra sí cruza organizaciones; (5) con el
 -- módulo cerrado, RLS bloquea la escritura; (6) el admin de una organización
 -- cliente no puede abrirse módulos solo; (7) cuando el maestro abre el
@@ -69,7 +69,7 @@ select count(*) as cuentas_visibles from cuentas_bancarias;
 select count(*) as reglas_visibles from reglas_clasificacion;
 reset role;
 
-\echo '── 3. Admin ARSSA: módulos de su organización (esperado 3 filas, todas en false)'
+\echo '── 3. Admin ARSSA: módulos de su organización (solo proyectos abierto)'
 set role authenticated;
 select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
 select m.clave, gm.habilitado from grupo_modulos gm join modulos m on m.clave = gm.modulo_clave

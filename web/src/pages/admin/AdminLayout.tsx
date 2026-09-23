@@ -8,6 +8,8 @@ import type { ModuloClave } from "../../types/database";
 const TABS: { a: string; etiqueta: string; end?: boolean; modulo?: ModuloClave; soloMaestra?: boolean }[] = [
   { a: "/admin", etiqueta: "Usuarios", end: true },
   { a: "/admin/empresas", etiqueta: "Entidades" },
+  { a: "/admin/organizacion", etiqueta: "Marca" },
+  { a: "/admin/suscripcion", etiqueta: "Suscripción" },
   { a: "/admin/organizaciones", etiqueta: "Organizaciones", soloMaestra: true },
   { a: "/admin/reglas", etiqueta: "Reglas de clasificación", modulo: "conciliacion" },
   { a: "/admin/excepciones", etiqueta: "Excepciones de proveedor", modulo: "conciliacion" },

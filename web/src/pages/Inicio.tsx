@@ -10,6 +10,7 @@ import type { Empresa, Modulo, ModuloClave } from "../types/database";
 
 const RUTA_DEL_MODULO: Record<ModuloClave, string> = {
   conciliacion: "/",
+  proyectos: "/proyectos",
   inventario: "/inventario",
   rh: "/rh",
 };

@@ -10,15 +10,147 @@ export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "ad
 // es un `grupo` con sus propias empresas, usuarios y módulos abiertos.
 // Ver supabase/migrations/20260923090001_grupos_modulos.sql.
 
-export type ModuloClave = "conciliacion" | "inventario" | "rh";
+export type ModuloClave = "conciliacion" | "inventario" | "rh" | "proyectos";
 
 export interface Grupo {
   id: string;
   nombre: string;
   codigo: string;
   marca_comercial: string | null;
+  /** Ruta dentro del bucket público `branding`; el frontend arma la URL con ella. */
+  logo_path: string | null;
   es_maestro: boolean;
   activo: boolean;
+}
+
+// Suscripción (ver supabase/migrations/20260923090003_suscripciones.sql).
+// Los datos de la tarjeta NO viven en esta base: metodo_pago_* es solo lo que
+// la pasarela devuelve para que el cliente reconozca su tarjeta en pantalla.
+
+export type EstadoSuscripcion = "prueba" | "activa" | "periodo_gracia" | "suspendida" | "cancelada";
+
+export interface Suscripcion {
+  grupo_id: string;
+  plan_clave: string;
+  plan_nombre: string;
+  precio_mensual_centavos: number;
+  moneda: string;
+  estado: EstadoSuscripcion;
+  periodo_fin: string | null;
+  gracia_hasta: string | null;
+  dias_gracia: number;
+  pasarela: string | null;
+  metodo_pago_marca: string | null;
+  metodo_pago_ultimos4: string | null;
+  puede_escribir: boolean;
+  escribe_hasta: string | null;
+}
+
+export interface Pago {
+  id: string;
+  grupo_id: string;
+  monto_centavos: number;
+  moneda: string;
+  estado: "pendiente" | "pagado" | "fallido" | "reembolsado";
+  periodo_inicio: string | null;
+  periodo_fin: string | null;
+  pagado_at: string | null;
+  detalle_error: string | null;
+  created_at: string;
+}
+
+// Módulo de Proyectos (ver supabase/migrations/20260923090005_modulo_proyectos.sql).
+
+export type EstatusProyecto =
+  | "prospecto"
+  | "en_diseno"
+  | "en_revision"
+  | "aprobado"
+  | "en_obra"
+  | "terminado"
+  | "cancelado";
+
+export type DisciplinaPlano =
+  | "arquitectonico"
+  | "estructural"
+  | "instalaciones"
+  | "acabados"
+  | "topografia"
+  | "otro";
+
+export type EstatusPlano = "en_diseno" | "en_revision" | "aprobado" | "para_obra" | "obsoleto";
+
+export type EstatusCotizacion = "borrador" | "enviada" | "aceptada" | "rechazada" | "vencida";
+
+export interface Proyecto {
+  id: string;
+  grupo_id: string;
+  empresa_id: string | null;
+  clave: string;
+  nombre: string;
+  cliente: string | null;
+  responsable: string | null;
+  ubicacion: string | null;
+  descripcion: string | null;
+  fecha_inicio: string | null;
+  fecha_fin_estimada: string | null;
+  estatus: EstatusProyecto;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface Plano {
+  id: string;
+  proyecto_id: string;
+  clave: string;
+  nombre: string;
+  disciplina: DisciplinaPlano;
+  revision: string;
+  estatus: EstatusPlano;
+  escala: string | null;
+  fecha: string;
+  storage_path: string | null;
+  notas: string | null;
+  created_at: string;
+}
+
+export interface Cotizacion {
+  id: string;
+  proyecto_id: string;
+  folio: string;
+  cliente: string | null;
+  fecha: string;
+  vigencia_dias: number;
+  moneda: string;
+  iva_tasa: number;
+  estatus: EstatusCotizacion;
+  notas: string | null;
+  created_at: string;
+}
+
+export interface CotizacionPartida {
+  id: string;
+  cotizacion_id: string;
+  orden: number;
+  concepto: string;
+  unidad: string;
+  cantidad: number;
+  precio_unitario: number;
+  importe: number;
+}
+
+export interface CotizacionTotales {
+  cotizacion_id: string;
+  proyecto_id: string;
+  folio: string;
+  estatus: EstatusCotizacion;
+  moneda: string;
+  fecha: string;
+  vigente_hasta: string;
+  partidas: number;
+  subtotal: number;
+  iva: number;
+  total: number;
 }
 
 export interface Modulo {

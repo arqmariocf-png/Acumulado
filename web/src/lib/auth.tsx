@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import type { Grupo, ModuloClave, Profile } from "../types/database";
+import type { Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
 
 interface AuthState {
   cargando: boolean;
@@ -14,6 +14,13 @@ interface AuthState {
   tieneModulo: (clave: ModuloClave) => boolean;
   /** Admin de la organización maestra: opera la plataforma, cruza organizaciones. */
   esAdminGlobal: boolean;
+  /** Suscripción de la organización. null mientras no hay organización. */
+  suscripcion: Suscripcion | null;
+  /** false cuando la suscripción venció: se consulta y exporta, pero no se captura. */
+  suscripcionPermiteEscribir: boolean;
+  /** URL pública del logotipo de la organización, si subió uno. */
+  logoUrl: string | null;
+  recargarOrganizacion: () => Promise<void>;
   puedeEscribirEnEmpresa: (empresaId: string) => boolean;
   veTodasLasEmpresas: boolean;
   cerrarSesion: () => Promise<void>;
@@ -26,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [perfil, setPerfil] = useState<Profile | null>(null);
   const [grupo, setGrupo] = useState<Grupo | null>(null);
   const [modulos, setModulos] = useState<ModuloClave[]>([]);
+  const [suscripcion, setSuscripcion] = useState<Suscripcion | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -52,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPerfil(null);
       setGrupo(null);
       setModulos([]);
+      setSuscripcion(null);
       setCargando(false);
       return;
     }
@@ -75,29 +84,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!perfilCargado?.grupo_id) {
         setGrupo(null);
         setModulos([]);
+        setSuscripcion(null);
         setCargando(false);
         return;
       }
 
-      const [{ data: grupoData }, { data: modulosData }] = await Promise.all([
-        supabase.from("grupos").select("*").eq("id", perfilCargado.grupo_id).single(),
-        supabase
-          .from("grupo_modulos")
-          .select("modulo_clave, habilitado")
-          .eq("grupo_id", perfilCargado.grupo_id)
-          .eq("habilitado", true),
-      ]);
-      if (!activo) return;
-
-      setGrupo((grupoData as Grupo | null) ?? null);
-      setModulos(((modulosData ?? []) as { modulo_clave: ModuloClave }[]).map((m) => m.modulo_clave));
-      setCargando(false);
+      await cargarOrganizacion(perfilCargado.grupo_id);
+      if (activo) setCargando(false);
     })();
 
     return () => {
       activo = false;
     };
   }, [session]);
+
+  // La organización se recarga aparte del perfil: al volver de la pasarela de
+  // pago hay que refrescar la suscripción sin obligar a cerrar sesión.
+  async function cargarOrganizacion(grupoId: string) {
+    const [{ data: grupoData }, { data: modulosData }, { data: suscripcionData }] = await Promise.all([
+      supabase.from("grupos").select("*").eq("id", grupoId).single(),
+      supabase.from("grupo_modulos").select("modulo_clave, habilitado").eq("grupo_id", grupoId).eq("habilitado", true),
+      supabase.from("v_suscripcion").select("*").eq("grupo_id", grupoId).maybeSingle(),
+    ]);
+
+    setGrupo((grupoData as Grupo | null) ?? null);
+    setModulos(((modulosData ?? []) as { modulo_clave: ModuloClave }[]).map((m) => m.modulo_clave));
+    setSuscripcion((suscripcionData as Suscripcion | null) ?? null);
+  }
+
+  async function recargarOrganizacion() {
+    if (perfil?.grupo_id) await cargarOrganizacion(perfil.grupo_id);
+  }
 
   const veTodasLasEmpresas = perfil ? (perfil.rol === "corporativo" || perfil.rol === "admin" || perfil.empresa_id === null) && perfil.rol !== "pendiente" : false;
   const esAdminGlobal = perfil?.rol === "admin" && grupo?.es_maestro === true;
@@ -109,7 +126,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return esAdminGlobal || modulos.includes(clave);
   }
 
+  // La suscripción vencida no quita permisos de rol: quita la escritura. Un
+  // corporativo sigue siendo corporativo, pero en solo lectura. Esto es un
+  // espejo de lo que ya impone RLS (suscripcion_permite_escribir) -- aquí
+  // sirve para no ofrecer botones que la base va a rechazar.
+  const suscripcionPermiteEscribir = esAdminGlobal || (suscripcion?.puede_escribir ?? false);
+  const logoUrl = grupo?.logo_path
+    ? supabase.storage.from("branding").getPublicUrl(grupo.logo_path).data.publicUrl
+    : null;
+
   function puedeEscribirEnEmpresa(empresaId: string): boolean {
+    if (!suscripcionPermiteEscribir) return false;
     if (!perfil || perfil.rol === "pendiente" || perfil.rol === "direccion") return false;
     if (perfil.rol === "corporativo" || perfil.rol === "admin") return true;
     return perfil.empresa_id === empresaId;
@@ -129,6 +156,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         modulos,
         tieneModulo,
         esAdminGlobal,
+        suscripcion,
+        suscripcionPermiteEscribir,
+        logoUrl,
+        recargarOrganizacion,
         puedeEscribirEnEmpresa,
         veTodasLasEmpresas,
         cerrarSesion,

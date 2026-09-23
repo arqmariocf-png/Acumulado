@@ -297,3 +297,115 @@ cuando el cliente las defina.
   la suya. Es el único camino de alta por autoservicio y un profile sin
   asignar no expone más que el nombre; si se quiere cerrar, hay que sustituirlo
   por alta por invitación.
+
+---
+
+## 12. Módulo de Proyectos, agregado 2026-09-23
+
+Es el módulo con el que entra ARSSA. Tres cosas encadenadas: **proyecto →
+planos → cotizaciones**.
+
+- **Proyectos**: clave (única dentro de la organización), nombre, cliente,
+  responsable, ubicación, fechas y estatus (prospecto, en diseño, en revisión,
+  aprobado, en obra, terminado, cancelado). `empresa_id` es **opcional** a
+  propósito: una organización puede estar trabajando proyectos antes de tener
+  dadas de alta sus razones sociales — que es justo el caso de ARSSA hoy.
+- **Planos**: cada revisión de una lámina es un renglón propio
+  (`unique (proyecto_id, clave, revision)`), con disciplina, escala, estatus y
+  el archivo en un bucket privado. El historial de diseño se agrega, no se
+  reescribe: es el mismo criterio que ya usa el proyecto para el saldo bancario
+  y las existencias.
+- **Cotizaciones**: folio, vigencia, moneda, tasa de IVA y estatus, con
+  partidas (concepto, unidad, cantidad, precio unitario). El importe de la
+  partida y los totales de la cotización se **calculan** (columna generada y
+  vista `v_cotizacion_totales`), nunca se capturan.
+
+Los archivos de planos viven en el bucket privado `proyectos`, bajo
+`<grupo_id>/<proyecto_id>/...`. El primer folder de la ruta es la frontera que
+revisan las policies de Storage; se descargan con URL firmada, no expuestos.
+
+---
+
+## 13. Suscripción y cobro, agregado 2026-09-23
+
+Acumulado se cobra **por organización**: una mensualidad por cliente, y eso es
+lo que mantiene encendida la captura. La organización maestra no se cobra a sí
+misma. El plan `estandar` está sembrado en **$1,500.00 MXN al mes**.
+
+### 13.1 La tarjeta no pasa por aquí
+
+Los datos de la tarjeta (PAN, CVV) **nunca** tocan esta base ni los edge
+functions: se capturan en el formulario de la pasarela. De la tarjeta solo se
+guardan marca y últimos 4 dígitos —lo que la propia pasarela devuelve— para que
+el cliente la reconozca en pantalla. Guardar un PAN nos metería en alcance PCI
+sin ninguna necesidad.
+
+La pasarela implementada es **Stripe**, detrás de un adaptador
+(`_shared/pagos/stripe.ts`). Las reglas de negocio viven aparte
+(`_shared/pagos/suscripcion.ts`) y no mencionan a Stripe: cambiar a Mercado
+Pago o Conekta es escribir otro adaptador, no rehacer el módulo.
+
+Domiciliación: lo que se domicilia es la **tarjeta** (queda registrada y el
+cobro sale solo cada mes). La domiciliación bancaria a CLABE no la ofrece
+ninguna de estas pasarelas — eso se contrata directo con el banco.
+
+### 13.2 Estados y qué permite cada uno
+
+| Estado | Qué significa | Captura |
+|---|---|---|
+| `prueba` | Sin tarjeta todavía, con fecha límite | Sí, hasta la fecha |
+| `activa` | Al corriente | Sí |
+| `periodo_gracia` | Falló el cobro; 7 días por default (configurable por organización) | Sí, hasta `gracia_hasta` |
+| `suspendida` | Se acabó la gracia | No |
+| `cancelada` | Se dio de baja | No |
+
+"No captura" significa **solo lectura**, no bloqueo: se sigue consultando y
+exportando la información propia. Y la **administración de la cuenta nunca se
+bloquea** — si se le bloquea el panel al cliente, no puede actualizar su
+tarjeta para ponerse al corriente.
+
+Dos decisiones que no son obvias:
+
+- **Los reintentos no reinician la gracia.** La pasarela reintenta el mismo
+  cobro varios días y manda un evento por intento; si cada uno reiniciara el
+  contador, quien nunca paga nunca se suspendería. La gracia se cuenta desde el
+  primer fallo.
+- **Una `activa` con el periodo vencido hace rato deja de escribir.** Es la red
+  por si se pierde un webhook: sin eso, una tarjeta cancelada seguiría
+  escribiendo para siempre porque nadie nos avisó.
+
+### 13.3 Idempotencia del webhook
+
+El webhook es un endpoint público: verifica la firma HMAC de la pasarela
+**antes** de leer el cuerpo, con tolerancia de tiempo contra reenvío. Cada
+evento se registra en `eventos_pasarela` y la unicidad de
+`(pasarela, evento_id)` es lo que hace idempotente el procesamiento. Un evento
+repetido que ya se procesó bien se descarta; uno que falló a medias sí se
+vuelve a procesar, que es justo para lo que la pasarela reintenta.
+
+### 13.4 Pendiente de validar
+
+- **Nunca se ha ejecutado un cobro real.** La lógica está probada
+  (`_shared/pagos/*.test.ts`: reglas de gracia, verificación de firma,
+  traducción de eventos) pero la conexión con Stripe necesita llaves de API y
+  una URL de webhook pública, que no existen en el entorno de desarrollo.
+- Falta dar de alta en Stripe el producto y el precio recurrente de $1,500 MXN
+  y poner su id en `STRIPE_PRECIO_ID`.
+- El estado guardado puede quedarse atrás del efectivo (una gracia vencida
+  sigue diciendo `periodo_gracia` hasta que llegue otro evento). No afecta el
+  bloqueo —`suscripcion_permite_escribir()` calcula el efectivo— pero conviene
+  un barrido programado que normalice la etiqueta.
+
+---
+
+## 14. Marca por organización, agregado 2026-09-23
+
+Cada cliente entra a "su" aplicación: su logotipo en el encabezado, y su marca
+comercial donde no hay logotipo. El archivo vive en el bucket **público**
+`branding` bajo `<grupo_id>/logo.<ext>` — un logotipo no es información
+reservada, y así se sirve por URL directa sin firmar nada en cada carga. Lo que
+sí está acotado es quién lo sube: solo un admin, y solo en la carpeta de su
+propia organización.
+
+La pantalla de login es neutra a propósito: antes de entrar no se sabe a qué
+organización pertenece el usuario.

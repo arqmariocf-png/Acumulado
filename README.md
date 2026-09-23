@@ -4,7 +4,7 @@ Backoffice maestro donde cada cliente vive como una **organización** propia,
 con sus entidades, usuarios y datos aislados, y con los módulos que se le van
 abriendo conforme los ocupe. Hoy operan dos: **Grupo Loma** (organización
 maestra, con conciliación bancaria, inventario y RH abiertos) y **ARSSA**
-(organización cliente, por ahora solo con la base).
+(organización cliente, con el módulo de Proyectos y suscripción de pago).
 
 El detalle funcional completo está en [`SPEC.md`](./SPEC.md) — la sección 11
 describe el modelo de organizaciones y el interruptor de módulos; este archivo
@@ -17,7 +17,10 @@ supabase/migrations/   Esquema Postgres: tablas, RLS, vistas de reporting
 supabase/functions/    Edge functions (Deno) + módulos puros compartidos
   _shared/motor/          Motor de conciliación (fases 4.1-4.6 del spec)
   _shared/ingesta/        Parsers de CSV/Excel (estado de cuenta, CFDI, OC/OV)
+  _shared/pagos/          Suscripción: reglas puras + adaptador de pasarela
   motor-conciliacion/     Corre el motor sobre un lote de movimientos
+  suscripcion-checkout/   Manda al admin a capturar/cambiar tarjeta en la pasarela
+  suscripcion-webhook/    Recibe los avisos de cobro y mueve el estado de la suscripción
   ingesta-estado-cuenta/  Sube y parsea un estado de cuenta
   ingesta-cfdi/           Sube y parsea CFDI Recibidos/Emitidos
   ingesta-oc-ov/          Carga manual de Excel para OC/OV (respaldo)
@@ -27,6 +30,7 @@ web/                    Frontend (Vite + React + Tailwind + Supabase)
                             módulos tiene abiertos (SPEC.md sección 11)
   src/pages/admin/          Usuarios, entidades, organizaciones (interruptor de
                             módulos), reglas y excepciones
+  src/pages/proyectos/      Proyectos, planos con revisiones y cotizaciones
   src/pages/inventario/     Entradas/salidas de almacén (con escaneo de código de
                             barras), existencias, catálogo de productos, y match
                             de recepción/embarque contra OC/OV (SPEC.md sección 10)
@@ -68,6 +72,15 @@ Secrets que los edge functions necesitan (`npx supabase secrets set NOMBRE=valor
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Todos los edge functions | Supabase los inyecta automáticamente, no hace falta configurarlos a mano |
 | `BACKOFFICE_API_BASE_URL` | `proxy-backoffice` | URL base de la API del backoffice (`reports.grupoloma.mx` o la que corresponda) |
 | `BACKOFFICE_API_TOKEN` | `proxy-backoffice` | Token una vez que se corrija la falta de autenticación de la API (sección 7.1 del spec) |
+| `STRIPE_SECRET_KEY` | `suscripcion-checkout` | Llave secreta de Stripe (`sk_...`) |
+| `STRIPE_PRECIO_ID` | `suscripcion-checkout` | Id del precio recurrente de $1,500 MXN dado de alta en Stripe (`price_...`) |
+| `STRIPE_WEBHOOK_SECRET` | `suscripcion-webhook` | Secreto de firma del webhook (`whsec_...`), que da Stripe al registrar la URL de la función |
+
+Para que el cobro corra hay que, además, dar de alta en Stripe el producto con
+su precio recurrente mensual y registrar la URL de `suscripcion-webhook` como
+endpoint, suscrito a `invoice.payment_succeeded`, `invoice.payment_failed`,
+`customer.subscription.updated`, `customer.subscription.deleted` y
+`payment_method.attached`.
 
 Después de crear el proyecto, hay que dar de alta al primer usuario `admin`
 a mano (el trigger `handle_new_user` deja a todo usuario nuevo en rol
@@ -98,13 +111,17 @@ npm test          # motor de conciliación + parsers de ingesta (90 pruebas)
 cd web && npm run build   # type-check + build del frontend
 ```
 
-Las pruebas de aislamiento entre organizaciones son SQL y necesitan un
-Postgres con las migraciones aplicadas, así que van aparte de `npm test` (el
-propio archivo explica cómo correrlas):
+Las pruebas de RLS (aislamiento entre organizaciones, interruptor de módulos y
+suscripción) son SQL y necesitan un Postgres con las migraciones aplicadas, así
+que van aparte de `npm test`. Un solo comando levanta el Postgres, aplica todas
+las migraciones desde cero y corre todo `supabase/tests/`:
 
 ```bash
-psql -d <base_con_migraciones> -f supabase/tests/aislamiento_organizaciones.sql
+./scripts/validar-sql.sh
 ```
+
+Es el comando que importa para cualquier cambio de esquema o de policies: ahí
+es donde vive casi toda la lógica de seguridad del proyecto.
 
 Los edge functions (Deno) no se pueden ejecutar en este flujo de pruebas —
 solo se verifican sintácticamente (`node --check`) porque este entorno de
