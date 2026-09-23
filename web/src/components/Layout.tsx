@@ -63,6 +63,10 @@ export function Layout() {
   // El checador es para todo mundo, sin importar el rol -- por eso se agrega
   // aparte de ENLACES en vez de vivir en la lista que cada rol filtra.
   enlacesMenu.push({ a: "/checador", etiqueta: "Checador" });
+  if (perfil?.rol === "direccion" || perfil?.rol === "corporativo" || esAdmin) {
+    enlacesMenu.push({ a: "/finanzas/saldos", etiqueta: "Saldos por empresa" });
+    enlacesMenu.push({ a: "/finanzas/pagos", etiqueta: "Programación de pagos" });
+  }
   if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
   if (veMantenimientoBbva) enlacesMenu.push({ a: "/mantenimiento/bbva", etiqueta: "Mantenimiento BBVA" });
   if (perfil?.rol === "supervisor_bbva" || perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento) {
