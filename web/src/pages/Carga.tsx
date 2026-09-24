@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
+import { sincronizarCatalogoOcOv } from "../lib/sincronizarOcOv";
 
 type Pestana = "estado_cuenta" | "cfdi" | "oc_ov";
 
@@ -90,19 +91,6 @@ async function llamarFuncion(nombre: string, formData: FormData) {
   return json;
 }
 
-async function llamarFuncionJson(nombre: string, body: Record<string, unknown>) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  const respuesta = await fetch(urlFuncion(nombre), {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const json = await respuesta.json();
-  if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-  return json;
-}
-
 export function Carga() {
   const { veTodasLasEmpresas, perfil } = useAuth();
   const { data: empresas } = useEmpresas();
@@ -168,8 +156,8 @@ export function Carga() {
     setResultado(null);
     setEnviando(true);
     try {
-      const json = await llamarFuncionJson("sync-catalogo-oc-ov", {});
-      setResultado(json);
+      const res = await sincronizarCatalogoOcOv();
+      setResultado({ sincronizado: true, ...res });
       queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
       queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
     } catch (err) {
@@ -294,7 +282,7 @@ export function Carga() {
             onClick={onSincronizarCatalogo}
             className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
           >
-            {enviando ? "Sincronizando…" : "Sincronizar catálogo OC/OV"}
+            {enviando ? "Sincronizando en segundo plano… (30–60 s)" : "Sincronizar catálogo OC/OV"}
           </button>
         </div>
       )}

@@ -7,6 +7,7 @@ import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import { idRemisionDesdeCodigo } from "../../lib/remision";
 import { imprimirRemision } from "./remisionQr";
+import { sincronizarCatalogoOcOv } from "../../lib/sincronizarOcOv";
 import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
 interface FilaCarrito {
@@ -22,10 +23,32 @@ interface FilaCarrito {
 type ModoCaptura = "codigo" | "nombre" | "foto";
 
 const MODOS_CAPTURA: { valor: ModoCaptura; etiqueta: string }[] = [
-  { valor: "codigo", etiqueta: "Código de barras" },
   { valor: "nombre", etiqueta: "Buscar por nombre" },
+  { valor: "codigo", etiqueta: "Código de barras" },
   { valor: "foto", etiqueta: "Foto de la nota" },
 ];
+
+/** Convierte cualquier imagen (incluida HEIC del iPhone cuando el navegador
+ * la decodifica) a JPEG de máximo 1600 px, para que la lectura por IA no la
+ * rechace por formato ni por peso. Si no se puede decodificar, se manda tal
+ * cual. */
+async function aJpeg(archivo: File): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(archivo);
+    const escala = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const lienzo = document.createElement("canvas");
+    lienzo.width = Math.round(bitmap.width * escala);
+    lienzo.height = Math.round(bitmap.height * escala);
+    const ctx = lienzo.getContext("2d");
+    if (!ctx) return archivo;
+    ctx.drawImage(bitmap, 0, 0, lienzo.width, lienzo.height);
+    const blob = await new Promise<Blob | null>((resolve) => lienzo.toBlob(resolve, "image/jpeg", 0.85));
+    if (!blob) return archivo;
+    return new File([blob], archivo.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return archivo;
+  }
+}
 
 /** Buscador reutilizable por nombre -- lo usa tanto el modo "Buscar por
  * nombre" como cada concepto sugerido por la foto (ahí sirve para mapear la
@@ -39,9 +62,35 @@ function BuscadorProducto({
   placeholder?: string;
   onSeleccionar: (producto: Producto) => void;
 }) {
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [resultados, setResultados] = useState<Producto[] | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const [creando, setCreando] = useState(false);
+  const [errorCrear, setErrorCrear] = useState<string | null>(null);
+
+  // Sin resultados: se da de alta el producto ahí mismo (no todo trae
+  // código de barras ni está todavía en el catálogo).
+  async function crearDesdeBusqueda(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const nombre = String(fd.get("nombre") ?? "").trim();
+    const sku = String(fd.get("sku") ?? "").trim();
+    const unidad = String(fd.get("unidad") ?? "PZA").trim() || "PZA";
+    if (!nombre || !sku) return;
+    setErrorCrear(null);
+    try {
+      const { data, error } = await supabase.from("productos").insert({ empresa_id: empresaId, sku, nombre, unidad_medida: unidad }).select("*").single();
+      if (error) throw error;
+      onSeleccionar(data as Producto);
+      setResultados(null);
+      setQuery("");
+      setCreando(false);
+      queryClient.invalidateQueries({ queryKey: ["productos"] });
+    } catch (err) {
+      setErrorCrear((err as Error).message);
+    }
+  }
 
   async function buscar() {
     const limpio = query.trim();
@@ -104,8 +153,29 @@ function BuscadorProducto({
               </button>
             </li>
           ))}
-          {resultados.length === 0 && <li className="px-2 py-1 text-slate-400">Sin resultados.</li>}
+          {resultados.length === 0 && (
+            <li className="px-2 py-1 text-slate-500">
+              Sin resultados.{" "}
+              <button type="button" onClick={() => setCreando(true)} className="text-slate-800 underline">
+                Dar de alta "{query}"
+              </button>
+            </li>
+          )}
         </ul>
+      )}
+      {creando && (
+        <form onSubmit={crearDesdeBusqueda} className="mt-2 grid grid-cols-2 gap-2 rounded border border-dashed border-slate-300 bg-slate-50 p-2 sm:grid-cols-4">
+          <input name="nombre" required defaultValue={query} placeholder="Nombre del producto" className="col-span-2 rounded border border-slate-300 px-2 py-1 text-sm" />
+          <input name="sku" required placeholder="Clave / SKU" className="rounded border border-slate-300 px-2 py-1 text-sm" />
+          <input name="unidad" defaultValue="PZA" placeholder="Unidad" className="rounded border border-slate-300 px-2 py-1 text-sm" />
+          {errorCrear && <p className="col-span-2 text-xs text-red-600 sm:col-span-4">{errorCrear}</p>}
+          <div className="col-span-2 flex gap-2 sm:col-span-4">
+            <button className="rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white">Crear y agregar al carrito</button>
+            <button type="button" onClick={() => setCreando(false)} className="text-xs text-slate-500 underline">
+              Cancelar
+            </button>
+          </div>
+        </form>
       )}
     </div>
   );
@@ -129,13 +199,7 @@ function ItemSugeridoCard({
   const [creando, setCreando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onCrear(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const nombre = String(form.get("nombre") ?? "").trim();
-    const sku = String(form.get("sku") ?? "").trim();
-    const unidad = String(form.get("unidad") ?? "PZA").trim() || "PZA";
-    if (!nombre || !sku) return;
+  async function crearProducto(nombre: string, sku: string, unidad: string) {
     setError(null);
     try {
       const { data, error: errInsert } = await supabase
@@ -149,6 +213,27 @@ function ItemSugeridoCard({
     } catch (err) {
       setError((err as Error).message);
     }
+  }
+
+  async function onCrear(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const nombre = String(form.get("nombre") ?? "").trim();
+    const sku = String(form.get("sku") ?? "").trim();
+    const unidad = String(form.get("unidad") ?? "PZA").trim() || "PZA";
+    if (!nombre || !sku) return;
+    await crearProducto(nombre, sku, unidad);
+  }
+
+  // Un clic: el concepto leído de la foto se da de alta tal cual (SKU
+  // generado) y se agrega al carrito; el formulario queda para corregir datos.
+  async function onCrearAutomatico() {
+    const nombre = item.descripcion.trim();
+    if (!nombre) {
+      setCreando(true);
+      return;
+    }
+    await crearProducto(nombre, `AUTO-${Date.now().toString(36).toUpperCase()}`, (item.unidad ?? "PZA").trim() || "PZA");
   }
 
   return (
@@ -167,9 +252,19 @@ function ItemSugeridoCard({
       {!creando ? (
         <>
           <BuscadorProducto empresaId={empresaId} placeholder="Buscar el producto correspondiente…" onSeleccionar={onAgregado} />
-          <button type="button" onClick={() => setCreando(true)} className="mt-1 text-xs text-blue-700 hover:underline">
-            No existe en el catálogo -- crear producto nuevo
-          </button>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onCrearAutomatico}
+              className="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800"
+            >
+              Crear en automático y agregar
+            </button>
+            <button type="button" onClick={() => setCreando(true)} className="text-xs text-blue-700 hover:underline">
+              Crear con datos específicos…
+            </button>
+          </div>
+          {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </>
       ) : (
         <form onSubmit={onCrear} className="mt-1 space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
@@ -376,13 +471,22 @@ export function Movimientos() {
   const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
   const [tipo, setTipo] = useState<TipoMovimientoInventario>("entrada");
   const [ordenId, setOrdenId] = useState("");
+  // "__nueva__": OC que todavía no llega del backoffice (por ejemplo,
+  // pendiente de autorización). Se da de alta con su folio y cuando la
+  // sincronización la traiga, se completa sola (mismo folio y tipo).
+  const [nuevaOcFolio, setNuevaOcFolio] = useState("");
+  const [nuevaOcProveedor, setNuevaOcProveedor] = useState("");
   const [esAjuste, setEsAjuste] = useState(false);
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [carrito, setCarrito] = useState<FilaCarrito[]>([]);
-  const [modo, setModo] = useState<ModoCaptura>("codigo");
+  const [modo, setModo] = useState<ModoCaptura>("nombre");
   const [codigo, setCodigo] = useState("");
   const [mostrarCamara, setMostrarCamara] = useState(false);
   const [codigoSinProducto, setCodigoSinProducto] = useState<string | null>(null);
+  const [sincronizandoOc, setSincronizandoOc] = useState(false);
+  const [avisoSyncOc, setAvisoSyncOc] = useState<string | null>(null);
+  // ids de productos creados en automático en esta sesión (nombre editable en el carrito)
+  const [productosNuevos, setProductosNuevos] = useState<Set<string>>(new Set());
   const [buscando, setBuscando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -445,7 +549,7 @@ export function Movimientos() {
         agregarAlCarrito(data as Producto);
         setCodigo("");
       } else {
-        setCodigoSinProducto(limpio);
+        await crearProductoAutomatico(limpio);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -453,6 +557,60 @@ export function Movimientos() {
       setBuscando(false);
       inputCodigoRef.current?.focus();
     }
+  }
+
+  // Alta automática (Laura, 23-sep-2026): un código que no existe en el
+  // catálogo ya no detiene la captura -- se crea el producto al vuelo con el
+  // código como SKU y un nombre provisional que se puede corregir desde el
+  // carrito. Si el insert falla (permisos, duplicado) se cae al formulario
+  // manual de siempre.
+  async function crearProductoAutomatico(codigoBarras: string) {
+    const ordenSel = ordenes?.find((o) => o.id === ordenId) as { proveedor?: string | null } | undefined;
+    const nombre = ordenSel?.proveedor ? `Producto ${codigoBarras} · ${ordenSel.proveedor}` : `Producto ${codigoBarras}`;
+    const { data, error: errInsert } = await supabase
+      .from("productos")
+      .insert({ empresa_id: empresaId, sku: codigoBarras, codigo_barras: codigoBarras, nombre, unidad_medida: "PZA" })
+      .select("*")
+      .single();
+    if (errInsert || !data) {
+      setCodigoSinProducto(codigoBarras);
+      if (errInsert) setError(`No se pudo crear el producto en automático: ${errInsert.message}`);
+      return;
+    }
+    const creado = data as Producto;
+    agregarAlCarrito(creado);
+    setProductosNuevos((prev) => new Set(prev).add(creado.id));
+    setCodigo("");
+    queryClient.invalidateQueries({ queryKey: ["productos"] });
+  }
+
+  // "Actualizar OCs": trae del backoffice las OC/OV autorizadas sin salir de
+  // inventario (antes solo desde Carga, que Laura no ve). Corre en segundo
+  // plano y al terminar refresca el selector.
+  async function onActualizarOcs() {
+    setAvisoSyncOc(null);
+    setSincronizandoOc(true);
+    try {
+      const res = await sincronizarCatalogoOcOv();
+      queryClient.invalidateQueries({ queryKey: ["ordenes-para-match"] });
+      setAvisoSyncOc(`Catálogo actualizado: ${res.oc_guardadas ?? 0} OC/OS y ${res.ov_guardadas ?? 0} OV del backoffice (solo las ya autorizadas).`);
+    } catch (err) {
+      setAvisoSyncOc(`No se pudo actualizar: ${(err as Error).message}`);
+    } finally {
+      setSincronizandoOc(false);
+    }
+  }
+
+  async function renombrarProducto(productoId: string, nombre: string) {
+    const limpio = nombre.trim();
+    if (!limpio) return;
+    const { error: errUpd } = await supabase.from("productos").update({ nombre: limpio }).eq("id", productoId);
+    if (errUpd) {
+      setError(errUpd.message);
+      return;
+    }
+    setCarrito((prev) => prev.map((f) => (f.producto.id === productoId ? { ...f, producto: { ...f.producto, nombre: limpio } } : f)));
+    queryClient.invalidateQueries({ queryKey: ["productos"] });
   }
 
   function onKeyDownCodigo(e: KeyboardEvent<HTMLInputElement>) {
@@ -506,6 +664,8 @@ export function Movimientos() {
     const formEl = e.currentTarget;
     try {
       const form = new FormData(formEl);
+      const original = form.get("file");
+      if (original instanceof File && original.size > 0) form.set("file", await aJpeg(original));
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const respuesta = await fetch(urlFuncion("ocr-nota-entrega"), {
@@ -573,6 +733,25 @@ export function Movimientos() {
         remision = rem as { id: string; folio: string };
       }
 
+      let ordenIdFinal = ordenId;
+      if (!esAjuste && tipo === "entrada" && ordenId === "__nueva__") {
+        const folio = nuevaOcFolio.trim();
+        if (!folio) throw new Error("Escribe el folio de la orden de compra.");
+        const { data: existente } = await supabase.from("ordenes_compra").select("id").eq("empresa_id", empresaId).eq("id_orden", folio).eq("tipo", "OC").maybeSingle();
+        if (existente) ordenIdFinal = existente.id;
+        else {
+          const total = carrito.reduce((s, f) => s + f.cantidad * (f.costoUnitario ?? 0), 0);
+          const { data: creada, error: errOc } = await supabase
+            .from("ordenes_compra")
+            .insert({ id_orden: folio, tipo: "OC", empresa_id: empresaId, proveedor: nuevaOcProveedor.trim() || null, total: total || null, fecha_creacion: fecha, fuente: "excel" })
+            .select("id")
+            .single();
+          if (errOc) throw errOc;
+          ordenIdFinal = creada.id;
+        }
+        queryClient.invalidateQueries({ queryKey: ["ordenes-para-match"] });
+      }
+
       const filas = carrito.map((f) => ({
         empresa_id: empresaId,
         almacen_id: almacen.id,
@@ -581,7 +760,7 @@ export function Movimientos() {
         cantidad: f.cantidad,
         costo_unitario: f.costoUnitario,
         fecha,
-        orden_compra_id: !esAjuste && tipo === "entrada" && ordenId ? ordenId : null,
+        orden_compra_id: !esAjuste && tipo === "entrada" && ordenIdFinal ? ordenIdFinal : null,
         orden_venta_id: !esAjuste && tipo === "salida" && ordenId ? ordenId : null,
         es_ajuste: esAjuste,
         codigo_escaneado: f.producto.codigo_barras,
@@ -668,17 +847,42 @@ export function Movimientos() {
 
       {!esAjuste && empresaId && (
         <div className="mb-4 max-w-md">
-          <label className="mb-1 block text-xs font-medium text-slate-600">
-            Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Grupo Loma)" : "orden de venta (match con Grupo Loma)"}
-          </label>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <label className="block text-xs font-medium text-slate-600">
+              Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Grupo Loma)" : "orden de venta (match con Grupo Loma)"}
+            </label>
+            <button
+              type="button"
+              onClick={onActualizarOcs}
+              disabled={sincronizandoOc}
+              title="Trae del backoffice las OC/OV autorizadas (tarda 30-60 s)"
+              className="shrink-0 rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {sincronizandoOc ? "Actualizando… (30–60 s)" : "Actualizar OCs del backoffice"}
+            </button>
+          </div>
+          {avisoSyncOc && (
+            <p className={`mb-1 text-xs ${avisoSyncOc.startsWith("No se pudo") ? "text-red-600" : "text-emerald-700"}`}>{avisoSyncOc}</p>
+          )}
           <select value={ordenId} onChange={(e) => setOrdenId(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Sin vincular</option>
+            <option value="">Sin vincular (ligar después)</option>
+            {tipo === "entrada" && <option value="__nueva__">+ OC que todavía no aparece (pendiente de autorización)</option>}
             {ordenes?.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.etiqueta}
               </option>
             ))}
           </select>
+          {ordenId === "__nueva__" && (
+            <div className="mt-2 grid grid-cols-2 gap-2 rounded border border-dashed border-slate-300 p-2">
+              <input value={nuevaOcFolio} onChange={(e) => setNuevaOcFolio(e.target.value)} placeholder="Folio de la OC (ej. 40921)" className="rounded border border-slate-300 px-2 py-1 text-sm" />
+              <input value={nuevaOcProveedor} onChange={(e) => setNuevaOcProveedor(e.target.value)} placeholder="Proveedor" className="rounded border border-slate-300 px-2 py-1 text-sm" />
+              <p className="col-span-2 text-xs text-slate-500">Las OC llegan del backoffice cada hora, pero solo las ya autorizadas. Con el folio la ligas desde ahora y se completa sola cuando la autoricen.</p>
+            </div>
+          )}
+          {tipo === "entrada" && ordenId === "" && (
+            <p className="mt-1 text-xs text-amber-700">Sin OC la entrada queda pendiente de vincular; puedes ligarla después desde "Pendientes por asignar orden de compra".</p>
+          )}
         </div>
       )}
 
@@ -764,7 +968,7 @@ export function Movimientos() {
                   <p className="text-sm font-medium text-blue-900">
                     No hay ningún producto con el código{" "}
                     <code className="rounded bg-blue-100 px-1.5 py-0.5 font-mono text-blue-900">{codigoSinProducto}</code> en esta
-                    empresa. Créalo para continuar:
+                    empresa y no se pudo crear en automático. Dalo de alta aquí:
                   </p>
                   <input name="nombre" required placeholder="Nombre del producto" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
                   <div className="flex gap-2">
@@ -814,7 +1018,7 @@ export function Movimientos() {
               </p>
               <form onSubmit={onSubirFoto} className="flex items-center gap-2">
                 <input type="hidden" name="empresaId" value={empresaId} />
-                <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required disabled={subiendoFoto} className="flex-1 text-sm" />
+                <input type="file" name="file" accept="image/*" required disabled={subiendoFoto} className="flex-1 text-sm" />
                 <button
                   disabled={subiendoFoto}
                   className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
@@ -839,7 +1043,7 @@ export function Movimientos() {
               {itemsSugeridos.length > 0 && (
                 <div className="space-y-2 rounded border border-blue-200 bg-blue-50 p-3">
                   <p className="text-sm font-medium text-blue-900">
-                    Conceptos detectados -- confírmalos buscando el producto correspondiente para agregarlos al carrito:
+                    Conceptos detectados -- búscalos en el catálogo o créalos en automático para agregarlos al carrito:
                   </p>
                   {itemsSugeridos.map((item, i) => (
                     <ItemSugeridoCard
@@ -872,7 +1076,26 @@ export function Movimientos() {
                   {carrito.map((f) => (
                     <tr key={f.producto.id} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        {f.producto.nombre} <span className="text-xs text-slate-400">({f.producto.sku})</span>
+                        {productosNuevos.has(f.producto.id) ? (
+                          <div>
+                            <input
+                              defaultValue={f.producto.nombre}
+                              onBlur={(e) => renombrarProducto(f.producto.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="w-full min-w-[12rem] rounded border border-blue-300 px-2 py-1 text-sm"
+                            />
+                            <p className="mt-0.5 text-xs text-blue-700">Producto nuevo creado en automático ({f.producto.sku}) -- puedes corregirle el nombre.</p>
+                          </div>
+                        ) : (
+                          <>
+                            {f.producto.nombre} <span className="text-xs text-slate-400">({f.producto.sku})</span>
+                          </>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <input
