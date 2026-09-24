@@ -61,6 +61,7 @@ export function Detalle() {
 
   const [filaEnPrecio, setFilaEnPrecio] = useState<string | null>(null);
   const [filaEnCantidad, setFilaEnCantidad] = useState<string | null>(null);
+  const [filaEnDescripcion, setFilaEnDescripcion] = useState<string | null>(null);
   const [editandoCabecera, setEditandoCabecera] = useState(false);
   const [agregando, setAgregando] = useState(false);
   const [comentario, setComentario] = useState("");
@@ -125,6 +126,25 @@ export function Detalle() {
     },
     onSuccess: () => {
       setFilaEnCantidad(null);
+      invalidar();
+    },
+  });
+
+  // Ajustar la descripción de un renglón ya capturado -- por ejemplo cuando
+  // cambian las medidas reales de una puerta ya cotizada. Es un override
+  // propio de esta tarjeta (descripcion_manual): nunca toca el insumo del
+  // catálogo, así que no afecta a ningún otro análisis que lo use. Vaciarlo
+  // regresa el renglón a la descripción del catálogo.
+  const guardarDescripcion = useMutation({
+    mutationFn: async ({ itemId, descripcion }: { itemId: string; descripcion: string }) => {
+      const { error: err } = await supabase
+        .from("pu_analisis_items")
+        .update({ descripcion_manual: descripcion.trim() || null })
+        .eq("id", itemId);
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setFilaEnDescripcion(null);
       invalidar();
     },
   });
@@ -308,11 +328,43 @@ export function Detalle() {
                           )}
                           {puedeEditar && (
                             <button
+                              onClick={() => setFilaEnDescripcion(filaEnDescripcion === r.item_id ? null : r.item_id)}
+                              className="ml-2 text-slate-600 underline"
+                            >
+                              descripción
+                            </button>
+                          )}
+                          {puedeEditar && (
+                            <button
                               onClick={() => borrarRenglon.mutate(r.item_id)}
                               className="ml-2 text-red-600 underline"
                             >
                               quitar
                             </button>
+                          )}
+                          {filaEnDescripcion === r.item_id && (
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                const f = new FormData(e.currentTarget);
+                                guardarDescripcion.mutate({ itemId: r.item_id, descripcion: String(f.get("descripcion") ?? "") });
+                              }}
+                              className="mt-2 grid gap-1 text-left"
+                            >
+                              <textarea
+                                name="descripcion"
+                                rows={3}
+                                defaultValue={r.descripcion ?? ""}
+                                placeholder="Descripción de este renglón (ej. medidas reales)"
+                                className="w-56 rounded border border-slate-300 px-2 py-1"
+                              />
+                              <p className="w-56 text-xs text-slate-400">
+                                Solo afecta esta tarjeta -- no cambia el insumo del catálogo. Déjalo vacío para regresar a la descripción original.
+                              </p>
+                              <button disabled={guardarDescripcion.isPending} className="w-40 rounded bg-slate-900 px-2 py-1 text-white disabled:opacity-50">
+                                {guardarDescripcion.isPending ? "Guardando…" : "Guardar"}
+                              </button>
+                            </form>
                           )}
                           {filaEnCantidad === r.item_id && (
                             <form
@@ -432,6 +484,11 @@ export function Detalle() {
         {guardarCantidad.error && (
           <p className="border-t border-slate-100 px-3 py-2 text-sm text-red-600">
             {(guardarCantidad.error as Error).message}
+          </p>
+        )}
+        {guardarDescripcion.error && (
+          <p className="border-t border-slate-100 px-3 py-2 text-sm text-red-600">
+            {(guardarDescripcion.error as Error).message}
           </p>
         )}
         {borrarRenglon.error && (
