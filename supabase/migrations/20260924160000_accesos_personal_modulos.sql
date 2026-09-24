@@ -113,7 +113,7 @@ $$;
 -- Vista para la pestaña "Accesos" de RH: persona, cuenta, rol, módulos y supervisor.
 create or replace view public.v_personal_accesos with (security_invoker = true) as
 select pe.id as personal_id, pe.nombre, pe.puesto, pe.area, pe.telefono, pe.correo, pe.activo,
-  pe.profile_id, p.rol, p.empresa_id, pe.supervisor_profile_id,
+  pe.profile_id, p.rol, pe.supervisor_profile_id,
   sup.nombre as supervisor_nombre,
   coalesce((select array_agg(pm.modulo order by pm.modulo) from public.permisos_modulo pm where pm.profile_id = pe.profile_id), '{}'::text[]) as modulos,
   (select count(*) from public.tipos_documento_personal td
@@ -121,6 +121,8 @@ select pe.id as personal_id, pe.nombre, pe.puesto, pe.area, pe.telefono, pe.corr
        and exists (select 1 from public.documentos_personal dp where dp.personal_id = pe.id and dp.tipo_documento_id = td.id and (dp.fecha_vigencia is null or dp.fecha_vigencia >= current_date))) as docs_indispensables,
   (select c.empresa_id from public.contrataciones c where c.personal_id = pe.id order by c.fecha_inicio desc limit 1) as empresa_contratacion_id
 from public.personal pe
-left join public.profiles p on p.id = pe.profile_id
-left join public.profiles sup on sup.id = pe.supervisor_profile_id;
+-- v_directorio (y no profiles): RH solo puede leer su propio perfil, pero el
+-- directorio expone nombre/rol de cualquier cuenta con acceso.
+left join public.v_directorio p on p.id = pe.profile_id
+left join public.v_directorio sup on sup.id = pe.supervisor_profile_id;
 grant select on public.v_personal_accesos to authenticated;
