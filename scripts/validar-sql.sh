@@ -105,6 +105,8 @@ create or replace function cron.schedule(jobname text, schedule text, command te
   returns bigint language sql as $$
     insert into cron.job (jobname, schedule, command) values (jobname, schedule, command) returning jobid
   $$;
+create or replace function cron.unschedule(jobname text)
+  returns boolean language sql as $$ delete from cron.job where cron.job.jobname = $1; select true $$;
 
 create schema if not exists storage;
 create table storage.buckets (id text primary key, name text, public boolean default false);

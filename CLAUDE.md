@@ -19,15 +19,23 @@ Todo cambio tiene que respetarlas, y las tres tienen que estar de acuerdo:
    siendo corporativo. La excepción es el admin de la organización maestra.
 2. **Módulo.** Si la organización no tiene el módulo abierto, sus tablas no
    responden. Cubre conciliación, inventario y RH; los módulos más nuevos
-   (producción, requisiciones, precios unitarios, remisiones) todavía **no**
-   están acotados — ver SPEC.md 11.1.
+   todavía no tienen interruptor (sí tienen frontera de organización).
 3. **Suscripción.** Sin pago al corriente se consulta y se exporta, pero no se
    captura ("gracia y luego solo lectura").
 
 Se imponen en tres capas, y **la de la base es la que manda**:
 
-- **RLS** (`grupo_en_alcance`, `empresa_en_alcance`, `auth_modulo_habilitado`,
+- **RLS.** La frontera de organización la impone una policy **restrictiva**
+  llamada `frontera_organizacion` en cada tabla de negocio: se evalúa en AND
+  con todas las demás, así que una policy nueva mal escrita no puede abrirla.
+  Las permisivas de cada módulo siguen decidiendo quién ve qué *dentro* de la
+  organización (`grupo_en_alcance`, `empresa_en_alcance`,
+  `empresa_en_mi_organizacion`, `auth_modulo_habilitado`,
   `auth_suscripcion_permite_escribir`).
+
+  **Toda tabla nueva de negocio necesita su `frontera_organizacion`.** No es
+  opcional ni se olvida: `supabase/tests/frontera_organizacion.sql` falla si
+  falta, y la lista blanca de tablas globales de plataforma vive ahí.
 - **Edge functions**: escriben con la `service_role` key, que bypassa RLS, así
   que validan explícitamente (`empresaOperableEnModulo`).
 - **Frontend**: no arma menú ni rutas de lo que no aplica. Es comodidad, no

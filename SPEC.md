@@ -239,25 +239,33 @@ organización **maestra** (opera la plataforma); ARSSA es el primer cliente.
 organización" en las policies reescritas por
 `20260923090002_grupos_rls.sql`, vía `empresa_en_alcance()`.
 
-### 11.1 Frontera incompleta — pendiente conocido
+### 11.1 Cómo se impone la frontera
 
-**29 policies de los módulos más nuevos siguen usando el patrón viejo**
-(`auth_ve_todas_empresas() or empresa_id = auth_empresa_id()`), que devuelve
-true para *todas* las filas cuando el usuario es corporativo o admin. En esas
-tablas un corporativo de una organización vería datos de otra:
+Dos capas, y la segunda es la que importa a largo plazo:
 
-`proyectos`, `proyecto_planos`, `requisiciones`, `requisicion_lineas`,
-`pu_*` (Precios Unitarios), `remisiones_salida`, `remisiones_produccion`,
-`notas_entrega`, `necesidades_compra`, `necesidades_entrega`,
-`equipos_produccion`, `pagos_programados`, `perfil_fiscal_parametros`.
+1. **Policies permisivas** (las de cada módulo) deciden *quién* ve qué dentro
+   de la organización: roles, empresa asignada, responsable del proyecto.
+2. Una **policy restrictiva** llamada `frontera_organizacion` en cada tabla de
+   negocio agrega "…y que sea de tu organización". Una restrictiva se evalúa
+   en **AND con todas las demás, incluidas las que todavía no existen**: una
+   policy nueva mal escrita en un módulo futuro ya no puede abrir la frontera.
 
-Hoy **no hay fuga real** porque ARSSA todavía no tiene usuarios ni datos, y
-esos módulos no están abiertos para nadie más que Loma. Pero hay que cerrarlo
-**antes** de que un segundo cliente opere cualquiera de esos módulos. La lista
-viva se obtiene con `supabase/tests/zz_cobertura_frontera.sql`, que corre con
-`./scripts/validar-sql.sh`.
+Se eligió así en vez de reescribir las 29 policies que tenían el patrón viejo
+(`auth_ve_todas_empresas() or empresa_id = auth_empresa_id()`, que devuelve
+true para *todas* las filas cuando el usuario es corporativo): no hay que
+entender ni arriesgarse a romper la lógica de permisos de cada módulo, que es
+de quien lo construyó, y el resultado cubre lo que venga después.
 
----
+`supabase/tests/frontera_organizacion.sql` lo prueba con un corporativo de cada
+organización, y **falla si alguien agrega una tabla de negocio sin frontera** —
+ya cazó cuatro (los tableros de tareas) mientras se escribía. La lista blanca
+de tablas verdaderamente globales (catálogos de la plataforma: `modulos`,
+`planes`, `plan_escalones`, `config_sistema`, `eventos_pasarela`) vive en esa
+prueba, así que agregar una a la lista es una decisión explícita y revisable.
+
+Quedan dos cosas menores anotadas, no fugas entre clientes: un tablero de
+tareas sin empresa (`tableros.empresa_id is null`) se comparte dentro de la
+organización, y `config_sistema` es global de la plataforma.
 
 ## 12. Suscripción: cobro por usuario, agregado 2026-09-23
 
