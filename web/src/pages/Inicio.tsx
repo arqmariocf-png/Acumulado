@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useMiPersonal } from "./MisDocumentos";
 import { useAuth } from "../lib/auth";
+import { esRolBasico } from "../lib/modulos";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
 // esperando ahí. La idea es abrirlo desde el celular y saber de un vistazo
@@ -171,6 +172,9 @@ export function Inicio() {
   const { perfil } = useAuth();
   const rol = perfil?.rol;
   const esAdmin = rol === "admin";
+  // Roles básicos de personal: checador, sus documentos y los módulos que
+  // RH les asignó. Nada de finanzas.
+  const rolBasico = esRolBasico(rol);
 
   // Mismo criterio que el menú de arriba: un supervisor y almacén no tienen
   // nada que hacer en los módulos financieros, así que ni se les pintan.
@@ -183,13 +187,15 @@ export function Inicio() {
   // la operación BBVA y el checador -- tareas y proyectos no les tocan.
   const esBbvaAcotado = rol === "responsable" && !!perfil?.bbva_mantenimiento;
   const veMantenimientoBbva = rol === "corporativo" || rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento;
-  const veFinanzas = !soloRequisicionesYPrecios && !esAlmacen && !esRhDocumentos && !esSupervisorBbva;
+  const modulos = perfil?.modulos ?? [];
+  const veFinanzas = !rolBasico && !soloRequisicionesYPrecios && !esAlmacen && !esRhDocumentos && !esSupervisorBbva;
   const veRH = rol === "rh" || esRhDocumentos || esAdmin;
-  const veSaldos = rol === "corporativo" || rol === "direccion" || esAdmin;
-  const veInventario = veFinanzas || esAlmacen;
-  const vePrecios = !esSupervisorBbva && !esBbvaAcotado;
-  const veRequisiciones = !esSupervisorBbva && !esBbvaAcotado;
-  const veFoliosBbva = esSupervisorBbva || rol === "corporativo" || rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento;
+  const veSaldos = !rolBasico && (rol === "corporativo" || rol === "direccion" || esAdmin);
+  const veInventario = rolBasico ? modulos.includes("inventario") : veFinanzas || esAlmacen;
+  const vePrecios = rolBasico ? modulos.includes("precios") : !esSupervisorBbva && !esBbvaAcotado;
+  const veRequisiciones = rolBasico ? modulos.includes("requisiciones") : !esSupervisorBbva && !esBbvaAcotado;
+  const veFoliosBbva = rolBasico ? modulos.includes("bbva") : esSupervisorBbva || rol === "corporativo" || rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento;
+  const veMantenimientoBbvaFinal = !rolBasico && veMantenimientoBbva;
 
   const etapaPu =
     rol === "responsable"
@@ -284,16 +290,46 @@ export function Inicio() {
       descripcion: "marcas del checador de tu equipo, con foto y ubicación",
       icono: ICONOS.rh,
     },
-    (veMantenimientoBbva || rol === "rh") && {
+    (veMantenimientoBbvaFinal || rol === "rh") && {
       a: "/bbva/equilibrio",
       etiqueta: "Punto de equilibrio BBVA",
       descripcion: "gasto del equipo contra folios generados y cobrados",
       icono: ICONOS.fiscal,
     },
-    veMantenimientoBbva && {
+    veMantenimientoBbvaFinal && {
       a: "/mantenimiento/bbva",
       etiqueta: "Mantenimiento BBVA",
       descripcion: "control de folios, estatus por paso y conciliación",
+      icono: ICONOS.panel,
+    },
+    rolBasico && {
+      a: "/checador",
+      etiqueta: "Checador",
+      descripcion: "marca tu entrada, comida y salida",
+      icono: ICONOS.rh,
+    },
+    rolBasico && (rol === "supervisor" || rol === "directivo") && {
+      a: "/bbva/asistencia",
+      etiqueta: "Asistencia del equipo",
+      descripcion: rol === "directivo" ? "marcas del checador de todo el personal" : "marcas del checador de tu gente",
+      icono: ICONOS.rh,
+    },
+    rolBasico && modulos.includes("produccion") && {
+      a: "/produccion",
+      etiqueta: "Producción",
+      descripcion: "lotes, órdenes y remisiones de planta",
+      icono: ICONOS.inventario,
+    },
+    rolBasico && modulos.includes("tareas") && {
+      a: "/tareas",
+      etiqueta: "Tareas",
+      descripcion: "tableros de actividades",
+      icono: ICONOS.pendientes,
+    },
+    rolBasico && modulos.includes("proyectos") && {
+      a: "/proyectos",
+      etiqueta: "Proyectos",
+      descripcion: "obras y proyectos",
       icono: ICONOS.panel,
     },
     !!miPersonal && {

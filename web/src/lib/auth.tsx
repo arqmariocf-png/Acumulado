@@ -63,13 +63,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // última copia guardada en este navegador para que la app no mande a
     // "cuenta sin acceso". Con señal, la copia se refresca cada vez.
     const claveCache = `perfil-cache-${session.user.id}`;
-    supabase
-      .from("profiles")
-      .select("id, nombre, rol, empresa_id, activo, bbva_mantenimiento")
-      .eq("id", session.user.id)
-      .single()
-      .then(({ data, error }) => {
+    Promise.all([
+      supabase.from("profiles").select("id, nombre, rol, empresa_id, activo, bbva_mantenimiento").eq("id", session.user.id).single(),
+      supabase.from("permisos_modulo").select("modulo").eq("profile_id", session.user.id),
+    ])
+      .then(([{ data: fila, error }, { data: permisos }]) => {
         if (!activo) return;
+        const data = fila ? { ...(fila as Omit<Profile, "modulos">), modulos: (permisos ?? []).map((m) => String(m.modulo)) } : null;
         if (data) {
           setPerfil(data as Profile);
           try {
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           let cacheado: Profile | null = null;
           try {
             const crudo = localStorage.getItem(claveCache);
-            cacheado = crudo ? (JSON.parse(crudo) as Profile) : null;
+            cacheado = crudo ? ({ ...(JSON.parse(crudo) as Partial<Profile>), modulos: (JSON.parse(crudo) as Partial<Profile>).modulos ?? [] } as Profile) : null;
           } catch {
             cacheado = null;
           }
