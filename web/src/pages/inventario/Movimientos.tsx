@@ -7,6 +7,8 @@ import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import { idRemisionDesdeCodigo } from "../../lib/remision";
 import { imprimirRemision } from "./remisionQr";
+import { imprimirComprobanteEntrada } from "./comprobanteEntradaQr";
+import { cantidadTexto } from "../../lib/remision";
 import { sincronizarCatalogoOcOv } from "../../lib/sincronizarOcOv";
 import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
@@ -18,6 +20,8 @@ interface FilaCarrito {
    * cuando se capturó suelta). Dos partidas distintas pueden mapear al mismo
    * producto, por eso la fila se identifica por partida cuando la hay. */
   lineaId?: string | null;
+  /** Datos de la partida (pedido, avance) para mostrar faltante/excedente. */
+  linea?: LineaAvance | null;
 }
 
 function claveFila(f: FilaCarrito): string {
@@ -569,6 +573,10 @@ export function Movimientos() {
   const [entregarA, setEntregarA] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [ultimaRemision, setUltimaRemision] = useState<{ id: string; folio: string } | null>(null);
+  // ids de los movimientos de la última entrada guardada (para el comprobante PDF con QR)
+  const [ultimaEntrada, setUltimaEntrada] = useState<{ ids: string[]; ordenCompraId: string | null } | null>(null);
+  // orden cuyas partidas pendientes ya se precargaron al carrito (una vez por orden elegida)
+  const autoCargadoRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const [itemsSugeridos, setItemsSugeridos] = useState<ItemSugeridoNota[]>([]);
   const [errorLecturaFoto, setErrorLecturaFoto] = useState<string | null>(null);
@@ -586,11 +594,30 @@ export function Movimientos() {
 
   useEffect(() => {
     setSeleccion({});
+    autoCargadoRef.current = null;
   }, [ordenId]);
 
-  function agregarAlCarrito(producto: Producto, cantidadSugerida?: number, extra?: { costoUnitario?: number | null; lineaId?: string | null }) {
+  // Al elegir una orden, sus partidas pendientes pasan solas al carrito con la
+  // cantidad que falta (Mario, 24-sep-2026): el almacén solo confirma o corrige
+  // si llegó más o menos. Solo la primera vez por orden y con el carrito vacío.
+  useEffect(() => {
+    if (!lineas || lineas.length === 0 || !ordenId || ordenId === "__nueva__" || esAjuste) return;
+    if (autoCargadoRef.current === ordenId || carrito.length > 0) return;
+    const mapa: Record<string, number> = {};
+    for (const l of lineas) if (l.pendiente > 0) mapa[l.linea_id] = l.pendiente;
+    autoCargadoRef.current = ordenId;
+    if (Object.keys(mapa).length === 0) return;
+    void agregarLineasAlCarrito(mapa);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineas, ordenId, esAjuste]);
+
+  function agregarAlCarrito(
+    producto: Producto,
+    cantidadSugerida?: number,
+    extra?: { costoUnitario?: number | null; lineaId?: string | null; linea?: LineaAvance | null },
+  ) {
     setCarrito((prev) => {
-      const lineaId = extra?.lineaId ?? null;
+      const lineaId = extra?.lineaId ?? extra?.linea?.linea_id ?? null;
       const existente = prev.find((f) => f.producto.id === producto.id && (f.lineaId ?? null) === lineaId);
       if (existente) {
         return prev.map((f) =>
@@ -604,6 +631,7 @@ export function Movimientos() {
           cantidad: cantidadSugerida ?? 1,
           costoUnitario: extra?.costoUnitario !== undefined ? extra.costoUnitario : producto.costo_referencia,
           lineaId,
+          linea: extra?.linea ?? null,
         },
       ];
     });
@@ -704,14 +732,15 @@ export function Movimientos() {
   // Cada partida marcada se vuelve una fila del carrito. El producto se busca
   // por el que ya se usó para esa partida, luego por nombre exacto en la
   // empresa, y si no existe se crea (mismo criterio de alta automática).
-  async function agregarLineasAlCarrito() {
+  async function agregarLineasAlCarrito(mapa?: Record<string, number>) {
     if (!lineas || !empresaId) return;
+    const sel = mapa ?? seleccion;
     setAgregandoLineas(true);
     setError(null);
     try {
       let creados = 0;
       for (const l of lineas) {
-        const cantidad = seleccion[l.linea_id];
+        const cantidad = sel[l.linea_id];
         if (!cantidad || cantidad <= 0) continue;
         let producto: Producto | null = null;
         if (l.producto_id) {
@@ -736,7 +765,7 @@ export function Movimientos() {
           const nuevoId = producto.id;
           setProductosNuevos((prev) => new Set(prev).add(nuevoId));
         }
-        agregarAlCarrito(producto, cantidad, { costoUnitario: l.costo, lineaId: l.linea_id });
+        agregarAlCarrito(producto, cantidad, { costoUnitario: l.costo, lineaId: l.linea_id, linea: l });
       }
       setSeleccion({});
       if (creados > 0) queryClient.invalidateQueries({ queryKey: ["productos"] });
@@ -856,6 +885,7 @@ export function Movimientos() {
     setError(null);
     setMensaje(null);
     setUltimaRemision(null);
+    setUltimaEntrada(null);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
@@ -918,8 +948,9 @@ export function Movimientos() {
         registrado_por: userId,
       }));
 
-      const { error: errInsert } = await supabase.from("movimientos_inventario").insert(filas);
+      const { data: insertados, error: errInsert } = await supabase.from("movimientos_inventario").insert(filas).select("id");
       if (errInsert) throw errInsert;
+      const idsGuardados = (insertados ?? []).map((m: { id: string }) => m.id);
 
       setMensaje(
         remision
@@ -928,6 +959,13 @@ export function Movimientos() {
       );
       setCarrito([]);
       limpiarFoto();
+      if (tipo === "entrada" && idsGuardados.length > 0) {
+        const entrada = { ids: idsGuardados, ordenCompraId: !esAjuste && ordenIdFinal && ordenIdFinal !== "__nueva__" ? ordenIdFinal : null };
+        setUltimaEntrada(entrada);
+        // Abre el comprobante con QR listo para guardar como PDF; si el
+        // navegador bloquea la ventana, el botón de abajo lo reabre.
+        imprimirComprobanteEntrada(entrada.ids).catch(() => undefined);
+      }
       if (remision) {
         setUltimaRemision(remision);
         setEntregarA("");
@@ -1093,7 +1131,7 @@ export function Movimientos() {
                 <button
                   type="button"
                   disabled={agregandoLineas || Object.keys(seleccion).length === 0}
-                  onClick={agregarLineasAlCarrito}
+                  onClick={() => agregarLineasAlCarrito()}
                   className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
                 >
                   {agregandoLineas ? "Agregando…" : `Agregar ${Object.keys(seleccion).length} partida(s) al carrito`}
@@ -1323,6 +1361,26 @@ export function Movimientos() {
                           </>
                         )}
                         {f.lineaId && <span className="ml-1 rounded bg-emerald-50 px-1 text-[10px] text-emerald-700">partida de la orden</span>}
+                        {f.linea && f.linea.cantidad != null && (() => {
+                          const restante = Number(f.linea.cantidad) - Number(f.linea.avanzado) - Number(f.cantidad || 0);
+                          const u = f.linea.unidad ?? "";
+                          const base = `Pedido ${cantidadTexto(Number(f.linea.cantidad))} ${u}` + (f.linea.avanzado > 0 ? ` · ya ${tipo === "entrada" ? "recibido" : "embarcado"} ${cantidadTexto(f.linea.avanzado)}` : "");
+                          if (restante > 0.0005) {
+                            return (
+                              <p className="mt-0.5 text-xs text-amber-700">
+                                {base} · quedarán {cantidadTexto(restante)} {u} pendientes: {tipo === "entrada" ? "el proveedor aún debe producto" : "falta por embarcar"}
+                              </p>
+                            );
+                          }
+                          if (restante < -0.0005) {
+                            return (
+                              <p className="mt-0.5 text-xs text-red-700">
+                                {base} · excede por {cantidadTexto(-restante)} {u}: {tipo === "entrada" ? "ajuste o reclamación posterior" : "revisa la cantidad"}
+                              </p>
+                            );
+                          }
+                          return <p className="mt-0.5 text-xs text-emerald-700">{base} · completa la partida</p>;
+                        })()}
                       </td>
                       <td className="px-3 py-2">
                         <input
@@ -1356,15 +1414,26 @@ export function Movimientos() {
             </div>
           )}
 
-          {carrito.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <button
               onClick={onGuardarMovimiento}
-              disabled={enviando}
-              className="mb-4 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              disabled={enviando || carrito.length === 0 || !almacen}
+              className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               {enviando ? "Guardando…" : `Guardar ${tipo === "entrada" ? "entrada" : "salida"} (${carrito.length} línea(s))`}
             </button>
-          )}
+            {carrito.length > 0 && (
+              <button type="button" onClick={() => setCarrito([])} className="text-xs text-slate-500 underline">
+                Vaciar carrito
+              </button>
+            )}
+            {carrito.length === 0 && (
+              <span className="text-xs text-slate-500">
+                {ordenId && ordenId !== "__nueva__" ? "Marca partidas de la orden o agrega productos para poder guardar." : "Agrega productos al carrito para poder guardar."}
+              </span>
+            )}
+            <span className="text-xs text-slate-500">Al guardar se genera el PDF con código QR{tipo === "salida" ? " (remisión)" : " (comprobante de entrada)"}.</span>
+          </div>
         </>
       )}
 
@@ -1375,12 +1444,27 @@ export function Movimientos() {
           {ultimaRemision && (
             <span className="ml-2">
               <button onClick={() => imprimirRemision(ultimaRemision.id).catch((err) => setError((err as Error).message))} className="underline">
-                Imprimir con QR
+                PDF con QR
               </button>
               {" · "}
               <Link to={`/inventario/remisiones/${ultimaRemision.id}`} className="underline">
                 Ver remisión
               </Link>
+            </span>
+          )}
+          {ultimaEntrada && (
+            <span className="ml-2">
+              <button onClick={() => imprimirComprobanteEntrada(ultimaEntrada.ids).catch((err) => setError((err as Error).message))} className="underline">
+                PDF con QR (comprobante de entrada)
+              </button>
+              {ultimaEntrada.ordenCompraId && (
+                <>
+                  {" · "}
+                  <Link to={`/inventario/match?oc=${ultimaEntrada.ordenCompraId}`} className="underline">
+                    Ver avance de la OC
+                  </Link>
+                </>
+              )}
             </span>
           )}
         </div>
