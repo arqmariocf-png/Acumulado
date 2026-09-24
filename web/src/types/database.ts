@@ -603,6 +603,10 @@ export interface PuRenglon {
   base_calculo: PuBaseCalculo;
   codigo: string | null;
   descripcion: string | null;
+  /** Descripción del insumo en el catálogo (la de arriba puede estar
+   * personalizada por renglón: medidas, lado, acabado). */
+  descripcion_catalogo: string | null;
+  descripcion_personalizada: boolean;
   unidad: string | null;
   tipo: PuTipoInsumo;
   cantidad: number;
