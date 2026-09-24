@@ -7,6 +7,7 @@ import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import { idRemisionDesdeCodigo } from "../../lib/remision";
 import { imprimirRemision } from "./remisionQr";
+import { sincronizarCatalogoOcOv } from "../../lib/sincronizarOcOv";
 import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
 interface FilaCarrito {
@@ -482,6 +483,8 @@ export function Movimientos() {
   const [codigo, setCodigo] = useState("");
   const [mostrarCamara, setMostrarCamara] = useState(false);
   const [codigoSinProducto, setCodigoSinProducto] = useState<string | null>(null);
+  const [sincronizandoOc, setSincronizandoOc] = useState(false);
+  const [avisoSyncOc, setAvisoSyncOc] = useState<string | null>(null);
   // ids de productos creados en automático en esta sesión (nombre editable en el carrito)
   const [productosNuevos, setProductosNuevos] = useState<Set<string>>(new Set());
   const [buscando, setBuscando] = useState(false);
@@ -579,6 +582,23 @@ export function Movimientos() {
     setProductosNuevos((prev) => new Set(prev).add(creado.id));
     setCodigo("");
     queryClient.invalidateQueries({ queryKey: ["productos"] });
+  }
+
+  // "Actualizar OCs": trae del backoffice las OC/OV autorizadas sin salir de
+  // inventario (antes solo desde Carga, que Laura no ve). Corre en segundo
+  // plano y al terminar refresca el selector.
+  async function onActualizarOcs() {
+    setAvisoSyncOc(null);
+    setSincronizandoOc(true);
+    try {
+      const res = await sincronizarCatalogoOcOv();
+      queryClient.invalidateQueries({ queryKey: ["ordenes-para-match"] });
+      setAvisoSyncOc(`Catálogo actualizado: ${res.oc_guardadas ?? 0} OC/OS y ${res.ov_guardadas ?? 0} OV del backoffice (solo las ya autorizadas).`);
+    } catch (err) {
+      setAvisoSyncOc(`No se pudo actualizar: ${(err as Error).message}`);
+    } finally {
+      setSincronizandoOc(false);
+    }
   }
 
   async function renombrarProducto(productoId: string, nombre: string) {
@@ -827,9 +847,23 @@ export function Movimientos() {
 
       {!esAjuste && empresaId && (
         <div className="mb-4 max-w-md">
-          <label className="mb-1 block text-xs font-medium text-slate-600">
-            Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Grupo Loma)" : "orden de venta (match con Grupo Loma)"}
-          </label>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <label className="block text-xs font-medium text-slate-600">
+              Vincular a {tipo === "entrada" ? "orden de compra/servicio (match con Grupo Loma)" : "orden de venta (match con Grupo Loma)"}
+            </label>
+            <button
+              type="button"
+              onClick={onActualizarOcs}
+              disabled={sincronizandoOc}
+              title="Trae del backoffice las OC/OV autorizadas (tarda 30-60 s)"
+              className="shrink-0 rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {sincronizandoOc ? "Actualizando… (30–60 s)" : "Actualizar OCs del backoffice"}
+            </button>
+          </div>
+          {avisoSyncOc && (
+            <p className={`mb-1 text-xs ${avisoSyncOc.startsWith("No se pudo") ? "text-red-600" : "text-emerald-700"}`}>{avisoSyncOc}</p>
+          )}
           <select value={ordenId} onChange={(e) => setOrdenId(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
             <option value="">Sin vincular (ligar después)</option>
             {tipo === "entrada" && <option value="__nueva__">+ OC que todavía no aparece (pendiente de autorización)</option>}
