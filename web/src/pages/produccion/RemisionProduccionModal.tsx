@@ -17,6 +17,14 @@ interface LineaForm {
   unidad: string;
 }
 
+interface ClienteCatalogo {
+  id: string;
+  razon_social: string;
+  nombre_comercial: string | null;
+  rfc: string | null;
+  domicilio: string | null;
+}
+
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiqueta = "mb-1 block text-xs font-medium text-slate-700";
 
@@ -39,6 +47,10 @@ export function RemisionProduccionModal({
 }) {
   const queryClient = useQueryClient();
   const [contraparte, setContraparte] = useState("");
+  const [clienteId, setClienteId] = useState("");
+  const [nuevoCliente, setNuevoCliente] = useState(false);
+  const [nuevoRfc, setNuevoRfc] = useState("");
+  const [nuevoDomicilio, setNuevoDomicilio] = useState("");
   const [referenciaId, setReferenciaId] = useState("");
   const [proyectoId, setProyectoId] = useState("");
   const [observaciones, setObservaciones] = useState("");
@@ -52,6 +64,24 @@ export function RemisionProduccionModal({
       const { data, error: err } = await supabase.from("proyectos").select("id, nombre, cliente").eq("empresa_id", empresaId).eq("activo", true).order("nombre");
       if (err) throw err;
       return data as { id: string; nombre: string; cliente: string | null }[];
+    },
+  });
+
+  // Catálogo de clientes de la empresa (salida): se elige de la lista y la
+  // remisión sale con su RFC y domicilio; "otro" permite capturar uno nuevo
+  // que se guarda en el catálogo.
+  const { data: clientes } = useQuery({
+    queryKey: ["clientes", empresaId],
+    enabled: tipo === "salida",
+    queryFn: async () => {
+      const { data, error: err } = await supabase
+        .from("clientes")
+        .select("id, razon_social, nombre_comercial, rfc, domicilio")
+        .eq("empresa_id", empresaId)
+        .eq("activo", true)
+        .order("razon_social");
+      if (err) throw err;
+      return data as ClienteCatalogo[];
     },
   });
 
@@ -73,12 +103,30 @@ export function RemisionProduccionModal({
       const { data: sesion } = await supabase.auth.getSession();
       const userId = sesion.session?.user.id;
       if (!userId) throw new Error("Sesión expirada, vuelve a iniciar sesión.");
+      let clienteIdFinal: string | null = tipo === "salida" && clienteId ? clienteId : null;
+      if (tipo === "salida" && nuevoCliente) {
+        const { data: c, error: errC } = await supabase
+          .from("clientes")
+          .insert({
+            empresa_id: empresaId,
+            razon_social: contraparte.trim(),
+            rfc: nuevoRfc.trim().toUpperCase() || null,
+            domicilio: nuevoDomicilio.trim() || null,
+            created_by: userId,
+          })
+          .select("id")
+          .single();
+        if (errC) throw errC;
+        clienteIdFinal = c.id;
+        queryClient.invalidateQueries({ queryKey: ["clientes", empresaId] });
+      }
       const { data: rem, error: errRem } = await supabase
         .from("remisiones_produccion")
         .insert({
           empresa_id: empresaId,
           tipo,
           contraparte: contraparte.trim(),
+          cliente_id: clienteIdFinal,
           proyecto_id: proyectoId || null,
           orden_venta_id: tipo === "salida" && referenciaId ? referenciaId : null,
           orden_compra_id: tipo === "entrada" && referenciaId ? referenciaId : null,
@@ -137,12 +185,60 @@ export function RemisionProduccionModal({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={etiqueta}>{tipo === "salida" ? "Cliente *" : "Proveedor / de quién se recibe *"}</label>
-                <input list="contrapartes-remision" value={contraparte} onChange={(e) => setContraparte(e.target.value)} className={campo} placeholder="Nombre" />
-                <datalist id="contrapartes-remision">
-                  {contrapartes.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
+                {tipo === "salida" && !nuevoCliente ? (
+                  <>
+                    <select
+                      value={clienteId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        if (id === "__nuevo__") {
+                          setNuevoCliente(true);
+                          setClienteId("");
+                          setContraparte("");
+                          return;
+                        }
+                        setClienteId(id);
+                        const c = clientes?.find((x) => x.id === id);
+                        setContraparte(c ? c.razon_social : "");
+                      }}
+                      className={campo}
+                    >
+                      <option value="">Elige un cliente…</option>
+                      {clientes?.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.razon_social}
+                          {c.rfc ? ` · ${c.rfc}` : ""}
+                        </option>
+                      ))}
+                      <option value="__nuevo__">+ Otro cliente (dar de alta)</option>
+                    </select>
+                    {clienteId && (() => {
+                      const c = clientes?.find((x) => x.id === clienteId);
+                      return c?.domicilio ? <p className="mt-1 text-xs text-slate-500">{c.domicilio}</p> : null;
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    <input list="contrapartes-remision" value={contraparte} onChange={(e) => setContraparte(e.target.value)} className={campo} placeholder={tipo === "salida" ? "Razón social del cliente" : "Nombre"} />
+                    <datalist id="contrapartes-remision">
+                      {contrapartes.map((c) => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+                    {tipo === "salida" && nuevoCliente && (
+                      <div className="mt-2 grid grid-cols-1 gap-2 rounded border border-dashed border-slate-300 p-2">
+                        <input value={nuevoRfc} onChange={(e) => setNuevoRfc(e.target.value)} className={campo} placeholder="RFC (opcional)" />
+                        <input value={nuevoDomicilio} onChange={(e) => setNuevoDomicilio(e.target.value)} className={campo} placeholder="Domicilio fiscal (opcional)" />
+                        <p className="text-xs text-slate-500">
+                          Se guarda en el catálogo de clientes de esta empresa.{" "}
+                          <button type="button" onClick={() => setNuevoCliente(false)} className="underline">
+                            Elegir del catálogo
+                          </button>
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
               <div>
                 <label className={etiqueta}>{tipo === "salida" ? "Orden de venta" : "Orden de compra"} (opcional)</label>

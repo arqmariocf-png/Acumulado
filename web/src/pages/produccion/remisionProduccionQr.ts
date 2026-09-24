@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import { abrirParaImprimir } from "../../lib/imprimir";
+import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlRemisionProduccion, urlRemisionProduccion, type LineaRemisionProduccion, type RemisionProduccionDoc } from "../../lib/remisionProduccion";
 
 export interface RemisionProduccionFila extends RemisionProduccionDoc {
@@ -38,9 +38,16 @@ export async function cargarRemisionProduccion(id: string): Promise<{ remision: 
 }
 
 export async function imprimirRemisionProduccion(id: string): Promise<boolean> {
-  const { remision, lineas } = await cargarRemisionProduccion(id);
-  const url = urlRemisionProduccion(window.location.origin, id);
-  const svg = await qrSvg(url);
-  const logo = `/logos/${remision.empresa_codigo.toLowerCase()}.png`;
-  return abrirParaImprimir(htmlRemisionProduccion(remision, lineas, svg, url, logo));
+  // La pestaña se abre durante el clic (móvil) y se navega al terminar.
+  const ventana = abrirVentanaImpresion();
+  try {
+    const { remision, lineas } = await cargarRemisionProduccion(id);
+    const url = urlRemisionProduccion(window.location.origin, id);
+    const svg = await qrSvg(url);
+    const logo = `/logos/${remision.empresa_codigo.toLowerCase()}.png`;
+    return abrirParaImprimir(htmlRemisionProduccion(remision, lineas, svg, url, logo), ventana);
+  } catch (err) {
+    cerrarVentanaImpresion(ventana);
+    throw err;
+  }
 }
