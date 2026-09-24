@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { AvisoVersion } from "./AvisoVersion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 
 const ENLACES = [
@@ -120,6 +121,7 @@ export function Layout() {
           </div>
         </div>
       </header>
+      <AvisoVersion />
       <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>
