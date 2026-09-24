@@ -90,19 +90,6 @@ async function llamarFuncion(nombre: string, formData: FormData) {
   return json;
 }
 
-async function llamarFuncionJson(nombre: string, body: Record<string, unknown>) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  const respuesta = await fetch(urlFuncion(nombre), {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const json = await respuesta.json();
-  if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-  return json;
-}
-
 export function Carga() {
   const { veTodasLasEmpresas, perfil } = useAuth();
   const { data: empresas } = useEmpresas();
@@ -163,15 +150,36 @@ export function Carga() {
   // sincronizar_catalogo_oc_ov) -- no hace falta elegir una empresa primero,
   // a diferencia de la carga de Excel de abajo, que sigue siendo por
   // empresa como respaldo manual.
+  //
+  // Corre en segundo plano (pg_cron, ver solicitar_sincronizacion_oc_ov):
+  // el API del backoffice tarda 30-60 s y esperarlo en una petición HTTP
+  // terminaba en "HTTP request cancelled" (23-sep-2026). Aquí solo se
+  // solicita y se consulta el estado cada 3 s hasta que termine.
   async function onSincronizarCatalogo() {
     setError(null);
     setResultado(null);
     setEnviando(true);
     try {
-      const json = await llamarFuncionJson("sync-catalogo-oc-ov", {});
-      setResultado(json);
-      queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
-      queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
+      const { data: id, error: errSolicitud } = await supabase.rpc("solicitar_sincronizacion_oc_ov");
+      if (errSolicitud) throw errSolicitud;
+      const inicio = Date.now();
+      while (Date.now() - inicio < 4 * 60 * 1000) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const { data: fila, error: errEstado } = await supabase
+          .from("sincronizaciones_oc_ov")
+          .select("terminada_en, resultado, error")
+          .eq("id", id)
+          .single();
+        if (errEstado) throw errEstado;
+        if (fila?.terminada_en) {
+          if (fila.error) throw new Error(fila.error);
+          setResultado({ sincronizado: true, ...((fila.resultado as Record<string, unknown> | null) ?? {}) });
+          queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
+          queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
+          return;
+        }
+      }
+      throw new Error("La sincronización sigue corriendo en segundo plano; vuelve a consultar en unos minutos.");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -294,7 +302,7 @@ export function Carga() {
             onClick={onSincronizarCatalogo}
             className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
           >
-            {enviando ? "Sincronizando…" : "Sincronizar catálogo OC/OV"}
+            {enviando ? "Sincronizando en segundo plano… (30–60 s)" : "Sincronizar catálogo OC/OV"}
           </button>
         </div>
       )}

@@ -73,7 +73,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 // son datos bancarios/financieros donde 'almacen' NO debe tener acceso.
 function puedeSubirNotaEnEmpresa(perfil: PerfilAutenticado, empresaId: string): boolean {
   if (perfil.rol === "corporativo" || perfil.rol === "admin") return true;
-  if (perfil.rol !== "empresa" && perfil.rol !== "almacen") return false;
+  // dirección (finanzas) también captura inventario -- mismo criterio que
+  // auth_puede_escribir_inventario() en la base (caso Laura, 23-sep-2026).
+  if (perfil.rol !== "empresa" && perfil.rol !== "almacen" && perfil.rol !== "direccion") return false;
   // empresa_id null es la convención del proyecto para "ve/opera en todas
   // las empresas" (ver auth_ve_todas_empresas() en la base de datos) -- un
   // usuario de almacén con acceso a las 8 empresas tiene empresa_id null,
