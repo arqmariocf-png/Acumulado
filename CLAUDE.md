@@ -55,6 +55,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (requiere `ANTHROPIC_API_KEY` válida en secrets de Edge Functions; la actual
   daba `invalid x-api-key` el 21-sep-2026).
 
+## Roles de personal contratado (24-sep-2026)
+- `operativo` (solo checador), `administrativo`, `supervisor` (ve el checador de
+  su gente: `personal.supervisor_profile_id`), `directivo` (ve el checador de
+  todos). Entran a Checador, Mis documentos y a los módulos de `permisos_modulo`
+  (inventario, produccion, precios, requisiciones, tareas, proyectos, bbva);
+  finanzas cerrado (`ProtectedRoute modulo="finanzas"`).
+- RH crea la cuenta en RH > "Accesos al sistema" cuando el expediente tiene INE,
+  CURP y comprobante de domicilio (`admin-crear-usuario` con `personalId`: correo
+  generado `nombre.apellido@grupoloma.mx`, link por WhatsApp al celular). RH cambia
+  rol dentro de la familia básica con `rh_asignar_rol_basico`, nunca a admin.
+
 ## Personas y roles (referencia rápida)
 Mario (admin, todas las empresas) · Laura Ortaza (direccion/finanzas, todas) ·
 Jorge Esperón (empresa, ERG: precios unitarios) · Eréndira / Fernando Gómez (rh) ·
