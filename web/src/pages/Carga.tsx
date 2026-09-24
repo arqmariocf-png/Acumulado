@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
+import { sincronizarCatalogoOcOv } from "../lib/sincronizarOcOv";
 
 type Pestana = "estado_cuenta" | "cfdi" | "oc_ov";
 
@@ -150,36 +151,15 @@ export function Carga() {
   // sincronizar_catalogo_oc_ov) -- no hace falta elegir una empresa primero,
   // a diferencia de la carga de Excel de abajo, que sigue siendo por
   // empresa como respaldo manual.
-  //
-  // Corre en segundo plano (pg_cron, ver solicitar_sincronizacion_oc_ov):
-  // el API del backoffice tarda 30-60 s y esperarlo en una petición HTTP
-  // terminaba en "HTTP request cancelled" (23-sep-2026). Aquí solo se
-  // solicita y se consulta el estado cada 3 s hasta que termine.
   async function onSincronizarCatalogo() {
     setError(null);
     setResultado(null);
     setEnviando(true);
     try {
-      const { data: id, error: errSolicitud } = await supabase.rpc("solicitar_sincronizacion_oc_ov");
-      if (errSolicitud) throw errSolicitud;
-      const inicio = Date.now();
-      while (Date.now() - inicio < 4 * 60 * 1000) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const { data: fila, error: errEstado } = await supabase
-          .from("sincronizaciones_oc_ov")
-          .select("terminada_en, resultado, error")
-          .eq("id", id)
-          .single();
-        if (errEstado) throw errEstado;
-        if (fila?.terminada_en) {
-          if (fila.error) throw new Error(fila.error);
-          setResultado({ sincronizado: true, ...((fila.resultado as Record<string, unknown> | null) ?? {}) });
-          queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
-          queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
-          return;
-        }
-      }
-      throw new Error("La sincronización sigue corriendo en segundo plano; vuelve a consultar en unos minutos.");
+      const res = await sincronizarCatalogoOcOv();
+      setResultado({ sincronizado: true, ...res });
+      queryClient.invalidateQueries({ queryKey: ["carga-recientes"] });
+      queryClient.invalidateQueries({ queryKey: ["estado-carga-empresa"] });
     } catch (err) {
       setError((err as Error).message);
     } finally {
