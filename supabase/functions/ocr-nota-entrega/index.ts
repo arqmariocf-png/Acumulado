@@ -8,7 +8,9 @@
 // guardada y el usuario puede seguir capturando manual -- nunca se bloquea
 // el flujo por un error de OCR.
 //
-// POST multipart/form-data: file, empresaId
+// POST multipart/form-data: file, empresaId, soloEvidencia ("1": solo
+// guarda la foto como evidencia del movimiento, sin lectura por IA -- es el
+// caso normal cuando las partidas ya vienen de la OC/OV del backoffice).
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.122.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
@@ -171,6 +173,7 @@ Deno.serve(async (req) => {
     const form = await req.formData();
     const empresaId = String(form.get("empresaId") ?? "");
     const archivo = form.get("file") as File | null;
+    const soloEvidencia = ["1", "true"].includes(String(form.get("soloEvidencia") ?? "").toLowerCase());
 
     if (!empresaId || !archivo) return jsonResponse({ error: "empresaId y file son requeridos" }, 400);
     if (!puedeSubirNotaEnEmpresa(perfil, empresaId)) return jsonResponse({ error: "Sin permiso para cargar en esta empresa" }, 403);
@@ -196,7 +199,9 @@ Deno.serve(async (req) => {
     let errorLectura: string | null = null;
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!apiKey) {
+    if (soloEvidencia) {
+      // nada que leer: la foto es evidencia de la recepción/embarque
+    } else if (!apiKey) {
       errorLectura = "ANTHROPIC_API_KEY no está configurado -- la foto se guardó, pero sin lectura automática.";
     } else {
       try {
@@ -216,7 +221,7 @@ Deno.serve(async (req) => {
         storage_path: rutaStorage,
         proveedor_sugerido: proveedorSugerido,
         fecha_sugerida: fechaSugerida,
-        texto_extraido: { items: itemsSugeridos, error: errorLectura },
+        texto_extraido: { items: itemsSugeridos, error: errorLectura, solo_evidencia: soloEvidencia },
         subido_por: perfil.id,
       })
       .select("id")
