@@ -68,7 +68,7 @@ select
   l.item,
   l.unidad,
   l.cantidad,
-  l.costo,
+  round(l.costo, 4) as costo,
   coalesce(sum(mi.cantidad), 0) as recibido,
   greatest(coalesce(l.cantidad, 0) - coalesce(sum(mi.cantidad), 0), 0) as pendiente,
   case
@@ -90,7 +90,7 @@ select
   l.concepto,
   l.unidad,
   l.cantidad,
-  l.precio_base,
+  round(l.precio_base, 4) as precio_base,
   coalesce(sum(mi.cantidad), 0) as embarcado,
   greatest(coalesce(l.cantidad, 0) - coalesce(sum(mi.cantidad), 0), 0) as pendiente,
   case
