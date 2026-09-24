@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { esRolBasico, MODULOS_ASIGNABLES } from "../lib/modulos";
 import { AvisoVersion } from "./AvisoVersion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 
@@ -39,8 +40,11 @@ export function Layout() {
   // trabajo es la operación BBVA -- tareas, proyectos, requisiciones y
   // precios no les corresponden (pedido de Mario, 21-sep-2026).
   const esBbvaAcotado = perfil?.rol === "responsable" && !!perfil?.bbva_mantenimiento;
+  // Roles básicos de personal (operativo, administrativo, supervisor,
+  // directivo): solo inicio + checador + los módulos que RH les asignó.
+  const rolBasico = esRolBasico(perfil?.rol);
   const enlaces =
-    esBbvaAcotado
+    rolBasico || esBbvaAcotado
       ? ENLACES.filter((e) => e.a === "/")
       : perfil?.rol === "responsable"
       ? ENLACES.filter((e) => ENLACES_RESPONSABLE.includes(e.a))
@@ -64,19 +68,25 @@ export function Layout() {
   // El checador es para todo mundo, sin importar el rol -- por eso se agrega
   // aparte de ENLACES en vez de vivir en la lista que cada rol filtra.
   enlacesMenu.push({ a: "/checador", etiqueta: "Checador" });
-  if (perfil?.rol === "direccion" || perfil?.rol === "corporativo" || esAdmin) {
+  if (rolBasico) {
+    for (const m of MODULOS_ASIGNABLES) {
+      if ((perfil?.modulos ?? []).includes(m.clave)) enlacesMenu.push({ a: m.ruta, etiqueta: m.etiqueta });
+    }
+    if (perfil?.rol === "supervisor" || perfil?.rol === "directivo") enlacesMenu.push({ a: "/bbva/asistencia", etiqueta: "Asistencia del equipo" });
+  }
+  if (!rolBasico && (perfil?.rol === "direccion" || perfil?.rol === "corporativo" || esAdmin)) {
     enlacesMenu.push({ a: "/finanzas/saldos", etiqueta: "Saldos por empresa" });
     enlacesMenu.push({ a: "/finanzas/pagos", etiqueta: "Programación de pagos" });
   }
   if (veSaldos) enlacesMenu.push({ a: "/saldos", etiqueta: "Saldos" });
-  if (veMantenimientoBbva) enlacesMenu.push({ a: "/mantenimiento/bbva", etiqueta: "Mantenimiento BBVA" });
-  if (perfil?.rol === "supervisor_bbva" || perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento) {
+  if (veMantenimientoBbva && !rolBasico) enlacesMenu.push({ a: "/mantenimiento/bbva", etiqueta: "Mantenimiento BBVA" });
+  if (!rolBasico && (perfil?.rol === "supervisor_bbva" || perfil?.rol === "corporativo" || perfil?.rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento)) {
     enlacesMenu.push({ a: "/bbva/folios", etiqueta: "Folios BBVA" });
   }
-  if (perfil?.rol === "corporativo" || perfil?.rol === "direccion" || perfil?.rol === "rh" || esAdmin || !!perfil?.bbva_mantenimiento) {
+  if (!rolBasico && (perfil?.rol === "corporativo" || perfil?.rol === "direccion" || perfil?.rol === "rh" || esAdmin || !!perfil?.bbva_mantenimiento)) {
     enlacesMenu.push({ a: "/bbva/equilibrio", etiqueta: "Punto de equilibrio BBVA" });
   }
-  if (!!perfil?.bbva_mantenimiento && perfil?.rol !== "rh") enlacesMenu.push({ a: "/bbva/asistencia", etiqueta: "Asistencia del equipo" });
+  if (!rolBasico && !!perfil?.bbva_mantenimiento && perfil?.rol !== "rh") enlacesMenu.push({ a: "/bbva/asistencia", etiqueta: "Asistencia del equipo" });
   if (veRH) enlacesMenu.push({ a: "/rh", etiqueta: "RH" });
   // Nómina externa (APIs de Grupo Loma): solo rh/admin -- rh_documentos
   // sigue acotado únicamente a subir expedientes.

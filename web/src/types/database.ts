@@ -4,7 +4,22 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable" | "rh_documentos" | "produccion" | "supervisor_bbva";
+export type AppRol =
+  | "pendiente"
+  | "corporativo"
+  | "empresa"
+  | "direccion"
+  | "admin"
+  | "rh"
+  | "almacen"
+  | "responsable"
+  | "rh_documentos"
+  | "produccion"
+  | "supervisor_bbva"
+  | "operativo"
+  | "administrativo"
+  | "supervisor"
+  | "directivo";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
@@ -24,6 +39,9 @@ export interface Profile {
   activo: boolean;
   telefono: string | null;
   bbva_mantenimiento: boolean;
+  /** Módulos asignados uno por uno (permisos_modulo); solo aplican a los
+   * roles básicos (operativo, administrativo, supervisor, directivo). */
+  modulos: string[];
 }
 
 export interface CuentaBancaria {

@@ -9,6 +9,7 @@ import { Actividades } from "./rh/Actividades";
 import { PerfilesJornada } from "./rh/PerfilesJornada";
 import { NominaChecador } from "./rh/NominaChecador";
 import { SolicitudesNda } from "./rh/SolicitudesNda";
+import { Accesos } from "./rh/Accesos";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
 import { abrirParaImprimir } from "../lib/imprimir";
@@ -22,7 +23,7 @@ import type {
   ProyeccionNominaSemanal,
   TipoContrato, FrecuenciaPago } from "../types/database";
 
-type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador" | "vacantes" | "actividades";
+type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador" | "vacantes" | "actividades" | "accesos";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "personal", etiqueta: "Personal" },
@@ -33,6 +34,7 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "checador", etiqueta: "Checador" },
   { valor: "vacantes", etiqueta: "Vacantes y rotación" },
   { valor: "actividades", etiqueta: "Actividades" },
+  { valor: "accesos", etiqueta: "Accesos al sistema" },
 ];
 
 function dinero(n: number | null | undefined): string {
@@ -115,6 +117,7 @@ export function RH() {
       {pestana === "checador" && <PestanaChecador />}
       {pestana === "vacantes" && <Vacantes />}
       {pestana === "actividades" && <Actividades />}
+      {pestana === "accesos" && <Accesos />}
     </div>
   );
 }
@@ -913,6 +916,25 @@ function useContrataciones() {
   });
 }
 
+/** Estado del acceso al sistema de la persona contratada (cuenta creada o
+ * qué falta del expediente); la gestión completa vive en la pestaña
+ * "Accesos al sistema". */
+function AccesoContratacion({ personalId }: { personalId: string }) {
+  const { data } = useQuery({
+    queryKey: ["rh-personal-accesos"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_personal_accesos").select("personal_id, profile_id, rol, docs_indispensables").eq("activo", true);
+      if (error) throw error;
+      return data as { personal_id: string; profile_id: string | null; rol: string | null; docs_indispensables: number }[];
+    },
+  });
+  const p = data?.find((x) => x.personal_id === personalId);
+  if (!p) return <span className="text-slate-400">—</span>;
+  if (p.profile_id) return <span className="text-emerald-700">Cuenta creada · rol {p.rol}</span>;
+  if (Number(p.docs_indispensables) >= 3) return <span className="text-sky-700">Expediente completo · crear en "Accesos al sistema"</span>;
+  return <span className="text-amber-700">Faltan documentos indispensables ({p.docs_indispensables}/3)</span>;
+}
+
 function PestanaContrataciones() {
   const { data: personal } = usePersonal();
   const { data: empresas } = useEmpresas();
@@ -1035,6 +1057,7 @@ function PestanaContrataciones() {
               <th className="px-3 py-2">Inicio</th>
               <th className="px-3 py-2">Fin</th>
               <th className="px-3 py-2">Estatus</th>
+              <th className="px-3 py-2">Acceso al sistema</th>
             </tr>
           </thead>
           <tbody>
@@ -1051,11 +1074,14 @@ function PestanaContrataciones() {
                 <td className="px-3 py-2">{c.fecha_inicio}</td>
                 <td className="px-3 py-2">{c.fecha_fin}</td>
                 <td className="px-3 py-2">{c.estatus}</td>
+                <td className="px-3 py-2 text-xs">
+                  <AccesoContratacion personalId={c.personal_id} />
+                </td>
               </tr>
             ))}
             {contrataciones?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
                   Todavía no hay contrataciones registradas.
                 </td>
               </tr>

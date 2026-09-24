@@ -4,7 +4,7 @@ import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import type { AppRol, Empresa, Profile } from "../../types/database";
 
-const ROLES: AppRol[] = ["pendiente", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "admin"];
+const ROLES: AppRol[] = ["pendiente", "operativo", "administrativo", "supervisor", "directivo", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "admin"];
 
 /** Deja sólo dígitos y, si parece un celular mexicano de 10 dígitos sin
  * código de país, le antepone 52 -- lo que necesita el link wa.me. Si ya
