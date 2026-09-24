@@ -332,7 +332,7 @@ export function Detalle() {
                           ) : (
                             <p className="text-slate-900">
                               {r.descripcion}
-                              {puedeEditar && r.tipo !== "auxiliar" && (
+                              {puedeEditar && (
                                 <button
                                   type="button"
                                   onClick={() => setFilaEnDescripcion(r.item_id)}

@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import { abrirParaImprimir } from "../../lib/imprimir";
+import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlComprobanteEntrada, urlAvanceOc, type ComprobanteEntrada, type LineaComprobante } from "../../lib/comprobanteEntrada";
 import { qrSvg } from "./remisionQr";
 
@@ -8,6 +8,16 @@ import { qrSvg } from "./remisionQr";
  * Regresa false si el navegador bloqueó la ventana. */
 export async function imprimirComprobanteEntrada(movimientoIds: string[]): Promise<boolean> {
   if (movimientoIds.length === 0) return false;
+  const ventana = abrirVentanaImpresion();
+  try {
+    return await generarComprobante(movimientoIds, ventana);
+  } catch (err) {
+    cerrarVentanaImpresion(ventana);
+    throw err;
+  }
+}
+
+async function generarComprobante(movimientoIds: string[], ventana: Window | null): Promise<boolean> {
   const { data: movs, error } = await supabase
     .from("movimientos_inventario")
     .select("id, cantidad, fecha, empresa_id, almacen_id, orden_compra_id, linea_orden_compra_id, nota_entrega_id, registrado_por, productos(nombre, sku, unidad_medida)")
@@ -59,5 +69,5 @@ export async function imprimirComprobanteEntrada(movimientoIds: string[]): Promi
   };
   const url = primero.orden_compra_id ? urlAvanceOc(window.location.origin, primero.orden_compra_id) : `${window.location.origin}/inventario/movimientos`;
   const svg = await qrSvg(url);
-  return abrirParaImprimir(htmlComprobanteEntrada(comprobante, lineas, svg, url));
+  return abrirParaImprimir(htmlComprobanteEntrada(comprobante, lineas, svg, url), ventana);
 }

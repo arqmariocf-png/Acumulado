@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import { abrirParaImprimir } from "../../lib/imprimir";
+import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlRemision, urlRemision, type LineaRemision } from "../../lib/remision";
 import type { RemisionSalida } from "../../types/database";
 
@@ -32,8 +32,16 @@ export async function cargarRemision(id: string): Promise<{ remision: RemisionSa
 /** Abre la remisión lista para imprimir. Regresa false si el navegador
  * bloqueó la ventana. */
 export async function imprimirRemision(id: string): Promise<boolean> {
-  const { remision, lineas } = await cargarRemision(id);
-  const url = urlRemision(window.location.origin, id);
-  const svg = await qrSvg(url);
-  return abrirParaImprimir(htmlRemision(remision, lineas, svg, url));
+  // La pestaña se abre antes del primer await para que el gesto del clic
+  // siga vigente en iPhone/Android.
+  const ventana = abrirVentanaImpresion();
+  try {
+    const { remision, lineas } = await cargarRemision(id);
+    const url = urlRemision(window.location.origin, id);
+    const svg = await qrSvg(url);
+    return abrirParaImprimir(htmlRemision(remision, lineas, svg, url), ventana);
+  } catch (err) {
+    cerrarVentanaImpresion(ventana);
+    throw err;
+  }
 }
