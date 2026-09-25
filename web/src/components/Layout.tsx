@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { seccionesPara, type SeccionMenu } from "../lib/menu";
+import { AREAS, areaComoSeccion } from "../lib/organigrama";
 import { AvisoVersion } from "./AvisoVersion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 
@@ -10,6 +11,8 @@ export function Layout() {
   // Menú por áreas con orientación de uso: la visibilidad por rol vive en
   // lib/menu.ts (misma fuente que el inicio y la guía).
   const secciones = seccionesPara(perfil);
+  // Director general: las áreas del organigrama van antes de "Módulos".
+  const areasBarra = perfil?.rol === "admin" ? AREAS.map(areaComoSeccion) : [];
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -30,12 +33,13 @@ export function Layout() {
               {/* Escritorio: un submenú por área. Celular: un solo "Módulos"
                   agrupado, porque no caben siete botones. */}
               <div className="hidden items-center gap-1 lg:flex">
-                {secciones.map((s) => (
-                  <MenuModulos key={s.clave} secciones={[s]} titulo={s.titulo} />
-                ))}
+                {areasBarra.length > 0
+                  ? areasBarra.map((s) => <MenuModulos key={s.clave} secciones={[s]} titulo={s.titulo} />)
+                  : secciones.map((s) => <MenuModulos key={s.clave} secciones={[s]} titulo={s.titulo} />)}
+                {areasBarra.length > 0 && <MenuModulos secciones={secciones} titulo="Módulos" />}
               </div>
               <div className="lg:hidden">
-                <MenuModulos secciones={secciones} titulo="Módulos" />
+                <MenuModulos secciones={areasBarra.length > 0 ? areasBarra : secciones} titulo="Módulos" />
               </div>
             </nav>
           </div>
