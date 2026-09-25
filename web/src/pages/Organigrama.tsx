@@ -30,12 +30,30 @@ function useKpis() {
   });
 }
 
-type Semaforo = "verde" | "ambar" | "rojo" | "gris";
+type Semaforo = "verde" | "ambar" | "rojo" | "gris" | "azul";
 
-function semaforo(valor: number | string | undefined, k: KpiConfig): Semaforo {
-  if (valor === undefined || typeof valor !== "number") return "gris";
-  if (valor >= Number(k.umbral_rojo)) return "rojo";
-  if (valor >= Number(k.umbral_ambar)) return "ambar";
+/** Valor numérico de un resultado: los montos "$1,234" se leen como número. */
+function numeroDe(valor: number | string | undefined): number | undefined {
+  if (typeof valor === "number") return valor;
+  if (typeof valor === "string") {
+    const limpio = Number(valor.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(limpio) && valor.trim() !== "—" ? limpio : undefined;
+  }
+  return undefined;
+}
+
+function semaforo(valor: number | string | undefined, k: KpiConfig, ind: Indicador): Semaforo {
+  if (ind.enDesarrollo) return "gris";
+  const n = numeroDe(valor);
+  if (n === undefined) return "gris";
+  if (ind.informativo) return "azul";
+  if (ind.direccion === "menor_es_peor") {
+    if (n <= Number(k.umbral_rojo)) return "rojo";
+    if (n <= Number(k.umbral_ambar)) return "ambar";
+    return "verde";
+  }
+  if (n >= Number(k.umbral_rojo)) return "rojo";
+  if (n >= Number(k.umbral_ambar)) return "ambar";
   return "verde";
 }
 
@@ -44,6 +62,7 @@ const COLOR_PUNTO: Record<Semaforo, string> = {
   ambar: "bg-amber-400",
   rojo: "bg-red-500",
   gris: "bg-slate-300",
+  azul: "bg-sky-400",
 };
 
 function useValorIndicador(ind: Indicador | undefined) {
@@ -61,11 +80,12 @@ function Punto({ k }: { k: KpiConfig }) {
   const ind = indicadorPorClave(k.indicador);
   const { data, isLoading } = useValorIndicador(ind);
   if (!ind) return null;
-  const estado = isLoading ? "gris" : semaforo(data?.valor, k);
+  const estado = isLoading ? "gris" : semaforo(data?.valor, k, ind);
   const etiqueta = k.etiqueta ?? ind.etiqueta;
+  const umbrales = ind.enDesarrollo ? "en desarrollo" : ind.informativo ? "informativo" : ind.direccion === "menor_es_peor" ? `ámbar ≤ ${k.umbral_ambar}, rojo ≤ ${k.umbral_rojo}` : `ámbar ≥ ${k.umbral_ambar}, rojo ≥ ${k.umbral_rojo}`;
   return (
     <span
-      title={`${etiqueta}: ${isLoading ? "…" : (data?.valor ?? "—")}${data?.detalle ? ` (${data.detalle})` : ""} · ámbar ≥ ${k.umbral_ambar}, rojo ≥ ${k.umbral_rojo}`}
+      title={`${etiqueta}: ${isLoading ? "…" : (data?.valor ?? "—")}${data?.detalle ? ` (${data.detalle})` : ""} · ${umbrales}`}
       className={`inline-block h-3 w-3 rounded-full ${COLOR_PUNTO[estado]} ${estado === "rojo" ? "ring-2 ring-red-200" : ""}`}
     />
   );
@@ -115,7 +135,8 @@ export function Organigrama() {
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> en orden</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400" /> requiere atención</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> urgente</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-300" /> sin dato</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-400" /> informativo</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-300" /> sin dato / en desarrollo</span>
         <Link to="/organigrama/configurar" className="ml-auto underline">
           Configurar KPIs
         </Link>
@@ -128,7 +149,7 @@ function TarjetaIndicador({ k }: { k: KpiConfig }) {
   const ind = indicadorPorClave(k.indicador);
   const { data, isLoading, error } = useValorIndicador(ind);
   if (!ind) return null;
-  const estado = isLoading ? "gris" : semaforo(data?.valor, k);
+  const estado = isLoading ? "gris" : semaforo(data?.valor, k, ind);
   const fondo = estado === "rojo" ? "border-red-300 bg-red-50" : estado === "ambar" ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white";
   return (
     <Link to={ind.ruta} className={`rounded-lg border p-3 ${fondo}`}>
@@ -138,6 +159,7 @@ function TarjetaIndicador({ k }: { k: KpiConfig }) {
       </p>
       <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{isLoading ? "…" : error ? "—" : data?.valor}</p>
       <p className="text-xs text-slate-500">{error ? "sin acceso" : (data?.detalle ?? "")}</p>
+      {ind.descripcion && <p className="mt-1 text-[11px] text-slate-400">{ind.descripcion}</p>}
     </Link>
   );
 }
@@ -227,6 +249,7 @@ export function ConfigurarKpis() {
   });
 
   const catalogo = INDICADORES_NUMERICOS();
+  const [mostrarTodos, setMostrarTodos] = useState<Record<string, boolean>>({});
 
   return (
     <div className="max-w-4xl">
@@ -251,9 +274,16 @@ export function ConfigurarKpis() {
       )}
       {AREAS.map((a) => {
         const del = (kpis ?? []).filter((k) => k.area === a.clave);
+        const todos = !!mostrarTodos[a.clave];
+        const lista = catalogo.filter((ind) => todos || ind.area === a.clave || del.some((k) => k.indicador === ind.clave));
         return (
           <section key={a.clave} className="mb-5 rounded border border-slate-200 bg-white">
-            <div className={`rounded-t px-3 py-1.5 text-sm font-semibold text-white ${a.color}`}>{a.titulo}</div>
+            <div className={`flex items-center justify-between rounded-t px-3 py-1.5 text-sm font-semibold text-white ${a.color}`}>
+              <span>{a.titulo}</span>
+              <button type="button" onClick={() => setMostrarTodos((prev) => ({ ...prev, [a.clave]: !todos }))} className="text-xs font-normal underline">
+                {todos ? "solo los del área" : "ver todos los indicadores"}
+              </button>
+            </div>
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>
@@ -266,13 +296,18 @@ export function ConfigurarKpis() {
                 </tr>
               </thead>
               <tbody>
-                {catalogo.map((ind) => {
+                {lista.map((ind) => {
                   const k = del.find((x) => x.indicador === ind.clave);
                   return (
                     <tr key={ind.clave} className={`border-t border-slate-100 ${k ? "" : "text-slate-400"}`}>
                       <td className="px-3 py-1.5">
-                        <div className={k ? "text-slate-900" : ""}>{ind.etiqueta}</div>
-                        <div className="text-[11px] text-slate-400">{ind.ruta}</div>
+                        <div className={k ? "text-slate-900" : ""}>
+                          {ind.etiqueta}
+                          {ind.enDesarrollo && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">en desarrollo</span>}
+                          {ind.informativo && <span className="ml-1 rounded bg-sky-50 px-1 text-[10px] text-sky-700">informativo</span>}
+                          {ind.direccion === "menor_es_peor" && <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] text-amber-700">menor es peor</span>}
+                        </div>
+                        <div className="text-[11px] text-slate-400">{ind.descripcion ?? ind.ruta}</div>
                       </td>
                       <td className="px-3 py-1.5">
                         <input
