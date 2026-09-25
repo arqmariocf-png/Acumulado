@@ -24,6 +24,7 @@ const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m
 import { Guia } from "./pages/Guia";
 import { Organigrama, Area, ConfigurarKpis } from "./pages/Organigrama";
 import { InicioSegunRol } from "./pages/InicioSegunRol";
+import { Socio } from "./pages/Socio";
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
@@ -99,6 +100,7 @@ function Enrutador() {
           <Route path="/" element={<InicioSegunRol />} />
           <Route path="/inicio" element={<Inicio />} />
           <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/socio" element={<Socio />} />
             <Route path="/organigrama" element={<Organigrama />} />
             <Route path="/organigrama/configurar" element={<ConfigurarKpis />} />
             <Route path="/area/:clave" element={<Area />} />
