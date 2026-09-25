@@ -25,16 +25,95 @@ export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente
 
 export interface Empresa {
   id: string;
+  grupo_id: string;
   nombre: string;
   codigo: string;
   rfc: string | null;
   activo: boolean;
 }
 
+// Organizaciones (tenants). Acumulado es la plataforma maestra: cada cliente
+// es un `grupo` con sus entidades, usuarios y datos aislados, y con los
+// módulos que se le van abriendo. Ver supabase/migrations/20260923090001.
+
+export type ModuloClave = "conciliacion" | "inventario" | "rh" | "proyectos";
+
+export interface Grupo {
+  id: string;
+  nombre: string;
+  codigo: string;
+  marca_comercial: string | null;
+  /** Ruta dentro del bucket público `branding`; el frontend arma la URL con ella. */
+  logo_path: string | null;
+  es_maestro: boolean;
+  activo: boolean;
+}
+
+export interface Modulo {
+  clave: ModuloClave;
+  nombre: string;
+  descripcion: string | null;
+  orden: number;
+}
+
+export interface GrupoModulo {
+  grupo_id: string;
+  modulo_clave: ModuloClave;
+  habilitado: boolean;
+  habilitado_at: string | null;
+  habilitado_por: string | null;
+}
+
+// Suscripción: se cobra por usuario, con escalones de volumen. Los datos de la
+// tarjeta NO viven en esta base -- metodo_pago_* es solo lo que la pasarela
+// devuelve para que el cliente reconozca la suya.
+
+export type EstadoSuscripcion = "prueba" | "activa" | "periodo_gracia" | "suspendida" | "cancelada";
+
+export interface PlanEscalon {
+  plan_clave: string;
+  desde_usuarios: number;
+  precio_unitario_centavos: number;
+}
+
+export interface Suscripcion {
+  grupo_id: string;
+  plan_clave: string;
+  plan_nombre: string;
+  moneda: string;
+  /** Usuarios activos con rol asignado: los que se cobran. */
+  usuarios_facturables: number;
+  precio_unitario_centavos: number;
+  total_mensual_centavos: number;
+  estado: EstadoSuscripcion;
+  periodo_fin: string | null;
+  gracia_hasta: string | null;
+  dias_gracia: number;
+  pasarela: string | null;
+  metodo_pago_marca: string | null;
+  metodo_pago_ultimos4: string | null;
+  puede_escribir: boolean;
+  escribe_hasta: string | null;
+}
+
+export interface Pago {
+  id: string;
+  grupo_id: string;
+  monto_centavos: number;
+  moneda: string;
+  estado: "pendiente" | "pagado" | "fallido" | "reembolsado";
+  periodo_inicio: string | null;
+  periodo_fin: string | null;
+  pagado_at: string | null;
+  detalle_error: string | null;
+  created_at: string;
+}
+
 export interface Profile {
   id: string;
   nombre: string;
   rol: AppRol;
+  grupo_id: string | null;
   empresa_id: string | null;
   activo: boolean;
   telefono: string | null;

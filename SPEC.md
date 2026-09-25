@@ -212,3 +212,106 @@ solo la vista de avance tendría que ganar granularidad.
   (impuestos, fletes incluidos en el total de la OC pero no en el costo del
   producto, etc.) el % de avance puede no cuadrar exactamente contra el
   total de la orden aunque físicamente ya se haya recibido/embarcado todo.
+
+---
+
+## 11. Organizaciones (multi-tenant), agregado 2026-09-23
+
+Acumulado deja de ser la app de un solo grupo: es el backoffice maestro donde
+cada cliente vive como una **organización** propia. Grupo Loma es la
+organización **maestra** (opera la plataforma); ARSSA es el primer cliente.
+
+- **`grupos`** es el tenant: nombre, código, marca comercial, logotipo y la
+  bandera `es_maestro`.
+- **`empresas`** y **`profiles`** cuelgan de un grupo. `nombre`/`codigo` de
+  empresa dejaron de ser únicos globalmente y pasaron a serlo dentro del grupo.
+  Si un profile tiene `empresa_id`, esa empresa tiene que ser de su mismo grupo
+  (lo fuerza un trigger, no solo la interfaz).
+- Las tablas que no cuelgan de una empresa ganaron `grupo_id`:
+  `archivos_cargados`, `reglas_clasificacion`, `excepciones_proveedor`,
+  `personal`, `tipos_documento_personal` y `audit_log`.
+- **`modulos` + `grupo_modulos`** es el interruptor por organización: una
+  organización nueva arranca solo con la base (entidades, usuarios,
+  administración) y se le abren módulos conforme los ocupe. Abrirlos es de la
+  organización maestra.
+
+`auth_ve_todas_empresas()` pasó a significar "todas las empresas de MI
+organización" en las policies reescritas por
+`20260923090002_grupos_rls.sql`, vía `empresa_en_alcance()`.
+
+### 11.1 Cómo se impone la frontera
+
+Dos capas, y la segunda es la que importa a largo plazo:
+
+1. **Policies permisivas** (las de cada módulo) deciden *quién* ve qué dentro
+   de la organización: roles, empresa asignada, responsable del proyecto.
+2. Una **policy restrictiva** llamada `frontera_organizacion` en cada tabla de
+   negocio agrega "…y que sea de tu organización". Una restrictiva se evalúa
+   en **AND con todas las demás, incluidas las que todavía no existen**: una
+   policy nueva mal escrita en un módulo futuro ya no puede abrir la frontera.
+
+Se eligió así en vez de reescribir las 29 policies que tenían el patrón viejo
+(`auth_ve_todas_empresas() or empresa_id = auth_empresa_id()`, que devuelve
+true para *todas* las filas cuando el usuario es corporativo): no hay que
+entender ni arriesgarse a romper la lógica de permisos de cada módulo, que es
+de quien lo construyó, y el resultado cubre lo que venga después.
+
+`supabase/tests/frontera_organizacion.sql` lo prueba con un corporativo de cada
+organización, y **falla si alguien agrega una tabla de negocio sin frontera** —
+ya cazó cuatro (los tableros de tareas) mientras se escribía. La lista blanca
+de tablas verdaderamente globales (catálogos de la plataforma: `modulos`,
+`planes`, `plan_escalones`, `config_sistema`, `eventos_pasarela`) vive en esa
+prueba, así que agregar una a la lista es una decisión explícita y revisable.
+
+Quedan dos cosas menores anotadas, no fugas entre clientes: un tablero de
+tareas sin empresa (`tableros.empresa_id is null`) se comparte dentro de la
+organización, y `config_sistema` es global de la plataforma.
+
+## 12. Suscripción: cobro por usuario, agregado 2026-09-23
+
+Se cobra **por usuario**, y eso es lo que mantiene encendida la captura. La
+organización maestra no se cobra a sí misma.
+
+| Usuarios | Precio por usuario |
+|---|---|
+| 1 a 4 | $1,500 |
+| 5 a 9 | $1,300 |
+| 10 a 19 | $1,100 |
+| 20 o más | $900 |
+
+El precio del escalón aplica a **todos** los usuarios: con 5 son 5×$1,300 =
+$6,500, no 4×$1,500 + 1×$1,300. Es un paquete, no una tarifa marginal. En
+Stripe es una tarifa escalonada con `tiers_mode=volume`; la app solo manda la
+cantidad. Los escalones son datos (`plan_escalones`), no código.
+
+Se cobran los usuarios **activos con rol asignado**: un recién registrado que
+nadie autorizó no cuenta, y desactivar a alguien baja la factura. El conteo
+real vive en `usuarios_facturables_interno()`, revocada de `public` — sin eso,
+cualquier usuario autenticado podría preguntar cuánta gente tiene otra
+organización, o sea cuánto le están cobrando a la competencia.
+
+**La tarjeta nunca toca esta base.** Se captura en el dominio de la pasarela;
+de ella solo se guardan marca y últimos 4. Ver `_shared/pagos/` (reglas puras
++ adaptador de Stripe) y los edge functions `suscripcion-checkout`,
+`suscripcion-webhook` y `usuarios-sincronizar`.
+
+Falta de pago: **gracia y luego solo lectura**. 7 días por default; después se
+consulta y exporta, pero no se captura. La administración de la cuenta no se
+bloquea nunca — si no, el cliente no podría actualizar su tarjeta.
+
+### 12.1 Pendiente
+
+Nunca se ha ejecutado un cobro real: falta dar de alta en Stripe el producto
+con la tarifa escalonada y configurar `STRIPE_SECRET_KEY`, `STRIPE_PRECIO_ID`
+y `STRIPE_WEBHOOK_SECRET`.
+
+---
+
+## 13. Marca por organización, agregado 2026-09-23
+
+Cada cliente ve su logotipo en el encabezado. El archivo vive en el bucket
+público `branding` bajo `<grupo_id>/logo.<ext>` — el primer folder de la ruta
+es la frontera que revisan las policies de Storage. Lo sube el admin de la
+organización (Admin → Marca) o el de la maestra para cualquier cliente
+(Admin → Organizaciones). El logotipo **no** se versiona en el repositorio: es
+material del cliente y el repositorio es público.

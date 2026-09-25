@@ -30,6 +30,8 @@ export interface PerfilAutenticado {
   id: string;
   nombre: string | null;
   rol: string;
+  /** Organización (tenant) del usuario. null mientras no tenga una asignada. */
+  grupoId: string | null;
   empresaId: string | null;
   bbvaMantenimiento: boolean;
 }
@@ -45,14 +47,32 @@ export async function obtenerPerfilAutenticado(req: Request): Promise<PerfilAute
   } = await cliente.auth.getUser();
   if (!user) return null;
 
-  const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, empresa_id, bbva_mantenimiento").eq("id", user.id).single();
+  const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, grupo_id, empresa_id, bbva_mantenimiento").eq("id", user.id).single();
   if (error || !perfil) return null;
 
-  return { id: perfil.id, nombre: perfil.nombre, rol: perfil.rol, empresaId: perfil.empresa_id, bbvaMantenimiento: !!perfil.bbva_mantenimiento };
+  return {
+    id: perfil.id,
+    nombre: perfil.nombre,
+    rol: perfil.rol,
+    grupoId: perfil.grupo_id,
+    empresaId: perfil.empresa_id,
+    bbvaMantenimiento: !!perfil.bbva_mantenimiento,
+  };
 }
 
 export function puedeEscribirEnEmpresa(perfil: PerfilAutenticado, empresaId: string): boolean {
   if (perfil.rol === "pendiente" || perfil.rol === "direccion") return false;
   if (perfil.rol === "corporativo" || perfil.rol === "admin") return true;
   return perfil.empresaId === empresaId;
+}
+
+/** La frontera que el chequeo de rol de arriba NO cubre: "corporativo" y
+ * "admin" pueden escribir en *todas* las empresas, pero solo las de SU
+ * organización. Estas funciones escriben con la service_role key, que bypassa
+ * RLS, así que la frontera hay que preguntarla explícitamente -- y se pregunta
+ * con el cliente del usuario, para no reimplementar aquí lo que ya decide RLS
+ * sobre `empresas`. */
+export async function empresaEnMiOrganizacion(req: Request, empresaId: string): Promise<boolean> {
+  const { data } = await clienteComoUsuario(req).from("empresas").select("id").eq("id", empresaId).maybeSingle();
+  return !!data;
 }

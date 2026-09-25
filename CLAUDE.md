@@ -4,7 +4,10 @@ Este archivo se lee al inicio de cada sesión. Es la memoria entre
 conversaciones: lo que no esté aquí o en el código, una sesión nueva no lo sabe.
 
 ## Qué es
-App interna de Grupo Loma (8 empresas). Supabase (proyecto `zdqahpzijkkcnfehbggs`:
+Backoffice **multi-organización**: cada cliente es una organización (tabla
+`grupos`) con sus entidades, usuarios y datos aislados. Grupo Loma es la
+organización **maestra** (opera la plataforma y es la de las 8 empresas);
+ARSSA es el primer cliente de paga. App interna de Grupo Loma (8 empresas). Supabase (proyecto `zdqahpzijkkcnfehbggs`:
 Postgres + RLS + Edge Functions en Deno) y React/Vite/TS en `web/`, desplegado en
 Vercel (`https://acumulado-nine.vercel.app`) desde `main`. Dueño: Mario Contreras
 Farfán (admin). Módulos: bancos/estados de cuenta, CFDI, OC/OV del backoffice,
@@ -62,11 +65,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `fn_kpis_empresa(uuid)`: mismas claves que `lib/indicadores.ts`, calculadas
   por empresa en SQL. El organigrama acepta `?empresa=<id>` y entonces pinta solo
   los KPIs que existen en ese mapa (`lib/kpisEmpresa.ts`).
-- Otra sesión trabaja la rama `claude/arssa-backoffice-acumulado-6wa90r`
-  (multi-organización: `grupos`, `grupo_modulos`, frontera RLS, suscripciones).
-  En producción solo está aplicada `grupos_modulos` (tabla `grupos` con RLS sin
-  policies: no leerla desde el navegador; usar la RPC). No mezclar esa rama
-  desde aquí.
+- Multi-organización **ya está completo en producción** (25-sep-2026):
+  `grupos`, `grupo_modulos`, frontera RLS restrictiva en ~77 tablas,
+  suscripciones con escalones por usuario y logotipo por organización.
+  `grupos` sí tiene policies: se puede leer desde el navegador.
+- `fn_socio_resumen()` y `fn_kpis_empresa()` cuentan dinero por empresa: la
+  primera se acota con `grupo_en_alcance()`, la segunda está revocada de
+  `authenticated` (solo `service_role`) y se consulta por
+  `fn_kpis_empresa_publica()`. Cualquier función nueva que sume dinero o gente
+  necesita la misma guarda.
 - Almacén: OC/OV se listan de la más reciente a la más vieja (`fecha` en
   `avance_recepcion_oc` / `avance_embarque_ov`, selector con fecha y filtro de
   texto). Match OC/OV: botón "Registrar entrada/salida" → `/inventario?empresa=
@@ -111,6 +118,58 @@ Jorge Esperón (empresa, ERG: precios unitarios) · Eréndira / Fernando Gómez 
 Christian (bbva_mantenimiento) · Jaime Sierra (produccion) · Miguel Tepal
 (responsable, Constructora) · Delia (contabilidad). Contraseñas iniciales se
 comunican por chat a Mario, nunca se guardan en el repo.
+
+## La frontera entre organizaciones (leer antes de tocar RLS)
+
+Con más de un cliente en la misma base, esto es lo que separa a uno de otro:
+
+1. **Organización.** Nadie ve datos de otra, ni siendo corporativo. La única
+   excepción es el admin de la organización maestra.
+2. **Módulo.** `grupo_modulos` dice qué tiene abierto cada organización
+   (cubre conciliación, inventario y RH; los módulos más nuevos todavía no
+   tienen interruptor, pero sí frontera de organización).
+3. **Suscripción.** Sin pago al corriente se consulta y se exporta, pero no se
+   captura ("gracia y luego solo lectura"). La maestra nunca se bloquea.
+
+La frontera la impone una policy **restrictiva** llamada `frontera_organizacion`
+en cada tabla de negocio: se evalúa en AND con todas las demás, así que una
+policy nueva mal escrita no puede abrirla. Las permisivas de cada módulo
+siguen decidiendo quién ve qué *dentro* de la organización.
+
+**Toda tabla nueva de negocio necesita su `frontera_organizacion`.** No es
+opcional: `supabase/tests/frontera_organizacion.sql` falla si falta, y la lista
+blanca de tablas globales de plataforma vive ahí.
+
+Otras reglas que no se rompen:
+
+- **Nunca** guardar datos de tarjeta (PAN, CVV). La tarjeta se captura en el
+  dominio de la pasarela; solo se guardan marca y últimos 4.
+- **Nada que cuente dinero o usuarios de otra organización se expone por RPC.**
+  Supabase publica toda función de `public`: o se acota por dentro, o se revoca
+  de `public` y se le da `execute` solo a `service_role`.
+- Los **totales se calculan**, no se capturan (saldo, existencias, mensualidad).
+
+## Validar antes de dar algo por hecho
+
+```bash
+npm test                  # módulos puros (node --test)
+./scripts/validar-sql.sh  # aplica TODAS las migraciones desde cero + pruebas de RLS
+cd web && npm run build && npm run lint
+```
+
+`./scripts/validar-sql.sh` es el que importa para cualquier cambio de esquema o
+de policies. Que aplique **desde cero** no es un detalle: es lo que permite
+restaurar la base el día que haga falta. Si una migración depende de algo que
+alguien creó a mano en Supabase, el repositorio ya no sabe reconstruir el
+sistema — pasó con Precios Unitarios (6 tablas y 5 funciones que ninguna
+migración creaba) y se reparó en `20260909125957/125958`.
+
+## Varias sesiones a la vez
+
+Ya pasó: se construyeron dos módulos de Inventario, dos de Proyectos y dos PWA
+en paralelo, y el esquema combinado ni siquiera aplicaba. **Antes de agregar un
+módulo, revisa `supabase/migrations/` y `web/src/pages/` a ver si ya está.**
+Cambios chicos partiendo de `main`, mezclando pronto.
 
 ## Pendientes conocidos
 - Clave `ANTHROPIC_API_KEY` válida para lectura de fotos.

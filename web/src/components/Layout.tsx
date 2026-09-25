@@ -4,10 +4,11 @@ import { useAuth } from "../lib/auth";
 import { seccionesPara, type SeccionMenu } from "../lib/menu";
 import { useEsSocio } from "../lib/socio";
 import { AvisoVersion } from "./AvisoVersion";
+import { AvisoSuscripcion } from "./AvisoSuscripcion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 
 export function Layout() {
-  const { perfil, cerrarSesion } = useAuth();
+  const { perfil, grupo, logoUrl, cerrarSesion } = useAuth();
   // Menú por áreas con orientación de uso: la visibilidad por rol vive en
   // lib/menu.ts (misma fuente que el inicio y la guía).
   const secciones = seccionesPara(perfil);
@@ -19,7 +20,20 @@ export function Layout() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2 sm:gap-6">
-            <span className="text-lg font-semibold text-slate-900">Grupo Loma</span>
+            {/* Cada organización se ve a sí misma: su logotipo si lo subió, si
+                no su marca. Sin organización cargada (sin señal) se queda el
+                nombre de siempre. */}
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={grupo?.marca_comercial ?? grupo?.nombre ?? "Organización"}
+                className="h-9 w-auto max-w-[180px] object-contain"
+              />
+            ) : (
+              <span className="text-lg font-semibold text-slate-900">
+                {grupo?.marca_comercial ?? grupo?.nombre ?? "Grupo Loma"}
+              </span>
+            )}
             <nav className="flex items-center gap-2 text-sm">
               <NavLink
                 to="/"
@@ -58,6 +72,7 @@ export function Layout() {
           </div>
         </div>
       </header>
+      <AvisoSuscripcion />
       <AvisoVersion />
       <main className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
