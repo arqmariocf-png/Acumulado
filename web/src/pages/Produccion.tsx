@@ -953,13 +953,17 @@ type OrdenConProducto = OrdenProduccion & { productos_produccion: { nombre: stri
 
 /** Personal de RH con costo por hora (sueldo semanal ÷ horas de su
  * jornada) y horas por día, para la mano de obra del lote. */
-function usePersonalProduccion() {
+type PersonalPlanta = { id: string; nombre: string; puesto: string | null; horas_dia: number; costo_hora: number | null; sueldo_semanal: number | null; empresa_id: string | null };
+
+/** Solo el personal con alta (contratación vigente) en la empresa de la
+ * planta: la planta no debe ver a toda la plantilla del grupo. */
+function usePersonalProduccion(empresaId: string) {
   return useQuery({
-    queryKey: ["personal-produccion"],
+    queryKey: ["personal-produccion", empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_personal_produccion").select("*").order("nombre");
+      const { data, error } = await supabase.from("v_personal_produccion").select("*").eq("empresa_id", empresaId).order("nombre");
       if (error) throw error;
-      return data as { id: string; nombre: string; puesto: string | null; horas_dia: number; costo_hora: number | null; sueldo_semanal: number | null }[];
+      return data as PersonalPlanta[];
     },
   });
 }
@@ -1207,7 +1211,7 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
   const { data: materias } = useMateriasPrimas(empresa.id);
   const { data: productosCatalogo } = useProductos(empresa.id);
   const { data: proyectosEmpresa } = useProyectosPlanta(empresa.id);
-  const { data: personalRh } = usePersonalProduccion();
+  const { data: personalRh } = usePersonalProduccion(empresa.id);
   const { data: costeo } = useCosteoOrden(orden.id);
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState(false);
@@ -1292,21 +1296,44 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
     onError: (err) => setError((err as Error).message),
   });
 
+  // Mario (25-sep-2026): aquí no se capturan horas ni costo; eso viene de RH.
+  // Horas = días planeados del lote (o 1 si no hay) × horas por día de su
+  // jornada; costo/hora = sueldo semanal ÷ horas de la jornada (vista
+  // v_personal_produccion). Sin contratación en RH, el costo queda en 0.
   const agregarManoObra = useMutation({
     mutationFn: async (fd: FormData) => {
       const personalId = oVacio(fd, "personal_id");
       const persona = personalRh?.find((p) => p.id === personalId);
+      if (!persona) throw new Error("Elige a una persona de la planta.");
+      const dias = Number(orden.dias_planeados ?? 1) || 1;
+      const horas = Math.round(dias * Number(persona.horas_dia) * 100) / 100;
       const { error } = await supabase.from("mano_de_obra_produccion").insert({
         orden_produccion_id: orden.id,
-        personal_id: personalId,
-        descripcion: oVacio(fd, "descripcion") ?? persona?.nombre ?? null,
-        horas: fd.get("horas"),
-        costo_hora: fd.get("costo_hora"),
+        personal_id: persona.id,
+        descripcion: persona.puesto ? `${persona.nombre} · ${persona.puesto}` : persona.nombre,
+        horas,
+        costo_hora: persona.costo_hora ?? 0,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mano-de-obra", orden.id] });
+      invalidarCosteo();
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  // Lo capturado se puede quitar mientras el lote esté abierto (RLS deja
+  // borrar a producción y admin).
+  const eliminarFila = useMutation({
+    mutationFn: async (v: { tabla: "movimientos_materia_prima" | "mano_de_obra_produccion" | "costos_indirectos_produccion"; id: string }) => {
+      const { error } = await supabase.from(v.tabla).delete().eq("id", v.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["consumo-materia-prima", orden.id] });
+      queryClient.invalidateQueries({ queryKey: ["mano-de-obra", orden.id] });
+      queryClient.invalidateQueries({ queryKey: ["costos-indirectos", orden.id] });
       invalidarCosteo();
     },
     onError: (err) => setError((err as Error).message),
@@ -1475,9 +1502,27 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <SeccionConsumo consumo={consumo ?? []} materias={materias ?? []} disabled={cerrada} onSubmit={(fd) => agregarConsumo.mutate(fd)} />
-        <SeccionManoObra manoObra={manoObra ?? []} personal={personalRh ?? []} diasPlaneados={orden.dias_planeados} disabled={cerrada} onSubmit={(fd) => agregarManoObra.mutate(fd)} />
-        <SeccionIndirectos indirectos={indirectos ?? []} disabled={cerrada} onSubmit={(fd) => agregarIndirecto.mutate(fd)} />
+        <SeccionConsumo
+          consumo={consumo ?? []}
+          materias={materias ?? []}
+          disabled={cerrada}
+          onSubmit={(fd) => agregarConsumo.mutate(fd)}
+          onEliminar={(id) => eliminarFila.mutate({ tabla: "movimientos_materia_prima", id })}
+        />
+        <SeccionManoObra
+          manoObra={manoObra ?? []}
+          personal={personalRh ?? []}
+          diasPlaneados={orden.dias_planeados}
+          disabled={cerrada}
+          onSubmit={(fd) => agregarManoObra.mutate(fd)}
+          onEliminar={(id) => eliminarFila.mutate({ tabla: "mano_de_obra_produccion", id })}
+        />
+        <SeccionIndirectos
+          indirectos={indirectos ?? []}
+          disabled={cerrada}
+          onSubmit={(fd) => agregarIndirecto.mutate(fd)}
+          onEliminar={(id) => eliminarFila.mutate({ tabla: "costos_indirectos_produccion", id })}
+        />
       </div>
 
       {!cerrada && (
@@ -1520,22 +1565,32 @@ function SeccionConsumo({
   materias,
   disabled,
   onSubmit,
+  onEliminar,
 }: {
   consumo: (MovimientoMateriaPrima & { materias_primas: { nombre: string; unidad_medida: string } })[];
   materias: MateriaPrima[];
   disabled: boolean;
   onSubmit: (fd: FormData) => void;
+  onEliminar: (id: string) => void;
 }) {
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase text-slate-600">Consumo de materia prima</h3>
       <ul className="mb-2 space-y-1 text-sm">
         {consumo.map((c) => (
-          <li key={c.id} className="flex justify-between border-b border-slate-100 pb-1">
+          <li key={c.id} className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1">
             <span>
               {c.materias_primas?.nombre} — {formatoNumero(c.cantidad)} {c.materias_primas?.unidad_medida}
+              <span className="text-slate-400"> × {formatoMoneda(c.costo_unitario)}</span>
             </span>
-            <span className="text-slate-500">{formatoMoneda(c.cantidad * c.costo_unitario)}</span>
+            <span className="flex items-center gap-2 whitespace-nowrap text-slate-500">
+              {formatoMoneda(c.cantidad * c.costo_unitario)}
+              {!disabled && (
+                <button type="button" onClick={() => onEliminar(c.id)} className="text-xs text-red-600 hover:underline" title="Quitar (para corregir, quítalo y vuélvelo a capturar)">
+                  quitar
+                </button>
+              )}
+            </span>
           </li>
         ))}
         {consumo.length === 0 && <li className="text-slate-400">Sin consumo capturado.</li>}
@@ -1576,39 +1631,40 @@ function SeccionManoObra({
   diasPlaneados,
   disabled,
   onSubmit,
+  onEliminar,
 }: {
   manoObra: ManoDeObraProduccion[];
-  personal: { id: string; nombre: string; puesto: string | null; horas_dia: number; costo_hora: number | null; sueldo_semanal: number | null }[];
+  personal: PersonalPlanta[];
   diasPlaneados: number | null;
   disabled: boolean;
   onSubmit: (fd: FormData) => void;
+  onEliminar: (id: string) => void;
 }) {
-  // Al elegir a alguien de RH se calculan solas las horas (días planeados
-  // del lote × horas por día de su jornada) y el costo por hora (sueldo
-  // semanal ÷ horas de la jornada). Se pueden ajustar antes de guardar.
+  // Solo se elige a la persona: horas y costo salen de la base de RH
+  // (jornada y sueldo de su contratación) y de los días planeados del lote.
   const [personaId, setPersonaId] = useState("");
-  const [horas, setHoras] = useState("");
-  const [costoHora, setCostoHora] = useState("");
   const nombrePersona = new Map(personal.map((p) => [p.id, p.nombre]));
-
-  function elegir(id: string) {
-    setPersonaId(id);
-    const p = personal.find((x) => x.id === id);
-    if (!p) return;
-    if (diasPlaneados) setHoras(String(Math.round(Number(diasPlaneados) * Number(p.horas_dia) * 100) / 100));
-    setCostoHora(p.costo_hora != null ? String(p.costo_hora) : "");
-  }
+  const elegida = personal.find((x) => x.id === personaId);
+  const dias = Number(diasPlaneados ?? 1) || 1;
+  const horasCalc = elegida ? Math.round(dias * Number(elegida.horas_dia) * 100) / 100 : null;
 
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase text-slate-600">Mano de obra</h3>
       <ul className="mb-2 space-y-1 text-sm">
         {manoObra.map((m) => (
-          <li key={m.id} className="flex justify-between border-b border-slate-100 pb-1">
+          <li key={m.id} className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1">
             <span>
               {(m.personal_id && nombrePersona.get(m.personal_id)) || m.descripcion || "Operador"} — {formatoNumero(m.horas)} h × {formatoMoneda(m.costo_hora)}
             </span>
-            <span className="text-slate-500">{formatoMoneda(m.costo_total)}</span>
+            <span className="flex items-center gap-2 whitespace-nowrap text-slate-500">
+              {formatoMoneda(m.costo_total)}
+              {!disabled && (
+                <button type="button" onClick={() => onEliminar(m.id)} className="text-xs text-red-600 hover:underline">
+                  quitar
+                </button>
+              )}
+            </span>
           </li>
         ))}
         {manoObra.length === 0 && <li className="text-slate-400">Sin mano de obra capturada.</li>}
@@ -1622,24 +1678,23 @@ function SeccionManoObra({
           }}
           className="space-y-2 rounded border border-slate-200 p-2"
         >
-          <select name="personal_id" value={personaId} onChange={(e) => elegir(e.target.value)} className={campoTexto}>
-            <option value="">Personal de RH…</option>
+          <select name="personal_id" value={personaId} onChange={(e) => setPersonaId(e.target.value)} required className={campoTexto}>
+            <option value="">Personal con alta en esta planta…</option>
             {personal.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nombre}
                 {p.puesto ? ` · ${p.puesto}` : ""}
-                {p.costo_hora != null ? ` · ${formatoMoneda(p.costo_hora)}/h` : " · sin contratación"}
+                {p.costo_hora != null ? ` · ${formatoMoneda(p.costo_hora)}/h` : " · sin sueldo en RH"}
               </option>
             ))}
           </select>
-          <input name="descripcion" placeholder="Descripción (opcional si eliges persona)" className={campoTexto} />
-          <div className="flex gap-2">
-            <input type="number" step="0.01" min="0.01" name="horas" value={horas} onChange={(e) => setHoras(e.target.value)} placeholder="Horas" required className={campoTexto} />
-            <input type="number" step="0.01" min="0" name="costo_hora" value={costoHora} onChange={(e) => setCostoHora(e.target.value)} placeholder="Costo/hora" required className={campoTexto} />
-          </div>
+          {personal.length === 0 && (
+            <p className="text-[11px] text-amber-700">Nadie tiene alta (contratación vigente) en esta planta. RH lo da de alta en Recursos humanos → Contrataciones.</p>
+          )}
           <p className="text-[11px] text-slate-500">
-            {diasPlaneados ? `Horas = ${formatoNumero(diasPlaneados)} día(s) planeados × horas por día de su jornada.` : "Captura el tiempo planeado del lote para calcular las horas solas."}{" "}
-            Costo/hora = sueldo semanal ÷ horas de su jornada.
+            {elegida
+              ? `${formatoNumero(dias)} día(s) × ${formatoNumero(Number(elegida.horas_dia))} h/día de su jornada = ${formatoNumero(horasCalc ?? 0)} h · ${formatoMoneda(elegida.costo_hora ?? 0)}/h = ${formatoMoneda((horasCalc ?? 0) * (elegida.costo_hora ?? 0))}`
+              : "Horas y costo salen de RH (jornada y sueldo de su contratación) y de los días planeados del lote; aquí no se capturan."}
           </p>
           <button className="w-full rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white">+ Agregar mano de obra</button>
         </form>
@@ -1652,19 +1707,28 @@ function SeccionIndirectos({
   indirectos,
   disabled,
   onSubmit,
+  onEliminar,
 }: {
   indirectos: { id: string; concepto: string; monto: number }[];
   disabled: boolean;
   onSubmit: (fd: FormData) => void;
+  onEliminar: (id: string) => void;
 }) {
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase text-slate-600">Costos indirectos</h3>
       <ul className="mb-2 space-y-1 text-sm">
         {indirectos.map((i) => (
-          <li key={i.id} className="flex justify-between border-b border-slate-100 pb-1">
+          <li key={i.id} className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1">
             <span>{i.concepto}</span>
-            <span className="text-slate-500">{formatoMoneda(i.monto)}</span>
+            <span className="flex items-center gap-2 whitespace-nowrap text-slate-500">
+              {formatoMoneda(i.monto)}
+              {!disabled && (
+                <button type="button" onClick={() => onEliminar(i.id)} className="text-xs text-red-600 hover:underline">
+                  quitar
+                </button>
+              )}
+            </span>
           </li>
         ))}
         {indirectos.length === 0 && <li className="text-slate-400">Sin indirectos capturados.</li>}
