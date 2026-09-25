@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useMiPersonal } from "./MisDocumentos";
 import { useAuth } from "../lib/auth";
 import { esRolBasico } from "../lib/modulos";
+import { SECCIONES, seccionDeRuta } from "../lib/menu";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
 // esperando ahí. La idea es abrirlo desde el celular y saber de un vistazo
@@ -441,11 +442,29 @@ export function Inicio() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {mosaicos.map((m) => (
-          <Mosaico key={m.a} {...m} />
-        ))}
-      </div>
+      {/* Agrupado por área (misma clasificación que el menú y la guía) para
+          que el inicio también oriente: qué hay en cada bloque y para qué. */}
+      {[...SECCIONES, { clave: "otros", titulo: "Otros", proposito: "", entradas: [] }].map((s) => {
+        const del = mosaicos.filter((m) => (seccionDeRuta(m.a)?.clave ?? "otros") === s.clave);
+        if (del.length === 0) return null;
+        return (
+          <section key={s.clave} className="mb-6">
+            <h2 className="text-sm font-semibold text-slate-900">{s.titulo}</h2>
+            {s.proposito && <p className="mb-2 text-xs text-slate-500">{s.proposito}</p>}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {del.map((m) => (
+                <Mosaico key={m.a} {...m} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+      <p className="text-xs text-slate-400">
+        ¿No sabes a dónde ir?{" "}
+        <Link to="/guia" className="underline">
+          Guía de uso
+        </Link>
+      </p>
     </div>
   );
 }
