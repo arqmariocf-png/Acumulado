@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { seccionesPara, type SeccionMenu } from "../lib/menu";
+import { useEsSocio } from "../lib/socio";
 import { AvisoVersion } from "./AvisoVersion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 
@@ -10,6 +11,8 @@ export function Layout() {
   // Menú por áreas con orientación de uso: la visibilidad por rol vive en
   // lib/menu.ts (misma fuente que el inicio y la guía).
   const secciones = seccionesPara(perfil);
+  const { data: socio } = useEsSocio(perfil?.rol === "admin" ? undefined : perfil?.id);
+  const esSocio = (socio?.length ?? 0) > 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -27,6 +30,11 @@ export function Layout() {
               >
                 Inicio
               </NavLink>
+              {esSocio && (
+                <NavLink to="/socio" className={({ isActive }) => `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                  Socio
+                </NavLink>
+              )}
               {/* Escritorio: un submenú por área. Celular: un solo "Módulos"
                   agrupado, porque no caben siete botones. */}
               <div className="hidden items-center gap-1 lg:flex">

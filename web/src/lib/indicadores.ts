@@ -198,6 +198,30 @@ export const INDICADORES: Indicador[] = [
       return { valor: n, alerta: n > 0, detalle: "ambiguos, duplicados o sin factura" };
     },
   },
+  {
+    clave: "fin_comprobaciones_por_revisar",
+    etiqueta: "Comprobaciones de gasto por revisar",
+    ruta: "/gastos",
+    area: "finanzas",
+    descripcion: "Facturas/notas de caja chica enviadas por supervisores que finanzas no ha aprobado ni rechazado.",
+    visible: finanzas,
+    consulta: async () => {
+      const n = await contar(supabase.from("comprobaciones_gasto").select("*", { count: "exact", head: true }).eq("estatus", "enviada"));
+      return { valor: n, alerta: n > 0, detalle: "esperan aprobación" };
+    },
+  },
+  {
+    clave: "mis_comprobaciones",
+    etiqueta: "Mis comprobaciones en revisión",
+    ruta: "/gastos",
+    descripcion: "Gastos que enviaste y finanzas aún no resuelve.",
+    informativo: true,
+    visible: (p) => ["supervisor", "responsable", "directivo", "administrativo"].includes(p.rol),
+    consulta: async (p) => {
+      const n = await contar(supabase.from("comprobaciones_gasto").select("*", { count: "exact", head: true }).eq("supervisor_id", p.id).eq("estatus", "enviada"));
+      return { valor: n, detalle: n === 0 ? "nada pendiente" : "en revisión" };
+    },
+  },
   { clave: "fin_flujo_30d", etiqueta: "Flujo de caja a 30 días", ruta: "/finanzas/saldos", area: "finanzas", descripcion: "Saldos + cobros esperados − pagos programados en 30 días.", direccion: "menor_es_peor", enDesarrollo: true, visible: finanzas, consulta: pendiente },
 
   // ------------------------------------------------------------ contabilidad
@@ -722,7 +746,7 @@ export function indicadorPorClave(clave: string): Indicador | undefined {
 }
 
 /** Indicadores que pueden ir como punto de color en el organigrama. */
-export const INDICADORES_NUMERICOS = () => INDICADORES.filter((i) => i.clave !== "mi_asistencia" && i.clave !== "firmas_pendientes");
+export const INDICADORES_NUMERICOS = () => INDICADORES.filter((i) => !["mi_asistencia", "firmas_pendientes", "mis_comprobaciones"].includes(i.clave));
 
 export function indicadoresPara(perfil: Profile | null | undefined, ctx: { tienePersonal: boolean }): Indicador[] {
   if (!perfil || perfil.rol === "pendiente") return [];
