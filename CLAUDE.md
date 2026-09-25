@@ -68,7 +68,31 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   policies: no leerla desde el navegador; usar la RPC). No mezclar esa rama
   desde aquí.
 - Almacén: OC/OV se listan de la más reciente a la más vieja (`fecha` en
-  `avance_recepcion_oc` / `avance_embarque_ov`, selector con fecha).
+  `avance_recepcion_oc` / `avance_embarque_ov`, selector con fecha y filtro de
+  texto). Match OC/OV: botón "Registrar entrada/salida" → `/inventario?empresa=
+  &tipo=&oc=|ov=` (Movimientos lee esos params). Partidas de OV con
+  `v_ov_lineas_avance`. `existencias` trae `costo_promedio` (ponderado de
+  entradas con costo) y `valor`.
+- **Socios**: tabla `socios_organizacion(profile_id, grupo_id, inicio)`; el admin
+  los administra desde la vista de socio (RPC `fn_socios_listar/asignar/quitar`).
+  `fn_socio_resumen()` devuelve todas las organizaciones al admin y solo las
+  propias a un socio; `RutaSocio` protege `/socio`, `/organigrama`, `/area`.
+  Laura es socia de ARSSA (sin `inicio`: conserva su inicio). Aldo pendiente de
+  cuenta.
+- **Comprobación de gastos / caja chica**: `comprobaciones_gasto` + vista
+  `v_comprobaciones_gasto`; sube por edge function `gastos-comprobar`
+  (archivo al bucket privado `cargas/comprobaciones/…`, push a admin/direccion/
+  corporativo). Pueden comprobar: supervisor, responsable, directivo,
+  administrativo, corporativo, direccion, empresa, admin
+  (`auth_puede_comprobar_gasto`); revisan admin/corporativo/direccion. Página
+  `/gastos`; KPI `fin_comprobaciones_por_revisar`.
+- **Ojo**: la rama de ARSSA recrea policies en producción sin las de inventario
+  (pasó el 25-sep: "new row violates RLS for productos"). Se restituyeron con
+  `20260925130000_inventario_permisos_tras_frontera.sql`; si vuelve a pasar,
+  volver a aplicar esa migración.
+- Evidencia (foto de nota/remisión) en Registrar movimiento es una sección
+  siempre visible para entrada y salida (edge `ocr-nota-entrega` v8 valida con
+  `auth_puede_escribir_inventario`). No se guardan líneas ni remisiones en 0.
 
 ## Roles de personal contratado (24-sep-2026)
 - `operativo` (solo checador), `administrativo`, `supervisor` (ve el checador de

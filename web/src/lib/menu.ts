@@ -48,6 +48,7 @@ export const SECCIONES: SeccionMenu[] = [
     entradas: [
       { ruta: "/dashboard", etiqueta: "Panel de indicadores", descripcion: "KPIs, carga por empresa y saldos", uso: "Vista general para dirección; de aquí salen los reportes de Clavicón y saldos.", visible: veFinanzasCompleto },
       { ruta: "/finanzas/saldos", etiqueta: "Saldos por empresa", descripcion: "inicio y cierre por empresa, sin detalle", uso: "El resumen rápido para finanzas antes de programar pagos.", visible: esFinanzas },
+      { ruta: "/gastos", etiqueta: "Comprobación de gastos", descripcion: "caja chica y gastos de obra con factura o nota", uso: "El supervisor sube el comprobante con monto y obra; finanzas recibe el aviso y lo aprueba.", visible: (p) => ["supervisor", "responsable", "directivo", "administrativo", "corporativo", "direccion", "empresa", "admin"].includes(p.rol) },
       { ruta: "/finanzas/pagos", etiqueta: "Programación de pagos", descripcion: "calendario de pagos por empresa", uso: "Para programar y dar seguimiento a los pagos de la semana.", visible: esFinanzas },
       { ruta: "/saldos", etiqueta: "Saldos diarios", descripcion: "corte por cuenta bancaria", uso: "Saldo de inicio y cierre de cada cuenta por día.", visible: esFinanzas },
       { ruta: "/prestamos-intercompania", etiqueta: "Préstamos entre empresas", descripcion: "movimientos intercompañía", uso: "Cuando una empresa del grupo le presta a otra: queda registrado de los dos lados.", visible: veFinanzasCompleto },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
@@ -92,7 +92,6 @@ type ModoCaptura = "codigo" | "nombre" | "foto";
 const MODOS_CAPTURA: { valor: ModoCaptura; etiqueta: string }[] = [
   { valor: "nombre", etiqueta: "Buscar por nombre" },
   { valor: "codigo", etiqueta: "Código de barras" },
-  { valor: "foto", etiqueta: "Foto de la nota" },
 ];
 
 /** Convierte cualquier imagen (incluida HEIC del iPhone cuando el navegador
@@ -405,6 +404,8 @@ function fechaSelector(iso: string | null | undefined): string {
   return `${String(d).padStart(2, "0")} ${mes} · `;
 }
 
+const dineroCorto = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }));
+
 function useOrdenes(empresaId: string, tipo: TipoMovimientoInventario) {
   return useQuery({
     queryKey: ["ordenes-para-match", empresaId, tipo],
@@ -419,7 +420,7 @@ function useOrdenes(empresaId: string, tipo: TipoMovimientoInventario) {
           .order("id_orden", { ascending: false })
           .limit(150);
         if (error) throw error;
-        return data.map((o) => ({ id: o.id, etiqueta: `${fechaSelector(o.fecha_creacion)}${o.tipo} ${o.id_orden} — ${o.proveedor ?? "sin proveedor"} (${o.total ?? "—"})` }));
+        return data.map((o) => ({ id: o.id, etiqueta: `${fechaSelector(o.fecha_creacion)}${o.tipo} ${o.id_orden} — ${o.proveedor ?? "sin proveedor"} (${dineroCorto(o.total)})` }));
       }
       const { data, error } = await supabase
         .from("ordenes_venta")
@@ -429,7 +430,7 @@ function useOrdenes(empresaId: string, tipo: TipoMovimientoInventario) {
         .order("id_ov", { ascending: false })
         .limit(150);
       if (error) throw error;
-      return data.map((o) => ({ id: o.id, etiqueta: `${fechaSelector(o.fecha_ov)}OV ${o.id_ov} — ${o.cliente ?? "sin cliente"} (${o.total ?? "—"})` }));
+      return data.map((o) => ({ id: o.id, etiqueta: `${fechaSelector(o.fecha_ov)}OV ${o.id_ov} — ${o.cliente ?? "sin cliente"} (${dineroCorto(o.total)})` }));
     },
   });
 }
@@ -596,6 +597,26 @@ export function Movimientos() {
 
   const { data: almacen } = useAlmacen(empresaId);
   const { data: ordenes } = useOrdenes(empresaId, tipo);
+  const [filtroOrden, setFiltroOrden] = useState("");
+  const ordenesFiltradas = (ordenes ?? []).filter((o) => o.etiqueta.toLowerCase().includes(filtroOrden.trim().toLowerCase()));
+  // Llegada desde "Match OC/OV" con la orden ya elegida.
+  const [params] = useSearchParams();
+  useEffect(() => {
+    const emp = params.get("empresa");
+    const oc = params.get("oc");
+    const ov = params.get("ov");
+    const t = params.get("tipo");
+    if (emp) setEmpresaId(emp);
+    if (t === "entrada" || t === "salida") setTipo(t);
+    if (oc) {
+      setTipo("entrada");
+      setOrdenId(oc);
+    } else if (ov) {
+      setTipo("salida");
+      setOrdenId(ov);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { data: lineas } = useLineasOrden(ordenId, tipo);
   const { data: recientes, isLoading: cargandoRecientes } = useMovimientosRecientes(empresaId);
   const { data: pendientesOrden } = usePendientesAsignarOrden(empresaId, tipo);
@@ -893,6 +914,10 @@ export function Movimientos() {
       setError("Indica a quién se entrega el material para generar la remisión.");
       return;
     }
+    if (carrito.some((f) => !(Number(f.cantidad) > 0))) {
+      setError("Hay líneas con cantidad 0: corrige la cantidad o quita la línea. No se guardan movimientos ni remisiones en cero.");
+      return;
+    }
     setEnviando(true);
     setError(null);
     setMensaje(null);
@@ -1064,10 +1089,21 @@ export function Movimientos() {
           {avisoSyncOc && (
             <p className={`mb-1 text-xs ${avisoSyncOc.startsWith("No se pudo") ? "text-red-600" : "text-emerald-700"}`}>{avisoSyncOc}</p>
           )}
+          <input
+            value={filtroOrden}
+            onChange={(e) => setFiltroOrden(e.target.value)}
+            placeholder={tipo === "entrada" ? "Filtrar OC por folio, proveedor o fecha (ej. 40983, ACEROS, 24 sep)…" : "Filtrar OV por folio, cliente o fecha…"}
+            className="mb-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+          />
+          {filtroOrden && (
+            <p className="mb-1 text-[11px] text-slate-500">
+              {ordenesFiltradas.length} de {ordenes?.length ?? 0} órdenes coinciden · de la más reciente a la más vieja
+            </p>
+          )}
           <select value={ordenId} onChange={(e) => setOrdenId(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
             <option value="">Sin vincular (ligar después)</option>
             {tipo === "entrada" && <option value="__nueva__">+ OC que todavía no aparece (pendiente de autorización)</option>}
-            {ordenes?.map((o) => (
+            {ordenesFiltradas.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.etiqueta}
               </option>
@@ -1282,11 +1318,12 @@ export function Movimientos() {
             </div>
           )}
 
-          {modo === "foto" && (
-            <div className="mb-4 max-w-xl space-y-3">
+          {empresaId && (
+            <div className="mb-4 max-w-xl space-y-3 rounded border border-slate-200 bg-white p-3">
+              <p className="text-sm font-semibold text-slate-800">Evidencia: foto de la nota o remisión ({tipo === "entrada" ? "entrada" : "salida"})</p>
               <p className="text-xs text-slate-500">
-                Sube la foto de la nota o remisión de papel como evidencia del movimiento: queda vinculada a todas las líneas que
-                guardes. Si la entrada no tiene OC, puedes pedir además que la IA intente leer los conceptos.
+                Sube la foto del papel del proveedor o del cliente: queda vinculada a todas las líneas que guardes y se consulta después desde el
+                movimiento. Si la entrada no tiene OC, puedes pedir además que la IA intente leer los conceptos.
               </p>
               <form onSubmit={onSubirFoto} className="flex flex-wrap items-center gap-2">
                 <input type="hidden" name="empresaId" value={empresaId} />

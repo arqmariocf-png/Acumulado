@@ -3,6 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Existencia } from "../../types/database";
+import { dineroMx } from "../../lib/kpisEmpresa";
+
+const pu = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
 function useEmpresas() {
   return useQuery({
@@ -40,6 +43,9 @@ export function Existencias() {
     if (!q) return true;
     return e.producto_nombre.toLowerCase().includes(q) || e.sku.toLowerCase().includes(q);
   });
+  const conExistencia = (filtradas ?? []).filter((e) => Number(e.existencia) !== 0);
+  const totalValor = (filtradas ?? []).reduce((s, e) => s + Number(e.valor ?? 0), 0);
+  const totalPiezas = (filtradas ?? []).reduce((s, e) => s + Number(e.existencia ?? 0), 0);
 
   return (
     <div>
@@ -77,7 +83,9 @@ export function Existencias() {
                 <th className="px-3 py-2">Producto</th>
                 <th className="px-3 py-2">Almacén</th>
                 <th className="px-3 py-2">Unidad</th>
-                <th className="px-3 py-2 text-right">Existencia</th>
+                <th className="px-3 py-2 text-right">Cantidad</th>
+                <th className="px-3 py-2 text-right" title="Promedio ponderado de las entradas con costo; si no hay, el costo de referencia">P.U. ponderado</th>
+                <th className="px-3 py-2 text-right">Valor</th>
               </tr>
             </thead>
             <tbody>
@@ -87,17 +95,34 @@ export function Existencias() {
                   <td className="px-3 py-2">{e.producto_nombre}</td>
                   <td className="px-3 py-2">{e.almacen_nombre}</td>
                   <td className="px-3 py-2">{e.unidad_medida}</td>
-                  <td className="px-3 py-2 text-right font-medium">{e.existencia}</td>
+                  <td className="px-3 py-2 text-right font-medium tabular-nums">{e.existencia}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                    {pu(e.costo_promedio ?? e.costo_referencia)}
+                    {e.costo_promedio == null && e.costo_referencia != null && <span className="ml-1 text-[10px] text-slate-400">ref.</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{dineroMx(Number(e.valor ?? 0))}</td>
                 </tr>
               ))}
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
                     Sin productos para mostrar.
                   </td>
                 </tr>
               )}
             </tbody>
+            {filtradas.length > 0 && (
+              <tfoot className="bg-slate-50 text-sm font-semibold text-slate-900">
+                <tr>
+                  <td colSpan={4} className="px-3 py-2">
+                    Total · {conExistencia.length} producto(s) con existencia
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{totalPiezas.toLocaleString("es-MX")}</td>
+                  <td className="px-3 py-2"></td>
+                  <td className="px-3 py-2 text-right tabular-nums">{dineroMx(totalValor)}</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}

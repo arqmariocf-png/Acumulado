@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { esRolBasico } from "../../lib/modulos";
 import { cantidadTexto, fechaCorta, urlRemision } from "../../lib/remision";
 import { cargarRemision, imprimirRemision, qrSvg } from "./remisionQr";
 import { EstatusRemisionChip } from "./Remisiones";
@@ -29,7 +30,8 @@ export function RemisionDetalle() {
     qrSvg(urlRemision(window.location.origin, id)).then(setSvg).catch(() => setSvg(""));
   }, [id]);
 
-  const puedeConfirmar = !!perfil && ["admin", "corporativo", "empresa", "almacen", "direccion", "responsable"].includes(perfil.rol);
+  const puedeConfirmar =
+    !!perfil && (["admin", "corporativo", "empresa", "almacen", "direccion", "responsable"].includes(perfil.rol) || (esRolBasico(perfil.rol) && (perfil.modulos ?? []).includes("inventario")));
 
   async function onConfirmar(e: FormEvent) {
     e.preventDefault();

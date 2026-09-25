@@ -24,7 +24,8 @@ const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m
 import { Guia } from "./pages/Guia";
 import { Organigrama, Area, ConfigurarKpis } from "./pages/Organigrama";
 import { InicioSegunRol } from "./pages/InicioSegunRol";
-import { Socio } from "./pages/Socio";
+import { Socio, RutaSocio } from "./pages/Socio";
+const Gastos = lazy(() => import("./pages/Gastos").then((m) => ({ default: m.Gastos })));
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
@@ -99,11 +100,16 @@ function Enrutador() {
         <Route element={<Layout />}>
           <Route path="/" element={<InicioSegunRol />} />
           <Route path="/inicio" element={<Inicio />} />
-          <Route element={<ProtectedRoute soloAdmin />}>
+          <Route element={<RutaSocio />}>
             <Route path="/socio" element={<Socio />} />
             <Route path="/organigrama" element={<Organigrama />} />
-            <Route path="/organigrama/configurar" element={<ConfigurarKpis />} />
             <Route path="/area/:clave" element={<Area />} />
+          </Route>
+          <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/organigrama/configurar" element={<ConfigurarKpis />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["supervisor", "responsable", "directivo", "administrativo", "corporativo", "direccion", "empresa"]} />}>
+            <Route path="/gastos" element={<Gastos />} />
           </Route>
           {/* Finanzas/bancos: cerrado para los roles básicos de personal
               (operativo, administrativo, supervisor, directivo) -- "finanzas"

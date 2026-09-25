@@ -410,6 +410,11 @@ export interface Existencia {
   almacen_id: string;
   almacen_nombre: string;
   existencia: number;
+  costo_referencia: number | null;
+  /** Promedio ponderado de las entradas con costo (cantidad × costo / cantidad). */
+  costo_promedio: number | null;
+  /** existencia × (costo_promedio o costo_referencia). */
+  valor: number;
 }
 
 export interface AvanceRecepcionOc {

@@ -1,19 +1,24 @@
-import { Link } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, Navigate, Outlet } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { AREAS } from "../lib/organigrama";
 import { indicadorPorClave } from "../lib/indicadores";
-import { useResumenSocio } from "../lib/socio";
+import { useEsSocio, useResumenSocio, useSociosAdmin } from "../lib/socio";
 import { cifrasTarjeta, dineroMx, formatearKpiEmpresa, saldoGrupo, tieneKpiEmpresa, type EmpresaSocio, type GrupoSocio } from "../lib/kpisEmpresa";
 import { COLOR_PUNTO, semaforo, useKpis, type KpiConfig } from "./Organigrama";
 
-/** Nivel socio (arriba de la dirección general): todas las organizaciones en
- * las que participa Mario (Grupo Loma y, de ejemplo, ARSSA) con sus empresas
- * y los KPIs de cada una. Desde aquí se entra al organigrama de una empresa
- * (filtrado) o del grupo completo. */
+/** Nivel socio (arriba de la dirección general): las organizaciones en las
+ * que participa la persona (Grupo Loma, ARSSA…) con sus empresas y los KPIs
+ * de cada una. El admin ve todas; un socio (socios_organizacion) solo las
+ * suyas. Desde aquí se entra al organigrama de una empresa (filtrado) o del
+ * grupo completo. */
 export function Socio() {
   const { perfil } = useAuth();
   const { data, isLoading, error } = useResumenSocio(true);
   const { data: kpis } = useKpis();
+  const esAdmin = perfil?.rol === "admin";
 
   return (
     <div>
@@ -29,8 +34,9 @@ export function Socio() {
       {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{(error as Error).message}</p>}
 
       {data?.grupos.map((g) => (
-        <SeccionGrupo key={g.id} grupo={g} kpis={kpis ?? []} />
+        <SeccionGrupo key={g.id} grupo={g} kpis={kpis ?? []} esAdmin={esAdmin} />
       ))}
+      {data && data.grupos.length === 0 && <p className="text-sm text-slate-500">No tienes organizaciones asignadas como socio.</p>}
 
       {data && (
         <div className="mt-4 flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
@@ -39,16 +45,36 @@ export function Socio() {
           <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> urgente</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-400" /> informativo</span>
           <span className="ml-auto">Calculado {new Date(data.calculado_en).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</span>
-          <Link to="/organigrama/configurar" className="underline">
-            Configurar KPIs
-          </Link>
+          {!esAdmin && (
+            <Link to="/inicio" className="underline">
+              Mi inicio de trabajo
+            </Link>
+          )}
+          {esAdmin && (
+            <Link to="/organigrama/configurar" className="underline">
+              Configurar KPIs
+            </Link>
+          )}
         </div>
       )}
+
+      {esAdmin && <AdminSocios />}
     </div>
   );
 }
 
-function SeccionGrupo({ grupo, kpis }: { grupo: GrupoSocio; kpis: KpiConfig[] }) {
+/** Guarda de ruta: admin o socio. Mientras se resuelve, no se redirige. */
+export function RutaSocio() {
+  const { perfil } = useAuth();
+  const esAdmin = perfil?.rol === "admin";
+  const { data, isLoading } = useEsSocio(esAdmin ? undefined : perfil?.id);
+  if (esAdmin) return <Outlet />;
+  if (isLoading) return <p className="text-sm text-slate-400">Cargando…</p>;
+  if ((data?.length ?? 0) > 0) return <Outlet />;
+  return <Navigate to="/" replace />;
+}
+
+function SeccionGrupo({ grupo, kpis, esAdmin }: { grupo: GrupoSocio; kpis: KpiConfig[]; esAdmin: boolean }) {
   return (
     <section className="mb-8">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-slate-200 pb-2">
@@ -62,7 +88,7 @@ function SeccionGrupo({ grupo, kpis }: { grupo: GrupoSocio; kpis: KpiConfig[] })
             {grupo.empresas.length > 0 && <> · saldo en bancos {dineroMx(saldoGrupo(grupo))}</>}
           </p>
         </div>
-        {grupo.es_maestro && (
+        {grupo.es_maestro && esAdmin && (
           <Link to="/organigrama" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
             Organigrama del grupo completo →
           </Link>
@@ -129,5 +155,128 @@ function PuntoEmpresa({ k, empresa }: { k: KpiConfig; empresa: EmpresaSocio }) {
       title={`${k.etiqueta ?? ind.etiqueta}: ${r.valor}${r.detalle ? ` (${r.detalle})` : ""}`}
       className={`inline-block h-2.5 w-2.5 rounded-full ${COLOR_PUNTO[estado]} ${estado === "rojo" ? "ring-2 ring-red-200" : ""}`}
     />
+  );
+}
+
+/** Solo admin: quién es socio de qué organización y si la vista de socio es
+ * su primera pantalla. Aldo → ARSSA, Laura → ARSSA, y así los demás. */
+function AdminSocios() {
+  const queryClient = useQueryClient();
+  const { data, error } = useSociosAdmin(true);
+  const { data: perfiles } = useQuery({
+    queryKey: ["perfiles-para-socio"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("id, nombre, rol").neq("rol", "pendiente").eq("activo", true).order("nombre");
+      if (error) throw new Error(error.message);
+      return (data ?? []) as { id: string; nombre: string | null; rol: string }[];
+    },
+  });
+  const [profileId, setProfileId] = useState("");
+  const [grupoId, setGrupoId] = useState("");
+  const [inicio, setInicio] = useState(true);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ["socios-admin"] });
+    queryClient.invalidateQueries({ queryKey: ["socio-propio"] });
+  };
+
+  const asignar = useMutation({
+    mutationFn: async (v: { profile: string; grupo: string; inicio: boolean }) => {
+      const { error } = await supabase.rpc("fn_socio_asignar", { p_profile: v.profile, p_grupo: v.grupo, p_inicio: v.inicio });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      invalidar();
+      setMensaje("Socio guardado.");
+    },
+    onError: (e) => setMensaje((e as Error).message),
+  });
+  const quitar = useMutation({
+    mutationFn: async (v: { profile: string; grupo: string }) => {
+      const { error } = await supabase.rpc("fn_socio_quitar", { p_profile: v.profile, p_grupo: v.grupo });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidar,
+    onError: (e) => setMensaje((e as Error).message),
+  });
+
+  function onAsignar(e: FormEvent) {
+    e.preventDefault();
+    if (!profileId || !grupoId) return;
+    asignar.mutate({ profile: profileId, grupo: grupoId, inicio });
+  }
+
+  return (
+    <section className="mt-8 rounded border border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-3 py-2">
+        <h2 className="text-sm font-semibold text-slate-900">Socios por organización</h2>
+        <p className="text-xs text-slate-500">
+          Un socio ve esta misma pantalla solo con las organizaciones que le asignes. "Primera pantalla" = entra directo aquí; si no, la abre desde el
+          menú y conserva su inicio de trabajo.
+        </p>
+      </div>
+      {error && <p className="px-3 py-2 text-sm text-red-700">{(error as Error).message}</p>}
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+          <tr>
+            <th className="px-3 py-1.5">Socio</th>
+            <th className="px-3 py-1.5">Rol</th>
+            <th className="px-3 py-1.5">Organización</th>
+            <th className="px-3 py-1.5">Primera pantalla</th>
+            <th className="px-3 py-1.5"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {(data?.socios ?? []).map((s) => (
+            <tr key={`${s.profile_id}-${s.grupo_id}`} className="border-t border-slate-100">
+              <td className="px-3 py-1.5 text-slate-900">{s.nombre ?? s.profile_id}</td>
+              <td className="px-3 py-1.5 text-slate-500">{s.rol}</td>
+              <td className="px-3 py-1.5">{s.grupo_nombre}</td>
+              <td className="px-3 py-1.5">
+                <input type="checkbox" checked={s.inicio} onChange={(e) => asignar.mutate({ profile: s.profile_id, grupo: s.grupo_id, inicio: e.target.checked })} />
+              </td>
+              <td className="px-3 py-1.5 text-right">
+                <button onClick={() => quitar.mutate({ profile: s.profile_id, grupo: s.grupo_id })} className="text-xs text-red-600 underline">
+                  quitar
+                </button>
+              </td>
+            </tr>
+          ))}
+          {data && data.socios.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-3 py-4 text-center text-xs text-slate-400">
+                Todavía no hay socios asignados.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <form onSubmit={onAsignar} className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-3 py-2">
+        <select value={profileId} onChange={(e) => setProfileId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
+          <option value="">Persona…</option>
+          {(perfiles ?? []).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nombre ?? p.id} · {p.rol}
+            </option>
+          ))}
+        </select>
+        <select value={grupoId} onChange={(e) => setGrupoId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
+          <option value="">Organización…</option>
+          {(data?.grupos ?? []).map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.marca_comercial ?? g.nombre}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1 text-xs text-slate-600">
+          <input type="checkbox" checked={inicio} onChange={(e) => setInicio(e.target.checked)} /> primera pantalla
+        </label>
+        <button disabled={!profileId || !grupoId || asignar.isPending} className="rounded bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-50">
+          Agregar socio
+        </button>
+        {mensaje && <span className="text-xs text-slate-500">{mensaje}</span>}
+      </form>
+      <p className="px-3 pb-2 text-[11px] text-slate-400">Si la persona no aparece es porque todavía no tiene cuenta: pídele que se registre y asígnale rol en Admin.</p>
+    </section>
   );
 }

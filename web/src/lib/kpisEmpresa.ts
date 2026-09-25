@@ -25,6 +25,8 @@ export interface GrupoSocio {
 export interface ResumenSocio {
   grupos: GrupoSocio[];
   calculado_en: string;
+  /** true cuando quien consulta es el admin (ve todas las organizaciones). */
+  es_admin?: boolean;
 }
 
 const CLAVES_DINERO = new Set(["fin_saldo_consolidado", "fin_pagos_semana"]);

@@ -176,7 +176,14 @@ Deno.serve(async (req) => {
     const soloEvidencia = ["1", "true"].includes(String(form.get("soloEvidencia") ?? "").toLowerCase());
 
     if (!empresaId || !archivo) return jsonResponse({ error: "empresaId y file son requeridos" }, 400);
-    if (!puedeSubirNotaEnEmpresa(perfil, empresaId)) return jsonResponse({ error: "Sin permiso para cargar en esta empresa" }, 403);
+    // Mismo criterio que RLS en la base (auth_puede_escribir_inventario):
+    // incluye almacén, dirección y los roles básicos con módulo inventario.
+    // La lista fija de roles de puedeSubirNotaEnEmpresa() se quedaba corta.
+    const { data: puedeInventario } = await clienteComoUsuario(req).rpc("auth_puede_escribir_inventario");
+    const enAlcance = perfil.empresaId === null || perfil.empresaId === empresaId;
+    if (!((puedeInventario === true && enAlcance) || puedeSubirNotaEnEmpresa(perfil, empresaId))) {
+      return jsonResponse({ error: "Sin permiso para cargar fotos en esta empresa (pide a RH el módulo de inventario)" }, 403);
+    }
     if (archivo.size > TAMANO_MAXIMO_BYTES) {
       return jsonResponse({ error: `La foto excede el tamaño máximo permitido (${TAMANO_MAXIMO_BYTES / 1024 / 1024} MB)` }, 400);
     }
