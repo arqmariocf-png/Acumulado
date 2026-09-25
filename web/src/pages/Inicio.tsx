@@ -6,6 +6,7 @@ import { useMiPersonal } from "./MisDocumentos";
 import { useAuth } from "../lib/auth";
 import { esRolBasico } from "../lib/modulos";
 import { SECCIONES, seccionDeRuta } from "../lib/menu";
+import { Indicadores } from "../components/Indicadores";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
 // esperando ahí. La idea es abrirlo desde el celular y saber de un vistazo
@@ -441,6 +442,8 @@ export function Inicio() {
             : "No tienes nada pendiente."}
         </p>
       </div>
+
+      <Indicadores tienePersonal={!!miPersonal} />
 
       {/* Agrupado por área (misma clasificación que el menú y la guía) para
           que el inicio también oriente: qué hay en cada bloque y para qué. */}

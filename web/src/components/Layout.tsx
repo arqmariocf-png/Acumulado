@@ -27,7 +27,16 @@ export function Layout() {
               >
                 Inicio
               </NavLink>
-              <MenuModulos secciones={secciones} />
+              {/* Escritorio: un submenú por área. Celular: un solo "Módulos"
+                  agrupado, porque no caben siete botones. */}
+              <div className="hidden items-center gap-1 lg:flex">
+                {secciones.map((s) => (
+                  <MenuModulos key={s.clave} secciones={[s]} titulo={s.titulo} />
+                ))}
+              </div>
+              <div className="lg:hidden">
+                <MenuModulos secciones={secciones} titulo="Módulos" />
+              </div>
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
@@ -89,7 +98,7 @@ function BotonNotificaciones({ profileId }: { profileId: string }) {
   );
 }
 
-function MenuModulos({ secciones }: { secciones: SeccionMenu[] }) {
+function MenuModulos({ secciones, titulo }: { secciones: SeccionMenu[]; titulo: string }) {
   const [abierto, setAbierto] = useState(false);
   const location = useLocation();
   const contenedorRef = useRef<HTMLDivElement>(null);
@@ -114,15 +123,15 @@ function MenuModulos({ secciones }: { secciones: SeccionMenu[] }) {
         onClick={() => setAbierto((v) => !v)}
         className={`flex items-center gap-1 rounded px-2 py-1 ${activo ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
       >
-        Módulos
+        {titulo}
         <span className="text-xs">▾</span>
       </button>
       {abierto && (
         <div className="absolute left-0 z-20 mt-1 max-h-[80vh] w-80 overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-lg">
           {secciones.map((s) => (
             <div key={s.clave} className="py-1">
-              <div className="px-3 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400" title={s.proposito}>
-                {s.titulo}
+              <div className={`px-3 pt-1 text-[11px] text-slate-400 ${secciones.length > 1 ? "font-semibold uppercase tracking-wide" : "normal-case"}`} title={s.proposito}>
+                {secciones.length > 1 ? s.titulo : s.proposito}
               </div>
               {s.entradas.map((e) => (
                 <NavLink
