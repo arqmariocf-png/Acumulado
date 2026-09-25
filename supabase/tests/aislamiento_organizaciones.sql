@@ -184,7 +184,21 @@ values ((select id from public.empresas where codigo='ARS'), 'X-1', 'Prueba');
 select count(*) as productos_arssa_al_corriente from public.productos;
 reset role;
 
-\echo '── 12. El resumen de socio no cruza organizaciones'
+\echo '── 12. El resumen de socio no cruza organizaciones, y "socio" solo lo otorga la maestra'
+-- Un admin de organización cliente no puede hacerse socio de la maestra.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+do $$
+begin
+  insert into public.socios_organizacion (profile_id, grupo_id)
+  values ('33333333-3333-3333-3333-333333333333', (select id from public.grupos where es_maestro));
+  raise exception 'FALLA: un admin cliente se otorgó a sí mismo socio de la maestra';
+exception when insufficient_privilege or raise_exception then
+  if sqlerrm like 'FALLA%' then raise; end if;
+  raise notice 'OK: solo la organización maestra otorga socios';
+end $$;
+reset role;
+
 set role authenticated;
 select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
 select jsonb_array_length(public.fn_socio_resumen()->'grupos') as grupos_que_ve_arssa,
