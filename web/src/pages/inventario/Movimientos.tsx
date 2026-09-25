@@ -395,6 +395,16 @@ function useAlmacen(empresaId: string) {
 // que es justo lo que la vista de avance necesita para acumular el monto
 // recibido/embarcado (ver comentario sobre match por monto, no por línea,
 // en la migración de esquema del inventario).
+/** "24 sep · " para que en el selector se vea de un vistazo cuál es la
+ * orden más reciente (van de la más nueva a la más vieja). */
+function fechaSelector(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const [a, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!a || !m || !d) return "";
+  const mes = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][m - 1];
+  return `${String(d).padStart(2, "0")} ${mes} · `;
+}
+
 function useOrdenes(empresaId: string, tipo: TipoMovimientoInventario) {
   return useQuery({
     queryKey: ["ordenes-para-match", empresaId, tipo],
@@ -403,21 +413,23 @@ function useOrdenes(empresaId: string, tipo: TipoMovimientoInventario) {
       if (tipo === "entrada") {
         const { data, error } = await supabase
           .from("ordenes_compra")
-          .select("id, id_orden, tipo, proveedor, total")
+          .select("id, id_orden, tipo, proveedor, total, fecha_creacion")
           .eq("empresa_id", empresaId)
-          .order("fecha_creacion", { ascending: false })
-          .limit(100);
+          .order("fecha_creacion", { ascending: false, nullsFirst: false })
+          .order("id_orden", { ascending: false })
+          .limit(150);
         if (error) throw error;
-        return data.map((o) => ({ id: o.id, etiqueta: `${o.tipo} ${o.id_orden} — ${o.proveedor ?? "sin proveedor"} (${o.total ?? "—"})` }));
+        return data.map((o) => ({ id: o.id, etiqueta: `${fechaSelector(o.fecha_creacion)}${o.tipo} ${o.id_orden} — ${o.proveedor ?? "sin proveedor"} (${o.total ?? "—"})` }));
       }
       const { data, error } = await supabase
         .from("ordenes_venta")
-        .select("id, id_ov, cliente, total")
+        .select("id, id_ov, cliente, total, fecha_ov")
         .eq("empresa_id", empresaId)
-        .order("fecha_ov", { ascending: false })
-        .limit(100);
+        .order("fecha_ov", { ascending: false, nullsFirst: false })
+        .order("id_ov", { ascending: false })
+        .limit(150);
       if (error) throw error;
-      return data.map((o) => ({ id: o.id, etiqueta: `OV ${o.id_ov} — ${o.cliente ?? "sin cliente"} (${o.total ?? "—"})` }));
+      return data.map((o) => ({ id: o.id, etiqueta: `${fechaSelector(o.fecha_ov)}OV ${o.id_ov} — ${o.cliente ?? "sin cliente"} (${o.total ?? "—"})` }));
     },
   });
 }

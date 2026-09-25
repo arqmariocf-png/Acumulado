@@ -26,8 +26,9 @@ function useAvanceRecepcion(empresaId: string) {
         .from("avance_recepcion_oc")
         .select("*")
         .eq("empresa_id", empresaId)
-        .order("estado_recepcion")
-        .limit(200);
+        .order("fecha", { ascending: false, nullsFirst: false })
+        .order("id_orden", { ascending: false })
+        .limit(300);
       if (error) throw error;
       return data as AvanceRecepcionOc[];
     },
@@ -43,12 +44,19 @@ function useAvanceEmbarque(empresaId: string) {
         .from("avance_embarque_ov")
         .select("*")
         .eq("empresa_id", empresaId)
-        .order("estado_embarque")
-        .limit(200);
+        .order("fecha", { ascending: false, nullsFirst: false })
+        .order("id_ov", { ascending: false })
+        .limit(300);
       if (error) throw error;
       return data as AvanceEmbarqueOv[];
     },
   });
+}
+
+function fechaTabla(iso: string | null): string {
+  if (!iso) return "—";
+  const [a, m, d] = iso.slice(0, 10).split("-");
+  return `${d}/${m}/${a}`;
 }
 
 const ESTILO_RECEPCION: Record<EstadoRecepcion, { color: string; etiqueta: string }> = {
@@ -222,6 +230,7 @@ export function Match() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                   <tr>
+                    <th className="px-3 py-2">Fecha</th>
                     <th className="px-3 py-2">Orden</th>
                     <th className="px-3 py-2">Proveedor</th>
                     <th className="px-3 py-2">Proyecto</th>
@@ -234,6 +243,7 @@ export function Match() {
                   {avanceOc.map((o) => (
                     <Fragment key={o.orden_compra_id}>
                       <tr className={`border-t border-slate-100 ${ocAbierta === o.orden_compra_id ? "bg-emerald-50" : ""}`}>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-500">{fechaTabla(o.fecha)}</td>
                         <td className="px-3 py-2">
                           {o.tipo} {o.id_orden}
                           <button
@@ -254,7 +264,7 @@ export function Match() {
                       </tr>
                       {ocAbierta === o.orden_compra_id && (
                         <tr className="bg-slate-50">
-                          <td colSpan={6} className="px-3 py-2">
+                          <td colSpan={7} className="px-3 py-2">
                             <PartidasOc ordenCompraId={o.orden_compra_id} />
                           </td>
                         </tr>
@@ -263,7 +273,7 @@ export function Match() {
                   ))}
                   {avanceOc.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                      <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
                         No hay órdenes de compra cargadas para esta empresa.
                       </td>
                     </tr>
@@ -283,6 +293,7 @@ export function Match() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                   <tr>
+                    <th className="px-3 py-2">Fecha</th>
                     <th className="px-3 py-2">Orden</th>
                     <th className="px-3 py-2">Cliente</th>
                     <th className="px-3 py-2">Proyecto</th>
@@ -294,6 +305,7 @@ export function Match() {
                 <tbody>
                   {avanceOv.map((o) => (
                     <tr key={o.orden_venta_id} className="border-t border-slate-100">
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-500">{fechaTabla(o.fecha)}</td>
                       <td className="px-3 py-2">OV {o.id_ov}</td>
                       <td className="px-3 py-2">{o.cliente ?? "—"}</td>
                       <td className="px-3 py-2">{o.proyecto ?? "—"}</td>
@@ -306,7 +318,7 @@ export function Match() {
                   ))}
                   {avanceOv.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                      <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
                         No hay órdenes de venta cargadas para esta empresa.
                       </td>
                     </tr>

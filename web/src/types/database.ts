@@ -424,6 +424,8 @@ export interface AvanceRecepcionOc {
   movimientos_vinculados: number;
   fecha_ultima_recepcion: string | null;
   estado_recepcion: EstadoRecepcion;
+  /** Fecha de la orden (fecha_creacion); las listas van de la más reciente a la más vieja. */
+  fecha: string | null;
 }
 
 export interface AvanceEmbarqueOv {
@@ -437,6 +439,7 @@ export interface AvanceEmbarqueOv {
   movimientos_vinculados: number;
   fecha_ultimo_embarque: string | null;
   estado_embarque: EstadoEmbarque;
+  fecha: string | null;
 }
 
 // Módulo de Requisiciones (ver supabase/migrations/20260827193332-193730_requisiciones_*.sql).

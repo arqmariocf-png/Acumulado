@@ -55,6 +55,21 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (requiere `ANTHROPIC_API_KEY` válida en secrets de Edge Functions; la actual
   daba `invalid x-api-key` el 21-sep-2026).
 
+## Nivel socio y organizaciones (25-sep-2026)
+- `/` para admin = **vista de socio** (`pages/Socio.tsx`): organizaciones
+  (`grupos`: LOMA maestro, ARSSA ejemplo) → empresas → KPIs por empresa, con
+  `fn_socio_resumen()` (SECURITY DEFINER, solo admin) que llama
+  `fn_kpis_empresa(uuid)`: mismas claves que `lib/indicadores.ts`, calculadas
+  por empresa en SQL. El organigrama acepta `?empresa=<id>` y entonces pinta solo
+  los KPIs que existen en ese mapa (`lib/kpisEmpresa.ts`).
+- Otra sesión trabaja la rama `claude/arssa-backoffice-acumulado-6wa90r`
+  (multi-organización: `grupos`, `grupo_modulos`, frontera RLS, suscripciones).
+  En producción solo está aplicada `grupos_modulos` (tabla `grupos` con RLS sin
+  policies: no leerla desde el navegador; usar la RPC). No mezclar esa rama
+  desde aquí.
+- Almacén: OC/OV se listan de la más reciente a la más vieja (`fecha` en
+  `avance_recepcion_oc` / `avance_embarque_ov`, selector con fecha).
+
 ## Roles de personal contratado (24-sep-2026)
 - `operativo` (solo checador), `administrativo`, `supervisor` (ve el checador de
   su gente: `personal.supervisor_profile_id`), `directivo` (ve el checador de

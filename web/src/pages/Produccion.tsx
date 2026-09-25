@@ -613,7 +613,7 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
     queryFn: async () => {
       let consulta = supabase.from("ordenes_compra").select("id, id_orden, proveedor, total").eq("empresa_id", empresaId);
       if (proyecto) consulta = consulta.eq("proyecto", proyecto);
-      const { data, error } = await consulta.order("created_at", { ascending: false }).limit(200);
+      const { data, error } = await consulta.order("fecha_creacion", { ascending: false, nullsFirst: false }).order("id_orden", { ascending: false }).limit(200);
       if (error) throw error;
       return data as { id: string; id_orden: string; proveedor: string | null; total: number | null }[];
     },
@@ -811,7 +811,7 @@ function SalidaProductoTerminado({ empresaId, proyecto, productos }: { empresaId
     queryFn: async () => {
       let consulta = supabase.from("ordenes_venta").select("id, id_ov, cliente, total").eq("empresa_id", empresaId);
       if (proyecto) consulta = consulta.eq("proyecto", proyecto);
-      const { data, error } = await consulta.order("created_at", { ascending: false }).limit(200);
+      const { data, error } = await consulta.order("fecha_ov", { ascending: false, nullsFirst: false }).order("id_ov", { ascending: false }).limit(200);
       if (error) throw error;
       return data as { id: string; id_ov: string; cliente: string | null; total: number | null }[];
     },

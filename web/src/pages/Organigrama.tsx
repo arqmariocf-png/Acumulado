@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { AREAS, areaDeClave, type AreaOrganigrama } from "../lib/organigrama";
 import { INDICADORES_NUMERICOS, indicadorPorClave, type Indicador } from "../lib/indicadores";
+import { useResumenSocio } from "../lib/socio";
+import { empresaDeResumen, formatearKpiEmpresa, tieneKpiEmpresa } from "../lib/kpisEmpresa";
 
 /** Configuración de un KPI del organigrama (tabla kpis_organigrama). */
-interface KpiConfig {
+export interface KpiConfig {
   id: string;
   area: string;
   indicador: string;
@@ -18,7 +20,7 @@ interface KpiConfig {
   activo: boolean;
 }
 
-function useKpis() {
+export function useKpis() {
   return useQuery({
     queryKey: ["kpis-organigrama"],
     staleTime: 5 * 60_000,
@@ -42,7 +44,7 @@ function numeroDe(valor: number | string | undefined): number | undefined {
   return undefined;
 }
 
-function semaforo(valor: number | string | undefined, k: KpiConfig, ind: Indicador): Semaforo {
+export function semaforo(valor: number | string | undefined, k: KpiConfig, ind: Indicador): Semaforo {
   if (ind.enDesarrollo) return "gris";
   const n = numeroDe(valor);
   if (n === undefined) return "gris";
@@ -57,7 +59,7 @@ function semaforo(valor: number | string | undefined, k: KpiConfig, ind: Indicad
   return "verde";
 }
 
-const COLOR_PUNTO: Record<Semaforo, string> = {
+export const COLOR_PUNTO: Record<Semaforo, string> = {
   verde: "bg-emerald-500",
   ambar: "bg-amber-400",
   rojo: "bg-red-500",
@@ -65,21 +67,47 @@ const COLOR_PUNTO: Record<Semaforo, string> = {
   azul: "bg-sky-400",
 };
 
-function useValorIndicador(ind: Indicador | undefined) {
+/** Empresa por la que se filtra el organigrama (?empresa=<id>), viniendo de
+ * la pantalla de socio. Sin filtro = todo el grupo. */
+function useEmpresaFiltro() {
+  const [params] = useSearchParams();
+  const empresaId = params.get("empresa");
+  const { data } = useResumenSocio(!!empresaId);
+  const empresa = empresaDeResumen(data, empresaId);
+  return { empresaId, empresa, sufijo: empresaId ? `?empresa=${empresaId}` : "" };
+}
+
+/** Valor de un indicador: a nivel grupo se consulta desde el navegador
+ * (ind.consulta); filtrado por empresa sale del resumen de socio, que la
+ * base calcula por empresa con las mismas claves. Los indicadores que no se
+ * pueden calcular por empresa quedan `disponible: false` y no se pintan. */
+function useValorIndicador(ind: Indicador | undefined, empresaId: string | null) {
   const { perfil } = useAuth();
-  return useQuery({
+  const resumen = useResumenSocio(!!empresaId);
+  const global = useQuery({
     queryKey: ["indicador", ind?.clave, perfil?.id],
-    enabled: !!perfil && !!ind,
+    enabled: !!perfil && !!ind && !empresaId,
     staleTime: 60_000,
     queryFn: () => ind!.consulta(perfil!),
   });
+  if (empresaId) {
+    const kpis = empresaDeResumen(resumen.data, empresaId)?.kpis;
+    const disponible = !!ind && !!kpis && tieneKpiEmpresa(kpis, ind.clave);
+    return {
+      data: disponible ? formatearKpiEmpresa(ind.clave, kpis[ind.clave]) : undefined,
+      isLoading: resumen.isLoading,
+      error: resumen.error,
+      disponible: resumen.isLoading || disponible,
+    };
+  }
+  return { data: global.data, isLoading: global.isLoading, error: global.error, disponible: true };
 }
 
 /** Punto de color de un KPI; el tooltip dice qué es y cuánto vale. */
-function Punto({ k }: { k: KpiConfig }) {
+function Punto({ k, empresaId }: { k: KpiConfig; empresaId: string | null }) {
   const ind = indicadorPorClave(k.indicador);
-  const { data, isLoading } = useValorIndicador(ind);
-  if (!ind) return null;
+  const { data, isLoading, disponible } = useValorIndicador(ind, empresaId);
+  if (!ind || !disponible) return null;
   const estado = isLoading ? "gris" : semaforo(data?.valor, k, ind);
   const etiqueta = k.etiqueta ?? ind.etiqueta;
   const umbrales = ind.enDesarrollo ? "en desarrollo" : ind.informativo ? "informativo" : ind.direccion === "menor_es_peor" ? `ámbar ≤ ${k.umbral_ambar}, rojo ≤ ${k.umbral_rojo}` : `ámbar ≥ ${k.umbral_ambar}, rojo ≥ ${k.umbral_rojo}`;
@@ -91,13 +119,13 @@ function Punto({ k }: { k: KpiConfig }) {
   );
 }
 
-function PuntosArea({ area, kpis }: { area: AreaOrganigrama; kpis: KpiConfig[] }) {
+function PuntosArea({ area, kpis, empresaId }: { area: AreaOrganigrama; kpis: KpiConfig[]; empresaId: string | null }) {
   const del = kpis.filter((k) => k.area === area.clave && k.activo);
   if (del.length === 0) return <span className="text-[11px] text-slate-400">sin KPIs configurados</span>;
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {del.map((k) => (
-        <Punto key={k.id} k={k} />
+        <Punto key={k.id} k={k} empresaId={empresaId} />
       ))}
     </span>
   );
@@ -108,21 +136,31 @@ function PuntosArea({ area, kpis }: { area: AreaOrganigrama; kpis: KpiConfig[] }
 export function Organigrama() {
   const { perfil } = useAuth();
   const { data: kpis } = useKpis();
+  const { empresaId, empresa, sufijo } = useEmpresaFiltro();
   return (
     <div>
       <div className="mb-6 text-center">
+        {empresaId && (
+          <p className="mb-2 text-xs text-slate-500">
+            <Link to="/socio" className="underline">
+              Socio
+            </Link>{" "}
+            · {empresa?.nombre ?? "empresa"}
+          </p>
+        )}
         <div className="inline-block rounded-lg bg-slate-900 px-6 py-3 text-white">
           <p className="text-[11px] uppercase tracking-wide text-slate-300">Dirección general</p>
-          <p className="font-semibold">{perfil?.nombre ?? "Grupo Loma"}</p>
+          <p className="font-semibold">{empresaId ? (empresa?.nombre ?? "…") : (perfil?.nombre ?? "Grupo Loma")}</p>
+          {empresaId && <p className="text-[11px] text-slate-300">solo esta empresa · {perfil?.nombre}</p>}
         </div>
         <div className="mx-auto h-6 w-px bg-slate-300" />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {AREAS.map((a) => (
-          <Link key={a.clave} to={`/area/${a.clave}`} className="rounded-lg border border-slate-200 bg-white transition hover:border-slate-400 hover:shadow-sm">
+          <Link key={a.clave} to={`/area/${a.clave}${sufijo}`} className="rounded-lg border border-slate-200 bg-white transition hover:border-slate-400 hover:shadow-sm">
             <div className={`rounded-t-lg px-3 py-2 text-white ${a.color}`}>
               <p className="font-semibold">{a.titulo}</p>
-              <div className="mt-1 min-h-3">{kpis && <PuntosArea area={a} kpis={kpis} />}</div>
+              <div className="mt-1 min-h-3">{kpis && <PuntosArea area={a} kpis={kpis} empresaId={empresaId} />}</div>
             </div>
             <div className="px-3 py-2">
               <p className="text-xs text-slate-600">{a.proposito}</p>
@@ -137,7 +175,11 @@ export function Organigrama() {
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> urgente</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-400" /> informativo</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-300" /> sin dato / en desarrollo</span>
-        <Link to="/organigrama/configurar" className="ml-auto underline">
+        {empresaId && <span>· por empresa solo se pintan los KPIs que se calculan por empresa</span>}
+        <Link to="/socio" className="ml-auto underline">
+          Vista de socio
+        </Link>
+        <Link to="/organigrama/configurar" className="underline">
           Configurar KPIs
         </Link>
       </div>
@@ -145,10 +187,10 @@ export function Organigrama() {
   );
 }
 
-function TarjetaIndicador({ k }: { k: KpiConfig }) {
+function TarjetaIndicador({ k, empresaId }: { k: KpiConfig; empresaId: string | null }) {
   const ind = indicadorPorClave(k.indicador);
-  const { data, isLoading, error } = useValorIndicador(ind);
-  if (!ind) return null;
+  const { data, isLoading, error, disponible } = useValorIndicador(ind, empresaId);
+  if (!ind || !disponible) return null;
   const estado = isLoading ? "gris" : semaforo(data?.valor, k, ind);
   const fondo = estado === "rojo" ? "border-red-300 bg-red-50" : estado === "ambar" ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white";
   return (
@@ -169,6 +211,7 @@ export function Area() {
   const { clave } = useParams();
   const area = areaDeClave(clave);
   const { data: kpis } = useKpis();
+  const { empresaId, empresa, sufijo } = useEmpresaFiltro();
   if (!area) return <Navigate to="/" replace />;
   const kpisArea = (kpis ?? []).filter((k) => k.area === area.clave && k.activo);
   return (
@@ -176,8 +219,16 @@ export function Area() {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-xs text-slate-500">
-            <Link to="/" className="underline">
-              Organigrama
+            {empresaId && (
+              <>
+                <Link to="/socio" className="underline">
+                  Socio
+                </Link>{" "}
+                ·{" "}
+              </>
+            )}
+            <Link to={`/organigrama${sufijo}`} className="underline">
+              Organigrama{empresa ? ` · ${empresa.codigo}` : ""}
             </Link>{" "}
             · {area.titulo}
           </p>
@@ -199,7 +250,7 @@ export function Area() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {kpisArea.map((k) => (
-              <TarjetaIndicador key={k.id} k={k} />
+              <TarjetaIndicador key={k.id} k={k} empresaId={empresaId} />
             ))}
           </div>
         )}
