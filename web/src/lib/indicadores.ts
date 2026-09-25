@@ -152,6 +152,80 @@ export const INDICADORES: Indicador[] = [
   },
 ];
 
+// ---- Indicadores numéricos adicionales para los KPIs del organigrama ----
+INDICADORES.push(
+  {
+    clave: "movimientos_revisar",
+    etiqueta: "Movimientos por revisar",
+    ruta: "/movimientos",
+    visible: (p) => ["corporativo", "direccion", "empresa", "admin"].includes(p.rol),
+    consulta: async () => {
+      const { data, error } = await supabase.from("v_pendientes_por_empresa").select("ambiguos, duplicados, faltantes");
+      if (error) throw error;
+      const n = (data ?? []).reduce((s: number, f: Record<string, number>) => s + Number(f.ambiguos ?? 0) + Number(f.duplicados ?? 0) + Number(f.faltantes ?? 0), 0);
+      return { valor: n, alerta: n > 0, detalle: "ambiguos, duplicados o sin factura" };
+    },
+  },
+  {
+    clave: "carga_sin_estado",
+    etiqueta: "Empresas sin estado de cuenta",
+    ruta: "/carga",
+    visible: (p) => ["corporativo", "direccion", "empresa", "admin"].includes(p.rol),
+    consulta: async () => {
+      const n = await contar(supabase.from("v_estado_carga_empresa").select("*", { count: "exact", head: true }).is("ultima_carga_estado_cuenta", null));
+      return { valor: n, alerta: n > 0, detalle: "sin carga del banco" };
+    },
+  },
+  {
+    clave: "rh_expedientes",
+    etiqueta: "Documentos faltantes en expedientes",
+    ruta: "/rh",
+    visible: rh,
+    consulta: async () => {
+      const n = await contar(supabase.from("v_documentos_faltantes_personal").select("*", { count: "exact", head: true }));
+      return { valor: n, alerta: n > 0, detalle: "documentos por entregar" };
+    },
+  },
+  {
+    clave: "bbva_folios",
+    etiqueta: "Folios BBVA sin atender",
+    ruta: "/bbva/folios",
+    visible: (p) => ["supervisor_bbva", "corporativo", "direccion", "admin"].includes(p.rol) || !!p.bbva_mantenimiento,
+    consulta: async () => {
+      const n = await contar(supabase.from("bbva_folios_cuadrilla").select("*", { count: "exact", head: true }).neq("estatus", "atendido"));
+      return { valor: n, alerta: n > 0, detalle: "folios abiertos" };
+    },
+  },
+  {
+    clave: "precios_pendientes",
+    etiqueta: "PU esperando autorización",
+    ruta: "/precios",
+    visible: (p) => ["direccion", "admin", "corporativo"].includes(p.rol),
+    consulta: async () => {
+      const n = await contar(supabase.from("v_pu_analisis_costeo").select("*", { count: "exact", head: true }).in("estado", ["material_confirmado", "autorizado"]));
+      return { valor: n, alerta: n > 0, detalle: "análisis por firmar o publicar" };
+    },
+  },
+  {
+    clave: "cuentas_pendientes",
+    etiqueta: "Cuentas sin rol",
+    ruta: "/admin",
+    visible: esAdmin,
+    consulta: async () => {
+      const n = await contar(supabase.from("profiles").select("*", { count: "exact", head: true }).eq("rol", "pendiente"));
+      return { valor: n, alerta: n > 0, detalle: "registradas solas, sin acceso" };
+    },
+  },
+);
+
+/** Indicadores con valor numérico: son los que pueden ir como punto de
+ * color en el organigrama. */
+export function indicadorPorClave(clave: string): Indicador | undefined {
+  return INDICADORES.find((i) => i.clave === clave);
+}
+
+export const INDICADORES_NUMERICOS = () => INDICADORES.filter((i) => i.clave !== "mi_asistencia");
+
 export function indicadoresPara(perfil: Profile | null | undefined, ctx: { tienePersonal: boolean }): Indicador[] {
   if (!perfil || perfil.rol === "pendiente") return [];
   return INDICADORES.filter((i) => i.visible(perfil, ctx));
