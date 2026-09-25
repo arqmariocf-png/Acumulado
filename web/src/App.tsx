@@ -22,6 +22,8 @@ const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ de
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
 import { Guia } from "./pages/Guia";
+import { Organigrama, Area } from "./pages/Organigrama";
+import { InicioSegunRol } from "./pages/InicioSegunRol";
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
@@ -94,7 +96,12 @@ function Enrutador() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
-          <Route path="/" element={<Inicio />} />
+          <Route path="/" element={<InicioSegunRol />} />
+          <Route path="/inicio" element={<Inicio />} />
+          <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/organigrama" element={<Organigrama />} />
+            <Route path="/area/:clave" element={<Area />} />
+          </Route>
           {/* Finanzas/bancos: cerrado para los roles básicos de personal
               (operativo, administrativo, supervisor, directivo) -- "finanzas"
               no es un módulo asignable. */}
