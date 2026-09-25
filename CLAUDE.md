@@ -65,11 +65,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `fn_kpis_empresa(uuid)`: mismas claves que `lib/indicadores.ts`, calculadas
   por empresa en SQL. El organigrama acepta `?empresa=<id>` y entonces pinta solo
   los KPIs que existen en ese mapa (`lib/kpisEmpresa.ts`).
-- Otra sesión trabaja la rama `claude/arssa-backoffice-acumulado-6wa90r`
-  (multi-organización: `grupos`, `grupo_modulos`, frontera RLS, suscripciones).
-  En producción solo está aplicada `grupos_modulos` (tabla `grupos` con RLS sin
-  policies: no leerla desde el navegador; usar la RPC). No mezclar esa rama
-  desde aquí.
+- Multi-organización **ya está completo en producción** (25-sep-2026):
+  `grupos`, `grupo_modulos`, frontera RLS restrictiva en ~77 tablas,
+  suscripciones con escalones por usuario y logotipo por organización.
+  `grupos` sí tiene policies: se puede leer desde el navegador.
+- `fn_socio_resumen()` y `fn_kpis_empresa()` cuentan dinero por empresa: la
+  primera se acota con `grupo_en_alcance()`, la segunda está revocada de
+  `authenticated` (solo `service_role`) y se consulta por
+  `fn_kpis_empresa_publica()`. Cualquier función nueva que sume dinero o gente
+  necesita la misma guarda.
 - Almacén: OC/OV se listan de la más reciente a la más vieja (`fecha` en
   `avance_recepcion_oc` / `avance_embarque_ov`, selector con fecha).
 

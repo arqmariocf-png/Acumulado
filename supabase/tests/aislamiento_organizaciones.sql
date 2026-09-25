@@ -150,3 +150,56 @@ select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222
 select count(*) as reglas_loma, count(*) filter (where etiqueta like '%ARSSA%') as ve_regla_arssa
   from reglas_clasificacion;
 reset role;
+
+\echo '── 11. Sin pago, inventario se queda en solo lectura (consulta sí, captura no)'
+-- Las policies de inventario se restituyeron después de la frontera
+-- (20260925130000) y quedaron sin preguntar por el pago; 20260925140000 lo
+-- cerró. Esto es lo que impide que se vuelva a abrir.
+update public.grupo_modulos set habilitado = true, habilitado_at = now()
+ where grupo_id = (select id from grupos where codigo='ARSSA') and modulo_clave = 'inventario';
+update public.suscripciones set estado = 'suspendida'
+ where grupo_id = (select id from grupos where codigo='ARSSA');
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+select count(*) as productos_visibles_suspendida from public.productos;
+do $$
+begin
+  insert into public.productos (empresa_id, sku, nombre)
+  values ((select id from public.empresas where codigo='ARS'), 'X-1', 'Prueba');
+  raise exception 'FALLA: una organización suspendida capturó en inventario';
+exception when insufficient_privilege or raise_exception then
+  if sqlerrm like 'FALLA%' then raise; end if;
+  raise notice 'OK: RLS bloqueó la captura de inventario sin pago';
+end $$;
+reset role;
+
+-- Y con el pago al corriente sí captura.
+update public.suscripciones set estado = 'activa', periodo_fin = now() + interval '30 days'
+ where grupo_id = (select id from grupos where codigo='ARSSA');
+set role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+insert into public.productos (empresa_id, sku, nombre)
+values ((select id from public.empresas where codigo='ARS'), 'X-1', 'Prueba');
+select count(*) as productos_arssa_al_corriente from public.productos;
+reset role;
+
+\echo '── 12. El resumen de socio no cruza organizaciones'
+set role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+select jsonb_array_length(public.fn_socio_resumen()->'grupos') as grupos_que_ve_arssa,
+       public.fn_socio_resumen()->'grupos'->0->>'codigo' as cual;
+do $$
+begin
+  perform public.fn_kpis_empresa((select id from public.empresas where codigo='AEP'));
+  raise exception 'FALLA: ARSSA calculó los KPIs de una empresa de Loma';
+exception when insufficient_privilege or raise_exception then
+  if sqlerrm like 'FALLA%' then raise; end if;
+  raise notice 'OK: fn_kpis_empresa no es invocable por un usuario autenticado';
+end $$;
+reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
+select jsonb_array_length(public.fn_socio_resumen()->'grupos') as grupos_que_ve_el_maestro;
+reset role;
