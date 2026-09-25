@@ -116,6 +116,55 @@ async function aJpeg(archivo: File): Promise<File> {
   }
 }
 
+/** Campo numérico que respeta lo que la persona va tecleando. Con un
+ * <input type="number"> controlado por Number(value), al borrar para escribir
+ * otra cantidad el valor se vuelve 0 y el campo "no se deja modificar" (Alma,
+ * 25-sep-2026). Aquí el texto vive aparte y solo se emite el número cuando es
+ * válido; vacío = null. */
+function InputNumero({
+  valor,
+  onCambio,
+  className,
+  min,
+  step,
+  placeholder,
+}: {
+  valor: number | null;
+  onCambio: (n: number | null) => void;
+  className?: string;
+  min?: string;
+  step?: string;
+  placeholder?: string;
+}) {
+  const [texto, setTexto] = useState(valor == null ? "" : String(valor));
+  const [enfocado, setEnfocado] = useState(false);
+  useEffect(() => {
+    if (!enfocado) setTexto(valor == null ? "" : String(valor));
+  }, [valor, enfocado]);
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      min={min}
+      step={step}
+      placeholder={placeholder}
+      value={texto}
+      onFocus={() => setEnfocado(true)}
+      onBlur={() => setEnfocado(false)}
+      onChange={(e) => {
+        const t = e.target.value;
+        setTexto(t);
+        if (t === "") onCambio(null);
+        else {
+          const n = Number(t);
+          if (Number.isFinite(n)) onCambio(n);
+        }
+      }}
+      className={className}
+    />
+  );
+}
+
 /** Buscador reutilizable por nombre -- lo usa tanto el modo "Buscar por
  * nombre" como cada concepto sugerido por la foto (ahí sirve para mapear la
  * descripción leída por la IA a un producto real del catálogo). */
@@ -1141,7 +1190,7 @@ export function Movimientos() {
                     <th className="px-2 py-1.5 text-right">Pedido</th>
                     <th className="px-2 py-1.5 text-right">{tipo === "entrada" ? "Recibido" : "Embarcado"}</th>
                     <th className="px-2 py-1.5 text-right">Pendiente</th>
-                    <th className="px-2 py-1.5 text-right">Cantidad ahora</th>
+                    <th className="px-2 py-1.5 text-right" title="Escribe la cantidad que llega o sale; al escribir se marca la partida">Cantidad ahora</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1159,16 +1208,21 @@ export function Movimientos() {
                         <td className="px-2 py-1.5 text-right">{l.avanzado}</td>
                         <td className={`px-2 py-1.5 text-right ${l.pendiente > 0 ? "font-medium text-amber-700" : ""}`}>{l.pendiente}</td>
                         <td className="px-2 py-1.5 text-right">
-                          {marcada && (
-                            <input
-                              type="number"
-                              min="0.001"
-                              step="0.001"
-                              value={seleccion[l.linea_id]}
-                              onChange={(e) => setSeleccion((prev) => ({ ...prev, [l.linea_id]: Number(e.target.value) }))}
-                              className="w-24 rounded border border-slate-300 px-2 py-1 text-right text-sm"
-                            />
-                          )}
+                          <InputNumero
+                            valor={marcada ? seleccion[l.linea_id] : null}
+                            min="0.001"
+                            step="0.001"
+                            placeholder={l.pendiente > 0 ? String(l.pendiente) : "0"}
+                            onCambio={(n) =>
+                              setSeleccion((prev) => {
+                                const sig = { ...prev };
+                                if (n === null) delete sig[l.linea_id];
+                                else sig[l.linea_id] = n;
+                                return sig;
+                              })
+                            }
+                            className="w-24 rounded border border-slate-300 px-2 py-1 text-right text-sm"
+                          />
                         </td>
                       </tr>
                     );
@@ -1432,22 +1486,20 @@ export function Movimientos() {
                         })()}
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="number"
+                        <InputNumero
+                          valor={f.cantidad}
                           min="0.001"
                           step="0.001"
-                          value={f.cantidad}
-                          onChange={(e) => actualizarFila(claveFila(f), "cantidad", Number(e.target.value))}
+                          onCambio={(n) => actualizarFila(claveFila(f), "cantidad", n ?? 0)}
                           className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <input
-                          type="number"
+                        <InputNumero
+                          valor={f.costoUnitario}
                           min="0"
                           step="0.01"
-                          value={f.costoUnitario ?? ""}
-                          onChange={(e) => actualizarFila(claveFila(f), "costoUnitario", e.target.value === "" ? (null as unknown as number) : Number(e.target.value))}
+                          onCambio={(n) => actualizarFila(claveFila(f), "costoUnitario", n as unknown as number)}
                           className="w-28 rounded border border-slate-300 px-2 py-1 text-sm"
                         />
                       </td>
