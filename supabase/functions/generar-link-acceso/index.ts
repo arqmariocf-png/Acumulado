@@ -29,12 +29,19 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
-    if (perfil.rol !== "admin") {
-      return jsonResponse({ error: "Solo un administrador puede generar links de acceso directo." }, 403);
+    if (perfil.rol !== "admin" && perfil.rol !== "rh") {
+      return jsonResponse({ error: "Solo un administrador o RH pueden generar links de acceso directo." }, 403);
     }
 
     const { userId, tipo } = await req.json();
     if (!userId) return jsonResponse({ error: "userId es requerido" }, 400);
+
+    // RH solo reenvía el acceso a personal contratado con rol básico (nunca a
+    // cuentas financieras/admin).
+    if (perfil.rol === "rh") {
+      const { data: ok } = await clienteServicio().rpc("rh_administra_perfil", { p_profile_id: userId });
+      if (!ok) return jsonResponse({ error: "RH solo puede generar links para personal contratado." }, 403);
+    }
     if (tipo && tipo !== "magiclink" && tipo !== "recovery") {
       return jsonResponse({ error: "tipo debe ser 'magiclink' o 'recovery'" }, 400);
     }

@@ -1,0 +1,45 @@
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "../lib/auth";
+import { indicadoresPara, type Indicador } from "../lib/indicadores";
+
+function Tarjeta({ ind }: { ind: Indicador }) {
+  const { perfil } = useAuth();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["indicador", ind.clave, perfil?.id],
+    enabled: !!perfil,
+    staleTime: 60_000,
+    queryFn: () => ind.consulta(perfil!),
+  });
+  const alerta = !!data?.alerta;
+  return (
+    <Link
+      to={ind.ruta}
+      className={`rounded-lg border p-3 transition hover:shadow-sm ${alerta ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}
+    >
+      <p className="text-[11px] uppercase tracking-wide text-slate-500">{ind.etiqueta}</p>
+      <p className={`mt-1 text-lg font-semibold tabular-nums ${alerta ? "text-amber-900" : "text-slate-900"}`}>
+        {isLoading ? "…" : error ? "—" : data?.valor}
+      </p>
+      <p className="text-xs text-slate-500">{error ? "sin acceso" : (data?.detalle ?? "")}</p>
+    </Link>
+  );
+}
+
+/** Franja de indicadores del inicio: solo los que le tocan al rol. */
+export function Indicadores({ tienePersonal }: { tienePersonal: boolean }) {
+  const { perfil } = useAuth();
+  const lista = indicadoresPara(perfil, { tienePersonal });
+  if (lista.length === 0) return null;
+  return (
+    <section className="mb-6">
+      <h2 className="text-sm font-semibold text-slate-900">Tus indicadores</h2>
+      <p className="mb-2 text-xs text-slate-500">Lo que hoy necesita tu atención, según tu rol.</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {lista.map((i) => (
+          <Tarjeta key={i.clave} ind={i} />
+        ))}
+      </div>
+    </section>
+  );
+}

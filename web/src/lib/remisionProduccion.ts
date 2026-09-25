@@ -10,6 +10,9 @@ export interface RemisionProduccionDoc {
   empresa_rfc: string | null;
   empresa_codigo: string;
   contraparte: string;
+  /** RFC y domicilio del cliente cuando la remisión se ligó al catálogo. */
+  cliente_rfc?: string | null;
+  cliente_domicilio?: string | null;
   proyecto_nombre: string | null;
   referencia: string | null;
   observaciones: string | null;
@@ -103,7 +106,7 @@ export function htmlRemisionProduccion(r: RemisionProduccionDoc, lineas: LineaRe
   </div>
   <div class="cuerpo">
     <div class="datos">
-      <div><span>${etiquetaContraparte}</span>${esc(r.contraparte)}</div>
+      <div><span>${etiquetaContraparte}</span>${esc(r.contraparte)}${r.cliente_rfc ? `<div class="rfc">RFC ${esc(r.cliente_rfc)}</div>` : ""}${r.cliente_domicilio ? `<div class="rfc">${esc(r.cliente_domicilio)}</div>` : ""}</div>
       <div><span>Proyecto / obra</span>${esc(r.proyecto_nombre) || "—"}</div>
       <div><span>Referencia (OV / OC)</span>${esc(r.referencia) || "—"}</div>
       <div><span>Emitida por</span>${esc(r.emitida_por_nombre) || "—"}</div>

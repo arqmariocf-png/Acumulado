@@ -4,7 +4,22 @@
 // no tiene credenciales de un proyecto Supabase real. Mantener sincronizado
 // a mano con las migraciones mientras tanto.
 
-export type AppRol = "pendiente" | "corporativo" | "empresa" | "direccion" | "admin" | "rh" | "almacen" | "responsable" | "rh_documentos" | "produccion" | "supervisor_bbva";
+export type AppRol =
+  | "pendiente"
+  | "corporativo"
+  | "empresa"
+  | "direccion"
+  | "admin"
+  | "rh"
+  | "almacen"
+  | "responsable"
+  | "rh_documentos"
+  | "produccion"
+  | "supervisor_bbva"
+  | "operativo"
+  | "administrativo"
+  | "supervisor"
+  | "directivo";
 
 export type EstadoClasificacion = "resuelto" | "pendiente_esperado" | "pendiente_revision" | "ambiguo";
 
@@ -103,6 +118,9 @@ export interface Profile {
   activo: boolean;
   telefono: string | null;
   bbva_mantenimiento: boolean;
+  /** Módulos asignados uno por uno (permisos_modulo); solo aplican a los
+   * roles básicos (operativo, administrativo, supervisor, directivo). */
+  modulos: string[];
 }
 
 export interface CuentaBancaria {
@@ -682,6 +700,10 @@ export interface PuRenglon {
   base_calculo: PuBaseCalculo;
   codigo: string | null;
   descripcion: string | null;
+  /** Descripción del insumo en el catálogo (la de arriba puede estar
+   * personalizada por renglón: medidas, lado, acabado). */
+  descripcion_catalogo: string | null;
+  descripcion_personalizada: boolean;
   unidad: string | null;
   tipo: PuTipoInsumo;
   cantidad: number;

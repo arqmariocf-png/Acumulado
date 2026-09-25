@@ -7,6 +7,8 @@ import { useAuth } from "../../lib/auth";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import { idRemisionDesdeCodigo } from "../../lib/remision";
 import { imprimirRemision } from "./remisionQr";
+import { imprimirComprobanteEntrada } from "./comprobanteEntradaQr";
+import { cantidadTexto } from "../../lib/remision";
 import { sincronizarCatalogoOcOv } from "../../lib/sincronizarOcOv";
 import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
@@ -14,6 +16,71 @@ interface FilaCarrito {
   producto: Producto;
   cantidad: number;
   costoUnitario: number | null;
+  /** Partida de la OC/OV del backoffice que esta fila recibe/embarca (null
+   * cuando se capturó suelta). Dos partidas distintas pueden mapear al mismo
+   * producto, por eso la fila se identifica por partida cuando la hay. */
+  lineaId?: string | null;
+  /** Datos de la partida (pedido, avance) para mostrar faltante/excedente. */
+  linea?: LineaAvance | null;
+}
+
+function claveFila(f: FilaCarrito): string {
+  return f.lineaId ?? f.producto.id;
+}
+
+/** Partida de una OC (entrada) u OV (salida) con su avance por cantidad --
+ * viene de v_oc_lineas_avance / v_ov_lineas_avance, normalizada a un solo
+ * tipo para que el checklist sea el mismo en los dos sentidos. */
+interface LineaAvance {
+  linea_id: string;
+  numero: number;
+  descripcion: string;
+  unidad: string | null;
+  cantidad: number | null;
+  costo: number | null;
+  avanzado: number;
+  pendiente: number;
+  estado: string;
+  producto_id: string | null;
+}
+
+function useLineasOrden(ordenId: string, tipo: TipoMovimientoInventario) {
+  return useQuery({
+    queryKey: ["lineas-orden", ordenId, tipo],
+    enabled: !!ordenId && ordenId !== "__nueva__",
+    queryFn: async (): Promise<LineaAvance[]> => {
+      if (tipo === "entrada") {
+        const { data, error } = await supabase.from("v_oc_lineas_avance").select("*").eq("orden_compra_id", ordenId).order("numero");
+        if (error) throw error;
+        return (data ?? []).map((l) => ({
+          linea_id: String(l.linea_id),
+          numero: Number(l.numero),
+          descripcion: String(l.item),
+          unidad: l.unidad ?? null,
+          cantidad: l.cantidad == null ? null : Number(l.cantidad),
+          costo: l.costo == null ? null : Number(l.costo),
+          avanzado: Number(l.recibido ?? 0),
+          pendiente: Number(l.pendiente ?? 0),
+          estado: String(l.estado),
+          producto_id: l.producto_id ?? null,
+        }));
+      }
+      const { data, error } = await supabase.from("v_ov_lineas_avance").select("*").eq("orden_venta_id", ordenId).order("numero");
+      if (error) throw error;
+      return (data ?? []).map((l) => ({
+        linea_id: String(l.linea_id),
+        numero: Number(l.numero),
+        descripcion: String(l.concepto),
+        unidad: l.unidad ?? null,
+        cantidad: l.cantidad == null ? null : Number(l.cantidad),
+        costo: l.precio_base == null ? null : Number(l.precio_base),
+        avanzado: Number(l.embarcado ?? 0),
+        pendiente: Number(l.pendiente ?? 0),
+        estado: String(l.estado),
+        producto_id: l.producto_id ?? null,
+      }));
+    },
+  });
 }
 
 // Tres formas de decidir qué producto va al carrito: escanear (físico o
@@ -485,6 +552,12 @@ export function Movimientos() {
   const [codigoSinProducto, setCodigoSinProducto] = useState<string | null>(null);
   const [sincronizandoOc, setSincronizandoOc] = useState(false);
   const [avisoSyncOc, setAvisoSyncOc] = useState<string | null>(null);
+  // checklist de partidas de la OC/OV seleccionada: lineaId -> cantidad ahora
+  const [seleccion, setSeleccion] = useState<Record<string, number>>({});
+  const [agregandoLineas, setAgregandoLineas] = useState(false);
+  // la foto normalmente es evidencia (las partidas ya vienen del backoffice);
+  // la lectura por IA queda como opción para notas sin OC
+  const [soloEvidencia, setSoloEvidencia] = useState(true);
   // ids de productos creados en automático en esta sesión (nombre editable en el carrito)
   const [productosNuevos, setProductosNuevos] = useState<Set<string>>(new Set());
   const [buscando, setBuscando] = useState(false);
@@ -500,6 +573,10 @@ export function Movimientos() {
   const [entregarA, setEntregarA] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [ultimaRemision, setUltimaRemision] = useState<{ id: string; folio: string } | null>(null);
+  // ids de los movimientos de la última entrada guardada (para el comprobante PDF con QR)
+  const [ultimaEntrada, setUltimaEntrada] = useState<{ ids: string[]; ordenCompraId: string | null } | null>(null);
+  // orden cuyas partidas pendientes ya se precargaron al carrito (una vez por orden elegida)
+  const autoCargadoRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const [itemsSugeridos, setItemsSugeridos] = useState<ItemSugeridoNota[]>([]);
   const [errorLecturaFoto, setErrorLecturaFoto] = useState<string | null>(null);
@@ -507,6 +584,7 @@ export function Movimientos() {
 
   const { data: almacen } = useAlmacen(empresaId);
   const { data: ordenes } = useOrdenes(empresaId, tipo);
+  const { data: lineas } = useLineasOrden(ordenId, tipo);
   const { data: recientes, isLoading: cargandoRecientes } = useMovimientosRecientes(empresaId);
   const { data: pendientesOrden } = usePendientesAsignarOrden(empresaId, tipo);
 
@@ -514,13 +592,48 @@ export function Movimientos() {
     setOrdenId("");
   }, [tipo, empresaId]);
 
-  function agregarAlCarrito(producto: Producto, cantidadSugerida?: number) {
+  useEffect(() => {
+    setSeleccion({});
+    autoCargadoRef.current = null;
+  }, [ordenId]);
+
+  // Al elegir una orden, sus partidas pendientes pasan solas al carrito con la
+  // cantidad que falta (Mario, 24-sep-2026): el almacén solo confirma o corrige
+  // si llegó más o menos. Solo la primera vez por orden y con el carrito vacío.
+  useEffect(() => {
+    if (!lineas || lineas.length === 0 || !ordenId || ordenId === "__nueva__" || esAjuste) return;
+    if (autoCargadoRef.current === ordenId || carrito.length > 0) return;
+    const mapa: Record<string, number> = {};
+    for (const l of lineas) if (l.pendiente > 0) mapa[l.linea_id] = l.pendiente;
+    autoCargadoRef.current = ordenId;
+    if (Object.keys(mapa).length === 0) return;
+    void agregarLineasAlCarrito(mapa);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineas, ordenId, esAjuste]);
+
+  function agregarAlCarrito(
+    producto: Producto,
+    cantidadSugerida?: number,
+    extra?: { costoUnitario?: number | null; lineaId?: string | null; linea?: LineaAvance | null },
+  ) {
     setCarrito((prev) => {
-      const existente = prev.find((f) => f.producto.id === producto.id);
+      const lineaId = extra?.lineaId ?? extra?.linea?.linea_id ?? null;
+      const existente = prev.find((f) => f.producto.id === producto.id && (f.lineaId ?? null) === lineaId);
       if (existente) {
-        return prev.map((f) => (f.producto.id === producto.id ? { ...f, cantidad: f.cantidad + (cantidadSugerida ?? 1) } : f));
+        return prev.map((f) =>
+          f.producto.id === producto.id && (f.lineaId ?? null) === lineaId ? { ...f, cantidad: f.cantidad + (cantidadSugerida ?? 1) } : f,
+        );
       }
-      return [...prev, { producto, cantidad: cantidadSugerida ?? 1, costoUnitario: producto.costo_referencia }];
+      return [
+        ...prev,
+        {
+          producto,
+          cantidad: cantidadSugerida ?? 1,
+          costoUnitario: extra?.costoUnitario !== undefined ? extra.costoUnitario : producto.costo_referencia,
+          lineaId,
+          linea: extra?.linea ?? null,
+        },
+      ];
     });
   }
 
@@ -601,6 +714,68 @@ export function Movimientos() {
     }
   }
 
+  function toggleLinea(l: LineaAvance, marcada: boolean) {
+    setSeleccion((prev) => {
+      const sig = { ...prev };
+      if (marcada) sig[l.linea_id] = l.pendiente > 0 ? l.pendiente : (l.cantidad ?? 1);
+      else delete sig[l.linea_id];
+      return sig;
+    });
+  }
+
+  function seleccionarPendientes() {
+    const sig: Record<string, number> = {};
+    for (const l of lineas ?? []) if (l.pendiente > 0) sig[l.linea_id] = l.pendiente;
+    setSeleccion(sig);
+  }
+
+  // Cada partida marcada se vuelve una fila del carrito. El producto se busca
+  // por el que ya se usó para esa partida, luego por nombre exacto en la
+  // empresa, y si no existe se crea (mismo criterio de alta automática).
+  async function agregarLineasAlCarrito(mapa?: Record<string, number>) {
+    if (!lineas || !empresaId) return;
+    const sel = mapa ?? seleccion;
+    setAgregandoLineas(true);
+    setError(null);
+    try {
+      let creados = 0;
+      for (const l of lineas) {
+        const cantidad = sel[l.linea_id];
+        if (!cantidad || cantidad <= 0) continue;
+        let producto: Producto | null = null;
+        if (l.producto_id) {
+          const { data } = await supabase.from("productos").select("*").eq("id", l.producto_id).maybeSingle();
+          producto = (data as Producto | null) ?? null;
+        }
+        if (!producto) {
+          const patron = l.descripcion.replace(/[%_\\]/g, "\\$&");
+          const { data } = await supabase.from("productos").select("*").eq("empresa_id", empresaId).eq("activo", true).ilike("nombre", patron).limit(1);
+          producto = ((data ?? [])[0] as Producto | undefined) ?? null;
+        }
+        if (!producto) {
+          const sku = `${tipo === "entrada" ? "OC" : "OV"}-${Date.now().toString(36).toUpperCase()}-${l.numero}`;
+          const { data, error: errInsert } = await supabase
+            .from("productos")
+            .insert({ empresa_id: empresaId, sku, nombre: l.descripcion, unidad_medida: l.unidad ?? "PZA", costo_referencia: l.costo })
+            .select("*")
+            .single();
+          if (errInsert) throw errInsert;
+          producto = data as Producto;
+          creados += 1;
+          const nuevoId = producto.id;
+          setProductosNuevos((prev) => new Set(prev).add(nuevoId));
+        }
+        agregarAlCarrito(producto, cantidad, { costoUnitario: l.costo, lineaId: l.linea_id, linea: l });
+      }
+      setSeleccion({});
+      if (creados > 0) queryClient.invalidateQueries({ queryKey: ["productos"] });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAgregandoLineas(false);
+    }
+  }
+
   async function renombrarProducto(productoId: string, nombre: string) {
     const limpio = nombre.trim();
     if (!limpio) return;
@@ -666,6 +841,7 @@ export function Movimientos() {
       const form = new FormData(formEl);
       const original = form.get("file");
       if (original instanceof File && original.size > 0) form.set("file", await aJpeg(original));
+      form.set("soloEvidencia", soloEvidencia ? "1" : "0");
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const respuesta = await fetch(urlFuncion("ocr-nota-entrega"), {
@@ -686,12 +862,12 @@ export function Movimientos() {
     }
   }
 
-  function actualizarFila(productoId: string, campo: "cantidad" | "costoUnitario", valor: number) {
-    setCarrito((prev) => prev.map((f) => (f.producto.id === productoId ? { ...f, [campo]: valor } : f)));
+  function actualizarFila(clave: string, campo: "cantidad" | "costoUnitario", valor: number) {
+    setCarrito((prev) => prev.map((f) => (claveFila(f) === clave ? { ...f, [campo]: valor } : f)));
   }
 
-  function quitarFila(productoId: string) {
-    setCarrito((prev) => prev.filter((f) => f.producto.id !== productoId));
+  function quitarFila(clave: string) {
+    setCarrito((prev) => prev.filter((f) => claveFila(f) !== clave));
   }
 
   async function onGuardarMovimiento() {
@@ -709,6 +885,7 @@ export function Movimientos() {
     setError(null);
     setMensaje(null);
     setUltimaRemision(null);
+    setUltimaEntrada(null);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
@@ -766,11 +943,14 @@ export function Movimientos() {
         codigo_escaneado: f.producto.codigo_barras,
         nota_entrega_id: notaEntregaId,
         remision_id: remision?.id ?? null,
+        linea_orden_compra_id: !esAjuste && tipo === "entrada" ? (f.lineaId ?? null) : null,
+        linea_orden_venta_id: !esAjuste && tipo === "salida" ? (f.lineaId ?? null) : null,
         registrado_por: userId,
       }));
 
-      const { error: errInsert } = await supabase.from("movimientos_inventario").insert(filas);
+      const { data: insertados, error: errInsert } = await supabase.from("movimientos_inventario").insert(filas).select("id");
       if (errInsert) throw errInsert;
+      const idsGuardados = (insertados ?? []).map((m: { id: string }) => m.id);
 
       setMensaje(
         remision
@@ -779,6 +959,13 @@ export function Movimientos() {
       );
       setCarrito([]);
       limpiarFoto();
+      if (tipo === "entrada" && idsGuardados.length > 0) {
+        const entrada = { ids: idsGuardados, ordenCompraId: !esAjuste && ordenIdFinal && ordenIdFinal !== "__nueva__" ? ordenIdFinal : null };
+        setUltimaEntrada(entrada);
+        // Abre el comprobante con QR listo para guardar como PDF; si el
+        // navegador bloquea la ventana, el botón de abajo lo reabre.
+        imprimirComprobanteEntrada(entrada.ids).catch(() => undefined);
+      }
       if (remision) {
         setUltimaRemision(remision);
         setEntregarA("");
@@ -792,6 +979,7 @@ export function Movimientos() {
       queryClient.invalidateQueries({ queryKey: ["existencias"] });
       queryClient.invalidateQueries({ queryKey: ["avance-recepcion-oc"] });
       queryClient.invalidateQueries({ queryKey: ["avance-embarque-ov"] });
+      queryClient.invalidateQueries({ queryKey: ["lineas-orden"] });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -878,6 +1066,78 @@ export function Movimientos() {
               <input value={nuevaOcFolio} onChange={(e) => setNuevaOcFolio(e.target.value)} placeholder="Folio de la OC (ej. 40921)" className="rounded border border-slate-300 px-2 py-1 text-sm" />
               <input value={nuevaOcProveedor} onChange={(e) => setNuevaOcProveedor(e.target.value)} placeholder="Proveedor" className="rounded border border-slate-300 px-2 py-1 text-sm" />
               <p className="col-span-2 text-xs text-slate-500">Las OC llegan del backoffice cada hora, pero solo las ya autorizadas. Con el folio la ligas desde ahora y se completa sola cuando la autoricen.</p>
+            </div>
+          )}
+          {lineas && lineas.length > 0 && ordenId !== "__nueva__" && (
+            <div className="mt-2 overflow-x-auto rounded border border-emerald-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2">
+                <p className="text-sm font-medium text-emerald-900">
+                  Partidas de la orden -- marca lo que {tipo === "entrada" ? "llegó" : "sale"} y corrige la cantidad si es distinta
+                </p>
+                <div className="flex gap-3 text-xs text-emerald-800">
+                  <button type="button" onClick={seleccionarPendientes} className="underline">
+                    Marcar todo lo pendiente
+                  </button>
+                  <button type="button" onClick={() => setSeleccion({})} className="underline">
+                    Limpiar
+                  </button>
+                </div>
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-2 py-1.5"></th>
+                    <th className="px-2 py-1.5">#</th>
+                    <th className="px-2 py-1.5">Partida</th>
+                    <th className="px-2 py-1.5">Unidad</th>
+                    <th className="px-2 py-1.5 text-right">Pedido</th>
+                    <th className="px-2 py-1.5 text-right">{tipo === "entrada" ? "Recibido" : "Embarcado"}</th>
+                    <th className="px-2 py-1.5 text-right">Pendiente</th>
+                    <th className="px-2 py-1.5 text-right">Cantidad ahora</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineas.map((l) => {
+                    const marcada = l.linea_id in seleccion;
+                    return (
+                      <tr key={l.linea_id} className={`border-t border-slate-100 ${l.estado === "completo" ? "text-slate-400" : ""}`}>
+                        <td className="px-2 py-1.5">
+                          <input type="checkbox" checked={marcada} onChange={(e) => toggleLinea(l, e.target.checked)} />
+                        </td>
+                        <td className="px-2 py-1.5 text-xs text-slate-500">{l.numero}</td>
+                        <td className="px-2 py-1.5">{l.descripcion}</td>
+                        <td className="px-2 py-1.5 text-xs">{l.unidad ?? ""}</td>
+                        <td className="px-2 py-1.5 text-right">{l.cantidad ?? "—"}</td>
+                        <td className="px-2 py-1.5 text-right">{l.avanzado}</td>
+                        <td className={`px-2 py-1.5 text-right ${l.pendiente > 0 ? "font-medium text-amber-700" : ""}`}>{l.pendiente}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          {marcada && (
+                            <input
+                              type="number"
+                              min="0.001"
+                              step="0.001"
+                              value={seleccion[l.linea_id]}
+                              onChange={(e) => setSeleccion((prev) => ({ ...prev, [l.linea_id]: Number(e.target.value) }))}
+                              className="w-24 rounded border border-slate-300 px-2 py-1 text-right text-sm"
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-3 py-2">
+                <button
+                  type="button"
+                  disabled={agregandoLineas || Object.keys(seleccion).length === 0}
+                  onClick={() => agregarLineasAlCarrito()}
+                  className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+                >
+                  {agregandoLineas ? "Agregando…" : `Agregar ${Object.keys(seleccion).length} partida(s) al carrito`}
+                </button>
+                <span className="text-xs text-slate-500">Si la partida aún no existe como producto, se da de alta sola con ese nombre.</span>
+              </div>
             </div>
           )}
           {tipo === "entrada" && ordenId === "" && (
@@ -1013,18 +1273,22 @@ export function Movimientos() {
           {modo === "foto" && (
             <div className="mb-4 max-w-xl space-y-3">
               <p className="text-xs text-slate-500">
-                Sube la foto de la nota o remisión de papel del proveedor -- la IA intentará leer los conceptos, cantidades y proveedor
-                automáticamente. La foto aplica a todo el movimiento (todas las líneas que agregues quedan vinculadas a ella).
+                Sube la foto de la nota o remisión de papel como evidencia del movimiento: queda vinculada a todas las líneas que
+                guardes. Si la entrada no tiene OC, puedes pedir además que la IA intente leer los conceptos.
               </p>
-              <form onSubmit={onSubirFoto} className="flex items-center gap-2">
+              <form onSubmit={onSubirFoto} className="flex flex-wrap items-center gap-2">
                 <input type="hidden" name="empresaId" value={empresaId} />
                 <input type="file" name="file" accept="image/*" required disabled={subiendoFoto} className="flex-1 text-sm" />
                 <button
                   disabled={subiendoFoto}
                   className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  {subiendoFoto ? "Leyendo…" : "Subir y leer"}
+                  {subiendoFoto ? (soloEvidencia ? "Subiendo…" : "Leyendo…") : soloEvidencia ? "Subir como evidencia" : "Subir y leer"}
                 </button>
+                <label className="flex w-full items-center gap-1.5 text-xs text-slate-600">
+                  <input type="checkbox" checked={!soloEvidencia} onChange={(e) => setSoloEvidencia(!e.target.checked)} />
+                  Intentar leer los conceptos con IA (solo para notas sin OC/OV)
+                </label>
               </form>
 
               {notaEntregaId && (
@@ -1074,7 +1338,7 @@ export function Movimientos() {
                 </thead>
                 <tbody>
                   {carrito.map((f) => (
-                    <tr key={f.producto.id} className="border-t border-slate-100">
+                    <tr key={claveFila(f)} className="border-t border-slate-100">
                       <td className="px-3 py-2">
                         {productosNuevos.has(f.producto.id) ? (
                           <div>
@@ -1096,6 +1360,27 @@ export function Movimientos() {
                             {f.producto.nombre} <span className="text-xs text-slate-400">({f.producto.sku})</span>
                           </>
                         )}
+                        {f.lineaId && <span className="ml-1 rounded bg-emerald-50 px-1 text-[10px] text-emerald-700">partida de la orden</span>}
+                        {f.linea && f.linea.cantidad != null && (() => {
+                          const restante = Number(f.linea.cantidad) - Number(f.linea.avanzado) - Number(f.cantidad || 0);
+                          const u = f.linea.unidad ?? "";
+                          const base = `Pedido ${cantidadTexto(Number(f.linea.cantidad))} ${u}` + (f.linea.avanzado > 0 ? ` · ya ${tipo === "entrada" ? "recibido" : "embarcado"} ${cantidadTexto(f.linea.avanzado)}` : "");
+                          if (restante > 0.0005) {
+                            return (
+                              <p className="mt-0.5 text-xs text-amber-700">
+                                {base} · quedarán {cantidadTexto(restante)} {u} pendientes: {tipo === "entrada" ? "el proveedor aún debe producto" : "falta por embarcar"}
+                              </p>
+                            );
+                          }
+                          if (restante < -0.0005) {
+                            return (
+                              <p className="mt-0.5 text-xs text-red-700">
+                                {base} · excede por {cantidadTexto(-restante)} {u}: {tipo === "entrada" ? "ajuste o reclamación posterior" : "revisa la cantidad"}
+                              </p>
+                            );
+                          }
+                          return <p className="mt-0.5 text-xs text-emerald-700">{base} · completa la partida</p>;
+                        })()}
                       </td>
                       <td className="px-3 py-2">
                         <input
@@ -1103,7 +1388,7 @@ export function Movimientos() {
                           min="0.001"
                           step="0.001"
                           value={f.cantidad}
-                          onChange={(e) => actualizarFila(f.producto.id, "cantidad", Number(e.target.value))}
+                          onChange={(e) => actualizarFila(claveFila(f), "cantidad", Number(e.target.value))}
                           className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                         />
                       </td>
@@ -1113,12 +1398,12 @@ export function Movimientos() {
                           min="0"
                           step="0.01"
                           value={f.costoUnitario ?? ""}
-                          onChange={(e) => actualizarFila(f.producto.id, "costoUnitario", e.target.value === "" ? (null as unknown as number) : Number(e.target.value))}
+                          onChange={(e) => actualizarFila(claveFila(f), "costoUnitario", e.target.value === "" ? (null as unknown as number) : Number(e.target.value))}
                           className="w-28 rounded border border-slate-300 px-2 py-1 text-sm"
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <button onClick={() => quitarFila(f.producto.id)} className="text-xs text-red-600 hover:underline">
+                        <button onClick={() => quitarFila(claveFila(f))} className="text-xs text-red-600 hover:underline">
                           Quitar
                         </button>
                       </td>
@@ -1129,15 +1414,26 @@ export function Movimientos() {
             </div>
           )}
 
-          {carrito.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <button
               onClick={onGuardarMovimiento}
-              disabled={enviando}
-              className="mb-4 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              disabled={enviando || carrito.length === 0 || !almacen}
+              className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               {enviando ? "Guardando…" : `Guardar ${tipo === "entrada" ? "entrada" : "salida"} (${carrito.length} línea(s))`}
             </button>
-          )}
+            {carrito.length > 0 && (
+              <button type="button" onClick={() => setCarrito([])} className="text-xs text-slate-500 underline">
+                Vaciar carrito
+              </button>
+            )}
+            {carrito.length === 0 && (
+              <span className="text-xs text-slate-500">
+                {ordenId && ordenId !== "__nueva__" ? "Marca partidas de la orden o agrega productos para poder guardar." : "Agrega productos al carrito para poder guardar."}
+              </span>
+            )}
+            <span className="text-xs text-slate-500">Al guardar se genera el PDF con código QR{tipo === "salida" ? " (remisión)" : " (comprobante de entrada)"}.</span>
+          </div>
         </>
       )}
 
@@ -1148,12 +1444,27 @@ export function Movimientos() {
           {ultimaRemision && (
             <span className="ml-2">
               <button onClick={() => imprimirRemision(ultimaRemision.id).catch((err) => setError((err as Error).message))} className="underline">
-                Imprimir con QR
+                PDF con QR
               </button>
               {" · "}
               <Link to={`/inventario/remisiones/${ultimaRemision.id}`} className="underline">
                 Ver remisión
               </Link>
+            </span>
+          )}
+          {ultimaEntrada && (
+            <span className="ml-2">
+              <button onClick={() => imprimirComprobanteEntrada(ultimaEntrada.ids).catch((err) => setError((err as Error).message))} className="underline">
+                PDF con QR (comprobante de entrada)
+              </button>
+              {ultimaEntrada.ordenCompraId && (
+                <>
+                  {" · "}
+                  <Link to={`/inventario/match?oc=${ultimaEntrada.ordenCompraId}`} className="underline">
+                    Ver avance de la OC
+                  </Link>
+                </>
+              )}
             </span>
           )}
         </div>
@@ -1188,6 +1499,7 @@ export function Movimientos() {
                       queryClient.invalidateQueries({ queryKey: ["movimientos-inventario-recientes"] });
                       queryClient.invalidateQueries({ queryKey: ["avance-recepcion-oc"] });
                       queryClient.invalidateQueries({ queryKey: ["avance-embarque-ov"] });
+      queryClient.invalidateQueries({ queryKey: ["lineas-orden"] });
                     }}
                   />
                 ))}

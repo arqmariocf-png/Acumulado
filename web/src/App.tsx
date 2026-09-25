@@ -21,6 +21,9 @@ const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
+import { Guia } from "./pages/Guia";
+import { Organigrama, Area } from "./pages/Organigrama";
+import { InicioSegunRol } from "./pages/InicioSegunRol";
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
@@ -97,28 +100,41 @@ function Enrutador() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
-          <Route path="/" element={<Inicio />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/movimientos" element={<Movimientos />} />
-          <Route path="/carga" element={<Carga />} />
-          <Route path="/reportes" element={<ReportesEspeciales />} />
-          <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
-          <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
-          <Route path="/pendientes" element={<Pendientes />} />
+          <Route path="/" element={<InicioSegunRol />} />
+          <Route path="/inicio" element={<Inicio />} />
+          <Route element={<ProtectedRoute soloAdmin />}>
+            <Route path="/organigrama" element={<Organigrama />} />
+            <Route path="/area/:clave" element={<Area />} />
+          </Route>
+          {/* Finanzas/bancos: cerrado para los roles básicos de personal
+              (operativo, administrativo, supervisor, directivo) -- "finanzas"
+              no es un módulo asignable. */}
+          <Route element={<ProtectedRoute modulo="finanzas" />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/movimientos" element={<Movimientos />} />
+            <Route path="/carga" element={<Carga />} />
+            <Route path="/reportes" element={<ReportesEspeciales />} />
+            <Route path="/prestamos-intercompania" element={<PrestamosIntercompania />} />
+            <Route path="/perfil-fiscal" element={<PerfilFiscal />} />
+            <Route path="/pendientes" element={<Pendientes />} />
+          </Route>
           <Route path="/checador" element={<Checador />} />
           <Route path="/mis-documentos" element={<MisDocumentos />} />
+          <Route path="/guia" element={<Guia />} />
 
-          <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+          <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} oPermiso={(p) => p.bbva_mantenimiento} modulo="bbva" />}>
             <Route path="/bbva/folios" element={<FoliosCuadrilla />} />
           </Route>
           <Route element={<ProtectedRoute roles={["corporativo", "direccion", "rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
             <Route path="/bbva/equilibrio" element={<Equilibrio />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+          <Route element={<ProtectedRoute roles={["rh", "supervisor", "directivo"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
             <Route path="/bbva/asistencia" element={<AsistenciaEquipo />} />
           </Route>
-          <Route path="/proyectos" element={<Proyectos />} />
-          <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
+          <Route element={<ProtectedRoute modulo="proyectos" />}>
+            <Route path="/proyectos" element={<Proyectos />} />
+            <Route path="/proyectos/:id" element={<ProyectoDetalle />} />
+          </Route>
 
           <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} />}>
             <Route path="/saldos" element={<SaldosDiarios />} />
@@ -133,6 +149,7 @@ function Enrutador() {
               bbva_mantenimiento_snapshots. */}
           <Route path="/mantenimiento/bbva" element={<BbvaMantenimiento />} />
 
+          <Route element={<ProtectedRoute modulo="inventario" />}>
           <Route path="/inventario" element={<InventarioLayout />}>
             <Route index element={<InventarioMovimientos />} />
             <Route path="existencias" element={<InventarioExistencias />} />
@@ -141,24 +158,31 @@ function Enrutador() {
             <Route path="remisiones" element={<InventarioRemisiones />} />
             <Route path="remisiones/:id" element={<InventarioRemisionDetalle />} />
           </Route>
+          </Route>
 
+          <Route element={<ProtectedRoute modulo="requisiciones" />}>
           <Route path="/requisiciones" element={<RequisicionesLayout />}>
             <Route index element={<MisRequisiciones />} />
             <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>
               <Route path="resolucion" element={<Resolucion />} />
             </Route>
           </Route>
+          </Route>
 
-          <Route path="/tareas" element={<Tableros />} />
-          <Route path="/tareas/:tableroId" element={<TableroDetalle />} />
+          <Route element={<ProtectedRoute modulo="tareas" />}>
+            <Route path="/tareas" element={<Tableros />} />
+            <Route path="/tareas/:tableroId" element={<TableroDetalle />} />
+          </Route>
 
           {/* El detalle vive fuera del layout de pestanas: es una
               tarjeta completa y ahi las pestanas estorban. */}
-          <Route path="/precios/:id" element={<PreciosDetalle />} />
-          <Route path="/precios" element={<PreciosLayout />}>
-            <Route index element={<PreciosAnalisis />} />
-            <Route path="publicados" element={<PreciosPublicados />} />
-            <Route path="catalogo" element={<PreciosCatalogo />} />
+          <Route element={<ProtectedRoute modulo="precios" />}>
+            <Route path="/precios/:id" element={<PreciosDetalle />} />
+            <Route path="/precios" element={<PreciosLayout />}>
+              <Route index element={<PreciosAnalisis />} />
+              <Route path="publicados" element={<PreciosPublicados />} />
+              <Route path="catalogo" element={<PreciosCatalogo />} />
+            </Route>
           </Route>
 
           <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>
@@ -174,11 +198,11 @@ function Enrutador() {
             <Route path="/clavicon" element={<PanoramaClavicon />} />
           </Route>
 
-          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable"]} />}>
+          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable"]} modulo="produccion" />}>
             <Route path="/produccion/remisiones/:id" element={<RemisionProduccionDetalle />} />
           </Route>
 
-          <Route element={<ProtectedRoute roles={["produccion"]} />}>
+          <Route element={<ProtectedRoute roles={["produccion"]} modulo="produccion" />}>
             {/* Una sola pantalla para las plantas del grupo, parametrizada
                 por la planta en la URL (clavicon | balken | carpinteria). */}
             <Route path="/produccion" element={<Navigate to="/produccion/clavicon" replace />} />

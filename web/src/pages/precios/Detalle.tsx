@@ -61,6 +61,7 @@ export function Detalle() {
 
   const [filaEnPrecio, setFilaEnPrecio] = useState<string | null>(null);
   const [filaEnCantidad, setFilaEnCantidad] = useState<string | null>(null);
+  const [filaEnDescripcion, setFilaEnDescripcion] = useState<string | null>(null);
   const [editandoCabecera, setEditandoCabecera] = useState(false);
   const [agregando, setAgregando] = useState(false);
   const [comentario, setComentario] = useState("");
@@ -125,6 +126,22 @@ export function Detalle() {
     },
     onSuccess: () => {
       setFilaEnCantidad(null);
+      invalidar();
+    },
+  });
+
+  // Descripción propia del renglón (medidas, lado, acabado) sin tocar el
+  // insumo del catálogo, que comparten todas las empresas. Vacío = catálogo.
+  const guardarDescripcion = useMutation({
+    mutationFn: async ({ itemId, descripcion }: { itemId: string; descripcion: string }) => {
+      const { error: err } = await supabase
+        .from("pu_analisis_items")
+        .update({ descripcion_manual: descripcion.trim() || null })
+        .eq("id", itemId);
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setFilaEnDescripcion(null);
       invalidar();
     },
   });
@@ -274,9 +291,62 @@ export function Detalle() {
                     {filas.map((r) => (
                       <tr key={r.item_id} className="border-t border-slate-100 align-top">
                         <td className="px-3 py-2">
-                          <p className="text-slate-900">{r.descripcion}</p>
+                          {filaEnDescripcion === r.item_id ? (
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                const f = new FormData(e.currentTarget);
+                                guardarDescripcion.mutate({ itemId: r.item_id, descripcion: String(f.get("descripcion") ?? "") });
+                              }}
+                              className="grid gap-1"
+                            >
+                              <textarea
+                                name="descripcion"
+                                defaultValue={r.descripcion ?? ""}
+                                rows={3}
+                                autoFocus
+                                className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                              />
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <button className="rounded bg-slate-900 px-3 py-1 font-medium text-white" disabled={guardarDescripcion.isPending}>
+                                  Guardar
+                                </button>
+                                {r.descripcion_personalizada && (
+                                  <button
+                                    type="button"
+                                    onClick={() => guardarDescripcion.mutate({ itemId: r.item_id, descripcion: "" })}
+                                    className="text-slate-600 underline"
+                                  >
+                                    volver a la del catálogo
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => setFilaEnDescripcion(null)} className="text-slate-600 underline">
+                                  cancelar
+                                </button>
+                                {guardarDescripcion.isError && <span className="text-red-600">{(guardarDescripcion.error as Error).message}</span>}
+                              </div>
+                              {r.descripcion_personalizada && r.descripcion_catalogo && (
+                                <p className="text-xs text-slate-400">Catálogo: {r.descripcion_catalogo}</p>
+                              )}
+                            </form>
+                          ) : (
+                            <p className="text-slate-900">
+                              {r.descripcion}
+                              {puedeEditar && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFilaEnDescripcion(r.item_id)}
+                                  className="ml-2 text-xs text-slate-500 underline"
+                                  title="Editar la descripción de este renglón (medidas, lado, acabado) sin cambiar el catálogo"
+                                >
+                                  editar
+                                </button>
+                              )}
+                            </p>
+                          )}
                           <p className="text-xs text-slate-500">
                             {r.codigo}
+                            {r.descripcion_personalizada && " · descripción propia de este análisis"}
                             {r.proveedor && ` · ${r.proveedor}`}
                           </p>
                           {r.sin_precio && <p className="text-xs text-amber-700">Sin precio en catálogo</p>}

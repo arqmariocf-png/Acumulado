@@ -302,3 +302,17 @@ create policy frontera_organizacion on public.tarjeta_archivos as restrictive fo
 create policy frontera_organizacion on public.tarjeta_actividad as restrictive for all
   using (exists (select 1 from public.tarjetas ta join public.tableros t on t.id = ta.tablero_id where ta.id = tarjeta_actividad.tarjeta_id and (t.empresa_id is null or public.empresa_en_mi_organizacion(t.empresa_id))))
   with check (exists (select 1 from public.tarjetas ta join public.tableros t on t.id = ta.tablero_id where ta.id = tarjeta_actividad.tarjeta_id and (t.empresa_id is null or public.empresa_en_mi_organizacion(t.empresa_id))));
+
+-- ── Tablas de los módulos más recientes ─────────────────────────────────
+create policy frontera_organizacion on public.clientes as restrictive for all
+  using (public.empresa_en_mi_organizacion(empresa_id)) with check (public.empresa_en_mi_organizacion(empresa_id));
+create policy frontera_organizacion on public.ordenes_compra_lineas as restrictive for all
+  using (exists (select 1 from public.ordenes_compra o where o.id = ordenes_compra_lineas.orden_compra_id and public.empresa_en_mi_organizacion(o.empresa_id)))
+  with check (exists (select 1 from public.ordenes_compra o where o.id = ordenes_compra_lineas.orden_compra_id and public.empresa_en_mi_organizacion(o.empresa_id)));
+create policy frontera_organizacion on public.ordenes_venta_lineas as restrictive for all
+  using (exists (select 1 from public.ordenes_venta o where o.id = ordenes_venta_lineas.orden_venta_id and public.empresa_en_mi_organizacion(o.empresa_id)))
+  with check (exists (select 1 from public.ordenes_venta o where o.id = ordenes_venta_lineas.orden_venta_id and public.empresa_en_mi_organizacion(o.empresa_id)));
+-- Los permisos de módulo son de un usuario, y un usuario es de una organización.
+create policy frontera_organizacion on public.permisos_modulo as restrictive for all
+  using (exists (select 1 from public.profiles pr where pr.id = permisos_modulo.profile_id and public.grupo_en_alcance(pr.grupo_id)))
+  with check (exists (select 1 from public.profiles pr where pr.id = permisos_modulo.profile_id and public.grupo_en_alcance(pr.grupo_id)));
