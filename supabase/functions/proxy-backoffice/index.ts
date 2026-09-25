@@ -13,7 +13,7 @@
 //
 // POST body: { recurso: 'oc' | 'ov', empresaId: string, modo: 'diagnostico' }
 
-import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
@@ -32,7 +32,9 @@ Deno.serve(async (req) => {
 
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
-    if (!puedeEscribirEnEmpresa(perfil, empresaId)) return jsonResponse({ error: "Sin permiso" }, 403);
+    if (!puedeEscribirEnEmpresa(perfil, empresaId) || !(await empresaOperableEnModulo(req, empresaId, "conciliacion"))) {
+      return jsonResponse({ error: "Sin permiso" }, 403);
+    }
 
     const baseUrl = Deno.env.get("BACKOFFICE_API_BASE_URL");
     const token = Deno.env.get("BACKOFFICE_API_TOKEN"); // Vacío mientras el backoffice no exija auth.

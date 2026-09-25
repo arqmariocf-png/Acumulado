@@ -50,6 +50,9 @@ Secrets que los edge functions necesitan (`npx supabase secrets set NOMBRE=valor
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Todos los edge functions | Supabase los inyecta automáticamente, no hace falta configurarlos a mano |
 | `BACKOFFICE_API_BASE_URL` | `proxy-backoffice` | URL base de la API del backoffice (`reports.grupoloma.mx` o la que corresponda) |
 | `BACKOFFICE_API_TOKEN` | `proxy-backoffice` | Token una vez que se corrija la falta de autenticación de la API (sección 7.1 del spec) |
+| `STRIPE_SECRET_KEY` | `suscripcion-checkout`, alta de usuarios | Llave secreta de Stripe (`sk_...`) |
+| `STRIPE_PRECIO_ID` | `suscripcion-checkout` | Precio recurrente con tarifa **escalonada por volumen** (SPEC.md sección 12) |
+| `STRIPE_WEBHOOK_SECRET` | `suscripcion-webhook` | Secreto de firma del webhook (`whsec_...`) |
 
 Después de crear el proyecto, hay que dar de alta al primer usuario `admin`
 a mano (el trigger `handle_new_user` deja a todo usuario nuevo en rol

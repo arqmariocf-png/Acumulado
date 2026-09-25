@@ -24,7 +24,7 @@
 // (cuentas_bancarias.banco), NO el contenido del archivo -- un banco sin
 // parser NO se debe intentar adivinar con el mismo regex de otro banco.
 
-import { clienteServicio, obtenerPerfilAutenticado, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     if (!empresaId || !cuentaId || !archivo) {
       return jsonResponse({ error: "empresaId, cuentaId y file son requeridos" }, 400);
     }
-    if (!puedeEscribirEnEmpresa(perfil, empresaId)) {
+    if (!puedeEscribirEnEmpresa(perfil, empresaId) || !(await empresaOperableEnModulo(req, empresaId, "conciliacion"))) {
       return jsonResponse({ error: "Sin permiso para cargar archivos de esta empresa" }, 403);
     }
     if (archivo.size > TAMANO_MAXIMO_BYTES) {

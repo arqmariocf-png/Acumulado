@@ -38,6 +38,10 @@ const Cuentas = lazy(() => import("./pages/admin/Cuentas").then((m) => ({ defaul
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
 const AdminProyectos = lazy(() => import("./pages/admin/Proyectos").then((m) => ({ default: m.Proyectos })));
+const AdminEmpresas = lazy(() => import("./pages/admin/Empresas").then((m) => ({ default: m.Empresas })));
+const MiOrganizacion = lazy(() => import("./pages/admin/MiOrganizacion").then((m) => ({ default: m.MiOrganizacion })));
+const Organizaciones = lazy(() => import("./pages/admin/Organizaciones").then((m) => ({ default: m.Organizaciones })));
+const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m) => ({ default: m.Suscripcion })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
 const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
 const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
@@ -221,6 +225,10 @@ function Enrutador() {
               <Route path="reglas" element={<Reglas />} />
               <Route path="excepciones" element={<Excepciones />} />
               <Route path="proyectos" element={<AdminProyectos />} />
+              <Route path="empresas" element={<AdminEmpresas />} />
+              <Route path="organizacion" element={<MiOrganizacion />} />
+              <Route path="organizaciones" element={<Organizaciones />} />
+              <Route path="suscripcion" element={<SuscripcionAdmin />} />
             </Route>
           </Route>
         </Route>

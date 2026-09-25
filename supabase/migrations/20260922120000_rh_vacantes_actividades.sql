@@ -88,8 +88,15 @@ declare
   v_admin uuid;
   v_tablero uuid;
 begin
-  if not exists (select 1 from public.tableros where nombre = 'RH · Actividades') then
-    select id into v_admin from public.profiles where rol = 'admin' order by created_at limit 1;
+  select id into v_admin from public.profiles where rol = 'admin' order by created_at limit 1;
+
+  -- El tablero exige un creador (tableros.creado_por es not null), así que la
+  -- semilla solo corre si ya hay un admin. En una base recién creada todavía
+  -- no lo hay -- el primer admin se da de alta a mano, ver README -- y sin
+  -- esta guarda la migración revienta al aplicarse desde cero, que es justo lo
+  -- que hay que poder hacer para restaurar o para probar.
+  if v_admin is not null
+     and not exists (select 1 from public.tableros where nombre = 'RH · Actividades') then
     insert into public.tableros (empresa_id, nombre, descripcion, creado_por)
       values (null, 'RH · Actividades', 'Actividades asignadas por Recursos Humanos con seguimiento de cumplimiento.', v_admin)
       returning id into v_tablero;

@@ -27,6 +27,7 @@
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
 import { clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { sincronizarUsuariosFacturables } from "../_shared/usuarios-facturables.ts";
 
 const ROLES_ASIGNABLES = ["pendiente", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "operativo", "administrativo", "supervisor", "directivo"];
 const ROLES_RH = ["operativo", "administrativo", "supervisor", "directivo"];
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
       if (!ROLES_RH.includes(rolPedido)) return jsonResponse({ error: `rol no válido para personal: ${rolPedido}` }, 400);
       const { data: persona, error: errPersona } = await dbServicio
         .from("personal")
-        .select("id, nombre, telefono, correo, profile_id, activo")
+        .select("id, nombre, telefono, correo, profile_id, activo, grupo_id")
         .eq("id", cuerpo.personalId)
         .maybeSingle();
       if (errPersona) return jsonResponse({ error: errPersona.message }, 500);
@@ -122,9 +123,19 @@ Deno.serve(async (req) => {
         .order("fecha_inicio", { ascending: false })
         .limit(1)
         .maybeSingle();
+      // La persona ya es de una organización (personal.grupo_id); su cuenta
+      // hereda esa misma. Sin grupo_id, RLS la deja sin acceso a nada.
+      const grupoDeLaPersona = persona.grupo_id ?? perfilLlamador?.grupoId ?? null;
+      const camposPerfilP: Record<string, unknown> = {
+        nombre: persona.nombre,
+        telefono: persona.telefono ?? null,
+        rol: rolPedido,
+        empresa_id: contratacion?.empresa_id ?? null,
+      };
+      if (grupoDeLaPersona) camposPerfilP.grupo_id = grupoDeLaPersona;
       const { error: errPerfilP } = await dbServicio
         .from("profiles")
-        .update({ nombre: persona.nombre, telefono: persona.telefono ?? null, rol: rolPedido, empresa_id: contratacion?.empresa_id ?? null })
+        .update(camposPerfilP)
         .eq("id", creadoP.user.id);
       if (errPerfilP) return jsonResponse({ error: `Cuenta creada pero no se pudo configurar el perfil: ${errPerfilP.message}`, userId: creadoP.user.id }, 500);
       const { error: errLiga } = await dbServicio.from("personal").update({ profile_id: creadoP.user.id, correo: persona.correo ?? correo }).eq("id", persona.id);
@@ -132,7 +143,16 @@ Deno.serve(async (req) => {
 
       const { data: linkP, error: errLinkP } = await dbServicio.auth.admin.generateLink({ type: "recovery", email: correo });
       if (errLinkP) return jsonResponse({ error: `Cuenta creada pero no se pudo generar el link: ${errLinkP.message}`, userId: creadoP.user.id }, 500);
-      return jsonResponse({ userId: creadoP.user.id, email: correo, link: linkP.properties.action_link, telefono: persona.telefono ?? null, rol: rolPedido });
+      const cobroP = grupoDeLaPersona ? await sincronizarUsuariosFacturables(dbServicio, grupoDeLaPersona) : null;
+      return jsonResponse({
+        userId: creadoP.user.id,
+        email: correo,
+        link: linkP.properties.action_link,
+        telefono: persona.telefono ?? null,
+        rol: rolPedido,
+        usuariosFacturables: cobroP?.usuarios,
+        avisoCobro: cobroP && !cobroP.sincronizado ? cobroP.motivo : undefined,
+      });
     }
 
     if (esRh) return jsonResponse({ error: "RH solo puede crear cuentas de personal contratado (personalId)" }, 403);
@@ -153,6 +173,10 @@ Deno.serve(async (req) => {
     if (nombre && typeof nombre === "string" && nombre.trim()) cambios.nombre = nombre.trim();
     if (telefono && typeof telefono === "string" && telefono.trim()) cambios.telefono = telefono.trim();
     if (rol && rol !== "pendiente") cambios.rol = rol;
+    // El usuario nuevo entra a la organización de quien lo dio de alta. Sin
+    // esto quedaría sin organización y, por RLS, sin acceso a nada -- que es
+    // justo lo que no quiere el admin que acaba de crearlo.
+    if (perfilLlamador?.grupoId) cambios.grupo_id = perfilLlamador.grupoId;
     if (Object.keys(cambios).length > 0) {
       const { error: errPerfil } = await dbServicio.from("profiles").update(cambios).eq("id", creado.user.id);
       if (errPerfil) return jsonResponse({ error: `Cuenta creada pero no se pudo actualizar el perfil: ${errPerfil.message}`, userId: creado.user.id }, 500);
@@ -164,7 +188,21 @@ Deno.serve(async (req) => {
     });
     if (errLink) return jsonResponse({ error: `Cuenta creada pero no se pudo generar el link: ${errLink.message}`, userId: creado.user.id }, 500);
 
-    return jsonResponse({ userId: creado.user.id, email: email.trim().toLowerCase(), link: linkData.properties.action_link });
+    // Un usuario más mueve lo que se le cobra a la organización. Es tolerante
+    // a fallas a propósito: si la pasarela no responde, la cuenta ya quedó
+    // creada y la cantidad se corrige en el siguiente movimiento -- no se
+    // deshace un alta por un mal minuto de Stripe.
+    const cobro = perfilLlamador?.grupoId
+      ? await sincronizarUsuariosFacturables(dbServicio, perfilLlamador.grupoId)
+      : null;
+
+    return jsonResponse({
+      userId: creado.user.id,
+      email: email.trim().toLowerCase(),
+      link: linkData.properties.action_link,
+      usuariosFacturables: cobro?.usuarios,
+      avisoCobro: cobro && !cobro.sincronizado ? cobro.motivo : undefined,
+    });
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }
