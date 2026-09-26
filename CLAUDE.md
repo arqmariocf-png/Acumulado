@@ -101,6 +101,37 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   siempre visible para entrada y salida (edge `ocr-nota-entrega` v8 valida con
   `auth_puede_escribir_inventario`). No se guardan líneas ni remisiones en 0.
 
+## ARSSA, el primer cliente (25-sep-2026)
+
+- Entra **solo con Proyectos**. `proyectos` ya es un módulo de verdad
+  (`modulos` + `grupo_modulos`), abierto a LOMA y ARSSA y cerrado para
+  cualquier organización futura. Sus cinco tablas piden
+  `auth_modulo_habilitado('proyectos')` y, al escribir, suscripción.
+- Aldo Rodríguez (arq.aldorodriguez@gmail.com) es **admin de ARSSA** y socio
+  de ARSSA. ARSSA todavía no tiene empresa: su primer paso es Admin →
+  Empresas.
+- **La marca es de cada organización, no está escrita a mano.** El título, la
+  pantalla de acceso y el manifiesto de la PWA se arman con `marca.ts` /
+  `useMarcaDeEntrada.ts`. Antes de entrar no hay sesión, así que la
+  organización se sabe por el `?org=<codigo>` del link o por la última sesión
+  en ese dispositivo, y se lee con `fn_marca_publica(codigo)` -- la única
+  función abierta a `anon`, y solo devuelve nombre y ruta del logotipo de UNA
+  organización que se pide por código. Link de ARSSA:
+  `https://acumulado-nine.vercel.app/?org=arssa`.
+  Si algo vuelve a caer a un nombre fijo, que sea "Acumulado": **nunca** la
+  marca de otro cliente.
+- **El menú se acota por módulo**, no solo por rol (`seccionesPara(perfil,
+  alcanceOrganizacion)` y `rutaPermitida`). Una entrada de menú sin `modulo`
+  declarado no se le muestra a un cliente: es el default seguro, igual que en
+  la base. Las de `personal: true` (checador, mis documentos, guía, admin de
+  su propia cuenta) siempre se ven.
+- **Crear cuentas por SQL**: si alguna vez hay que hacerlo sin poder llamar a
+  `admin-crear-usuario`, las columnas de texto de `auth.users`
+  (`confirmation_token`, `recovery_token`, `email_change*`, `phone_change*`,
+  `reauthentication_token`) tienen que ir en `''`, **no en NULL**: el servicio
+  de sesiones las lee como texto y responde "Database error querying schema"
+  al intentar entrar. Pasó con la cuenta de Aldo.
+
 ## Roles de personal contratado (24-sep-2026)
 - `operativo` (solo checador), `administrativo`, `supervisor` (ve el checador de
   su gente: `personal.supervisor_profile_id`), `directivo` (ve el checador de
