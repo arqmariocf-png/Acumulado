@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Proyecto, PuEstado } from "../../types/database";
 import { PuntosSemaforoPu } from "./SemaforoPreciosUnitarios";
+import { AlmacenPorProyecto, PuntosAlmacen, useRequisicionesPorProyecto } from "./AlmacenProyectos";
 
 function useEmpresas() {
   return useQuery({
@@ -56,6 +57,7 @@ export function Proyectos() {
   const [busqueda, setBusqueda] = useState("");
   const { data: proyectos, isLoading } = useProyectos(empresaId, busqueda);
   const { data: semaforos } = useSemaforoProyectos((proyectos ?? []).map((p) => p.id));
+  const { data: reqPorProyecto } = useRequisicionesPorProyecto((proyectos ?? []).map((p) => p.id));
 
   return (
     <div>
@@ -82,6 +84,10 @@ export function Proyectos() {
 
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
+      {proyectos && reqPorProyecto && (
+        <AlmacenPorProyecto proyectos={proyectos.map((p) => ({ id: p.id, nombre: p.nombre, empresa: veTodasLasEmpresas ? p.empresas?.nombre : null }))} porProyecto={reqPorProyecto} />
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {proyectos?.map((p) => (
           <Link key={p.id} to={`/proyectos/${p.id}`} className="block rounded border border-slate-200 bg-white p-4 hover:border-slate-400 hover:shadow-sm">
@@ -89,6 +95,7 @@ export function Proyectos() {
             <p className="mt-1 text-xs text-slate-500">{p.empresas?.nombre}</p>
             <p className="mt-2 text-sm text-slate-600">{p.cliente ? `Cliente: ${p.cliente}` : "Sin cliente asignado"}</p>
             {semaforos && <PuntosSemaforoPu filas={semaforos.get(p.id) ?? []} />}
+            {reqPorProyecto && <PuntosAlmacen filas={reqPorProyecto.get(p.id) ?? []} />}
           </Link>
         ))}
         {proyectos?.length === 0 && !isLoading && <p className="text-sm text-slate-400">No hay proyectos para este filtro.</p>}
