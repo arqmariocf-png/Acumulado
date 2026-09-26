@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { CLASE_ETAPA, ETAPAS_REQUISICION, ETIQUETA_ETAPA, puedeMarcarEtapa, semaforoEtapa, siguienteEtapa, type EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { Producto, Proyecto } from "../../types/database";
 
 interface FilaCarrito {
@@ -55,7 +56,7 @@ function useRequisiciones(empresaId: string) {
     queryFn: async () => {
       let query = supabase
         .from("requisiciones")
-        .select("id, folio, fecha, estado, comentario, proyectos(nombre), profiles(nombre)")
+        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, proyectos(nombre, responsable_id, comprador_id), profiles(nombre)")
         .order("created_at", { ascending: false })
         .limit(100);
       if (empresaId) query = query.eq("empresa_id", empresaId);
@@ -300,6 +301,7 @@ export function MisRequisiciones() {
                 <th className="px-3 py-2">Proyecto</th>
                 <th className="px-3 py-2">Solicitado por</th>
                 <th className="px-3 py-2">Estado</th>
+                <th className="px-3 py-2">Suministro</th>
               </tr>
             </thead>
             <tbody>
@@ -312,11 +314,14 @@ export function MisRequisiciones() {
                   <td className="px-3 py-2">
                     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ESTADO_ESTILO[r.estado] ?? ""}`}>{r.estado}</span>
                   </td>
+                  <td className="px-3 py-2">
+                    <CeldaEtapa r={r} />
+                  </td>
                 </tr>
               ))}
               {requisiciones.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-slate-400">
+                  <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
                     Sin requisiciones todavía.
                   </td>
                 </tr>
@@ -325,6 +330,57 @@ export function MisRequisiciones() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Semáforo de suministro de una requisición y el botón de la siguiente
+ * etapa para quien le toca (misma regla que fn_requisicion_etapa). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CeldaEtapa({ r }: { r: any }) {
+  const { perfil } = useAuth();
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const cancelada = r.estado === "cancelada";
+  const etapa = (r.etapa ?? "solicitada") as EtapaRequisicion;
+  const s = semaforoEtapa(etapa, cancelada);
+  const clase = CLASE_ETAPA[s.color];
+  const sig = cancelada ? null : siguienteEtapa(etapa);
+  const esDelProyecto = !!perfil && (perfil.id === r.solicitado_por || perfil.id === r.proyectos?.responsable_id || perfil.id === r.proyectos?.comprador_id);
+  const puede = !!perfil && !!sig && puedeMarcarEtapa(perfil.rol, sig, esDelProyecto);
+  const marcar = useMutation({
+    mutationFn: async () => {
+      if (!sig) return;
+      const nota = window.prompt(`Marcar "${ETIQUETA_ETAPA[sig]}". Nota (opcional):`);
+      if (nota === null) return;
+      const { error: err } = await supabase.rpc("fn_requisicion_etapa", { p_requisicion_id: r.id, p_etapa: sig, p_nota: nota || null });
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["requisiciones"] });
+      queryClient.invalidateQueries({ queryKey: ["requisiciones-proyecto"] });
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+  return (
+    <div className="min-w-[11rem]">
+      <div className="flex items-center gap-1.5">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${clase.punto}`} />
+        <span className="text-xs text-slate-700">{cancelada ? "Cancelada" : ETIQUETA_ETAPA[etapa]}</span>
+        <span className="text-[10px] text-slate-400">{s.pct}%</span>
+      </div>
+      <div className="mt-1 flex gap-0.5">
+        {ETAPAS_REQUISICION.map((e, i) => (
+          <span key={e} className={`h-1 flex-1 rounded-sm ${i < s.paso ? clase.barra : "bg-slate-100"}`} title={ETIQUETA_ETAPA[e]} />
+        ))}
+      </div>
+      {sig && puede && (
+        <button onClick={() => marcar.mutate()} disabled={marcar.isPending} className="mt-1 text-[11px] text-slate-700 underline disabled:opacity-50">
+          marcar {ETIQUETA_ETAPA[sig].toLowerCase()}
+        </button>
+      )}
+      {error && <p className="mt-1 text-[11px] text-red-600">{error}</p>}
     </div>
   );
 }

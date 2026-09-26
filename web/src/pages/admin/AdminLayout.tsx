@@ -5,6 +5,7 @@ import { useAuth } from "../../lib/auth";
 // abre módulos. El resto de las pestañas las ve el admin de cualquiera.
 const TABS: { a: string; etiqueta: string; end?: boolean; soloMaestra?: boolean }[] = [
   { a: "/admin", etiqueta: "Usuarios", end: true },
+  { a: "/admin/roles", etiqueta: "Accesos por rol" },
   { a: "/admin/empresas", etiqueta: "Entidades" },
   { a: "/admin/organizacion", etiqueta: "Marca" },
   { a: "/admin/suscripcion", etiqueta: "Suscripción" },

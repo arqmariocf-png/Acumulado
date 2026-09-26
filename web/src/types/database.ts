@@ -580,6 +580,8 @@ export interface PuPrecioCliente {
   created_at: string;
 }
 
+export type EtapaRequisicion = "solicitada" | "autorizada" | "pagada" | "suministro" | "en_bodega" | "en_transito" | "recibida";
+
 export interface Requisicion {
   id: string;
   folio: number;
@@ -588,6 +590,10 @@ export interface Requisicion {
   solicitado_por: string;
   fecha: string;
   estado: EstadoRequisicion;
+  /** Semáforo de suministro (fn_requisicion_etapa). */
+  etapa: EtapaRequisicion;
+  etapa_en: string;
+  etapa_por: string | null;
   comentario: string | null;
   created_at: string;
 }

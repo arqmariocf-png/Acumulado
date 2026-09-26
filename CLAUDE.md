@@ -66,8 +66,25 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   tableros de avance, control de obra y planos (`auth_opera_proyectos_empresa`,
   `auth_administra_tableros_de`, `auth_administra_proyecto`; admin y
   corporativo en todas). Frontend: `administraProyectosDe(perfil, empresaId)`
-  en `lib/modulos.ts`. Pestañas del proyecto: Planos · Catálogo (precios del
-  cliente) · Precios unitarios (semáforo) · Avance · Control de obra.
+  en `lib/modulos.ts`. Pestañas del proyecto: **Resumen físico-financiero**
+  (solo admin/corporativo/direccion/empresa; `proyectos/ResumenObra.tsx`:
+  presupuesto y ejercido de los controles de obra contra tareas hechas,
+  suministro de requerimientos y PU) · Planos · Catálogo (precios del
+  cliente) · Precios unitarios (semáforo) · Avance (semáforos de
+  requerimientos y PU + tableros) · Control de obra.
+- **Semáforo de requerimientos (26-sep-2026)**: `requisiciones.etapa`
+  (solicitada → autorizada → pagada → suministro → en_bodega → en_transito →
+  recibida) con bitácora `requisicion_etapas`; se avanza solo por
+  `fn_requisicion_etapa(id, etapa, nota)` (autoriza dirección/empresa; paga
+  dirección; suministro dirección/empresa/almacén; bodega y tránsito
+  empresa/almacén; recibida empresa/almacén/responsable o quien la pidió;
+  admin/corporativo todo; regresar solo admin/corporativo/dirección). Reglas
+  replicadas en `lib/requisicionEtapa.ts` (con pruebas) para los botones.
+- **Organigrama de accesos por rol**: Admin → "Accesos por rol"
+  (`pages/admin/Roles.tsx`, `lib/accesosRoles.ts`): "ve" se calcula del
+  catálogo del menú con un perfil de muestra; "edita" es el mapa EDITA a
+  mano. **Si cambia una policy, actualizar EDITA.** Los módulos puros que
+  se prueban en node importan con extensión `.ts` (`menu.ts` incluido).
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
   abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
   (móvil). QR con `qrcode` (import dinámico).
