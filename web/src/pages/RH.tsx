@@ -25,24 +25,34 @@ import type {
 
 type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "checador" | "kpi_checador" | "kpi_vacantes" | "kpi_actividades" | "vacantes" | "actividades" | "accesos";
 
-// Orden (Mario, 26-sep-2026): 1-5 es el flujo de RH administrativo (se
-// registra el contrato, se arma el expediente, queda en Personal, checador y
-// asignaciones diarias). De la 6 en adelante es RH directivo: las tres
-// presentaciones de KPI, más la captura de vacantes/actividades y los
-// accesos. `directivo`: solo la ve RH directivo (o admin). "Nómina y
-// asistencia" se retiró: lo que necesitaba está en Accesos y en Checador.
+// Navegación de RH (Mario, 26-sep-2026): al entrar se cae en Indicadores
+// (RH directivo y admin; RH administrativo cae en Personal). Las secciones
+// van en un menú vertical y, dentro de cada una, las pestañas de segundo
+// nivel en horizontal; el checador tiene un tercer nivel también horizontal.
+// `directivo`: solo la ve RH directivo (o admin). "Nómina y asistencia" se
+// retiró: lo que necesitaba está en Accesos y en Checador.
 const PESTANAS: { valor: Pestana; etiqueta: string; directivo?: boolean }[] = [
+  { valor: "kpi_checador", etiqueta: "Asistencias y retardos", directivo: true },
+  { valor: "kpi_vacantes", etiqueta: "Vacantes y rotación", directivo: true },
+  { valor: "kpi_actividades", etiqueta: "Cumplimiento de actividades", directivo: true },
   { valor: "contrataciones", etiqueta: "1. Contrataciones" },
   { valor: "documentos", etiqueta: "2. Documentos / Expediente" },
   { valor: "personal", etiqueta: "3. Personal" },
   { valor: "checador", etiqueta: "4. Checador" },
   { valor: "asignaciones", etiqueta: "5. Asignaciones diarias" },
-  { valor: "kpi_checador", etiqueta: "6. KPI Asistencias y retardos", directivo: true },
-  { valor: "kpi_vacantes", etiqueta: "7. KPI Vacantes y rotación", directivo: true },
-  { valor: "kpi_actividades", etiqueta: "8. KPI Cumplimiento de actividades", directivo: true },
   { valor: "vacantes", etiqueta: "Vacantes", directivo: true },
   { valor: "actividades", etiqueta: "Actividades" },
   { valor: "accesos", etiqueta: "Accesos al sistema", directivo: true },
+];
+
+type Seccion = "indicadores" | "personal" | "operacion" | "gestion" | "accesos";
+
+const SECCIONES: { clave: Seccion; etiqueta: string; descripcion: string; pestanas: Pestana[] }[] = [
+  { clave: "indicadores", etiqueta: "Indicadores", descripcion: "KPI de asistencia, rotación y cumplimiento", pestanas: ["kpi_checador", "kpi_vacantes", "kpi_actividades"] },
+  { clave: "personal", etiqueta: "Personal", descripcion: "Contrato, expediente y datos", pestanas: ["contrataciones", "documentos", "personal"] },
+  { clave: "operacion", etiqueta: "Operación", descripcion: "Checador y asignaciones", pestanas: ["checador", "asignaciones"] },
+  { clave: "gestion", etiqueta: "Vacantes y actividades", descripcion: "Captura de vacantes y tablero", pestanas: ["vacantes", "actividades"] },
+  { clave: "accesos", etiqueta: "Accesos", descripcion: "Cuentas y roles del personal", pestanas: ["accesos"] },
 ];
 
 
@@ -90,15 +100,20 @@ export function RH() {
   const soloDocumentos = perfil?.rol === "rh_documentos";
   const directivo = esRhDirectivo(perfil);
   const pestanas = soloDocumentos ? PESTANAS.filter((p) => p.valor === "documentos") : PESTANAS.filter((p) => !p.directivo || directivo);
+  const secciones = SECCIONES.map((s) => ({ ...s, pestanas: s.pestanas.filter((v) => pestanas.some((p) => p.valor === v)) })).filter((s) => s.pestanas.length > 0);
   // La pestaña vive en la URL (?tab=documentos&personal=<id>) para que desde
-  // Personal se pueda abrir directo el expediente de alguien.
+  // Personal se pueda abrir directo el expediente de alguien. Sin ?tab se cae
+  // en la primera sección que la persona puede ver (Indicadores para el
+  // directivo, Personal para el administrativo).
   const [params, setParams] = useSearchParams();
   const tabUrl = params.get("tab") as Pestana | null;
-  const pestana: Pestana = soloDocumentos ? "documentos" : tabUrl && pestanas.some((p) => p.valor === tabUrl) ? tabUrl : "contrataciones";
+  const pestana: Pestana = soloDocumentos ? "documentos" : tabUrl && pestanas.some((p) => p.valor === tabUrl) ? tabUrl : secciones[0]?.pestanas[0] ?? "contrataciones";
+  const seccion = secciones.find((s) => s.pestanas.includes(pestana)) ?? secciones[0];
   const setPestana = (v: Pestana) => {
     const sig = new URLSearchParams(params);
     sig.set("tab", v);
     if (v !== "documentos") sig.delete("personal");
+    if (v !== "checador") sig.delete("sub");
     setParams(sig, { replace: true });
   };
 
@@ -106,32 +121,61 @@ export function RH() {
     <div>
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
       {perfil?.rol === "rh" && (
-        <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: todo el módulo, los KPI (6-8), accesos y roles." : "RH administrativo: contratos, expedientes, personal, asignaciones, checador y actividades."}</p>
+        <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: indicadores, todo el módulo, accesos y roles." : "RH administrativo: contratos, expedientes, personal, checador, asignaciones y actividades."}</p>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {pestanas.map((p) => (
-          <button
-            key={p.valor}
-            onClick={() => setPestana(p.valor)}
-            className={`rounded px-3 py-1.5 text-sm ${pestana === p.valor ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-100"} border border-slate-200`}
-          >
-            {p.etiqueta}
-          </button>
-        ))}
-      </div>
+      <div className="flex flex-col gap-4 md:flex-row">
+        {/* Nivel 1: secciones en vertical (en pantalla chica, una fila desplazable). */}
+        {secciones.length > 1 && (
+          <nav className="flex shrink-0 gap-1 overflow-x-auto md:w-48 md:flex-col md:overflow-visible" aria-label="Secciones de RH">
+            {secciones.map((s) => {
+              const activa = s.clave === seccion?.clave;
+              return (
+                <button
+                  key={s.clave}
+                  onClick={() => setPestana(s.pestanas[0])}
+                  className={`shrink-0 rounded border px-3 py-2 text-left text-sm ${activa ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"}`}
+                >
+                  <div className="font-medium">{s.etiqueta}</div>
+                  <div className={`hidden text-[11px] md:block ${activa ? "text-slate-300" : "text-slate-400"}`}>{s.descripcion}</div>
+                </button>
+              );
+            })}
+          </nav>
+        )}
 
-      {pestana === "personal" && <PestanaPersonal />}
-      {pestana === "asignaciones" && <PestanaAsignaciones />}
-      {pestana === "contrataciones" && <PestanaContrataciones />}
-      {pestana === "documentos" && <PestanaDocumentos personalInicial={params.get("personal")} />}
-      {pestana === "checador" && <PestanaChecador />}
-      {pestana === "kpi_checador" && <KpiChecador />}
-      {pestana === "kpi_vacantes" && <KpiVacantes />}
-      {pestana === "kpi_actividades" && <KpiActividades />}
-      {pestana === "vacantes" && <Vacantes />}
-      {pestana === "actividades" && <Actividades />}
-      {pestana === "accesos" && <Accesos />}
+        <div className="min-w-0 flex-1">
+          {/* Nivel 2: pestañas de la sección en horizontal. */}
+          {seccion && seccion.pestanas.length > 1 && (
+            <div className="mb-4 flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+              {seccion.pestanas.map((v) => {
+                const p = PESTANAS.find((x) => x.valor === v)!;
+                return (
+                  <button
+                    key={p.valor}
+                    onClick={() => setPestana(p.valor)}
+                    className={`rounded px-3 py-1.5 text-sm ${pestana === p.valor ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-100"} border border-slate-200`}
+                  >
+                    {p.etiqueta}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {pestana === "personal" && <PestanaPersonal />}
+          {pestana === "asignaciones" && <PestanaAsignaciones />}
+          {pestana === "contrataciones" && <PestanaContrataciones />}
+          {pestana === "documentos" && <PestanaDocumentos personalInicial={params.get("personal")} />}
+          {pestana === "checador" && <PestanaChecador sub={params.get("sub")} setSub={(v) => { const sig = new URLSearchParams(params); sig.set("sub", v); setParams(sig, { replace: true }); }} />}
+          {pestana === "kpi_checador" && <KpiChecador />}
+          {pestana === "kpi_vacantes" && <KpiVacantes />}
+          {pestana === "kpi_actividades" && <KpiActividades />}
+          {pestana === "vacantes" && <Vacantes />}
+          {pestana === "actividades" && <Actividades />}
+          {pestana === "accesos" && <Accesos />}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1033,13 +1077,33 @@ function PestanaContrataciones() {
 
 // ── Checador: marcas, correcciones y sitios ───────────────────────────────
 
-function PestanaChecador() {
+type SubChecador = "marcas" | "sitios" | "jornadas";
+const SUB_CHECADOR: { valor: SubChecador; etiqueta: string }[] = [
+  { valor: "marcas", etiqueta: "Marcas y correcciones" },
+  { valor: "sitios", etiqueta: "Sitios de checado" },
+  { valor: "jornadas", etiqueta: "Perfiles de jornada" },
+];
+
+/** Tercer nivel (horizontal) del checador. `sub` vive en la URL (?sub=). */
+function PestanaChecador({ sub, setSub }: { sub: string | null; setSub: (v: SubChecador) => void }) {
   const [prellenado, setPrellenado] = useState<{ lat: number; lng: number } | null>(null);
+  const actual: SubChecador = SUB_CHECADOR.some((s) => s.valor === sub) ? (sub as SubChecador) : "marcas";
   return (
     <div>
-      <UbicacionesChecador key={prellenado ? `${prellenado.lat},${prellenado.lng}` : "sin"} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />
-      <MarcasChecador onCrearSitioDesde={(c) => { setPrellenado(c); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
-      <PerfilesJornada />
+      <div className="mb-3 flex flex-wrap gap-1">
+        {SUB_CHECADOR.map((s) => (
+          <button
+            key={s.valor}
+            onClick={() => setSub(s.valor)}
+            className={`rounded-full border px-3 py-1 text-xs ${actual === s.valor ? "border-slate-700 bg-slate-700 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}
+          >
+            {s.etiqueta}
+          </button>
+        ))}
+      </div>
+      {actual === "marcas" && <MarcasChecador onCrearSitioDesde={(c) => { setPrellenado(c); setSub("sitios"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />}
+      {actual === "sitios" && <UbicacionesChecador key={prellenado ? `${prellenado.lat},${prellenado.lng}` : "sin"} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />}
+      {actual === "jornadas" && <PerfilesJornada />}
     </div>
   );
 }
