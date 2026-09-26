@@ -321,6 +321,8 @@ export interface Contratacion {
   /** Semanal o quincenal; sueldo_periodo es lo que se paga en cada periodo. */
   frecuencia_pago: FrecuenciaPago;
   sueldo_periodo: number | null;
+  /** Salario NO fiscal por periodo; no aparece en el contrato. */
+  sueldo_no_fiscal_periodo: number | null;
   fecha_inicio: string;
   duracion_dias: number;
   fecha_fin: string;
