@@ -73,9 +73,10 @@ function useDirectorio() {
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 
-function TarjetaCard({ tarjeta, nombreAsignado, onClick, onDragStart }: {
+function TarjetaCard({ tarjeta, nombreAsignado, nombreSupervisor, onClick, onDragStart }: {
   tarjeta: Tarjeta;
   nombreAsignado: string | null;
+  nombreSupervisor: string | null;
   onClick: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
 }) {
@@ -90,7 +91,15 @@ function TarjetaCard({ tarjeta, nombreAsignado, onClick, onDragStart }: {
       <p className="font-medium text-slate-900">{tarjeta.titulo}</p>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         {nombreAsignado && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{nombreAsignado}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600" title="Responsable principal">
+            {nombreAsignado}
+            {(tarjeta.corresponsables ?? []).length > 0 && <span className="text-slate-400"> +{tarjeta.corresponsables.length}</span>}
+          </span>
+        )}
+        {nombreSupervisor && (
+          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700" title="Supervisor a cargo">
+            Sup. {nombreSupervisor}
+          </span>
         )}
         {tarjeta.fecha_limite && semaforo && (
           <span className={`rounded-full px-2 py-0.5 text-xs ${COLOR_SEMAFORO[semaforo]}`}>
@@ -318,6 +327,7 @@ export function TableroDetalle() {
                   key={tarjeta.id}
                   tarjeta={tarjeta}
                   nombreAsignado={tarjeta.asignado_a ? (nombrePorId.get(tarjeta.asignado_a) ?? null) : null}
+                  nombreSupervisor={tarjeta.supervisor_id ? (nombrePorId.get(tarjeta.supervisor_id) ?? null) : null}
                   onClick={() => setTarjetaSeleccionada(tarjeta.id)}
                   onDragStart={(e) => e.dataTransfer.setData("text/tarjeta-id", tarjeta.id)}
                 />

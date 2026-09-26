@@ -133,12 +133,12 @@ export function Actividades() {
   };
 
   const crear = useMutation({
-    mutationFn: async (p: { titulo: string; descripcion: string | null; asignado_a: string | null; fecha_limite: string | null }) => {
+    mutationFn: async (p: { titulo: string; descripcion: string | null; asignado_a: string | null; supervisor_id: string | null; fecha_limite: string | null }) => {
       if (!tab || !columnaInicial) throw new Error("No existe el tablero de actividades de RH.");
       const userId = await usuarioActualId();
       const { data: tarjeta, error: err } = await supabase
         .from("tarjetas")
-        .insert({ tablero_id: tab.tablero.id, columna_id: columnaInicial.id, titulo: p.titulo, descripcion: p.descripcion, asignado_a: p.asignado_a, fecha_limite: p.fecha_limite, creado_por: userId })
+        .insert({ tablero_id: tab.tablero.id, columna_id: columnaInicial.id, titulo: p.titulo, descripcion: p.descripcion, asignado_a: p.asignado_a, supervisor_id: p.supervisor_id, fecha_limite: p.fecha_limite, creado_por: userId })
         .select("id")
         .single();
       if (err) throw err;
@@ -166,13 +166,19 @@ export function Actividades() {
   });
 
   const reasignar = useMutation({
-    mutationFn: async (p: { tarjetaId: string; asignadoA: string | null; fechaLimite?: string | null }) => {
+    mutationFn: async (p: { tarjetaId: string; asignadoA?: string | null; supervisorId?: string | null; fechaLimite?: string | null }) => {
       const userId = await usuarioActualId();
-      const cambios: Record<string, unknown> = { asignado_a: p.asignadoA };
+      const cambios: Record<string, unknown> = {};
+      if (p.asignadoA !== undefined) cambios.asignado_a = p.asignadoA;
+      if (p.supervisorId !== undefined) cambios.supervisor_id = p.supervisorId;
       if (p.fechaLimite !== undefined) cambios.fecha_limite = p.fechaLimite;
       const { error: err } = await supabase.from("tarjetas").update(cambios).eq("id", p.tarjetaId);
       if (err) throw err;
-      await supabase.from("tarjeta_actividad").insert({ tarjeta_id: p.tarjetaId, tipo: "asignada", detalle: p.asignadoA ? { nombre: nombrePorId.get(p.asignadoA) } : null, actor_id: userId });
+      if (p.asignadoA !== undefined || p.supervisorId !== undefined) {
+        const esSup = p.supervisorId !== undefined;
+        const id = esSup ? p.supervisorId : p.asignadoA;
+        await supabase.from("tarjeta_actividad").insert({ tarjeta_id: p.tarjetaId, tipo: "asignada", detalle: { rol: esSup ? "supervisor" : "principal", nombre: id ? nombrePorId.get(id) : null }, actor_id: userId });
+      }
     },
     onSuccess: invalidar,
     onError: (err) => setError((err as Error).message),
@@ -186,6 +192,7 @@ export function Actividades() {
       titulo: String(fd.get("titulo") ?? "").trim(),
       descripcion: String(fd.get("descripcion") ?? "").trim() || null,
       asignado_a: String(fd.get("asignado_a") ?? "") || null,
+      supervisor_id: String(fd.get("supervisor_id") ?? "") || null,
       fecha_limite: String(fd.get("fecha_limite") ?? "") || null,
     });
     e.currentTarget.reset();
@@ -247,15 +254,26 @@ export function Actividades() {
         />
       </div>
 
-      <form onSubmit={onCrear} className="grid grid-cols-1 gap-3 rounded border border-slate-200 bg-white p-4 sm:grid-cols-5">
+      <form onSubmit={onCrear} className="grid grid-cols-1 gap-3 rounded border border-slate-200 bg-white p-4 sm:grid-cols-6">
         <div className="sm:col-span-2">
           <label className={etiqueta}>Actividad *</label>
           <input name="titulo" required placeholder="Ej. Entregar contratos firmados de la semana" className={campo} />
         </div>
         <div>
-          <label className={etiqueta}>Asignar a</label>
+          <label className={etiqueta}>Responsable</label>
           <select name="asignado_a" className={campo} defaultValue="">
             <option value="">Sin asignar</option>
+            {directorio?.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={etiqueta}>Supervisor a cargo</label>
+          <select name="supervisor_id" className={campo} defaultValue="">
+            <option value="">Sin supervisor</option>
             {directorio?.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.nombre}
@@ -272,7 +290,7 @@ export function Actividades() {
             {crear.isPending ? "Guardando…" : "Asignar actividad"}
           </button>
         </div>
-        <div className="sm:col-span-5">
+        <div className="sm:col-span-6">
           <input name="descripcion" placeholder="Detalle (opcional)" className={campo} />
         </div>
       </form>
@@ -304,7 +322,8 @@ export function Actividades() {
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
               <th className="px-3 py-2">Actividad</th>
-              <th className="px-3 py-2">Asignada a</th>
+              <th className="px-3 py-2">Responsable</th>
+              <th className="px-3 py-2">Supervisor</th>
               <th className="px-3 py-2">Fecha límite</th>
               <th className="px-3 py-2">Etapa</th>
               <th className="px-3 py-2">Cumplimiento</th>
@@ -331,7 +350,17 @@ export function Actividades() {
                     </select>
                   </td>
                   <td className="px-3 py-2">
-                    <input type="date" value={a.fecha_limite ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, asignadoA: a.asignado_a, fechaLimite: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs" />
+                    <select value={a.tarjeta.supervisor_id ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, supervisorId: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs">
+                      <option value="">Sin supervisor</option>
+                      {directorio?.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input type="date" value={a.fecha_limite ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, fechaLimite: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs" />
                   </td>
                   <td className="px-3 py-2">
                     <select value={a.tarjeta.columna_id} onChange={(e) => mover.mutate({ tarjeta: a.tarjeta, columnaId: e.target.value })} className="rounded border border-slate-300 px-1 py-0.5 text-xs">
