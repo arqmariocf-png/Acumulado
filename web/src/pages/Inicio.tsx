@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useMiPersonal } from "./MisDocumentos";
 import { useAuth } from "../lib/auth";
 import { esRolBasico } from "../lib/modulos";
-import { SECCIONES, seccionDeRuta } from "../lib/menu";
+import { SECCIONES, rutaPermitida, seccionDeRuta } from "../lib/menu";
 import { Indicadores } from "../components/Indicadores";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
@@ -171,7 +171,7 @@ function Mosaico({
 /* ---------- pantalla ---------- */
 
 export function Inicio() {
-  const { perfil } = useAuth();
+  const { perfil, alcanceOrganizacion } = useAuth();
   const rol = perfil?.rol;
   const esAdmin = rol === "admin";
   // Roles básicos de personal: checador, sus documentos y los módulos que
@@ -426,6 +426,11 @@ export function Inicio() {
     conteo?: number;
   }[];
 
+  // Una organización cliente solo ve los mosaicos de los módulos que tiene
+  // abiertos -- misma regla que el menú (lib/menu.ts), para no ofrecer atajos
+  // a pantallas que su organización no contrató.
+  const mosaicosVisibles = mosaicos.filter((m) => rutaPermitida(m.a, alcanceOrganizacion));
+
   const totalPendiente = [requisiciones, precios, inventario, movimientos, carga, rhFaltantes]
     .filter((n): n is number => typeof n === "number")
     .reduce((s, n) => s + n, 0);
@@ -448,7 +453,7 @@ export function Inicio() {
       {/* Agrupado por área (misma clasificación que el menú y la guía) para
           que el inicio también oriente: qué hay en cada bloque y para qué. */}
       {[...SECCIONES, { clave: "otros", titulo: "Otros", proposito: "", entradas: [] }].map((s) => {
-        const del = mosaicos.filter((m) => (seccionDeRuta(m.a)?.clave ?? "otros") === s.clave);
+        const del = mosaicosVisibles.filter((m) => (seccionDeRuta(m.a)?.clave ?? "otros") === s.clave);
         if (del.length === 0) return null;
         return (
           <section key={s.clave} className="mb-6">

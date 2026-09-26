@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
-import { urlPublicaDelLogo } from "./marca";
+import { aplicarMarca, recordarOrganizacion, urlPublicaDelLogo } from "./marca";
 
 interface AuthState {
   cargando: boolean;
@@ -12,6 +12,8 @@ interface AuthState {
   veTodasLasEmpresas: boolean;
   /** Organización (tenant) del usuario. null mientras no tenga una asignada. */
   grupo: Grupo | null;
+  /** Módulos abiertos de la organización, para acotar el menú. null mientras no carga. */
+  alcanceOrganizacion: { esMaestra: boolean; modulos: ModuloClave[] } | null;
   modulos: ModuloClave[];
   tieneModulo: (clave: ModuloClave) => boolean;
   /** Admin de la organización maestra: opera la plataforma, cruza organizaciones. */
@@ -149,7 +151,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const veTodasLasEmpresas = perfil ? (perfil.rol === "corporativo" || perfil.rol === "admin" || perfil.empresa_id === null) && perfil.rol !== "pendiente" : false;
 
   const esAdminGlobal = perfil?.rol === "admin" && grupo?.es_maestro === true;
+  // Lo que la organización tiene abierto. El menú lo usa para no ofrecerle a
+  // un cliente módulos que no contrató (la base ya los rechaza; esto es para
+  // que no vea puertas que no abren).
+  const alcanceOrganizacion = grupo ? { esMaestra: grupo.es_maestro === true, modulos } : null;
   const logoUrl = urlPublicaDelLogo(grupo?.logo_path);
+
+  // El nombre de la organización manda en el título y en el manifiesto: es lo
+  // que queda debajo del icono cuando el cliente instala la aplicación en su
+  // teléfono. También se recuerda su código, para que la próxima pantalla de
+  // acceso en este dispositivo ya salga con su marca y no con la de otro.
+  useEffect(() => {
+    if (!grupo) return;
+    aplicarMarca(grupo.marca_comercial ?? grupo.nombre, logoUrl);
+    recordarOrganizacion(grupo.codigo);
+  }, [grupo, logoUrl]);
 
   // El admin de la organización maestra ve todos los módulos: es quien los
   // abre y quien da soporte (mismo criterio que auth_modulo_habilitado() en la
@@ -191,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         puedeEscribirEnEmpresa,
         veTodasLasEmpresas,
         grupo,
+        alcanceOrganizacion,
         modulos,
         tieneModulo,
         esAdminGlobal,

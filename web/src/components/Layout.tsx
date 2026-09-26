@@ -8,10 +8,10 @@ import { AvisoSuscripcion } from "./AvisoSuscripcion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 
 export function Layout() {
-  const { perfil, grupo, logoUrl, cerrarSesion } = useAuth();
+  const { perfil, grupo, alcanceOrganizacion, logoUrl, cerrarSesion } = useAuth();
   // Menú por áreas con orientación de uso: la visibilidad por rol vive en
   // lib/menu.ts (misma fuente que el inicio y la guía).
-  const secciones = seccionesPara(perfil);
+  const secciones = seccionesPara(perfil, alcanceOrganizacion);
   const { data: socio } = useEsSocio(perfil?.rol === "admin" ? undefined : perfil?.id);
   const esSocio = (socio?.length ?? 0) > 0;
 
@@ -31,7 +31,7 @@ export function Layout() {
               />
             ) : (
               <span className="text-lg font-semibold text-slate-900">
-                {grupo?.marca_comercial ?? grupo?.nombre ?? "Grupo Loma"}
+                {grupo?.marca_comercial ?? grupo?.nombre ?? "Acumulado"}
               </span>
             )}
             <nav className="flex items-center gap-2 text-sm">

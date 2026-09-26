@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import { useMarcaDeEntrada } from "../lib/useMarcaDeEntrada";
 import { useAuth } from "../lib/auth";
 
 /** Pantalla que reemplaza toda la app mientras `recuperandoContrasena` está
@@ -9,6 +10,7 @@ import { useAuth } from "../lib/auth";
  * sesión temporal que trae el link, no hace falta contraseña anterior. */
 export function NuevaContrasena() {
   const { terminarRecuperacion } = useAuth();
+  const marca = useMarcaDeEntrada();
   const [password, setPassword] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export function NuevaContrasena() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-lg font-semibold text-slate-900">Grupo Loma</h1>
+        <h1 className="mb-1 text-lg font-semibold text-slate-900">{marca?.nombre ?? "Acumulado"}</h1>
         <p className="mb-6 text-sm text-slate-500">Definir contraseña</p>
 
         {lista ? (

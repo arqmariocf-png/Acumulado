@@ -1,7 +1,7 @@
 {
-  "name": "Acumulado - Grupo Loma",
+  "name": "Acumulado",
   "short_name": "Acumulado",
-  "description": "Sistema integral de Grupo Loma",
+  "description": "Backoffice multi-organizacion",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

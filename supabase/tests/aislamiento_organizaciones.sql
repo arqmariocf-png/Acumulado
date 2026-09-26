@@ -217,3 +217,20 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
 select jsonb_array_length(public.fn_socio_resumen()->'grupos') as grupos_que_ve_el_maestro;
 reset role;
+
+\echo '── 13. La marca pública dice el nombre y nada más'
+set role anon;
+select public.fn_marca_publica('ARSSA') as marca_arssa,
+       public.fn_marca_publica('NO-EXISTE') is null as inexistente_no_revela;
+reset role;
+-- Que no se pueda listar quién es cliente de la plataforma desde fuera.
+set role anon;
+do $$
+begin
+  perform count(*) from public.grupos;
+  raise exception 'FALLA: anon pudo listar las organizaciones';
+exception when insufficient_privilege or raise_exception then
+  if sqlerrm like 'FALLA%' then raise; end if;
+  raise notice 'OK: anon no lista organizaciones';
+end $$;
+reset role;

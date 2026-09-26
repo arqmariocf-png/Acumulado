@@ -5,8 +5,8 @@ import { seccionesPara } from "../lib/menu";
 /** Guía de uso: qué hace cada módulo que esta persona puede ver y cuándo
  * usarlo. Misma fuente que el menú (lib/menu.ts). */
 export function Guia() {
-  const { perfil } = useAuth();
-  const secciones = seccionesPara(perfil);
+  const { perfil, alcanceOrganizacion } = useAuth();
+  const secciones = seccionesPara(perfil, alcanceOrganizacion);
   return (
     <div className="max-w-3xl">
       <h1 className="text-xl font-semibold text-slate-900">Guía de uso</h1>

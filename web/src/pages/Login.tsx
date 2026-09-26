@@ -2,9 +2,11 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
+import { useMarcaDeEntrada } from "../lib/useMarcaDeEntrada";
 
 export function Login() {
   const { session } = useAuth();
+  const marca = useMarcaDeEntrada();
   const [modo, setModo] = useState<"entrar" | "crear" | "recuperar">("entrar");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -79,7 +81,10 @@ export function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
       <form onSubmit={onSubmit} className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-lg font-semibold text-slate-900">Grupo Loma</h1>
+        {marca?.logoUrl ? (
+          <img src={marca.logoUrl} alt={marca.nombre} className="mb-2 h-10 w-auto max-w-[200px] object-contain" />
+        ) : null}
+        <h1 className="mb-1 text-lg font-semibold text-slate-900">{marca?.nombre ?? "Acumulado"}</h1>
         <p className="mb-6 text-sm text-slate-500">Sistema integral</p>
 
         {modo !== "recuperar" && (
