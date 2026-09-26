@@ -6,13 +6,15 @@ import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import { administraProyectosDe } from "../../lib/modulos";
 import { SemaforoPreciosUnitarios } from "./SemaforoPreciosUnitarios";
+import { SemaforoRequisiciones } from "./SemaforoRequisiciones";
+import { ResumenObra } from "./ResumenObra";
 import type { Proyecto, ProyectoPlano, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
 
-type Tab = "planos" | "catalogo" | "precios" | "avance" | "control";
+type Tab = "resumen" | "planos" | "catalogo" | "precios" | "avance" | "control";
 
 function useProyecto(id: string) {
   return useQuery({
@@ -27,13 +29,19 @@ function useProyecto(id: string) {
 
 export function ProyectoDetalle() {
   const { id } = useParams<{ id: string }>();
+  const { perfil } = useAuth();
   const { data: proyecto } = useProyecto(id!);
-  const [tab, setTab] = useState<Tab>("planos");
+  // Resumen físico-financiero: pestaña principal del rol empresa hacia
+  // arriba (Mario, 26-sep-2026); los supervisores y responsables no la ven.
+  const veResumen = !!perfil && ["admin", "corporativo", "direccion", "empresa"].includes(perfil.rol);
+  const [tab, setTab] = useState<Tab | null>(null);
   const [prellenado, setPrellenado] = useState<{ concepto: string; unidad: string } | null>(null);
 
   if (!proyecto) return <p className="text-sm text-slate-500">Cargando…</p>;
+  const tabActual: Tab = tab ?? (veResumen ? "resumen" : "planos");
 
   const TABS: { clave: Tab; etiqueta: string }[] = [
+    ...(veResumen ? [{ clave: "resumen" as Tab, etiqueta: "Resumen físico-financiero" }] : []),
     { clave: "planos", etiqueta: "Planos" },
     { clave: "catalogo", etiqueta: "Catálogo" },
     { clave: "precios", etiqueta: "Precios unitarios" },
@@ -58,14 +66,15 @@ export function ProyectoDetalle() {
           <button
             key={t.clave}
             onClick={() => setTab(t.clave)}
-            className={`border-b-2 px-3 py-2 text-sm ${tab === t.clave ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+            className={`border-b-2 px-3 py-2 text-sm ${tabActual === t.clave ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
           >
             {t.etiqueta}
           </button>
         ))}
       </div>
 
-      {tab === "planos" && (
+      {tabActual === "resumen" && veResumen && <ResumenObra proyecto={proyecto} />}
+      {tabActual === "planos" && (
         <PestanaPlanos
           proyectoId={proyecto.id}
           onUsarConcepto={(c) => {
@@ -74,10 +83,10 @@ export function ProyectoDetalle() {
           }}
         />
       )}
-      {tab === "catalogo" && <PestanaCotizacion proyecto={proyecto} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />}
-      {tab === "precios" && <SemaforoPreciosUnitarios proyecto={proyecto} />}
-      {tab === "avance" && <PestanaAvance proyecto={proyecto} />}
-      {tab === "control" && <PestanaControlObra proyecto={proyecto} />}
+      {tabActual === "catalogo" && <PestanaCotizacion proyecto={proyecto} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />}
+      {tabActual === "precios" && <SemaforoPreciosUnitarios proyecto={proyecto} />}
+      {tabActual === "avance" && <PestanaAvance proyecto={proyecto} />}
+      {tabActual === "control" && <PestanaControlObra proyecto={proyecto} />}
     </div>
   );
 }
@@ -556,6 +565,7 @@ function PestanaAvance({ proyecto }: { proyecto: Proyecto }) {
     <div>
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
+      <SemaforoRequisiciones proyecto={proyecto} compacto />
       <SemaforoPreciosUnitarios proyecto={proyecto} compacto />
       {tableros?.map((t) => (
         <ResumenTablero key={t.id} tablero={t} />

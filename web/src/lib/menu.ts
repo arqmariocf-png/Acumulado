@@ -1,4 +1,4 @@
-import { esRhDirectivo, esRolBasico } from "./modulos";
+import { esRhDirectivo, esRolBasico } from "./modulos.ts";
 import type { ModuloClave, Profile } from "../types/database";
 
 /** Catálogo único de módulos, por área, con orientación de uso. Lo consumen

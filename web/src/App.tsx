@@ -34,6 +34,7 @@ const Proyectos = lazy(() => import("./pages/proyectos/Proyectos").then((m) => (
 const ProyectoDetalle = lazy(() => import("./pages/proyectos/ProyectoDetalle").then((m) => ({ default: m.ProyectoDetalle })));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
 const Usuarios = lazy(() => import("./pages/admin/Usuarios").then((m) => ({ default: m.Usuarios })));
+const Roles = lazy(() => import("./pages/admin/Roles").then((m) => ({ default: m.Roles })));
 const Cuentas = lazy(() => import("./pages/admin/Cuentas").then((m) => ({ default: m.Cuentas })));
 const Reglas = lazy(() => import("./pages/admin/Reglas").then((m) => ({ default: m.Reglas })));
 const Excepciones = lazy(() => import("./pages/admin/Excepciones").then((m) => ({ default: m.Excepciones })));
@@ -229,6 +230,7 @@ function Enrutador() {
               <Route path="organizacion" element={<MiOrganizacion />} />
               <Route path="organizaciones" element={<Organizaciones />} />
               <Route path="suscripcion" element={<SuscripcionAdmin />} />
+              <Route path="roles" element={<Roles />} />
             </Route>
           </Route>
         </Route>
