@@ -97,6 +97,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (pasó el 25-sep: "new row violates RLS for productos"). Se restituyeron con
   `20260925130000_inventario_permisos_tras_frontera.sql`; si vuelve a pasar,
   volver a aplicar esa migración.
+- **Rendimiento con la frontera (26-sep-2026)**: las policies llaman por fila
+  a `empresa_en_alcance()` / `empresa_en_mi_organizacion()`; se reescribieron
+  esas funciones (y `auth_admin_global`, `grupo_en_alcance`,
+  `auth_modulo_habilitado`) como UNA consulta sobre `profiles` en vez de
+  8-10 funciones anidadas (`20260926090000_rls_helpers_rapidos.sql`). No
+  volver a anidarlas. `v_movimientos_cierre` ya no usa NOT EXISTS
+  correlacionado (era cuadrático). Los KPIs del inicio y del organigrama a
+  nivel grupo salen de `fn_kpis_alcance()` (una RPC, enmascara claves de
+  finanzas/RH por rol); solo lo que no está ahí se consulta vista por vista.
+  Síntoma si se rompe: "canceling statement due to statement timeout" en
+  ráfagas al abrir el inicio.
 - Evidencia (foto de nota/remisión) en Registrar movimiento es una sección
   siempre visible para entrada y salida (edge `ocr-nota-entrega` v8 valida con
   `auth_puede_escribir_inventario`). No se guardan líneas ni remisiones en 0.
