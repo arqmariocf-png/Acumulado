@@ -126,6 +126,10 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   finanzas/RH por rol); solo lo que no está ahí se consulta vista por vista.
   Síntoma si se rompe: "canceling statement due to statement timeout" en
   ráfagas al abrir el inicio.
+- **Frontera por profile_id**: nunca `exists (select 1 from profiles …)`
+  dentro de una policy (profiles solo deja leer el renglón propio y la
+  frontera se vuelve invisible para RH). Usar `perfil_en_alcance(profile_id)`
+  (definer; `20260926200000`). Síntoma: "Marca no encontrada o sin permiso".
 - Evidencia (foto de nota/remisión) en Registrar movimiento es una sección
   siempre visible para entrada y salida (edge `ocr-nota-entrega` v8 valida con
   `auth_puede_escribir_inventario`). No se guardan líneas ni remisiones en 0.
