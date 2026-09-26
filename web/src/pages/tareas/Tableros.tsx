@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Tablero } from "../../types/database";
+import { MisActividades } from "./MisActividades";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -101,6 +102,8 @@ export function Tableros() {
           </button>
         )}
       </div>
+
+      <MisActividades />
 
       {mostrarForm && (
         <form onSubmit={onSubmit} className="mb-6 max-w-xl rounded border border-slate-200 bg-white p-4">

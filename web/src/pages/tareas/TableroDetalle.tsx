@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
@@ -123,7 +123,9 @@ export function TableroDetalle() {
   const { data: tarjetas } = useTarjetas(tableroId!);
   const { data: directorio } = useDirectorio();
   const { data: empresas } = useEmpresas();
-  const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState<string | null>(null);
+  // ?tarjeta=<id> abre directo el panel (desde "Mis actividades" y los avisos).
+  const [params] = useSearchParams();
+  const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState<string | null>(params.get("tarjeta"));
   const [nuevaColumna, setNuevaColumna] = useState(false);
   const [editandoTablero, setEditandoTablero] = useState(false);
   const [error, setError] = useState<string | null>(null);
