@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
+import { etiquetaSexo } from "../../lib/modulos";
 import type { DocumentoFaltante, ExpedienteFila, ExtraccionDocumento, Personal } from "../../types/database";
 
 // Expediente de personal: cada documento del checklist se sube como archivo
@@ -292,7 +293,7 @@ function ExpedientePersona({ persona, puedeAplicar }: { persona: Personal; puede
             return (
               <div key={c.columna} className="flex gap-2">
                 <dt className="w-40 shrink-0 text-xs uppercase tracking-wide text-slate-500">{c.etiqueta}</dt>
-                <dd className={v ? "text-slate-900" : "text-slate-300"}>{v ? String(v) : "—"}</dd>
+                <dd className={v ? "text-slate-900" : "text-slate-300"}>{v ? (c.columna === "sexo" ? etiquetaSexo(String(v)) : String(v)) : "—"}</dd>
               </div>
             );
           })}
@@ -590,8 +591,8 @@ function DatosExtraidos({
                       className="mt-1"
                     />
                     <span>
-                      <span className="text-slate-700">{s.etiqueta}:</span> <span className="font-medium text-slate-900">{s.nuevo}</span>
-                      {s.actual && <span className="ml-1 text-xs text-amber-700">(hoy: {s.actual})</span>}
+                      <span className="text-slate-700">{s.etiqueta}:</span> <span className="font-medium text-slate-900">{s.columna === "sexo" ? etiquetaSexo(s.nuevo) : s.nuevo}</span>
+                      {s.actual && <span className="ml-1 text-xs text-amber-700">(hoy: {s.columna === "sexo" ? etiquetaSexo(s.actual) : s.actual})</span>}
                     </span>
                   </label>
                 ))}
