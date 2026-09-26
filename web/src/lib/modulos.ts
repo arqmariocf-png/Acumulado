@@ -65,3 +65,15 @@ export function etiquetaSexo(v: string | null | undefined): string {
   if (t === "F" || t.startsWith("FEM") || t.startsWith("MUJ")) return "Femenino";
   return String(v);
 }
+
+/** Quién administra los proyectos de una empresa (tableros de avance,
+ * control de obra): admin y corporativo en todas; empresa y responsable en
+ * la suya; los roles básicos en la suya si RH les dio el módulo 'proyectos'.
+ * Misma regla que auth_administra_proyecto / auth_administra_tableros_de. */
+export function administraProyectosDe(p: { rol: string; empresa_id?: string | null; modulos?: string[] } | null | undefined, empresaId: string | null | undefined): boolean {
+  if (!p) return false;
+  if (p.rol === "admin" || p.rol === "corporativo") return true;
+  if (!empresaId || p.empresa_id !== empresaId) return false;
+  if (p.rol === "empresa" || p.rol === "responsable") return true;
+  return esRolBasico(p.rol as AppRol) && (p.modulos ?? []).includes("proyectos");
+}

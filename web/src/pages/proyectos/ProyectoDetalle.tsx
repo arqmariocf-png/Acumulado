@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
+import { administraProyectosDe } from "../../lib/modulos";
 import { SemaforoPreciosUnitarios } from "./SemaforoPreciosUnitarios";
 import type { Proyecto, ProyectoPlano, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
@@ -11,7 +12,7 @@ import { PestanaControlObra } from "./ControlObra";
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
 
-type Tab = "planos" | "cotizacion" | "avance" | "control";
+type Tab = "planos" | "catalogo" | "precios" | "avance" | "control";
 
 function useProyecto(id: string) {
   return useQuery({
@@ -34,7 +35,8 @@ export function ProyectoDetalle() {
 
   const TABS: { clave: Tab; etiqueta: string }[] = [
     { clave: "planos", etiqueta: "Planos" },
-    { clave: "cotizacion", etiqueta: "Cotización" },
+    { clave: "catalogo", etiqueta: "Catálogo" },
+    { clave: "precios", etiqueta: "Precios unitarios" },
     { clave: "avance", etiqueta: "Avance" },
     { clave: "control", etiqueta: "Control de obra" },
   ];
@@ -68,11 +70,12 @@ export function ProyectoDetalle() {
           proyectoId={proyecto.id}
           onUsarConcepto={(c) => {
             setPrellenado(c);
-            setTab("cotizacion");
+            setTab("catalogo");
           }}
         />
       )}
-      {tab === "cotizacion" && <PestanaCotizacion proyecto={proyecto} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />}
+      {tab === "catalogo" && <PestanaCotizacion proyecto={proyecto} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />}
+      {tab === "precios" && <SemaforoPreciosUnitarios proyecto={proyecto} />}
       {tab === "avance" && <PestanaAvance proyecto={proyecto} />}
       {tab === "control" && <PestanaControlObra proyecto={proyecto} />}
     </div>
@@ -503,7 +506,7 @@ function PestanaCotizacion({
         <p className="mb-6 text-sm text-slate-500">Define el cliente de este proyecto para ver/capturar su catálogo de precios.</p>
       )}
 
-      <SemaforoPreciosUnitarios proyecto={proyecto} />
+      <p className="text-xs text-slate-500">Los análisis de precio unitario de este proyecto y su semáforo de autorización están en la pestaña "Precios unitarios".</p>
     </div>
   );
 }
@@ -527,7 +530,7 @@ function PestanaAvance({ proyecto }: { proyecto: Proyecto }) {
   const { data: tableros, isLoading } = useTablerosDelProyecto(proyecto.id);
   const [error, setError] = useState<string | null>(null);
 
-  const puedeAdministrar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || (perfil?.rol === "empresa" && perfil.empresa_id === proyecto.empresa_id);
+  const puedeAdministrar = administraProyectosDe(perfil, proyecto.empresa_id);
 
   const crearTablero = useMutation({
     mutationFn: async () => {

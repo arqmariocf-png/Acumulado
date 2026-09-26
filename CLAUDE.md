@@ -60,10 +60,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   admin, direccion, corporativo, empresa o responsable/comprador del
   proyecto). Rojo = elaboración/almacén, ámbar = dirección/publicación,
   azul = espera al cliente, verde = autorizado por el cliente.
-- **Tableros y control de obra del rol `empresa` (26-sep-2026)**: Jorge (ERG)
-  crea tableros de avance y controles de obra de los proyectos de SU empresa
-  (`auth_administra_tableros_de(empresa_id)`, `auth_administra_proyecto(id)`;
-  admin y corporativo en todas). En Tareas el selector de empresa se le fija.
+- **Quién administra los proyectos de su empresa (26-sep-2026)**: rol
+  `empresa` (Jorge), `responsable` (Mauro) y los básicos con módulo
+  `proyectos` (Jonathan, supervisor) ven los proyectos de SU empresa y crean
+  tableros de avance, control de obra y planos (`auth_opera_proyectos_empresa`,
+  `auth_administra_tableros_de`, `auth_administra_proyecto`; admin y
+  corporativo en todas). Frontend: `administraProyectosDe(perfil, empresaId)`
+  en `lib/modulos.ts`. Pestañas del proyecto: Planos · Catálogo (precios del
+  cliente) · Precios unitarios (semáforo) · Avance · Control de obra.
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
   abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
   (móvil). QR con `qrcode` (import dinámico).

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { administraProyectosDe } from "../../lib/modulos";
 import type { Tablero } from "../../types/database";
 import { MisActividades } from "./MisActividades";
 
@@ -48,9 +49,10 @@ export function Tableros() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // El rol empresa crea tableros solo de su empresa (la base lo exige:
-  // auth_administra_tableros_de); el selector se le fija.
-  const soloSuEmpresa = perfil?.rol === "empresa" && !!perfil.empresa_id;
+  // Quien administra proyectos de su empresa (empresa, responsable, básicos
+  // con módulo proyectos) crea tableros solo de esa empresa; la base lo
+  // exige (auth_administra_tableros_de) y el selector se le fija.
+  const soloSuEmpresa = perfil?.rol !== "admin" && perfil?.rol !== "corporativo" && !!perfil?.empresa_id && administraProyectosDe(perfil, perfil.empresa_id);
   const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "corporativo" || soloSuEmpresa;
 
   const crear = useMutation({
