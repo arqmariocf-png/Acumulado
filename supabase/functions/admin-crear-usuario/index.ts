@@ -26,7 +26,7 @@
 // administrativo, supervisor o directivo.
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
 import { sincronizarUsuariosFacturables } from "../_shared/usuarios-facturables.ts";
 
 const ROLES_ASIGNABLES = ["pendiente", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "operativo", "administrativo", "supervisor", "directivo"];
@@ -73,6 +73,11 @@ Deno.serve(async (req) => {
 
     const cuerpo = await req.json();
     const esRh = perfilLlamador?.rol === "rh";
+    // Dos niveles de RH (26-sep-2026): solo RH directivo crea accesos.
+    if (esRh) {
+      const { data: directivo } = await clienteComoUsuario(req).rpc("auth_rh_directivo");
+      if (directivo !== true) return jsonResponse({ error: "Solo RH directivo puede crear accesos al sistema" }, 403);
+    }
 
     // ---- Alta de personal contratado (RH o admin con personalId) ----
     if (cuerpo.personalId) {

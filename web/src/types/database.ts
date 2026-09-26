@@ -118,6 +118,8 @@ export interface Profile {
   activo: boolean;
   telefono: string | null;
   bbva_mantenimiento: boolean;
+  /** Solo rol rh: 'directivo' (todo RH, accesos y roles) o 'administrativo' (flujo operativo). Null = directivo. */
+  rh_nivel: "administrativo" | "directivo" | null;
   /** Módulos asignados uno por uno (permisos_modulo); solo aplican a los
    * roles básicos (operativo, administrativo, supervisor, directivo). */
   modulos: string[];
