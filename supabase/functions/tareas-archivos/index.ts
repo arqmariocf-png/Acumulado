@@ -9,10 +9,19 @@
 // GET  ?archivoId=<uuid>                                -> signed URL de descarga (60s)
 // DELETE json: { archivoId }                            -> borra el registro (RLS decide permiso) y el objeto
 
-import { corsHeaders, respuestaCors, jsonResponse } from "../_shared/cors.ts";
+import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
 import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
 
-const TAMANO_MAXIMO_BYTES = 25 * 1024 * 1024;
+// Sin límite de cantidad de archivos por tarjeta; cada uno hasta 50 MB.
+const TAMANO_MAXIMO_BYTES = 50 * 1024 * 1024;
+
+/** Storage rechaza llaves con acentos, ñ, espacios raros o símbolos: el
+ * nombre original se guarda tal cual en la tabla, pero la ruta del objeto
+ * va en ASCII plano. */
+function nombreSeguro(nombre: string): string {
+  const base = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  return (base || "archivo").slice(0, 120);
+}
 
 async function tarjetaVisible(req: Request, tarjetaId: string): Promise<boolean> {
   const cliente = clienteComoUsuario(req);
@@ -36,7 +45,7 @@ async function subir(req: Request): Promise<Response> {
 
   const dbServicio = clienteServicio();
   const bytes = new Uint8Array(await archivo.arrayBuffer());
-  const rutaStorage = `tareas/${tarjetaId}/${Date.now()}-${archivo.name}`;
+  const rutaStorage = `tareas/${tarjetaId}/${Date.now()}-${nombreSeguro(archivo.name)}`;
 
   const { error: errUpload } = await dbServicio.storage.from("cargas").upload(rutaStorage, bytes, {
     contentType: archivo.type || "application/octet-stream",

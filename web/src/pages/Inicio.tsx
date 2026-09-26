@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { esRolBasico } from "../lib/modulos";
 import { SECCIONES, rutaPermitida, seccionDeRuta } from "../lib/menu";
 import { Indicadores } from "../components/Indicadores";
+import { MisActividades } from "./tareas/MisActividades";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
 // esperando ahí. La idea es abrirlo desde el celular y saber de un vistazo
@@ -449,6 +450,9 @@ export function Inicio() {
       </div>
 
       <Indicadores tienePersonal={!!miPersonal} />
+
+      {/* El personal básico entra aquí: sus tareas pendientes van primero. */}
+      {rolBasico && <MisActividades compacto />}
 
       {/* Agrupado por área (misma clasificación que el menú y la guía) para
           que el inicio también oriente: qué hay en cada bloque y para qué. */}

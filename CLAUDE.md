@@ -159,6 +159,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   movida; a todos los involucrados menos quien hizo el cambio) llamada en
   segundo plano desde `lib/tareasNotificar.ts`; el recordatorio diario
   (`push-enviar-recordatorios`, cron 14:00 UTC) también les llega a todos.
+- **Mis actividades** (`pages/tareas/MisActividades.tsx`): panel personal en
+  `/tareas` y en el inicio del rol básico; lista lo que la persona tiene como
+  responsable, supervisor o corresponsable, con su cumplimiento. El tablero
+  acepta `?tarjeta=<id>` para abrir el panel directo. Archivos de tarjeta:
+  sin límite de cantidad, 50 MB cada uno, ruta en Storage saneada a ASCII
+  (`tareas-archivos` v2).
 - RH crea la cuenta en RH > "Accesos al sistema" cuando el expediente tiene INE,
   CURP y comprobante de domicilio (`admin-crear-usuario` con `personalId`: correo
   generado `nombre.apellido@grupoloma.mx`, link por WhatsApp al celular). RH cambia

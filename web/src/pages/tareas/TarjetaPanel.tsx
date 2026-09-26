@@ -117,6 +117,7 @@ export function TarjetaPanel({
   const [comentarioTexto, setComentarioTexto] = useState("");
   const [ovTexto, setOvTexto] = useState("");
   const [subiendoArchivo, setSubiendoArchivo] = useState(false);
+  const [progresoArchivo, setProgresoArchivo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const puedeAdministrar = perfil?.rol === "admin" || perfil?.rol === "corporativo";
@@ -227,34 +228,52 @@ export function TarjetaPanel({
     onError: (err) => setError((err as Error).message),
   });
 
+  const TAMANO_MAXIMO_MB = 50;
+
+  /** Sube uno por uno todos los archivos elegidos (sin límite de cantidad;
+   * cada uno hasta TAMANO_MAXIMO_MB). Si uno falla, sigue con los demás y
+   * reporta cuáles no entraron. */
   async function onSubirArchivo(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formEl = e.currentTarget;
     const input = formEl.elements.namedItem("file") as HTMLInputElement;
-    const archivo = input.files?.[0];
-    if (!archivo) return;
+    const archivos = Array.from(input.files ?? []);
+    if (archivos.length === 0) return;
     setError(null);
     setSubiendoArchivo(true);
+    const fallas: string[] = [];
     try {
-      const fd = new FormData();
-      fd.append("tarjetaId", tarjetaId);
-      fd.append("file", archivo);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      const respuesta = await fetch(urlFuncion("tareas-archivos"), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      const json = await respuesta.json();
-      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+      for (let i = 0; i < archivos.length; i++) {
+        const archivo = archivos[i];
+        setProgresoArchivo(`${i + 1}/${archivos.length}`);
+        if (archivo.size > TAMANO_MAXIMO_MB * 1024 * 1024) {
+          fallas.push(`${archivo.name}: pesa más de ${TAMANO_MAXIMO_MB} MB`);
+          continue;
+        }
+        try {
+          const fd = new FormData();
+          fd.append("tarjetaId", tarjetaId);
+          fd.append("file", archivo);
+          const respuesta = await fetch(urlFuncion("tareas-archivos"), {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          const json = await respuesta.json().catch(() => ({}));
+          if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+        } catch (err) {
+          fallas.push(`${archivo.name}: ${(err as Error).message}`);
+        }
+        queryClient.invalidateQueries({ queryKey: ["tarjeta-archivos", tarjetaId] });
+      }
       formEl.reset();
-      queryClient.invalidateQueries({ queryKey: ["tarjeta-archivos", tarjetaId] });
       queryClient.invalidateQueries({ queryKey: ["tarjeta-actividad", tarjetaId] });
-    } catch (err) {
-      setError((err as Error).message);
+      if (fallas.length > 0) setError(`No se subieron: ${fallas.join(" · ")}`);
     } finally {
       setSubiendoArchivo(false);
+      setProgresoArchivo("");
     }
   }
 
@@ -468,9 +487,9 @@ export function TarjetaPanel({
             {archivos?.length === 0 && <li className="text-xs text-slate-400">Sin archivos adjuntos.</li>}
           </ul>
           <form onSubmit={onSubirArchivo} className="flex gap-2">
-            <input type="file" name="file" className="flex-1 text-xs" />
+            <input type="file" name="file" multiple className="flex-1 text-xs" />
             <button type="submit" disabled={subiendoArchivo} className="shrink-0 rounded border border-slate-300 px-2 text-xs text-slate-600 hover:bg-slate-50">
-              {subiendoArchivo ? "Subiendo…" : "Subir"}
+              {subiendoArchivo ? `Subiendo ${progresoArchivo}…` : "Subir"}
             </button>
           </form>
         </div>
