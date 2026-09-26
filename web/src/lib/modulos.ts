@@ -32,3 +32,12 @@ export function numeroWhatsapp(telefono: string): string {
   const digitos = telefono.replace(/\D/g, "");
   return digitos.length === 10 ? `52${digitos}` : digitos;
 }
+
+/** RH directivo (Eréndira, Fernando): todo RH, crea accesos y asigna roles.
+ * RH administrativo (Raúl): flujo operativo. Null en rh_nivel = directivo. */
+export function esRhDirectivo(p: { rol: string; rh_nivel?: string | null } | null | undefined): boolean {
+  if (!p) return false;
+  if (p.rol === "admin") return true;
+  return p.rol === "rh" && (p.rh_nivel ?? "directivo") === "directivo";
+}
+export const ETIQUETA_NIVEL_RH: Record<"administrativo" | "directivo", string> = { administrativo: "RH administrativo", directivo: "RH directivo" };

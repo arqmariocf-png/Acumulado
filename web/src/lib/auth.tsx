@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     Promise.all([
       supabase
         .from("profiles")
-        .select("id, nombre, rol, grupo_id, empresa_id, activo, bbva_mantenimiento")
+        .select("id, nombre, rol, grupo_id, empresa_id, activo, bbva_mantenimiento, rh_nivel")
         .eq("id", session.user.id)
         .single(),
       supabase.from("permisos_modulo").select("modulo").eq("profile_id", session.user.id),

@@ -53,13 +53,15 @@ export function Usuarios() {
       rol,
       empresa_id,
       telefono,
+      rh_nivel,
     }: {
       id: string;
       rol?: AppRol;
       empresa_id?: string | null;
       telefono?: string | null;
+      rh_nivel?: "administrativo" | "directivo" | null;
     }) => {
-      const { error } = await supabase.from("profiles").update({ rol, empresa_id, telefono }).eq("id", id);
+      const { error } = await supabase.from("profiles").update({ rol, empresa_id, telefono, rh_nivel }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }),
@@ -222,6 +224,17 @@ export function Usuarios() {
                       </option>
                     ))}
                   </select>
+                  {p.rol === "rh" && (
+                    <select
+                      value={p.rh_nivel ?? "directivo"}
+                      onChange={(e) => actualizar.mutate({ id: p.id, rh_nivel: e.target.value as "administrativo" | "directivo" })}
+                      className="mt-1 block max-w-[110px] rounded border border-slate-300 px-1 py-1 text-xs"
+                      title="RH directivo: todo RH, accesos y roles. RH administrativo: contratos, expedientes, personal, checador y actividades."
+                    >
+                      <option value="directivo">RH directivo</option>
+                      <option value="administrativo">RH administrativo</option>
+                    </select>
+                  )}
                 </td>
                 <td className="px-2 py-2">
                   <select

@@ -8,50 +8,39 @@ import { UbicacionesChecador } from "./rh/UbicacionesChecador";
 import { Vacantes } from "./rh/Vacantes";
 import { Actividades } from "./rh/Actividades";
 import { PerfilesJornada } from "./rh/PerfilesJornada";
-import { NominaChecador } from "./rh/NominaChecador";
 import { SolicitudesNda } from "./rh/SolicitudesNda";
 import { Accesos } from "./rh/Accesos";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
+import { esRhDirectivo } from "../lib/modulos";
 import { abrirParaImprimir } from "../lib/imprimir";
 import { patronDe } from "./MisDocumentos";
 import type {
   AsignacionDiaria,
   Contratacion,
   EmpresaPerfilLegal,
-  DirectorioPerfil,
   Personal,
-  ProyeccionNominaSemanal,
   TipoContrato, FrecuenciaPago } from "../types/database";
 
-type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador" | "vacantes" | "actividades" | "accesos";
+type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "checador" | "vacantes" | "actividades" | "accesos";
 
 // Orden del primer flujo (Mario, 26-sep-2026): se registra el contrato, se
 // arma el expediente y queda en Personal. Lo demás va después.
-const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
+// `directivo`: solo la ve RH directivo (o admin). "Nómina y asistencia" se
+// retiró (26-sep-2026): lo que necesitaba está en Accesos y en Checador.
+const PESTANAS: { valor: Pestana; etiqueta: string; directivo?: boolean }[] = [
   { valor: "contrataciones", etiqueta: "1. Contrataciones" },
   { valor: "documentos", etiqueta: "2. Documentos / Expediente" },
   { valor: "personal", etiqueta: "3. Personal" },
   { valor: "asignaciones", etiqueta: "Asignaciones diarias" },
-  { valor: "nomina", etiqueta: "Nómina y asistencia" },
   { valor: "checador", etiqueta: "Checador" },
-  { valor: "vacantes", etiqueta: "Vacantes y rotación" },
+  { valor: "vacantes", etiqueta: "Vacantes y rotación", directivo: true },
   { valor: "actividades", etiqueta: "Actividades" },
-  { valor: "accesos", etiqueta: "Accesos al sistema" },
+  { valor: "accesos", etiqueta: "Accesos al sistema", directivo: true },
 ];
 
-function dinero(n: number | null | undefined): string {
-  return Number(n ?? 0).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
-}
 
 /** Lunes de la semana ISO que contiene `d`, en formato YYYY-MM-DD. */
-function inicioDeSemana(d: Date): string {
-  const copia = new Date(d);
-  const diaSemana = (copia.getDay() + 6) % 7; // lunes = 0
-  copia.setDate(copia.getDate() - diaSemana);
-  copia.setHours(0, 0, 0, 0);
-  return copia.toISOString().slice(0, 10);
-}
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -93,12 +82,13 @@ export function RH() {
   // asignaciones diarias, datos de personal editables) aunque RLS ya se lo
   // bloquee del lado del dato, ver 20260828020000_rh_documentos_rol_enum.sql.
   const soloDocumentos = perfil?.rol === "rh_documentos";
-  const pestanas = soloDocumentos ? PESTANAS.filter((p) => p.valor === "documentos") : PESTANAS;
+  const directivo = esRhDirectivo(perfil);
+  const pestanas = soloDocumentos ? PESTANAS.filter((p) => p.valor === "documentos") : PESTANAS.filter((p) => !p.directivo || directivo);
   // La pestaña vive en la URL (?tab=documentos&personal=<id>) para que desde
   // Personal se pueda abrir directo el expediente de alguien.
   const [params, setParams] = useSearchParams();
   const tabUrl = params.get("tab") as Pestana | null;
-  const pestana: Pestana = soloDocumentos ? "documentos" : tabUrl && PESTANAS.some((p) => p.valor === tabUrl) ? tabUrl : "contrataciones";
+  const pestana: Pestana = soloDocumentos ? "documentos" : tabUrl && pestanas.some((p) => p.valor === tabUrl) ? tabUrl : "contrataciones";
   const setPestana = (v: Pestana) => {
     const sig = new URLSearchParams(params);
     sig.set("tab", v);
@@ -108,7 +98,10 @@ export function RH() {
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
+      <h1 className="mb-1 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
+      {perfil?.rol === "rh" && (
+        <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: todo el módulo, accesos y roles." : "RH administrativo: contratos, expedientes, personal, asignaciones, checador y actividades."}</p>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         {pestanas.map((p) => (
@@ -126,7 +119,6 @@ export function RH() {
       {pestana === "asignaciones" && <PestanaAsignaciones />}
       {pestana === "contrataciones" && <PestanaContrataciones />}
       {pestana === "documentos" && <PestanaDocumentos personalInicial={params.get("personal")} />}
-      {pestana === "nomina" && <PestanaNomina />}
       {pestana === "checador" && <PestanaChecador />}
       {pestana === "vacantes" && <Vacantes />}
       {pestana === "actividades" && <Actividades />}
@@ -137,151 +129,7 @@ export function RH() {
 
 // ── Nómina y asistencia ──────────────────────────────────────────────────
 
-function useDirectorio() {
-  return useQuery({
-    queryKey: ["directorio"],
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_directorio").select("*").eq("activo", true).order("nombre");
-      if (error) throw error;
-      return data as DirectorioPerfil[];
-    },
-  });
-}
 
-function useProyeccionNomina() {
-  return useQuery({
-    queryKey: ["proyeccion-nomina"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_proyeccion_nomina_semanal").select("*").order("semana_inicio");
-      if (error) throw error;
-      return data as ProyeccionNominaSemanal[];
-    },
-  });
-}
-
-function PestanaNomina() {
-  const { data: personal } = usePersonal();
-  const { data: empresas } = useEmpresas();
-  const { data: directorio } = useDirectorio();
-  const queryClient = useQueryClient();
-  const [semanaInicio, setSemanaInicio] = useState(inicioDeSemana(new Date()));
-  const { data: proyeccion, isLoading: cargandoProyeccion } = useProyeccionNomina();
-  const [error, setError] = useState<string | null>(null);
-
-  const nombreEmpresa = new Map((empresas ?? []).map((e) => [e.id, e.nombre]));
-
-  const vincular = useMutation({
-    mutationFn: async ({ personalId, profileId }: { personalId: string; profileId: string | null }) => {
-      const { error: err } = await supabase.from("personal").update({ profile_id: profileId }).eq("id", personalId);
-      if (err) throw err;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rh-personal"] }),
-    onError: (err) => setError((err as Error).message),
-  });
-
-  const personalActivo = (personal ?? []).filter((p) => p.activo);
-  const pendientesDeVincular = personalActivo.filter((p) => !p.profile_id).length;
-
-  return (
-    <div>
-      {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
-      <p className="mb-4 max-w-2xl text-xs text-slate-500">
-        El checador (entrada/salida) es una señal aparte de "Asignaciones diarias" -- todavía no se concilian automáticamente,
-        compáralas a mano al armar la nómina real. El monto sugerido es el sueldo semanal completo de su contratación
-        vigente; ajústalo por faltas o incidencias antes de pagar.
-      </p>
-
-      <h3 className="mb-2 text-sm font-semibold text-slate-700">
-        Vincular cuenta para poder checar {pendientesDeVincular > 0 && <span className="font-normal text-amber-600">({pendientesDeVincular} sin vincular)</span>}
-      </h3>
-      <div className="mb-6 overflow-x-auto rounded border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-3 py-2">Persona</th>
-              <th className="px-3 py-2">Cuenta vinculada</th>
-            </tr>
-          </thead>
-          <tbody>
-            {personalActivo.map((p) => (
-              <tr key={p.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{p.nombre}</td>
-                <td className="px-3 py-2">
-                  <select
-                    value={p.profile_id ?? ""}
-                    onChange={(e) => vincular.mutate({ personalId: p.id, profileId: e.target.value || null })}
-                    className="rounded border border-slate-300 px-2 py-1 text-xs"
-                  >
-                    <option value="">Sin vincular</option>
-                    {directorio?.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-            {personalActivo.length === 0 && (
-              <tr>
-                <td colSpan={2} className="px-3 py-6 text-center text-slate-400">
-                  Sin personal activo.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mb-2 flex items-center gap-3">
-        <h3 className="text-sm font-semibold text-slate-700">Lista de nómina de la semana</h3>
-        <input
-          type="date"
-          value={semanaInicio}
-          onChange={(e) => setSemanaInicio(inicioDeSemana(new Date(e.target.value + "T00:00:00")))}
-          className="rounded border border-slate-300 px-2 py-1 text-xs"
-        />
-      </div>
-      <NominaChecador semanaInicio={semanaInicio} nombreEmpresa={nombreEmpresa} />
-
-      <PerfilesJornada />
-
-      <p className="mb-4 text-xs text-slate-500">Las marcas del checador con foto, ubicación y correcciones están en la pestaña "Checador".</p>
-
-      <h3 className="mb-2 text-sm font-semibold text-slate-700">Proyección de gasto de nómina (próximas 12 semanas)</h3>
-      {cargandoProyeccion && <p className="text-sm text-slate-500">Cargando…</p>}
-      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-3 py-2">Semana</th>
-              <th className="px-3 py-2">Empresa</th>
-              <th className="px-3 py-2 text-right">Monto proyectado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {proyeccion?.map((p, i) => (
-              <tr key={i} className="border-t border-slate-100">
-                <td className="px-3 py-2">{new Date(p.semana_inicio + "T00:00:00").toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</td>
-                <td className="px-3 py-2 text-slate-500">{nombreEmpresa.get(p.empresa_id) ?? "—"}</td>
-                <td className="px-3 py-2 text-right font-medium">{dinero(p.monto_proyectado)}</td>
-              </tr>
-            ))}
-            {proyeccion?.length === 0 && !cargandoProyeccion && (
-              <tr>
-                <td colSpan={3} className="px-3 py-8 text-center text-slate-400">
-                  Sin contrataciones vigentes para proyectar.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 // ── Personal ─────────────────────────────────────────────────────────────
 
@@ -1182,6 +1030,7 @@ function PestanaChecador() {
     <div>
       <UbicacionesChecador key={prellenado ? `${prellenado.lat},${prellenado.lng}` : "sin"} prellenado={prellenado} onConsumirPrellenado={() => setPrellenado(null)} />
       <MarcasChecador onCrearSitioDesde={(c) => { setPrellenado(c); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+      <PerfilesJornada />
     </div>
   );
 }
