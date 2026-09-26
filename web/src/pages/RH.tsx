@@ -272,6 +272,54 @@ function PestanaNomina() {
 
 // ── Personal ─────────────────────────────────────────────────────────────
 
+/** Expedientes completos vs en regularización, en total y por empresa
+ * (Mario, 26-sep-2026). "En regularización" = le falta algún documento
+ * obligatorio (v_documentos_faltantes_personal). */
+function IndicadorExpedientes() {
+  const { data } = useQuery({
+    queryKey: ["rh-expedientes-empresa"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_expedientes_por_empresa").select("*");
+      if (error) throw error;
+      return (data ?? []) as { empresa_id: string; empresa_codigo: string; empresa_nombre: string; total: number; completos: number; en_regularizacion: number }[];
+    },
+  });
+  if (!data || data.length === 0) return null;
+  const total = data.reduce((s, f) => s + Number(f.total), 0);
+  const completos = data.reduce((s, f) => s + Number(f.completos), 0);
+  const regularizando = total - completos;
+  const pct = total > 0 ? Math.round((completos / total) * 100) : 0;
+  const color = (reg: number, tot: number) => (reg === 0 ? "bg-emerald-500" : tot > 0 && (tot - reg) / tot >= 0.8 ? "bg-amber-400" : "bg-red-500");
+  return (
+    <section className="mb-4 rounded border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`inline-block h-3 w-3 rounded-full ${color(regularizando, total)}`} />
+        <p className="text-sm text-slate-800">
+          <b>Expedientes:</b> {completos} de {total} completos ({pct} %) ·{" "}
+          <span className={regularizando > 0 ? "font-medium text-amber-700" : "text-emerald-700"}>{regularizando} en regularización</span>
+        </p>
+      </div>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded bg-slate-100">
+        <div className={`h-2 ${color(regularizando, total)}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {data.map((f) => (
+          <span
+            key={f.empresa_id}
+            title={`${f.empresa_nombre}: ${f.completos} completos, ${f.en_regularizacion} en regularización`}
+            className="flex items-center gap-1.5 rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-700"
+          >
+            <span className={`inline-block h-2 w-2 rounded-full ${color(Number(f.en_regularizacion), Number(f.total))}`} />
+            {f.empresa_codigo} {f.completos}/{f.total}
+            {Number(f.en_regularizacion) > 0 && <span className="text-amber-700">· {f.en_regularizacion} por regularizar</span>}
+          </span>
+        ))}
+      </div>
+      <p className="mt-1 text-[11px] text-slate-400">Empresa según la última contratación; "en regularización" = falta algún documento obligatorio del expediente.</p>
+    </section>
+  );
+}
+
 function PestanaPersonal() {
   const { data: personal, isLoading } = usePersonal();
   const queryClient = useQueryClient();
@@ -420,6 +468,8 @@ function PestanaPersonal() {
           {mostrarForm ? "Cancelar" : "+ Dar de alta"}
         </button>
       </div>
+
+      <IndicadorExpedientes />
 
       <SolicitudesNda personal={personal ?? []} />
 
@@ -966,6 +1016,7 @@ function PestanaContrataciones() {
       frecuencia_pago: frecuencia,
       sueldo_periodo: sueldoPeriodo,
       sueldo_semanal: sueldoSemanalDesde(frecuencia, sueldoPeriodo),
+      sueldo_no_fiscal_periodo: fd.get("sueldo_no_fiscal_periodo") ? Number(fd.get("sueldo_no_fiscal_periodo")) : null,
       fecha_inicio: fd.get("fecha_inicio"),
       duracion_dias: Number(fd.get("duracion_dias")),
       tipo_contrato: fd.get("tipo_contrato"),
@@ -1024,8 +1075,14 @@ function PestanaContrataciones() {
           </select>
         </div>
         <div>
-          <label className={etiquetaCampo}>Sueldo por periodo (semana o quincena) *</label>
+          <label className={etiquetaCampo}>Salario fiscal por periodo *</label>
           <input type="number" step="0.01" min="0.01" name="sueldo_periodo" required className={campoTexto} />
+          <p className="mt-0.5 text-[11px] text-slate-500">Es el único que aparece en el contrato (semana o quincena).</p>
+        </div>
+        <div>
+          <label className={etiquetaCampo}>Salario no fiscal por periodo</label>
+          <input type="number" step="0.01" min="0" name="sueldo_no_fiscal_periodo" className={campoTexto} />
+          <p className="mt-0.5 text-[11px] text-slate-500">No va en el contrato; solo para nómina interna.</p>
         </div>
         <div>
           <label className={etiquetaCampo}>Fecha de inicio *</label>
@@ -1038,7 +1095,7 @@ function PestanaContrataciones() {
         <div className="sm:col-span-3">
           {error && <p className="mb-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <button disabled={crear.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-            {crear.isPending ? "Guardando…" : "Registrar contratación"}
+            {crear.isPending ? "Guardando…" : "Registrar contrato"}
           </button>
         </div>
       </form>
@@ -1070,6 +1127,7 @@ function PestanaContrataciones() {
                 <td className="whitespace-nowrap px-3 py-2 text-right">
                   ${(c.sueldo_periodo ?? c.sueldo_semanal).toLocaleString("es-MX")} {c.frecuencia_pago === "quincenal" ? "quincenal" : "semanal"}
                   {c.frecuencia_pago === "quincenal" && <div className="text-xs text-slate-400">≈ ${c.sueldo_semanal.toLocaleString("es-MX")} semanal</div>}
+                  {c.sueldo_no_fiscal_periodo != null && <div className="text-xs text-slate-500">+ ${Number(c.sueldo_no_fiscal_periodo).toLocaleString("es-MX")} no fiscal</div>}
                 </td>
                 <td className="px-3 py-2">{c.fecha_inicio}</td>
                 <td className="px-3 py-2">{c.fecha_fin}</td>
