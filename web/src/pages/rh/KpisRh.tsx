@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { BarrasPorcentaje, COLOR, GraficaApilada, GraficaLinea } from "./graficas";
 
@@ -237,7 +238,11 @@ interface KpiActividadesDatos {
   resumen: { total: number; hechas: number; a_tiempo: number; vencidas: number; pendientes: number; pct_cumplimiento?: number | null; pct_a_tiempo?: number | null };
   por_semana: { semana: string; total: number; hechas: number; a_tiempo: number; vencidas: number }[];
   por_persona: { nombre: string; total: number; hechas: number; a_tiempo: number; vencidas: number }[];
+  abiertas?: { id: string; tablero_id: string; titulo: string; fecha_limite: string | null; responsable: string | null; supervisor: string | null; columna: string | null; estado: "vencida" | "pendiente" | "sin_fecha" }[];
 }
+
+const ETIQUETA_ABIERTA = { vencida: "Vencida", pendiente: "Pendiente", sin_fecha: "Sin fecha" } as const;
+const TONO_ABIERTA = { vencida: "bg-red-50 text-red-700", pendiente: "bg-amber-50 text-amber-700", sin_fecha: "bg-slate-100 text-slate-600" } as const;
 
 export function KpiActividades() {
   const q = useQuery({
@@ -284,6 +289,34 @@ export function KpiActividades() {
               detalle: `${p.hechas} de ${p.total} hechas · ${p.a_tiempo} a tiempo · ${p.vencidas} vencidas`,
             }))}
           />
+          <div className="rounded border border-slate-200 bg-white p-3">
+            <h4 className="mb-2 text-sm font-semibold text-slate-700">Actividades abiertas (pendientes, vencidas y sin fecha)</h4>
+            {(d.abiertas ?? []).length === 0 ? (
+              <p className="text-xs text-slate-400">No hay actividades abiertas.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {(d.abiertas ?? []).map((a) => (
+                  <li key={a.id}>
+                    <Link to={`/tareas/${a.tablero_id}?tarjeta=${a.id}`} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm hover:bg-slate-50">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-slate-900">{a.titulo}</div>
+                        <div className="text-xs text-slate-500">
+                          {a.responsable ?? "Sin responsable"}
+                          {a.supervisor && <> · sup. {a.supervisor}</>}
+                          {a.columna && <> · {a.columna}</>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${TONO_ABIERTA[a.estado]}`}>{ETIQUETA_ABIERTA[a.estado]}</span>
+                        {a.fecha_limite && <span className="text-xs tabular-nums text-slate-600">{etiquetaDia(a.fecha_limite)}</span>}
+                        <span className="text-xs text-slate-400">abrir →</span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </>
       )}
     </div>
