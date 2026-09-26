@@ -148,7 +148,7 @@ export function SemaforoPreciosUnitarios({ proyecto, compacto = false }: { proye
               })}
             </ul>
           )}
-          {compacto && visibles.length > 6 && <p className="mt-2 text-xs text-slate-400">y {visibles.length - 6} más en la pestaña Cotización.</p>}
+          {compacto && visibles.length > 6 && <p className="mt-2 text-xs text-slate-400">y {visibles.length - 6} más en la pestaña Precios unitarios.</p>}
         </>
       )}
     </section>
