@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
-import type { Proyecto } from "../../types/database";
+import type { Proyecto, PuEstado } from "../../types/database";
+import { PuntosSemaforoPu } from "./SemaforoPreciosUnitarios";
 
 function useEmpresas() {
   return useQuery({
@@ -30,12 +31,31 @@ function useProyectos(empresaId: string, busqueda: string) {
   });
 }
 
+function useSemaforoProyectos(ids: string[]) {
+  return useQuery({
+    queryKey: ["pu-semaforo-proyectos", ids],
+    enabled: ids.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("pu_analisis").select("proyecto_id, estado, cliente_autorizado_en").in("proyecto_id", ids);
+      if (error) throw error;
+      const por = new Map<string, { estado: PuEstado; cliente_autorizado_en: string | null }[]>();
+      for (const f of (data ?? []) as { proyecto_id: string; estado: PuEstado; cliente_autorizado_en: string | null }[]) {
+        const lista = por.get(f.proyecto_id) ?? [];
+        lista.push({ estado: f.estado, cliente_autorizado_en: f.cliente_autorizado_en });
+        por.set(f.proyecto_id, lista);
+      }
+      return por;
+    },
+  });
+}
+
 export function Proyectos() {
   const { veTodasLasEmpresas } = useAuth();
   const { data: empresas } = useEmpresas();
   const [empresaId, setEmpresaId] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const { data: proyectos, isLoading } = useProyectos(empresaId, busqueda);
+  const { data: semaforos } = useSemaforoProyectos((proyectos ?? []).map((p) => p.id));
 
   return (
     <div>
@@ -68,6 +88,7 @@ export function Proyectos() {
             <h2 className="font-semibold text-slate-900">{p.nombre}</h2>
             <p className="mt-1 text-xs text-slate-500">{p.empresas?.nombre}</p>
             <p className="mt-2 text-sm text-slate-600">{p.cliente ? `Cliente: ${p.cliente}` : "Sin cliente asignado"}</p>
+            {semaforos && <PuntosSemaforoPu filas={semaforos.get(p.id) ?? []} />}
           </Link>
         ))}
         {proyectos?.length === 0 && !isLoading && <p className="text-sm text-slate-400">No hay proyectos para este filtro.</p>}
