@@ -512,7 +512,7 @@ function PestanaAvance({ proyecto }: { proyecto: Proyecto }) {
   const { data: tableros, isLoading } = useTablerosDelProyecto(proyecto.id);
   const [error, setError] = useState<string | null>(null);
 
-  const puedeAdministrar = perfil?.rol === "admin" || perfil?.rol === "corporativo";
+  const puedeAdministrar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || (perfil?.rol === "empresa" && perfil.empresa_id === proyecto.empresa_id);
 
   const crearTablero = useMutation({
     mutationFn: async () => {

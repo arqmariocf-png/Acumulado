@@ -60,6 +60,10 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   admin, direccion, corporativo, empresa o responsable/comprador del
   proyecto). Rojo = elaboración/almacén, ámbar = dirección/publicación,
   azul = espera al cliente, verde = autorizado por el cliente.
+- **Tableros y control de obra del rol `empresa` (26-sep-2026)**: Jorge (ERG)
+  crea tableros de avance y controles de obra de los proyectos de SU empresa
+  (`auth_administra_tableros_de(empresa_id)`, `auth_administra_proyecto(id)`;
+  admin y corporativo en todas). En Tareas el selector de empresa se le fija.
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
   abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
   (móvil). QR con `qrcode` (import dinámico).
