@@ -11,6 +11,7 @@ import { PerfilesJornada } from "./rh/PerfilesJornada";
 import { SolicitudesNda } from "./rh/SolicitudesNda";
 import { Accesos } from "./rh/Accesos";
 import { PestanaDocumentos } from "./rh/Expediente";
+import { KpiActividades, KpiChecador, KpiVacantes } from "./rh/KpisRh";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
 import { esRhDirectivo } from "../lib/modulos";
 import { abrirParaImprimir } from "../lib/imprimir";
@@ -22,19 +23,24 @@ import type {
   Personal,
   TipoContrato, FrecuenciaPago } from "../types/database";
 
-type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "checador" | "vacantes" | "actividades" | "accesos";
+type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "checador" | "kpi_checador" | "kpi_vacantes" | "kpi_actividades" | "vacantes" | "actividades" | "accesos";
 
-// Orden del primer flujo (Mario, 26-sep-2026): se registra el contrato, se
-// arma el expediente y queda en Personal. Lo demás va después.
-// `directivo`: solo la ve RH directivo (o admin). "Nómina y asistencia" se
-// retiró (26-sep-2026): lo que necesitaba está en Accesos y en Checador.
+// Orden (Mario, 26-sep-2026): 1-5 es el flujo de RH administrativo (se
+// registra el contrato, se arma el expediente, queda en Personal, checador y
+// asignaciones diarias). De la 6 en adelante es RH directivo: las tres
+// presentaciones de KPI, más la captura de vacantes/actividades y los
+// accesos. `directivo`: solo la ve RH directivo (o admin). "Nómina y
+// asistencia" se retiró: lo que necesitaba está en Accesos y en Checador.
 const PESTANAS: { valor: Pestana; etiqueta: string; directivo?: boolean }[] = [
   { valor: "contrataciones", etiqueta: "1. Contrataciones" },
   { valor: "documentos", etiqueta: "2. Documentos / Expediente" },
   { valor: "personal", etiqueta: "3. Personal" },
-  { valor: "asignaciones", etiqueta: "Asignaciones diarias" },
-  { valor: "checador", etiqueta: "Checador" },
-  { valor: "vacantes", etiqueta: "Vacantes y rotación", directivo: true },
+  { valor: "checador", etiqueta: "4. Checador" },
+  { valor: "asignaciones", etiqueta: "5. Asignaciones diarias" },
+  { valor: "kpi_checador", etiqueta: "6. KPI Asistencias y retardos", directivo: true },
+  { valor: "kpi_vacantes", etiqueta: "7. KPI Vacantes y rotación", directivo: true },
+  { valor: "kpi_actividades", etiqueta: "8. KPI Cumplimiento de actividades", directivo: true },
+  { valor: "vacantes", etiqueta: "Vacantes", directivo: true },
   { valor: "actividades", etiqueta: "Actividades" },
   { valor: "accesos", etiqueta: "Accesos al sistema", directivo: true },
 ];
@@ -100,7 +106,7 @@ export function RH() {
     <div>
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
       {perfil?.rol === "rh" && (
-        <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: todo el módulo, accesos y roles." : "RH administrativo: contratos, expedientes, personal, asignaciones, checador y actividades."}</p>
+        <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: todo el módulo, los KPI (6-8), accesos y roles." : "RH administrativo: contratos, expedientes, personal, asignaciones, checador y actividades."}</p>
       )}
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -120,6 +126,9 @@ export function RH() {
       {pestana === "contrataciones" && <PestanaContrataciones />}
       {pestana === "documentos" && <PestanaDocumentos personalInicial={params.get("personal")} />}
       {pestana === "checador" && <PestanaChecador />}
+      {pestana === "kpi_checador" && <KpiChecador />}
+      {pestana === "kpi_vacantes" && <KpiVacantes />}
+      {pestana === "kpi_actividades" && <KpiActividades />}
       {pestana === "vacantes" && <Vacantes />}
       {pestana === "actividades" && <Actividades />}
       {pestana === "accesos" && <Accesos />}
