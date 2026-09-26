@@ -164,3 +164,85 @@ export function BarrasPorcentaje({ filas, titulo }: { filas: { etiqueta: string;
     </div>
   );
 }
+
+/** Línea de una sola serie (p. ej. rotación mensual en %). Sin leyenda
+ * porque el título nombra la serie; etiqueta directa en el último punto,
+ * tooltip por punto y vista de tabla. */
+export function GraficaLinea({ puntos, titulo, sufijo = "", alto = 160 }: { puntos: { etiqueta: string; valor: number | null }[]; titulo: string; sufijo?: string; alto?: number }) {
+  const [tabla, setTabla] = useState(false);
+  const [hover, setHover] = useState<number | null>(null);
+  const valores = puntos.map((p) => p.valor ?? 0);
+  const maximo = Math.max(1, ...valores);
+  const ancho = 640;
+  const margen = { izq: 34, der: 30, arr: 10, abajo: 26 };
+  const anchoPlot = ancho - margen.izq - margen.der;
+  const altoPlot = alto - margen.arr - margen.abajo;
+  const paso = puntos.length > 1 ? anchoPlot / (puntos.length - 1) : 0;
+  const x = (i: number) => margen.izq + (puntos.length > 1 ? paso * i : anchoPlot / 2);
+  const y = (v: number) => margen.arr + altoPlot - (v / maximo) * altoPlot;
+  const ticks = [0, Math.ceil(maximo / 2), maximo];
+  const camino = puntos.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.valor ?? 0).toFixed(1)}`).join(" ");
+  const ultimo = puntos.length - 1;
+
+  return (
+    <div className="rounded border border-slate-200 bg-white p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-slate-700">{titulo}</h4>
+        <button onClick={() => setTabla((v) => !v)} className="text-xs text-slate-500 underline">
+          {tabla ? "ver gráfica" : "ver tabla"}
+        </button>
+      </div>
+      {puntos.length === 0 ? (
+        <p className="text-xs text-slate-400">Sin datos todavía.</p>
+      ) : tabla ? (
+        <table className="w-full text-xs">
+          <thead className="text-left uppercase text-slate-500">
+            <tr>
+              <th className="py-1">Periodo</th>
+              <th className="py-1 text-right">{titulo}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {puntos.map((p) => (
+              <tr key={p.etiqueta} className="border-t border-slate-100">
+                <td className="py-1">{p.etiqueta}</td>
+                <td className="py-1 text-right tabular-nums">{p.valor === null ? "—" : `${p.valor}${sufijo}`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <svg viewBox={`0 0 ${ancho} ${alto}`} className="h-auto w-full" role="img" aria-label={titulo}>
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={margen.izq} x2={ancho - margen.der} y1={y(t)} y2={y(t)} stroke={COLOR.grid} strokeWidth={1} />
+              <text x={margen.izq - 4} y={y(t) + 3} fontSize={9} textAnchor="end" fill={COLOR.textoSec}>
+                {t}
+                {sufijo}
+              </text>
+            </g>
+          ))}
+          <path d={camino} fill="none" stroke={COLOR.serie1} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {puntos.map((p, i) => (
+            <g key={p.etiqueta}>
+              <circle cx={x(i)} cy={y(p.valor ?? 0)} r={hover === i ? 5 : 3.5} fill={COLOR.serie1} stroke="#fff" strokeWidth={2} />
+              <rect x={x(i) - paso / 2} y={margen.arr} width={Math.max(paso, 12)} height={altoPlot} fill="transparent" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+                <title>{`${p.etiqueta}: ${p.valor === null ? "—" : `${p.valor}${sufijo}`}`}</title>
+              </rect>
+              {(i === ultimo || hover === i) && (
+                <text x={x(i)} y={y(p.valor ?? 0) - 8} fontSize={9} textAnchor={i === ultimo ? "end" : "middle"} fill={COLOR.texto}>
+                  {p.valor === null ? "—" : `${p.valor}${sufijo}`}
+                </text>
+              )}
+              {(puntos.length <= 8 || i % Math.ceil(puntos.length / 8) === 0 || i === ultimo) && (
+                <text x={x(i)} y={alto - 8} fontSize={9} textAnchor="middle" fill={COLOR.textoSec}>
+                  {p.etiqueta}
+                </text>
+              )}
+            </g>
+          ))}
+        </svg>
+      )}
+    </div>
+  );
+}
