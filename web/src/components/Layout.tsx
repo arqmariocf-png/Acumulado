@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { seccionesPara, type SeccionMenu } from "../lib/menu";
+import { seccionesPara, type NivelMenu, type SeccionMenu } from "../lib/menu";
 import { useEsSocio } from "../lib/socio";
 import { AvisoVersion } from "./AvisoVersion";
 import { AvisoSuscripcion } from "./AvisoSuscripcion";
@@ -136,7 +136,7 @@ function MenuModulos({ secciones, titulo }: { secciones: SeccionMenu[]; titulo: 
     return () => document.removeEventListener("mousedown", onClickFuera);
   }, []);
 
-  useEffect(() => setAbierto(false), [location.pathname]);
+  useEffect(() => setAbierto(false), [location.pathname, location.search]);
 
   if (secciones.length === 0) return null;
 
@@ -150,15 +150,15 @@ function MenuModulos({ secciones, titulo }: { secciones: SeccionMenu[]; titulo: 
         <span className="text-xs">▾</span>
       </button>
       {abierto && (
-        <div className="absolute left-0 z-20 mt-1 max-h-[80vh] w-80 overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-lg">
+        <div className={`absolute left-0 z-20 mt-1 max-h-[80vh] overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-lg ${secciones.some((s) => s.entradas.some((e) => e.niveles?.length)) ? "w-[26rem] max-w-[92vw]" : "w-80"}`}>
           {secciones.map((s) => (
             <div key={s.clave} className="py-1">
               <div className={`px-3 pt-1 text-[11px] text-slate-400 ${secciones.length > 1 ? "font-semibold uppercase tracking-wide" : "normal-case"}`} title={s.proposito}>
                 {secciones.length > 1 ? s.titulo : s.proposito}
               </div>
               {s.entradas.map((e) => (
+                <div key={e.ruta}>
                 <NavLink
-                  key={e.ruta}
                   to={e.ruta}
                   title={e.uso}
                   className={({ isActive }) => `block px-3 py-1.5 ${isActive ? "bg-slate-100" : "hover:bg-slate-50"}`}
@@ -166,11 +166,60 @@ function MenuModulos({ secciones, titulo }: { secciones: SeccionMenu[]; titulo: 
                   <span className={`block text-sm ${location.pathname.startsWith(e.ruta) ? "font-medium text-slate-900" : "text-slate-700"}`}>{e.etiqueta}</span>
                   <span className="block text-[11px] leading-tight text-slate-400">{e.descripcion}</span>
                 </NavLink>
+                {e.niveles && e.niveles.length > 0 && <Niveles niveles={e.niveles} actual={`${location.pathname}${location.search}`} />}
+              </div>
               ))}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Submenú de una entrada: niveles en vertical; dentro de cada uno, sus
+ * pestañas en horizontal y, si una pestaña tiene tercer nivel, también en
+ * horizontal a continuación. `actual` = ruta + query de la página abierta. */
+function Niveles({ niveles, actual }: { niveles: NivelMenu[]; actual: string }) {
+  const enRuta = (n: NivelMenu): boolean => actual === n.ruta || (n.hijos ?? []).some(enRuta);
+  return (
+    <div className="ml-3 mb-1 border-l border-slate-200 pl-3">
+      {niveles.map((n) => {
+        const activoNivel = enRuta(n);
+        return (
+          <div key={n.ruta} className="py-1">
+            <NavLink to={n.ruta} className={`block text-xs ${activoNivel ? "font-semibold text-slate-900" : "font-medium text-slate-700 hover:text-slate-900"}`}>
+              {n.etiqueta}
+            </NavLink>
+            {n.hijos && n.hijos.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                {n.hijos.map((h) => (
+                  <span key={h.ruta} className="flex flex-wrap items-center gap-1">
+                    <NavLink
+                      to={h.ruta}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] ${enRuta(h) ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"}`}
+                    >
+                      {h.etiqueta}
+                    </NavLink>
+                    {h.hijos && h.hijos.length > 0 && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-slate-400">
+                        {h.hijos.map((t, i) => (
+                          <span key={t.ruta} className="flex items-center gap-0.5">
+                            {i > 0 && <span>·</span>}
+                            <NavLink to={t.ruta} className={`rounded px-1 ${actual === t.ruta ? "bg-slate-200 text-slate-900" : "hover:bg-slate-100 hover:text-slate-700"}`}>
+                              {t.etiqueta}
+                            </NavLink>
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
