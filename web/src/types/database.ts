@@ -559,7 +559,7 @@ export interface ProyectoPlano {
   proyecto_id: string;
   nombre_original: string;
   storage_path: string;
-  tipo_archivo: "pdf" | "dwg";
+  tipo_archivo: "pdf" | "dwg" | "imagen";
   subido_por: string;
   created_at: string;
 }

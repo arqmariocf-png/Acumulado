@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
@@ -136,33 +136,47 @@ function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onU
     }
   }
 
-  async function onSubir(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const formEl = e.currentTarget;
-    const input = formEl.elements.namedItem("file") as HTMLInputElement;
-    const archivo = input.files?.[0];
-    if (!archivo) return;
+  const [progreso, setProgreso] = useState("");
+
+  /** Sube en cuanto se eligen los archivos (sin segundo clic): uno por uno,
+   * sin límite de cantidad, 50 MB cada uno. Si uno falla sigue con el resto. */
+  async function onElegirArchivos(e: ChangeEvent<HTMLInputElement>) {
+    const input = e.currentTarget;
+    const archivos = Array.from(input.files ?? []);
+    if (archivos.length === 0) {
+      setError("No se eligió ningún archivo.");
+      return;
+    }
     setError(null);
     setSubiendo(true);
+    const fallas: string[] = [];
     try {
-      const fd = new FormData();
-      fd.append("proyectoId", proyectoId);
-      fd.append("file", archivo);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      const respuesta = await fetch(urlFuncion("proyecto-archivos"), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      const json = await respuesta.json();
-      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-      formEl.reset();
-      queryClient.invalidateQueries({ queryKey: ["proyecto-planos", proyectoId] });
-    } catch (err) {
-      setError((err as Error).message);
+      for (let i = 0; i < archivos.length; i++) {
+        const archivo = archivos[i];
+        setProgreso(`${i + 1}/${archivos.length}`);
+        try {
+          const fd = new FormData();
+          fd.append("proyectoId", proyectoId);
+          fd.append("file", archivo);
+          const respuesta = await fetch(urlFuncion("proyecto-archivos"), {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          const json = await respuesta.json().catch(() => ({}));
+          if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+        } catch (err) {
+          fallas.push(`${archivo.name}: ${(err as Error).message}`);
+        }
+        queryClient.invalidateQueries({ queryKey: ["proyecto-planos", proyectoId] });
+      }
+      if (fallas.length > 0) setError(`No se subieron: ${fallas.join(" · ")}`);
     } finally {
+      input.value = "";
       setSubiendo(false);
+      setProgreso("");
     }
   }
 
@@ -209,12 +223,13 @@ function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onU
       </p>
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <form onSubmit={onSubir} className="mb-4 flex gap-2">
-        <input type="file" name="file" accept=".pdf,.dwg" className="flex-1 text-sm" />
-        <button type="submit" disabled={subiendo} className="shrink-0 rounded bg-slate-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          {subiendo ? "Subiendo…" : "Subir plano"}
-        </button>
-      </form>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className={`cursor-pointer rounded bg-slate-900 px-4 py-1.5 text-sm font-medium text-white ${subiendo ? "opacity-50" : "hover:bg-slate-800"}`}>
+          {subiendo ? `Subiendo ${progreso}…` : "Subir plano (PDF, DWG o foto)"}
+          <input type="file" accept=".pdf,.dwg,image/*" multiple disabled={subiendo} onChange={onElegirArchivos} className="hidden" />
+        </label>
+        <span className="text-xs text-slate-500">Se sube al elegirlo. Puedes seleccionar varios; hasta 50 MB cada uno.</span>
+      </div>
 
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">

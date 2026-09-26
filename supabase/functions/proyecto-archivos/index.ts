@@ -12,16 +12,28 @@
 // GET  ?planoId=<uuid>                           -> signed URL de descarga (60s)
 // DELETE json: { planoId }                       -> borra el registro (RLS decide permiso) y el objeto
 
-import { corsHeaders, respuestaCors, jsonResponse } from "../_shared/cors.ts";
+import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
 import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
 
 const TAMANO_MAXIMO_BYTES = 50 * 1024 * 1024;
 
-function tipoDeArchivo(nombre: string): "pdf" | "dwg" | null {
-  const ext = nombre.toLowerCase().split(".").pop();
-  if (ext === "pdf") return "pdf";
+// Además de PDF y DWG, una foto o captura del plano (lo que hay a la mano en
+// obra desde el celular) entra como "imagen".
+const EXT_IMAGEN = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
+
+function tipoDeArchivo(nombre: string, mime: string): "pdf" | "dwg" | "imagen" | null {
+  const ext = nombre.toLowerCase().split(".").pop() ?? "";
+  if (ext === "pdf" || mime === "application/pdf") return "pdf";
   if (ext === "dwg") return "dwg";
+  if (EXT_IMAGEN.includes(ext) || mime.startsWith("image/")) return "imagen";
   return null;
+}
+
+/** Storage rechaza llaves con acentos, ñ o símbolos: la ruta va en ASCII
+ * plano; el nombre original se guarda tal cual en la tabla. */
+function nombreSeguro(nombre: string): string {
+  const base = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  return (base || "archivo").slice(0, 120);
 }
 
 async function proyectoVisible(req: Request, proyectoId: string): Promise<boolean> {
@@ -39,8 +51,8 @@ async function subir(req: Request): Promise<Response> {
   const archivo = form.get("file") as File | null;
   if (!proyectoId || !archivo) return jsonResponse({ error: "proyectoId y file son requeridos" }, 400);
 
-  const tipoArchivo = tipoDeArchivo(archivo.name);
-  if (!tipoArchivo) return jsonResponse({ error: "Solo se aceptan archivos PDF o DWG" }, 400);
+  const tipoArchivo = tipoDeArchivo(archivo.name, archivo.type || "");
+  if (!tipoArchivo) return jsonResponse({ error: "Solo se aceptan PDF, DWG o imágenes (JPG, PNG, WEBP, HEIC)" }, 400);
 
   if (!(await proyectoVisible(req, proyectoId))) return jsonResponse({ error: "Sin acceso a este proyecto" }, 403);
   if (archivo.size > TAMANO_MAXIMO_BYTES) {
@@ -49,7 +61,7 @@ async function subir(req: Request): Promise<Response> {
 
   const dbServicio = clienteServicio();
   const bytes = new Uint8Array(await archivo.arrayBuffer());
-  const rutaStorage = `planos/${proyectoId}/${Date.now()}-${archivo.name}`;
+  const rutaStorage = `planos/${proyectoId}/${Date.now()}-${nombreSeguro(archivo.name)}`;
 
   const { error: errUpload } = await dbServicio.storage.from("cargas").upload(rutaStorage, bytes, {
     contentType: archivo.type || "application/octet-stream",
