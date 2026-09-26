@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { AREAS, areaDeClave, type AreaOrganigrama } from "../lib/organigrama";
 import { INDICADORES_NUMERICOS, indicadorPorClave, type Indicador } from "../lib/indicadores";
-import { useResumenSocio } from "../lib/socio";
+import { useKpisAlcance, useResumenSocio } from "../lib/socio";
 import { empresaDeResumen, formatearKpiEmpresa, tieneKpiEmpresa } from "../lib/kpisEmpresa";
 
 /** Configuración de un KPI del organigrama (tabla kpis_organigrama). */
@@ -84,12 +84,24 @@ function useEmpresaFiltro() {
 function useValorIndicador(ind: Indicador | undefined, empresaId: string | null) {
   const { perfil } = useAuth();
   const resumen = useResumenSocio(!!empresaId);
+  // A nivel grupo, lo que exista en fn_kpis_alcance() sale de ahí (una sola
+  // llamada, sin RLS por fila); lo demás se consulta como antes.
+  const alcance = useKpisAlcance(!!perfil && !empresaId);
+  const enAlcance = !empresaId && !!ind && !!alcance.data && tieneKpiEmpresa(alcance.data.total, ind.clave);
   const global = useQuery({
     queryKey: ["indicador", ind?.clave, perfil?.id],
-    enabled: !!perfil && !!ind && !empresaId,
+    enabled: !!perfil && !!ind && !empresaId && !alcance.isLoading && !enAlcance,
     staleTime: 60_000,
     queryFn: () => ind!.consulta(perfil!),
   });
+  if (!empresaId && ind && (enAlcance || alcance.isLoading)) {
+    return {
+      data: enAlcance ? formatearKpiEmpresa(ind.clave, alcance.data!.total[ind.clave]) : undefined,
+      isLoading: alcance.isLoading,
+      error: null as unknown,
+      disponible: true,
+    };
+  }
   if (empresaId) {
     const kpis = empresaDeResumen(resumen.data, empresaId)?.kpis;
     const disponible = !!ind && !!kpis && tieneKpiEmpresa(kpis, ind.clave);

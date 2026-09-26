@@ -69,3 +69,26 @@ export function useSociosAdmin(habilitado: boolean) {
     },
   });
 }
+
+export interface KpisAlcance {
+  total: Record<string, number | null>;
+  empresas: { id: string; codigo: string; nombre: string; kpis: Record<string, number | null> }[];
+  calculado_en: string;
+}
+
+/** KPIs del grupo en UNA llamada (fn_kpis_alcance): suma por empresa en el
+ * alcance de quien consulta, calculada en la base sin pasar por RLS fila
+ * por fila. Sustituye ~40 consultas de vistas pesadas desde el navegador,
+ * que con la frontera de organizaciones tardaban 4-8 s cada una. */
+export function useKpisAlcance(habilitado = true) {
+  return useQuery({
+    queryKey: ["kpis-alcance"],
+    enabled: habilitado,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_kpis_alcance");
+      if (error) throw new Error(error.message);
+      return data as KpisAlcance;
+    },
+  });
+}

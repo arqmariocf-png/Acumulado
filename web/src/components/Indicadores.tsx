@@ -2,15 +2,31 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth";
 import { indicadoresPara, type Indicador } from "../lib/indicadores";
+import { useKpisAlcance } from "../lib/socio";
+import { formatearKpiEmpresa, tieneKpiEmpresa } from "../lib/kpisEmpresa";
 
 function Tarjeta({ ind }: { ind: Indicador }) {
   const { perfil } = useAuth();
-  const { data, isLoading, error } = useQuery({
+  // Lo que ya viene calculado en fn_kpis_alcance() (una llamada para todos
+  // los KPIs numéricos) no se vuelve a consultar vista por vista.
+  const alcance = useKpisAlcance(!!perfil);
+  const enAlcance = !!alcance.data && tieneKpiEmpresa(alcance.data.total, ind.clave);
+  const propio = useQuery({
     queryKey: ["indicador", ind.clave, perfil?.id],
-    enabled: !!perfil,
+    enabled: !!perfil && !alcance.isLoading && !enAlcance,
     staleTime: 60_000,
     queryFn: () => ind.consulta(perfil!),
   });
+  const data = enAlcance
+    ? (() => {
+        const r = formatearKpiEmpresa(ind.clave, alcance.data!.total[ind.clave]);
+        const n = typeof r.valor === "number" ? r.valor : Number(String(r.valor).replace(/[^0-9.-]/g, ""));
+        const alerta = !ind.informativo && Number.isFinite(n) && (ind.direccion === "menor_es_peor" ? false : n > 0);
+        return { ...r, alerta };
+      })()
+    : propio.data;
+  const isLoading = alcance.isLoading || (!enAlcance && propio.isLoading);
+  const error = enAlcance ? null : propio.error;
   const alerta = !!data?.alerta;
   return (
     <Link
