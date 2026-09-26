@@ -37,7 +37,9 @@ function oVacio(fd: FormData, campo: string) {
 
 export function PestanaControlObra({ proyecto }: { proyecto: Proyecto }) {
   const { perfil } = useAuth();
-  const puedeEditar = perfil?.rol === "admin" || perfil?.rol === "corporativo";
+  // admin y corporativo en todas; el rol empresa (Jorge) en los proyectos
+  // de su empresa. La base aplica la misma regla (auth_administra_proyecto).
+  const puedeEditar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || (perfil?.rol === "empresa" && perfil.empresa_id === proyecto.empresa_id);
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState(false);

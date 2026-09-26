@@ -48,7 +48,10 @@ export function Tableros() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "corporativo";
+  // El rol empresa crea tableros solo de su empresa (la base lo exige:
+  // auth_administra_tableros_de); el selector se le fija.
+  const soloSuEmpresa = perfil?.rol === "empresa" && !!perfil.empresa_id;
+  const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "corporativo" || soloSuEmpresa;
 
   const crear = useMutation({
     mutationFn: async (payload: { nombre: string; descripcion: string; empresaId: string }) => {
@@ -88,7 +91,7 @@ export function Tableros() {
     crear.mutate({
       nombre: String(fd.get("nombre") ?? "").trim(),
       descripcion: String(fd.get("descripcion") ?? "").trim(),
-      empresaId: String(fd.get("empresa_id") ?? ""),
+      empresaId: soloSuEmpresa ? (perfil.empresa_id ?? "") : String(fd.get("empresa_id") ?? ""),
     });
   }
 
@@ -117,8 +120,8 @@ export function Tableros() {
           </div>
           <div className="mb-3">
             <label className={etiquetaCampo}>Empresa</label>
-            <select name="empresa_id" className={campoTexto} defaultValue="">
-              <option value="">Corporativo (visible a todas las empresas)</option>
+            <select name="empresa_id" className={campoTexto} defaultValue={soloSuEmpresa ? perfil.empresa_id ?? "" : ""} disabled={soloSuEmpresa}>
+              {!soloSuEmpresa && <option value="">Corporativo (visible a todas las empresas)</option>}
               {empresas?.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.nombre}
