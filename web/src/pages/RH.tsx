@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
@@ -25,11 +26,13 @@ import type {
 
 type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "nomina" | "checador" | "vacantes" | "actividades" | "accesos";
 
+// Orden del primer flujo (Mario, 26-sep-2026): se registra el contrato, se
+// arma el expediente y queda en Personal. Lo demás va después.
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
-  { valor: "personal", etiqueta: "Personal" },
+  { valor: "contrataciones", etiqueta: "1. Contrataciones" },
+  { valor: "documentos", etiqueta: "2. Documentos / Expediente" },
+  { valor: "personal", etiqueta: "3. Personal" },
   { valor: "asignaciones", etiqueta: "Asignaciones diarias" },
-  { valor: "contrataciones", etiqueta: "Contrataciones" },
-  { valor: "documentos", etiqueta: "Documentos / Expediente" },
   { valor: "nomina", etiqueta: "Nómina y asistencia" },
   { valor: "checador", etiqueta: "Checador" },
   { valor: "vacantes", etiqueta: "Vacantes y rotación" },
@@ -91,7 +94,17 @@ export function RH() {
   // bloquee del lado del dato, ver 20260828020000_rh_documentos_rol_enum.sql.
   const soloDocumentos = perfil?.rol === "rh_documentos";
   const pestanas = soloDocumentos ? PESTANAS.filter((p) => p.valor === "documentos") : PESTANAS;
-  const [pestana, setPestana] = useState<Pestana>(soloDocumentos ? "documentos" : "personal");
+  // La pestaña vive en la URL (?tab=documentos&personal=<id>) para que desde
+  // Personal se pueda abrir directo el expediente de alguien.
+  const [params, setParams] = useSearchParams();
+  const tabUrl = params.get("tab") as Pestana | null;
+  const pestana: Pestana = soloDocumentos ? "documentos" : tabUrl && PESTANAS.some((p) => p.valor === tabUrl) ? tabUrl : "contrataciones";
+  const setPestana = (v: Pestana) => {
+    const sig = new URLSearchParams(params);
+    sig.set("tab", v);
+    if (v !== "documentos") sig.delete("personal");
+    setParams(sig, { replace: true });
+  };
 
   return (
     <div>
@@ -112,7 +125,7 @@ export function RH() {
       {pestana === "personal" && <PestanaPersonal />}
       {pestana === "asignaciones" && <PestanaAsignaciones />}
       {pestana === "contrataciones" && <PestanaContrataciones />}
-      {pestana === "documentos" && <PestanaDocumentos />}
+      {pestana === "documentos" && <PestanaDocumentos personalInicial={params.get("personal")} />}
       {pestana === "nomina" && <PestanaNomina />}
       {pestana === "checador" && <PestanaChecador />}
       {pestana === "vacantes" && <Vacantes />}
@@ -562,18 +575,18 @@ function PestanaPersonal() {
           </fieldset>
 
           <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <legend className="mb-2 text-sm font-semibold text-slate-700">Contacto de emergencia</legend>
+            <legend className="mb-2 text-sm font-semibold text-slate-700">Contacto de emergencia (obligatorio)</legend>
             <div>
-              <label className={etiquetaCampo}>Nombre</label>
-              <input name="contacto_emergencia_nombre" className={campoTexto} />
+              <label className={etiquetaCampo}>Nombre *</label>
+              <input name="contacto_emergencia_nombre" required className={campoTexto} />
             </div>
             <div>
-              <label className={etiquetaCampo}>Teléfono</label>
-              <input name="contacto_emergencia_telefono" className={campoTexto} />
+              <label className={etiquetaCampo}>Teléfono *</label>
+              <input name="contacto_emergencia_telefono" required pattern="[0-9 +()-]{7,}" title="Teléfono de al menos 7 dígitos" className={campoTexto} />
             </div>
             <div>
-              <label className={etiquetaCampo}>Parentesco</label>
-              <input name="contacto_emergencia_parentesco" className={campoTexto} />
+              <label className={etiquetaCampo}>Parentesco *</label>
+              <input name="contacto_emergencia_parentesco" required className={campoTexto} />
             </div>
           </fieldset>
 
@@ -700,7 +713,16 @@ function PestanaPersonal() {
           <tbody>
             {listado.map((p) => (
               <tr key={p.id} className={`border-t border-slate-100 ${p.activo ? "" : "text-slate-400"}`}>
-                <td className="px-3 py-2">{p.nombre}</td>
+                <td className="px-3 py-2">
+                  <Link to={`/rh?tab=documentos&personal=${p.id}`} className="font-medium text-slate-900 underline decoration-slate-300 hover:decoration-slate-900" title="Abrir su expediente (todos sus documentos)">
+                    {p.nombre}
+                  </Link>
+                  {p.activo && (!p.contacto_emergencia_nombre || !p.contacto_emergencia_telefono) && (
+                    <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700" title="Falta capturar nombre y teléfono del contacto de emergencia">
+                      sin contacto de emergencia
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2">{p.puesto ?? "—"}</td>
                 <td className="px-3 py-2">{p.fecha_ingreso}</td>
                 <td className="px-3 py-2">{p.telefono ?? "—"}</td>

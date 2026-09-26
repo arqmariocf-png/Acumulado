@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
@@ -210,11 +210,15 @@ async function tokenSesion() {
   return data.session?.access_token ?? "";
 }
 
-export function PestanaDocumentos() {
+export function PestanaDocumentos({ personalInicial }: { personalInicial?: string | null } = {}) {
   const { perfil } = useAuth();
   const { data: personal } = usePersonalLista();
   const { data: faltantes, isLoading: cargandoFaltantes } = useDocumentosFaltantes();
-  const [personaId, setPersonaId] = useState<string | null>(null);
+  const [personaId, setPersonaId] = useState<string | null>(personalInicial ?? null);
+  // Llegada desde Personal con ?personal=<id>: se abre ese expediente.
+  useEffect(() => {
+    if (personalInicial) setPersonaId(personalInicial);
+  }, [personalInicial]);
 
   const persona = personal?.find((p) => p.id === personaId) ?? null;
   // rh_documentos sube archivos; aplicar datos a la ficha y verificar es de RH/admin.
