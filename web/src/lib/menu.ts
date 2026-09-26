@@ -1,4 +1,4 @@
-import { esRolBasico } from "./modulos";
+import { esRhDirectivo, esRolBasico } from "./modulos";
 import type { ModuloClave, Profile } from "../types/database";
 
 /** Catálogo único de módulos, por área, con orientación de uso. Lo consumen
@@ -20,6 +20,18 @@ export interface EntradaMenu {
   /** Pantallas de la propia persona o de su cuenta (checador, sus documentos,
    * la guía, la administración de su organización): no dependen de módulos. */
   personal?: true;
+  /** Submenú del encabezado (Mario, 26-sep-2026): niveles en vertical bajo
+   * la entrada y, dentro de cada nivel, sus pestañas en horizontal (con un
+   * tercer nivel también horizontal cuando aplica). Las rutas llevan
+   * `?tab=`; para el catálogo y la guía sigue contando solo `ruta`. */
+  niveles?: NivelMenu[];
+}
+
+export interface NivelMenu {
+  etiqueta: string;
+  ruta: string;
+  visible?: (p: Profile) => boolean;
+  hijos?: NivelMenu[];
 }
 
 export interface SeccionMenu {
@@ -79,12 +91,67 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Recursos humanos",
     proposito: "Personal, expedientes, nómina, checador y accesos al sistema.",
     entradas: [
-      { ruta: "/checador", etiqueta: "Checador", descripcion: "entrada, comida y salida con foto y ubicación", uso: "Cada día al llegar, al salir a comer y al terminar. Funciona sin señal y sincroniza después.", visible: () => true , personal: true },
-      { ruta: "/mis-documentos", etiqueta: "Mis documentos", descripcion: "contrato, aviso de privacidad y documentos por firmar", uso: "Cuando RH te pide firmar algo o quieres consultar tu contrato.", visible: () => true , personal: true },
-      { ruta: "/bbva/asistencia", etiqueta: "Asistencia del equipo", descripcion: "marcas del checador de tu gente", uso: "Para revisar quién llegó, a qué hora y desde dónde.", visible: (p) => p.rol === "supervisor" || p.rol === "directivo" || (bbva(p) && p.rol !== "rh") , modulo: "rh" },
-      { ruta: "/rh", etiqueta: "Recursos humanos", descripcion: "personal, expedientes, contrataciones, nómina, checador y accesos", uso: "Alta de personal, documentos, contrato, y desde Accesos se crea la cuenta cuando el expediente está completo.", visible: (p) => p.rol === "rh" || p.rol === "rh_documentos" || esAdmin(p) , modulo: "rh" },
+      {
+        ruta: "/rh",
+        etiqueta: "Recursos humanos",
+        descripcion: "indicadores, personal, operación, vacantes y accesos",
+        uso: "Entra a los indicadores; de ahí el flujo de personal (contrato, expediente, alta), checador, asignaciones y accesos.",
+        visible: (p) => p.rol === "rh" || p.rol === "rh_documentos" || esAdmin(p),
+        modulo: "rh",
+        niveles: [
+          {
+            etiqueta: "Indicadores",
+            ruta: "/rh?tab=kpi_checador",
+            visible: (p) => esRhDirectivo(p),
+            hijos: [
+              { etiqueta: "Asistencias y retardos", ruta: "/rh?tab=kpi_checador" },
+              { etiqueta: "Vacantes y rotación", ruta: "/rh?tab=kpi_vacantes" },
+              { etiqueta: "Cumplimiento de actividades", ruta: "/rh?tab=kpi_actividades" },
+            ],
+          },
+          {
+            etiqueta: "Personal",
+            ruta: "/rh?tab=contrataciones",
+            hijos: [
+              { etiqueta: "1. Contrataciones", ruta: "/rh?tab=contrataciones", visible: (p) => p.rol !== "rh_documentos" },
+              { etiqueta: "2. Documentos / Expediente", ruta: "/rh?tab=documentos" },
+              { etiqueta: "3. Personal", ruta: "/rh?tab=personal", visible: (p) => p.rol !== "rh_documentos" },
+            ],
+          },
+          {
+            etiqueta: "Operación",
+            ruta: "/rh?tab=checador",
+            visible: (p) => p.rol !== "rh_documentos",
+            hijos: [
+              {
+                etiqueta: "4. Checador",
+                ruta: "/rh?tab=checador",
+                hijos: [
+                  { etiqueta: "Marcas", ruta: "/rh?tab=checador&sub=marcas" },
+                  { etiqueta: "Sitios", ruta: "/rh?tab=checador&sub=sitios" },
+                  { etiqueta: "Jornadas", ruta: "/rh?tab=checador&sub=jornadas" },
+                ],
+              },
+              { etiqueta: "5. Asignaciones diarias", ruta: "/rh?tab=asignaciones" },
+            ],
+          },
+          {
+            etiqueta: "Vacantes y actividades",
+            ruta: "/rh?tab=actividades",
+            visible: (p) => p.rol !== "rh_documentos",
+            hijos: [
+              { etiqueta: "Vacantes", ruta: "/rh?tab=vacantes", visible: (p) => esRhDirectivo(p) },
+              { etiqueta: "Actividades", ruta: "/rh?tab=actividades" },
+            ],
+          },
+          { etiqueta: "Accesos al sistema", ruta: "/rh?tab=accesos", visible: (p) => esRhDirectivo(p) },
+        ],
+      },
       { ruta: "/rh/mano-de-obra", etiqueta: "Mano de obra", descripcion: "nómina externa de las APIs de Grupo Loma", uso: "Costo de mano de obra por periodo y por obra.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
       { ruta: "/rh/agenda-pagos", etiqueta: "Agenda de pagos", descripcion: "calendario de pagos de nómina", uso: "Qué se paga cada semana y quincena.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
+      { ruta: "/bbva/asistencia", etiqueta: "Asistencia del equipo", descripcion: "marcas del checador de tu gente", uso: "Para revisar quién llegó, a qué hora y desde dónde.", visible: (p) => p.rol === "supervisor" || p.rol === "directivo" || (bbva(p) && p.rol !== "rh") , modulo: "rh" },
+      { ruta: "/checador", etiqueta: "Checador", descripcion: "entrada, comida y salida con foto y ubicación", uso: "Cada día al llegar, al salir a comer y al terminar. Funciona sin señal y sincroniza después.", visible: () => true , personal: true },
+      { ruta: "/mis-documentos", etiqueta: "Mis documentos", descripcion: "contrato, aviso de privacidad y documentos por firmar", uso: "Cuando RH te pide firmar algo o quieres consultar tu contrato.", visible: () => true , personal: true },
     ],
   },
   {
@@ -163,11 +230,16 @@ export function seccionesPara(
 ): SeccionMenu[] {
   if (!perfil || perfil.rol === "pendiente") return [];
   const acotar = !!alcance && !alcance.esMaestra;
+  const nivelesVisibles = (niveles: NivelMenu[] | undefined): NivelMenu[] | undefined =>
+    niveles
+      ?.filter((n) => !n.visible || n.visible(perfil))
+      .map((n) => ({ ...n, hijos: nivelesVisibles(n.hijos) }))
+      .filter((n) => !n.hijos || n.hijos.length > 0);
   return SECCIONES.map((s) => ({
     ...s,
-    entradas: s.entradas.filter(
-      (e) => e.visible(perfil) && (!acotar || e.personal === true || (!!e.modulo && alcance!.modulos.includes(e.modulo))),
-    ),
+    entradas: s.entradas
+      .filter((e) => e.visible(perfil) && (!acotar || e.personal === true || (!!e.modulo && alcance!.modulos.includes(e.modulo))))
+      .map((e) => (e.niveles ? { ...e, niveles: nivelesVisibles(e.niveles) } : e)),
   })).filter((s) => s.entradas.length > 0);
 }
 
