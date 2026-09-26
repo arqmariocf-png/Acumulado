@@ -2,6 +2,7 @@ import { useState, type DragEvent, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
+import { notificarTarjeta } from "../../lib/tareasNotificar";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { TarjetaPanel } from "./TarjetaPanel";
@@ -212,6 +213,7 @@ export function TableroDetalle() {
       await supabase
         .from("tarjeta_actividad")
         .insert({ tarjeta_id: tarjeta.id, tipo: "movida", detalle: { de: origen, a: destino }, actor_id: userId });
+      notificarTarjeta(tarjeta.id, "movida", destino);
     },
     onSuccess: invalidarTarjetas,
     onError: (err) => setError((err as Error).message),

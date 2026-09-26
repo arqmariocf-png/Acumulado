@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { modulosEfectivos } from "./modulos";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
@@ -93,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ])
       .then(([{ data: fila, error }, { data: permisos }]) => {
         if (!activo) return;
-        const data = fila ? { ...(fila as Omit<Profile, "modulos">), modulos: (permisos ?? []).map((m) => String(m.modulo)) } : null;
+        const data = fila ? { ...(fila as Omit<Profile, "modulos">), modulos: modulosEfectivos((fila as { rol: Profile["rol"] }).rol, (permisos ?? []).map((m) => String(m.modulo))) } : null;
         if (data) {
           setPerfil(data as Profile);
           // La organización se carga aparte y sin bloquear: sin señal (el
@@ -110,7 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           let cacheado: Profile | null = null;
           try {
             const crudo = localStorage.getItem(claveCache);
-            cacheado = crudo ? ({ ...(JSON.parse(crudo) as Partial<Profile>), modulos: (JSON.parse(crudo) as Partial<Profile>).modulos ?? [] } as Profile) : null;
+            const parcial = crudo ? (JSON.parse(crudo) as Partial<Profile>) : null;
+            cacheado = parcial ? ({ ...parcial, modulos: modulosEfectivos(parcial.rol, parcial.modulos) } as Profile) : null;
           } catch {
             cacheado = null;
           }

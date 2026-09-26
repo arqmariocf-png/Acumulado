@@ -246,13 +246,15 @@ export function Accesos() {
                           <label key={m.clave} className="flex items-center gap-1.5">
                             <input
                               type="checkbox"
-                              checked={p.modulos.includes(m.clave)}
+                              checked={!!m.incluido || p.modulos.includes(m.clave)}
+                              disabled={!!m.incluido}
                               onChange={(e) => cambiarModulo.mutate({ profileId: p.profile_id!, modulo: m.clave, activar: e.target.checked })}
                             />
                             {m.etiqueta}
+                            {m.incluido && <span className="text-slate-400">(todos)</span>}
                           </label>
                         ))}
-                        <span className="text-slate-400">Checador y Mis documentos siempre.</span>
+                        <span className="text-slate-400">Checador, Mis documentos y Tareas siempre.</span>
                       </div>
                     ) : (
                       <span className="text-slate-400">{p.profile_id ? "Rol fijo, lo administra un administrador" : "—"}</span>
