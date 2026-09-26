@@ -786,7 +786,12 @@ export interface Tarjeta {
   titulo: string;
   descripcion: string | null;
   orden_venta_id: string | null;
+  /** Responsable principal (cuenta en cumplimiento y recibe recordatorio). */
   asignado_a: string | null;
+  /** Supervisor a cargo. */
+  supervisor_id: string | null;
+  /** Otros responsables además del principal. */
+  corresponsables: string[];
   creado_por: string;
   fecha_limite: string | null;
   orden: number;

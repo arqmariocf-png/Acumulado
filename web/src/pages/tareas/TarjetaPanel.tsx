@@ -81,7 +81,12 @@ function fechaHora(iso: string): string {
 const TEXTO_ACTIVIDAD: Record<string, (detalle: any) => string> = {
   creada: () => "creó la tarjeta",
   movida: (d) => `movió la tarjeta de "${d?.de ?? "?"}" a "${d?.a ?? "?"}"`,
-  asignada: (d) => (d?.nombre ? `la asignó a ${d.nombre}` : "quitó la asignación"),
+  asignada: (d) =>
+    d?.rol === "supervisor"
+      ? d?.nombre ? `puso de supervisor a ${d.nombre}` : "quitó al supervisor"
+      : d?.rol === "corresponsables"
+        ? `cambió los corresponsables: ${d?.nombre || "ninguno"}`
+        : d?.nombre ? `la asignó a ${d.nombre}` : "quitó la asignación",
   archivada: () => "archivó la tarjeta",
   reabierta: () => "reabrió la tarjeta",
   editada: (d) => (d?.accion === "archivo_agregado" ? `adjuntó "${d.nombre_original}"` : "editó la tarjeta"),
@@ -131,15 +136,32 @@ export function TarjetaPanel({
     onError: (err) => setError((err as Error).message),
   });
 
+  // Responsable principal o supervisor a cargo: mismo flujo, distinto campo.
   const asignar = useMutation({
-    mutationFn: async (asignadoA: string) => {
+    mutationFn: async ({ campo, valor }: { campo: "asignado_a" | "supervisor_id"; valor: string }) => {
       const userId = await usuarioActualId();
-      const { error: errUpdate } = await supabase.from("tarjetas").update({ asignado_a: asignadoA || null }).eq("id", tarjetaId);
+      const { error: errUpdate } = await supabase.from("tarjetas").update({ [campo]: valor || null }).eq("id", tarjetaId);
       if (errUpdate) throw errUpdate;
       await supabase.from("tarjeta_actividad").insert({
         tarjeta_id: tarjetaId,
         tipo: "asignada",
-        detalle: asignadoA ? { nombre: nombrePorId.get(asignadoA) } : null,
+        detalle: { rol: campo === "supervisor_id" ? "supervisor" : "principal", nombre: valor ? nombrePorId.get(valor) : null },
+        actor_id: userId,
+      });
+    },
+    onSuccess: invalidarTodo,
+    onError: (err) => setError((err as Error).message),
+  });
+
+  const corresponsables = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const userId = await usuarioActualId();
+      const { error: errUpdate } = await supabase.from("tarjetas").update({ corresponsables: ids }).eq("id", tarjetaId);
+      if (errUpdate) throw errUpdate;
+      await supabase.from("tarjeta_actividad").insert({
+        tarjeta_id: tarjetaId,
+        tipo: "asignada",
+        detalle: { rol: "corresponsables", nombre: ids.map((id) => nombrePorId.get(id) ?? "?").join(", ") },
         actor_id: userId,
       });
     },
@@ -301,8 +323,8 @@ export function TarjetaPanel({
             </select>
           </div>
           <div>
-            <label className={etiquetaCampo}>Asignado a</label>
-            <select value={tarjeta.asignado_a ?? ""} onChange={(e) => asignar.mutate(e.target.value)} className={campoTexto}>
+            <label className={etiquetaCampo}>Responsable principal</label>
+            <select value={tarjeta.asignado_a ?? ""} onChange={(e) => asignar.mutate({ campo: "asignado_a", valor: e.target.value })} className={campoTexto}>
               <option value="">Sin asignar</option>
               {directorio.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -310,6 +332,45 @@ export function TarjetaPanel({
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className={etiquetaCampo}>Supervisor a cargo</label>
+            <select value={tarjeta.supervisor_id ?? ""} onChange={(e) => asignar.mutate({ campo: "supervisor_id", valor: e.target.value })} className={campoTexto}>
+              <option value="">Sin supervisor</option>
+              {directorio.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={etiquetaCampo}>Corresponsables</label>
+            <details className="rounded border border-slate-300 bg-white text-sm">
+              <summary className="cursor-pointer px-2 py-1.5 text-slate-700">
+                {(tarjeta.corresponsables ?? []).length === 0 ? "Nadie más" : (tarjeta.corresponsables ?? []).map((id) => nombrePorId.get(id) ?? "?").join(", ")}
+              </summary>
+              <div className="max-h-40 overflow-y-auto border-t border-slate-200 px-2 py-1">
+                {directorio
+                  .filter((p) => p.id !== tarjeta.asignado_a)
+                  .map((p) => {
+                    const marcado = (tarjeta.corresponsables ?? []).includes(p.id);
+                    return (
+                      <label key={p.id} className="flex items-center gap-2 py-0.5 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={marcado}
+                          onChange={(e) => {
+                            const actual = tarjeta.corresponsables ?? [];
+                            corresponsables.mutate(e.target.checked ? [...actual, p.id] : actual.filter((id) => id !== p.id));
+                          }}
+                        />
+                        {p.nombre}
+                      </label>
+                    );
+                  })}
+              </div>
+            </details>
           </div>
           <div>
             <label className={etiquetaCampo}>Fecha límite</label>

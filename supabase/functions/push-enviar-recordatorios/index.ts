@@ -24,6 +24,8 @@ interface TarjetaHoy {
   titulo: string;
   tablero_id: string;
   asignado_a: string | null;
+  supervisor_id: string | null;
+  corresponsables: string[] | null;
   creado_por: string;
 }
 
@@ -50,17 +52,21 @@ Deno.serve(async (req) => {
 
     const { data: tarjetas, error: errTarjetas } = await dbServicio
       .from("tarjetas")
-      .select("id, titulo, tablero_id, asignado_a, creado_por")
+      .select("id, titulo, tablero_id, asignado_a, supervisor_id, corresponsables, creado_por")
       .eq("archivada", false)
       .eq("fecha_limite", hoyIso);
     if (errTarjetas) throw new Error(errTarjetas.message);
 
     const porPersona = new Map<string, TarjetaHoy[]>();
     for (const t of (tarjetas ?? []) as TarjetaHoy[]) {
-      const destinatario = t.asignado_a ?? t.creado_por;
-      const lista = porPersona.get(destinatario) ?? [];
-      lista.push(t);
-      porPersona.set(destinatario, lista);
+      // Principal (o quien la creó), supervisor a cargo y corresponsables:
+      // todos reciben el aviso, una sola vez cada uno.
+      const destinatarios = new Set<string>([t.asignado_a ?? t.creado_por, ...(t.supervisor_id ? [t.supervisor_id] : []), ...(t.corresponsables ?? [])]);
+      for (const destinatario of destinatarios) {
+        const lista = porPersona.get(destinatario) ?? [];
+        lista.push(t);
+        porPersona.set(destinatario, lista);
+      }
     }
 
     let enviados = 0;
