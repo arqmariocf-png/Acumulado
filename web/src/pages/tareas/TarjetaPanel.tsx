@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
+import { notificarTarjeta } from "../../lib/tareasNotificar";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, TableroColumna, Tarjeta, TarjetaActividad, TarjetaArchivo, TarjetaComentario } from "../../types/database";
 
@@ -148,6 +149,7 @@ export function TarjetaPanel({
         detalle: { rol: campo === "supervisor_id" ? "supervisor" : "principal", nombre: valor ? nombrePorId.get(valor) : null },
         actor_id: userId,
       });
+      if (valor) notificarTarjeta(tarjetaId, campo === "supervisor_id" ? "supervisor" : "asignada");
     },
     onSuccess: invalidarTodo,
     onError: (err) => setError((err as Error).message),
@@ -164,6 +166,7 @@ export function TarjetaPanel({
         detalle: { rol: "corresponsables", nombre: ids.map((id) => nombrePorId.get(id) ?? "?").join(", ") },
         actor_id: userId,
       });
+      notificarTarjeta(tarjetaId, "corresponsables");
     },
     onSuccess: invalidarTodo,
     onError: (err) => setError((err as Error).message),
@@ -215,6 +218,7 @@ export function TarjetaPanel({
       const userId = await usuarioActualId();
       const { error: errInsert } = await supabase.from("tarjeta_comentarios").insert({ tarjeta_id: tarjetaId, autor_id: userId, texto });
       if (errInsert) throw errInsert;
+      notificarTarjeta(tarjetaId, "comentario", texto);
     },
     onSuccess: () => {
       setComentarioTexto("");
@@ -312,7 +316,11 @@ export function TarjetaPanel({
             <label className={etiquetaCampo}>Columna</label>
             <select
               value={tarjeta.columna_id}
-              onChange={(e) => actualizar.mutate({ columna_id: e.target.value })}
+              onChange={(e) => {
+                const destino = columnas.find((c) => c.id === e.target.value)?.nombre;
+                actualizar.mutate({ columna_id: e.target.value });
+                notificarTarjeta(tarjetaId, "movida", destino);
+              }}
               className={campoTexto}
             >
               {columnas.map((c) => (

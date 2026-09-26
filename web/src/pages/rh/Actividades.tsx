@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
+import { notificarTarjeta } from "../../lib/tareasNotificar";
 import { ETIQUETA_CUMPLIMIENTO, clasificar, porPersona, porSemana, type ActividadBase, type EstadoCumplimiento } from "../../lib/cumplimiento";
 import type { Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { BarrasPorcentaje, COLOR, GraficaApilada } from "./graficas";
@@ -144,6 +145,8 @@ export function Actividades() {
       if (err) throw err;
       await supabase.from("tarjeta_actividad").insert({ tarjeta_id: tarjeta.id, tipo: "creada", actor_id: userId });
       if (p.asignado_a) await supabase.from("tarjeta_actividad").insert({ tarjeta_id: tarjeta.id, tipo: "asignada", detalle: { nombre: nombrePorId.get(p.asignado_a) }, actor_id: userId });
+      if (p.asignado_a) notificarTarjeta(tarjeta.id, "asignada");
+      if (p.supervisor_id) notificarTarjeta(tarjeta.id, "supervisor");
     },
     onSuccess: invalidar,
     onError: (err) => setError((err as Error).message),
@@ -160,6 +163,7 @@ export function Actividades() {
         detalle: { de: nombreColumna.get(p.tarjeta.columna_id), a: nombreColumna.get(p.columnaId) },
         actor_id: userId,
       });
+      notificarTarjeta(p.tarjeta.id, "movida", nombreColumna.get(p.columnaId));
     },
     onSuccess: invalidar,
     onError: (err) => setError((err as Error).message),
@@ -178,6 +182,7 @@ export function Actividades() {
         const esSup = p.supervisorId !== undefined;
         const id = esSup ? p.supervisorId : p.asignadoA;
         await supabase.from("tarjeta_actividad").insert({ tarjeta_id: p.tarjetaId, tipo: "asignada", detalle: { rol: esSup ? "supervisor" : "principal", nombre: id ? nombrePorId.get(id) : null }, actor_id: userId });
+        if (id) notificarTarjeta(p.tarjetaId, esSup ? "supervisor" : "asignada");
       }
     },
     onSuccess: invalidar,

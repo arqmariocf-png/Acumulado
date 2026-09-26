@@ -149,6 +149,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   todos). Entran a Checador, Mis documentos y a los módulos de `permisos_modulo`
   (inventario, produccion, precios, requisiciones, tareas, proyectos, bbva);
   finanzas cerrado (`ProtectedRoute modulo="finanzas"`).
+- **Tareas viene de fábrica para todo rol básico** (`MODULOS_BASE` en
+  `lib/modulos.ts`, mezclado en `perfil.modulos` por `modulosEfectivos`); la
+  base ya lo permitía (`tablero_visible`: cualquier rol ≠ pendiente ve los
+  tableros de su empresa y los que no tienen empresa, como "RH · Actividades").
+- Tarjetas: `asignado_a` = responsable principal (cuenta en cumplimiento),
+  `supervisor_id` y `corresponsables uuid[]`. Avisos push de seguimiento por
+  edge `tareas-notificar` (asignada, supervisor, corresponsables, comentario,
+  movida; a todos los involucrados menos quien hizo el cambio) llamada en
+  segundo plano desde `lib/tareasNotificar.ts`; el recordatorio diario
+  (`push-enviar-recordatorios`, cron 14:00 UTC) también les llega a todos.
 - RH crea la cuenta en RH > "Accesos al sistema" cuando el expediente tiene INE,
   CURP y comprobante de domicilio (`admin-crear-usuario` con `personalId`: correo
   generado `nombre.apellido@grupoloma.mx`, link por WhatsApp al celular). RH cambia
