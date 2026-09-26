@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
-import type { Proyecto, ProyectoPlano, PuCosteo, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
+import { SemaforoPreciosUnitarios } from "./SemaforoPreciosUnitarios";
+import type { Proyecto, ProyectoPlano, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -344,16 +345,6 @@ function usePreciosCliente(empresaId: string, cliente: string) {
   });
 }
 
-function useAnalisisDelProyecto(proyectoId: string) {
-  return useQuery({
-    queryKey: ["pu-analisis-proyecto", proyectoId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_pu_analisis_costeo").select("*").eq("proyecto_id", proyectoId).order("codigo");
-      if (error) throw error;
-      return data as PuCosteo[];
-    },
-  });
-}
 
 function PestanaCotizacion({
   proyecto,
@@ -368,7 +359,6 @@ function PestanaCotizacion({
   const queryClient = useQueryClient();
   const [cliente, setCliente] = useState(proyecto.cliente ?? "");
   const { data: precios } = usePreciosCliente(proyecto.empresa_id, proyecto.cliente ?? "");
-  const { data: analisis } = useAnalisisDelProyecto(proyecto.id);
   const [error, setError] = useState<string | null>(null);
 
   const puedeEscribirPu = perfil?.rol && ["corporativo", "empresa", "admin", "direccion"].includes(perfil.rol);
@@ -498,43 +488,7 @@ function PestanaCotizacion({
         <p className="mb-6 text-sm text-slate-500">Define el cliente de este proyecto para ver/capturar su catálogo de precios.</p>
       )}
 
-      <h3 className="mb-2 text-sm font-semibold text-slate-700">Análisis de Precios Unitarios de este proyecto</h3>
-      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-3 py-2">Código</th>
-              <th className="px-3 py-2">Concepto</th>
-              <th className="px-3 py-2">Estado</th>
-              <th className="px-3 py-2 text-right">Precio</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analisis?.map((a) => (
-              <tr key={a.analisis_id} className="border-t border-slate-100">
-                <td className="px-3 py-2">
-                  <Link to={`/precios/${a.analisis_id}`} className="text-slate-700 hover:underline">
-                    {a.codigo}
-                  </Link>
-                </td>
-                <td className="px-3 py-2">{a.concepto}</td>
-                <td className="px-3 py-2 text-slate-500">{a.estado}</td>
-                <td className="px-3 py-2 text-right">${a.precio_unitario.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</td>
-              </tr>
-            ))}
-            {analisis?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-8 text-center text-slate-400">
-                  Sin análisis de precio unitario todavía.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <Link to={`/precios?proyecto=${proyecto.id}`} className="mt-3 inline-block text-sm text-slate-700 hover:underline">
-        + Nuevo análisis de precio unitario para este proyecto
-      </Link>
+      <SemaforoPreciosUnitarios proyecto={proyecto} />
     </div>
   );
 }
@@ -584,6 +538,7 @@ function PestanaAvance({ proyecto }: { proyecto: Proyecto }) {
     <div>
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
+      <SemaforoPreciosUnitarios proyecto={proyecto} compacto />
       {tableros?.map((t) => (
         <ResumenTablero key={t.id} tablero={t} />
       ))}

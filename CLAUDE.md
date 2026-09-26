@@ -50,6 +50,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
 - Costeo de precios unitarios: funciones `fn_pu_*` son SECURITY DEFINER con guarda
   de rol (evitaban timeout por RLS recursivo). `pu_analisis_items.descripcion_manual`
   = descripción propia por renglón sin tocar el catálogo compartido.
+- **Precios unitarios en Proyectos (26-sep-2026)**: semáforo por análisis
+  (`lib/puSemaforo.ts`, con pruebas) en la lista de proyectos, en Cotización y
+  arriba de los tableros de Avance (`proyectos/SemaforoPreciosUnitarios.tsx`).
+  Seis pasos: los cinco del circuito interno (borrador → almacén → dirección
+  → publicado) y la autorización del cliente, que es posterior a publicado y
+  se registra con `fn_pu_autorizar_cliente(id, bool, referencia)`
+  (`pu_analisis.cliente_autorizado_en/_por/cliente_referencia`; roles:
+  admin, direccion, corporativo, empresa o responsable/comprador del
+  proyecto). Rojo = elaboración/almacén, ámbar = dirección/publicación,
+  azul = espera al cliente, verde = autorizado por el cliente.
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
   abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
   (móvil). QR con `qrcode` (import dinámico).
