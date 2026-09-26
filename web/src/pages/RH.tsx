@@ -358,8 +358,8 @@ function PestanaPersonal() {
               <label className={etiquetaCampo}>Sexo</label>
               <select name="sexo" className={campoTexto} defaultValue="">
                 <option value="">—</option>
-                <option value="M">M</option>
-                <option value="F">F</option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
               </select>
             </div>
             <div>

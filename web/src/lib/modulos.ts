@@ -41,3 +41,13 @@ export function esRhDirectivo(p: { rol: string; rh_nivel?: string | null } | nul
   return p.rol === "rh" && (p.rh_nivel ?? "directivo") === "directivo";
 }
 export const ETIQUETA_NIVEL_RH: Record<"administrativo" | "directivo", string> = { administrativo: "RH administrativo", directivo: "RH directivo" };
+
+/** El sexo se guarda como "M"/"F"; en pantalla va la palabra completa. Con
+ * una sola letra el traductor del navegador convertía "M" en "metro". */
+export function etiquetaSexo(v: string | null | undefined): string {
+  if (!v) return "—";
+  const t = String(v).trim().toUpperCase();
+  if (t === "M" || t === "H" || t.startsWith("MASC") || t.startsWith("HOM")) return "Masculino";
+  if (t === "F" || t.startsWith("FEM") || t.startsWith("MUJ")) return "Femenino";
+  return String(v);
+}
