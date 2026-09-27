@@ -34,11 +34,26 @@ export function ProyectoDetalle() {
   // Resumen físico-financiero: pestaña principal del rol empresa hacia
   // arriba (Mario, 26-sep-2026); los supervisores y responsables no la ven.
   const veResumen = !!perfil && ["admin", "corporativo", "direccion", "empresa"].includes(perfil.rol);
+  const queryClient = useQueryClient();
+  const [errorActivo, setErrorActivo] = useState<string | null>(null);
+  const cambiarActivo = useMutation({
+    mutationFn: async (activo: boolean) => {
+      const { error } = await supabase.from("proyectos").update({ activo }).eq("id", id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setErrorActivo(null);
+      queryClient.invalidateQueries({ queryKey: ["proyecto-detalle", id] });
+      queryClient.invalidateQueries({ queryKey: ["proyectos-ventana"] });
+    },
+    onError: (err) => setErrorActivo((err as Error).message),
+  });
   const [tab, setTab] = useState<Tab | null>(null);
   const [prellenado, setPrellenado] = useState<{ concepto: string; unidad: string } | null>(null);
 
   if (!proyecto) return <p className="text-sm text-slate-500">Cargando…</p>;
   const tabActual: Tab = tab ?? (veResumen ? "resumen" : "planos");
+  const puedeDesactivar = !!perfil && (perfil.rol === "admin" || perfil.rol === "corporativo" || (perfil.rol === "empresa" && perfil.empresa_id === proyecto.empresa_id));
 
   const TABS: { clave: Tab; etiqueta: string }[] = [
     ...(veResumen ? [{ clave: "resumen" as Tab, etiqueta: "Resumen físico-financiero" }] : []),
@@ -54,11 +69,29 @@ export function ProyectoDetalle() {
       <Link to="/proyectos" className="text-xs text-slate-500 hover:underline">
         ← Todos los proyectos
       </Link>
-      <div className="mt-1 mb-4">
-        <h1 className="text-xl font-semibold text-slate-900">{proyecto.nombre}</h1>
-        <p className="text-xs text-slate-500">
-          {proyecto.empresas?.nombre} {proyecto.cliente && `· Cliente: ${proyecto.cliente}`}
-        </p>
+      <div className="mt-1 mb-4 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {proyecto.nombre}
+            {!proyecto.activo && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-normal uppercase text-slate-500">desactivado</span>}
+          </h1>
+          <p className="text-xs text-slate-500">
+            {proyecto.empresas?.nombre} {proyecto.cliente && `· Cliente: ${proyecto.cliente}`}
+          </p>
+          {errorActivo && <p className="mt-1 text-xs text-red-600">{errorActivo}</p>}
+        </div>
+        {puedeDesactivar && (
+          <button
+            onClick={() => {
+              if (proyecto.activo && !window.confirm(`¿Desactivar "${proyecto.nombre}"? Deja de aparecer en las listas y selectores; se puede reactivar después.`)) return;
+              cambiarActivo.mutate(!proyecto.activo);
+            }}
+            disabled={cambiarActivo.isPending}
+            className={`rounded border px-3 py-1.5 text-xs ${proyecto.activo ? "border-slate-300 text-slate-600 hover:bg-slate-50" : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"} disabled:opacity-50`}
+          >
+            {proyecto.activo ? "Desactivar proyecto" : "Reactivar proyecto"}
+          </button>
+        )}
       </div>
 
       <div className="mb-4 flex gap-2 border-b border-slate-200">
