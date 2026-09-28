@@ -120,12 +120,13 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
 
       {q.data && (
         <>
-          <div className={`mb-4 grid gap-2 ${compacto ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-5"}`}>
+          <div className={`mb-4 grid gap-2 ${compacto ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-3 sm:grid-cols-6"}`}>
             <Indicador etiqueta="Cumplimiento" valor={pct === null ? "—" : `${pct}%`} tono={pct === null ? "" : pct >= 90 ? "text-emerald-700" : pct >= 75 ? "text-amber-700" : "text-red-700"} />
             <Indicador etiqueta="Pendientes" valor={String(resumen.pendientes)} />
             <Indicador etiqueta="Vencidas" valor={String(resumen.vencidas)} tono={resumen.vencidas > 0 ? "text-red-700" : "text-emerald-700"} />
             <Indicador etiqueta="Hechas" valor={String(resumen.hechas)} />
             <Indicador etiqueta="A tiempo" valor={resumen.hechas === 0 ? "—" : `${Math.round((100 * resumen.aTiempo) / resumen.hechas)}%`} />
+            <Indicador etiqueta="Fechas movidas" valor={String(propias.reduce((s, f) => s + (f.tarjeta.fecha_cambios ?? 0), 0))} tono={propias.some((f) => (f.tarjeta.fecha_cambios ?? 0) > 0) ? "text-amber-700" : ""} />
           </div>
 
           {grupos.length === 0 && <p className="text-sm text-slate-400">No tienes actividades pendientes.</p>}

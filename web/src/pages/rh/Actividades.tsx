@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
+import { cambiarFechaOSolicitar } from "../../lib/fechaCompromiso";
 import { ETIQUETA_CUMPLIMIENTO, clasificar, porPersona, porSemana, type ActividadBase, type EstadoCumplimiento } from "../../lib/cumplimiento";
 import type { Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { BarrasPorcentaje, COLOR, GraficaApilada } from "./graficas";
@@ -189,6 +190,17 @@ export function Actividades() {
     onError: (err) => setError((err as Error).message),
   });
 
+  // Fecha compromiso: la primera se pone libre; después la base exige
+  // autorización del jefe (si no lo eres, pide el motivo y crea la solicitud).
+  const cambiarFecha = useMutation({
+    mutationFn: async (p: { tarjetaId: string; fecha: string | null }) => cambiarFechaOSolicitar(p.tarjetaId, p.fecha),
+    onSuccess: (r) => {
+      if (r === "solicitada") window.alert("Solicitud enviada: la fecha cambia cuando el jefe inmediato la autorice desde la tarjeta.");
+      invalidar();
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
   function onCrear(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -365,7 +377,12 @@ export function Actividades() {
                     </select>
                   </td>
                   <td className="px-3 py-2">
-                    <input type="date" value={a.fecha_limite ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, fechaLimite: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs" />
+                    <input type="date" value={a.fecha_limite ?? ""} onChange={(e) => cambiarFecha.mutate({ tarjetaId: a.id, fecha: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs" />
+                    {(a.tarjeta.fecha_cambios ?? 0) > 0 && (
+                      <span className="ml-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700" title="Veces que se movió la fecha compromiso">
+                        movida {a.tarjeta.fecha_cambios}×
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <select value={a.tarjeta.columna_id} onChange={(e) => mover.mutate({ tarjeta: a.tarjeta, columnaId: e.target.value })} className="rounded border border-slate-300 px-1 py-0.5 text-xs">

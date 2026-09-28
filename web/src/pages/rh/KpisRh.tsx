@@ -235,10 +235,10 @@ export function KpiVacantes() {
 // ── 8. Cumplimiento de actividades ────────────────────────────────────────
 
 interface KpiActividadesDatos {
-  resumen: { total: number; hechas: number; a_tiempo: number; vencidas: number; pendientes: number; pct_cumplimiento?: number | null; pct_a_tiempo?: number | null };
+  resumen: { total: number; hechas: number; a_tiempo: number; vencidas: number; pendientes: number; cambios_fecha?: number; con_fecha_movida?: number; pct_cumplimiento?: number | null; pct_a_tiempo?: number | null };
   por_semana: { semana: string; total: number; hechas: number; a_tiempo: number; vencidas: number }[];
   por_persona: { nombre: string; total: number; hechas: number; a_tiempo: number; vencidas: number }[];
-  abiertas?: { id: string; tablero_id: string; titulo: string; fecha_limite: string | null; responsable: string | null; supervisor: string | null; columna: string | null; estado: "vencida" | "pendiente" | "sin_fecha" }[];
+  abiertas?: { id: string; tablero_id: string; titulo: string; fecha_limite: string | null; cambios_fecha?: number; responsable: string | null; supervisor: string | null; columna: string | null; estado: "vencida" | "pendiente" | "sin_fecha" }[];
 }
 
 const ETIQUETA_ABIERTA = { vencida: "Vencida", pendiente: "Pendiente", sin_fecha: "Sin fecha" } as const;
@@ -263,11 +263,12 @@ export function KpiActividades() {
       <Estado cargando={q.isPending} error={q.error} />
       {d && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Tarjeta etiqueta="Cumplimiento" valor={pct === null ? "—" : `${pct}%`} detalle={`${d.resumen.hechas} de ${d.resumen.total} actividades hechas`} tono={tonoPct(pct)} />
             <Tarjeta etiqueta="A tiempo" valor={pctTiempo === null ? "—" : `${pctTiempo}%`} detalle={`${d.resumen.a_tiempo} hechas antes de su límite`} tono={tonoPct(pctTiempo)} />
             <Tarjeta etiqueta="Vencidas" valor={String(d.resumen.vencidas)} detalle="sin cerrar y con fecha pasada" tono={d.resumen.vencidas === 0 ? "bueno" : d.resumen.vencidas <= 2 ? "advertencia" : "critico"} />
             <Tarjeta etiqueta="Pendientes" valor={String(d.resumen.pendientes)} detalle="en curso, dentro de plazo" />
+            <Tarjeta etiqueta="Fechas movidas" valor={String(d.resumen.cambios_fecha ?? 0)} detalle={`${d.resumen.con_fecha_movida ?? 0} actividad(es) con fecha compromiso cambiada`} tono={(d.resumen.cambios_fecha ?? 0) === 0 ? "bueno" : (d.resumen.cambios_fecha ?? 0) <= 3 ? "advertencia" : "critico"} />
           </div>
           <GraficaApilada
             titulo="Actividades por semana (por fecha límite)"
@@ -309,6 +310,7 @@ export function KpiActividades() {
                       <div className="flex items-center gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-[11px] ${TONO_ABIERTA[a.estado]}`}>{ETIQUETA_ABIERTA[a.estado]}</span>
                         {a.fecha_limite && <span className="text-xs tabular-nums text-slate-600">{etiquetaDia(a.fecha_limite)}</span>}
+                        {(a.cambios_fecha ?? 0) > 0 && <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">movida {a.cambios_fecha}×</span>}
                         <span className="text-xs text-slate-400">abrir →</span>
                       </div>
                     </Link>

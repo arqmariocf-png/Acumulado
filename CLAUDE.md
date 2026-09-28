@@ -207,6 +207,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   movida; a todos los involucrados menos quien hizo el cambio) llamada en
   segundo plano desde `lib/tareasNotificar.ts`; el recordatorio diario
   (`push-enviar-recordatorios`, cron 14:00 UTC) también les llega a todos.
+- **Fecha compromiso con autorización (28-sep-2026)**: la primera fecha de
+  una tarjeta se pone libre; después, el trigger `tarjetas_fecha_guard`
+  solo deja cambiarla directo al jefe inmediato (`auth_es_jefe_de_tarjeta`:
+  supervisor de la tarjeta, jefe RH de la persona asignada, responsable del
+  proyecto, rol empresa de esa empresa, admin/corporativo/direccion) y la
+  registra; los demás solicitan con motivo (`fn_tarjeta_fecha_solicitar`) y
+  el jefe resuelve (`fn_tarjeta_fecha_resolver`, no la propia). Tabla
+  `tarjeta_cambios_fecha`; contador `tarjetas.fecha_cambios` (KPI de RH,
+  Mis actividades, tarjeta del tablero). Frontend: `lib/fechaCompromiso.ts`
+  (`cambiarFechaOSolicitar`) y `tareas/FechaCompromiso.tsx`.
 - **Mis actividades** (`pages/tareas/MisActividades.tsx`): panel personal en
   `/tareas` y en el inicio del rol básico; lista lo que la persona tiene como
   responsable, supervisor o corresponsable, con su cumplimiento. El tablero
