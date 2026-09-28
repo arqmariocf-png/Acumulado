@@ -8,13 +8,14 @@ import { administraProyectosDe } from "../../lib/modulos";
 import { SemaforoPreciosUnitarios } from "./SemaforoPreciosUnitarios";
 import { SemaforoRequisiciones } from "./SemaforoRequisiciones";
 import { ResumenObra } from "./ResumenObra";
+import { SupervisionIA } from "./SupervisionIA";
 import type { Proyecto, ProyectoPlano, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
 
-type Tab = "resumen" | "planos" | "catalogo" | "precios" | "avance" | "control";
+type Tab = "resumen" | "planos" | "catalogo" | "precios" | "avance" | "control" | "supervision";
 
 function useProyecto(id: string) {
   return useQuery({
@@ -62,6 +63,7 @@ export function ProyectoDetalle() {
     { clave: "precios", etiqueta: "Precios unitarios" },
     { clave: "avance", etiqueta: "Avance" },
     { clave: "control", etiqueta: "Control de obra" },
+    { clave: "supervision", etiqueta: "Supervisión IA" },
   ];
 
   return (
@@ -120,6 +122,7 @@ export function ProyectoDetalle() {
       {tabActual === "precios" && <SemaforoPreciosUnitarios proyecto={proyecto} />}
       {tabActual === "avance" && <PestanaAvance proyecto={proyecto} />}
       {tabActual === "control" && <PestanaControlObra proyecto={proyecto} />}
+      {tabActual === "supervision" && <SupervisionIA proyecto={proyecto} />}
     </div>
   );
 }
