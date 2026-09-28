@@ -80,6 +80,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   empresa/almacén; recibida empresa/almacén/responsable o quien la pidió;
   admin/corporativo todo; regresar solo admin/corporativo/dirección). Reglas
   replicadas en `lib/requisicionEtapa.ts` (con pruebas) para los botones.
+- **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
+  IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
+  acciones → tarjetas del tablero de avance), resumen de hilo/documento,
+  comparativa de cotizaciones y reporte de avance para el cliente (este
+  último toma tareas, requerimientos, PU y control de obra del proyecto).
+  Edge `proyecto-supervision-ia` (SDK Anthropic, `claude-opus-5`, effort
+  medium, system prompt cacheado, sin fallbacks); guarda cada corrida en
+  `proyecto_bitacora_ia` con el cliente del usuario (RLS). Requiere
+  `ANTHROPIC_API_KEY` válida en secrets; si no, devuelve error claro.
 - **Organigrama de accesos por rol**: Admin → "Accesos por rol"
   (`pages/admin/Roles.tsx`, `lib/accesosRoles.ts`): "ve" se calcula del
   catálogo del menú con un perfil de muestra; "edita" es el mapa EDITA a
