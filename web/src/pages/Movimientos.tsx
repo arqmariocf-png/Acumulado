@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
@@ -37,7 +38,11 @@ export function Movimientos() {
   const { data: empresas } = useEmpresas();
   const queryClient = useQueryClient();
 
-  const [empresaId, setEmpresaId] = useState<string>("");
+  // Desde Saldos por empresa se llega con ?empresa=&cuenta= (Laura arranca en
+  // saldos y da clic para ver los últimos movimientos de esa cuenta).
+  const [params, setParams] = useSearchParams();
+  const [empresaId, setEmpresaId] = useState<string>(params.get("empresa") ?? "");
+  const cuentaId = params.get("cuenta") ?? "";
   const [estado, setEstado] = useState<EstadoClasificacion | "todos">("todos");
   const [soloDuplicados, setSoloDuplicados] = useState(false);
   const [cuentaReclasificando, setCuentaReclasificando] = useState<string | null>(null);
@@ -50,10 +55,10 @@ export function Movimientos() {
   // solo trae 2 páginas) -- siempre se regresa a la primera.
   useEffect(() => {
     setPagina(0);
-  }, [empresaFiltro, estado, soloDuplicados]);
+  }, [empresaFiltro, cuentaId, estado, soloDuplicados]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["movimientos", empresaFiltro, estado, soloDuplicados, pagina],
+    queryKey: ["movimientos", empresaFiltro, cuentaId, estado, soloDuplicados, pagina],
     queryFn: async () => {
       const desde = pagina * TAMANO_PAGINA;
       const hasta = desde + TAMANO_PAGINA - 1;
@@ -63,11 +68,22 @@ export function Movimientos() {
         .order("fecha_pago", { ascending: false })
         .range(desde, hasta);
       if (empresaFiltro) query = query.eq("empresa_id", empresaFiltro);
+      if (cuentaId) query = query.eq("cuenta_id", cuentaId);
       if (estado !== "todos") query = query.eq("estado_clasificacion", estado);
       if (soloDuplicados) query = query.eq("posible_duplicado", true);
       const { data, error, count } = await query;
       if (error) throw error;
       return { movimientos: data as Movimiento[], total: count ?? 0 };
+    },
+  });
+
+  const { data: cuenta } = useQuery({
+    queryKey: ["cuenta-bancaria", cuentaId],
+    enabled: !!cuentaId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("cuentas_bancarias").select("id, banco, ultimos_4, alias").eq("id", cuentaId).maybeSingle();
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -130,6 +146,25 @@ export function Movimientos() {
           <input type="checkbox" checked={soloDuplicados} onChange={(e) => setSoloDuplicados(e.target.checked)} />
           Solo posibles duplicados
         </label>
+        {cuentaId && (
+          <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-800">
+            Cuenta: {cuenta ? `${cuenta.banco} ${cuenta.ultimos_4}${cuenta.alias ? ` · ${cuenta.alias}` : ""}` : "…"}
+            <button
+              type="button"
+              onClick={() => {
+                params.delete("cuenta");
+                setParams(params, { replace: true });
+              }}
+              className="font-semibold hover:text-sky-950"
+              title="Quitar el filtro de cuenta"
+            >
+              ×
+            </button>
+          </span>
+        )}
+        <Link to="/finanzas/saldos" className="text-xs text-slate-500 underline">
+          Saldos por empresa
+        </Link>
       </div>
 
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
