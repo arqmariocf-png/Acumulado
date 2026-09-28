@@ -297,10 +297,23 @@ export function Checador() {
   const inputFoto = useRef<HTMLInputElement>(null);
   const [foto, setFoto] = useState<File | null>(null);
   const [vistaPrevia, setVistaPrevia] = useState<string | null>(null);
+  // Sin foto el botón de entrada/salida se veía apagado y "no hacía nada"
+  // (Christian, 28-sep-2026): ahora avisa y abre la cámara directo.
+  const [avisoFoto, setAvisoFoto] = useState<string | null>(null);
+  function marcarConFoto(tipo: "entrada" | "salida") {
+    if (!foto) {
+      setAvisoFoto("Primero toma tu foto (paso 1). Se abre la cámara…");
+      inputFoto.current?.click();
+      return;
+    }
+    setAvisoFoto(null);
+    marcar.mutate(tipo);
+  }
   const [paso, setPaso] = useState<string | null>(null);
 
   function onFotoElegida(archivo: File | null) {
     setFoto(archivo);
+    if (archivo) setAvisoFoto(null);
     setVistaPrevia((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return archivo ? URL.createObjectURL(archivo) : null;
@@ -434,7 +447,7 @@ export function Checador() {
         </div>
         <div className="flex flex-wrap justify-center gap-2">
           {estado === "fuera" && (
-            <button onClick={() => marcar.mutate("entrada")} disabled={marcar.isPending || !foto} className="rounded bg-emerald-700 px-6 py-3 text-lg font-semibold text-white disabled:opacity-50">
+            <button onClick={() => marcarConFoto("entrada")} disabled={marcar.isPending} className={`rounded px-6 py-3 text-lg font-semibold text-white disabled:opacity-50 ${foto ? "bg-emerald-700" : "bg-emerald-700/60"}`}>
               {marcar.isPending ? (paso ?? "Marcando…") : "2. Marcar entrada"}
             </button>
           )}
@@ -443,7 +456,7 @@ export function Checador() {
               <button onClick={() => marcar.mutate("comida_inicio")} disabled={marcar.isPending} className="rounded bg-amber-500 px-5 py-3 text-base font-semibold text-white disabled:opacity-50">
                 {marcar.isPending ? (paso ?? "Marcando…") : "Salir a comer"}
               </button>
-              <button onClick={() => marcar.mutate("salida")} disabled={marcar.isPending || !foto} className="rounded bg-slate-900 px-6 py-3 text-lg font-semibold text-white disabled:opacity-50">
+              <button onClick={() => marcarConFoto("salida")} disabled={marcar.isPending} className={`rounded px-6 py-3 text-lg font-semibold text-white disabled:opacity-50 ${foto ? "bg-slate-900" : "bg-slate-900/60"}`}>
                 {marcar.isPending ? (paso ?? "Marcando…") : "2. Marcar salida"}
               </button>
             </>
@@ -454,6 +467,10 @@ export function Checador() {
             </button>
           )}
         </div>
+        {avisoFoto && <p className="mt-2 text-sm font-medium text-amber-700">{avisoFoto}</p>}
+        {!foto && (estado === "fuera" || estado === "dentro") && !avisoFoto && (
+          <p className="mt-2 text-xs text-amber-700">Para marcar {estado === "fuera" ? "entrada" : "salida"} primero toma tu foto (paso 1).</p>
+        )}
         <p className="mt-2 text-xs text-slate-400">
           Entrada y salida guardan tu foto y tu ubicación; la comida solo la ubicación. La pausa de comida no cuenta como horas trabajadas.
         </p>
