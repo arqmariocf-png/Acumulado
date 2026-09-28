@@ -178,7 +178,9 @@ function Enrutador() {
           </Route>
           </Route>
 
-          <Route element={<ProtectedRoute modulo="requisiciones" />}>
+          {/* Con módulo 'proyectos' también entran (Jonathan): quien opera
+              los proyectos de su empresa crea sus requerimientos. */}
+          <Route element={<ProtectedRoute modulo="requisiciones" oPermiso={(p) => (p.modulos ?? []).includes("proyectos")} />}>
           <Route path="/requisiciones" element={<RequisicionesLayout />}>
             <Route index element={<MisRequisiciones />} />
             <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>

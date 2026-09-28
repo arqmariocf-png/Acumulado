@@ -25,7 +25,7 @@ function useLineasPendientes(empresaId: string) {
     queryFn: async () => {
       let query = supabase
         .from("requisicion_lineas")
-        .select("id, requisicion_id, cantidad_solicitada, unidad_medida, productos(id, nombre, sku), requisiciones(folio, fecha, empresa_id, proyectos(nombre))")
+        .select("id, requisicion_id, cantidad_solicitada, unidad_medida, descripcion, productos(id, nombre, sku), requisiciones(folio, fecha, empresa_id, proyectos(nombre))")
         .order("created_at", { ascending: true })
         .limit(300);
       const { data, error } = await query;
@@ -167,7 +167,7 @@ export function Resolucion() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium text-slate-800">
-                      {l.productos?.nombre} <span className="text-xs text-slate-400">({l.productos?.sku})</span>
+                      {l.productos?.nombre ?? l.descripcion} <span className="text-xs text-slate-400">({l.productos?.sku ?? "texto libre"})</span>
                     </p>
                     <p className="text-xs text-slate-500">
                       Requisición #{l.requisiciones?.folio} · {l.requisiciones?.proyectos?.nombre} · {l.requisiciones?.fecha}

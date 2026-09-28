@@ -39,7 +39,9 @@ export function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
-  if (modulo && esRolBasico(perfil.rol) && !(perfil.modulos ?? []).includes(modulo)) {
+  // `oPermiso` también abre la puerta a un rol básico sin el módulo (ej.
+  // requisiciones con módulo 'proyectos').
+  if (modulo && esRolBasico(perfil.rol) && !(perfil.modulos ?? []).includes(modulo) && !(oPermiso && oPermiso(perfil))) {
     return <Navigate to="/" replace />;
   }
 
