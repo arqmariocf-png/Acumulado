@@ -61,12 +61,20 @@ export function normalizarTexto(t: string): string {
 /** Filtra por texto (proveedor o clave) y por empresa (uuid dentro de
  * `empresas`), y ordena. "disponible" pone primero lo más apretado (los sin
  * línea al final). */
-export function filtrarYOrdenar(filas: FilaCxp[], texto: string, empresaId: string, orden: OrdenCxp, soloConSaldo: boolean): FilaCxp[] {
+export type FiltroLinea = "con_linea" | "sin_linea" | "todos";
+
+export function tieneLinea(f: Pick<FilaCxp, "linea_credito">): boolean {
+  return f.linea_credito != null && Number(f.linea_credito) > 0;
+}
+
+export function filtrarYOrdenar(filas: FilaCxp[], texto: string, empresaId: string, orden: OrdenCxp, soloConSaldo: boolean, linea: FiltroLinea = "todos"): FilaCxp[] {
   const q = normalizarTexto(texto);
   const res = filas.filter((f) => {
     if (q && !normalizarTexto(`${f.proveedor} ${f.clave}`).includes(q)) return false;
     if (empresaId && !(f.empresas ?? []).includes(empresaId)) return false;
     if (soloConSaldo && !(Number(f.por_pagar) > 0 || Number(f.sin_facturar) > 0)) return false;
+    if (linea === "con_linea" && !tieneLinea(f)) return false;
+    if (linea === "sin_linea" && tieneLinea(f)) return false;
     return true;
   });
   const n = (v: number | null | undefined) => Number(v ?? 0);
@@ -118,4 +126,37 @@ export function estadoVencimiento(vencimiento: string | null, hoy: string): { es
   if (dias < 0) return { estado: "vencida", dias };
   if (dias <= 30) return { estado: "por_vencer", dias };
   return { estado: "vigente", dias };
+}
+
+/** CSV (separado por comas, con BOM para Excel) de la lista filtrada, para
+ * pasarla a otra área: p. ej. los proveedores sin línea de crédito. */
+export function csvCxp(filas: FilaCxp[], nombreEmpresa: (id: string) => string): string {
+  const esc = (v: string | number | null | undefined) => {
+    const t = v == null ? "" : String(v);
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const enc = ["Proveedor", "Empresas", "OC", "Comprometido", "Facturas", "Facturado", "Pagado detectado", "Por pagar", "Sin facturar", "Línea de crédito", "Días", "Vence", "Disponible", "Última OC", "Última factura", "Notas"];
+  const lineas = filas.map((f) =>
+    [
+      f.proveedor,
+      (f.empresas ?? []).map(nombreEmpresa).join(" / "),
+      f.n_oc,
+      Number(f.comprometido).toFixed(2),
+      f.n_facturas,
+      Number(f.facturado).toFixed(2),
+      Number(f.pagado).toFixed(2),
+      Number(f.por_pagar).toFixed(2),
+      Number(f.sin_facturar).toFixed(2),
+      f.linea_credito != null ? Number(f.linea_credito).toFixed(2) : "",
+      f.dias_credito ?? "",
+      f.vencimiento ?? "",
+      f.disponible != null ? Number(f.disponible).toFixed(2) : "",
+      f.ultima_oc ? f.ultima_oc.slice(0, 10) : "",
+      f.ultima_factura ? f.ultima_factura.slice(0, 10) : "",
+      f.notas ?? "",
+    ]
+      .map(esc)
+      .join(","),
+  );
+  return "\ufeff" + [enc.join(","), ...lineas].join("\r\n");
 }
