@@ -14,6 +14,7 @@ export interface FilaCxp {
   linea_credito: number | null;
   dias_credito: number | null;
   notas: string | null;
+  vencimiento: string | null;
   disponible: number | null;
   ultima_oc: string | null;
   ultima_factura: string | null;
@@ -103,4 +104,18 @@ export function totalesCxp(filas: FilaCxp[]): { comprometido: number; facturado:
     },
     { comprometido: 0, facturado: 0, pagado: 0, por_pagar: 0, sin_facturar: 0, con_linea: 0, rojos: 0 },
   );
+}
+
+export type EstadoVencimiento = "sin_fecha" | "vigente" | "por_vencer" | "vencida";
+
+/** Vencimiento de la línea: vencida si ya pasó, por vencer con 30 días o
+ * menos, vigente el resto. `hoy` en ISO (yyyy-mm-dd) para poder probar. */
+export function estadoVencimiento(vencimiento: string | null, hoy: string): { estado: EstadoVencimiento; dias: number | null } {
+  if (!vencimiento) return { estado: "sin_fecha", dias: null };
+  const a = Date.UTC(Number(vencimiento.slice(0, 4)), Number(vencimiento.slice(5, 7)) - 1, Number(vencimiento.slice(8, 10)));
+  const b = Date.UTC(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)) - 1, Number(hoy.slice(8, 10)));
+  const dias = Math.round((a - b) / 86_400_000);
+  if (dias < 0) return { estado: "vencida", dias };
+  if (dias <= 30) return { estado: "por_vencer", dias };
+  return { estado: "vigente", dias };
 }

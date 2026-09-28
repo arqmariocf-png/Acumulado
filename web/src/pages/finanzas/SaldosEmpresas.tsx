@@ -51,6 +51,7 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
           <Link to="/finanzas/proveedores" className="rounded-full border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-100">3 · OC y cuentas por pagar</Link>
           <span>→</span>
           <Link to="/finanzas/pagos" className="rounded-full border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-100">4 · Programar pagos</Link>
+          <Link to="/finanzas/lineas-credito" className="rounded-full border border-dashed border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-100">Líneas de crédito</Link>
           <Link to="/inicio" className="ml-auto underline">Ver todo el inicio</Link>
         </nav>
       )}

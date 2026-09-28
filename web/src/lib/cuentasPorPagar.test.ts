@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filtrarYOrdenar, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
+import { estadoVencimiento, filtrarYOrdenar, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
 
 function fila(p: Partial<FilaCxp>): FilaCxp {
   return {
     clave: "X", proveedor: "X", n_oc: 0, comprometido: 0, n_facturas: 0, facturado: 0, pagado: 0, por_pagar: 0, sin_facturar: 0,
-    linea_credito: null, dias_credito: null, notas: null, disponible: null, ultima_oc: null, ultima_factura: null, ultimo_pago: null, empresas: [],
+    linea_credito: null, dias_credito: null, notas: null, vencimiento: null, disponible: null, ultima_oc: null, ultima_factura: null, ultimo_pago: null, empresas: [],
     ...p,
   };
 }
@@ -58,4 +58,13 @@ test("totales suman y cuentan rojos y líneas capturadas", () => {
   assert.equal(t.por_pagar, 50);
   assert.equal(t.con_linea, 1);
   assert.equal(t.rojos, 1);
+});
+
+test("vencimiento de la línea: vencida, por vencer a 30 días, vigente", () => {
+  assert.equal(estadoVencimiento(null, "2026-09-28").estado, "sin_fecha");
+  assert.equal(estadoVencimiento("2026-09-27", "2026-09-28").estado, "vencida");
+  assert.equal(estadoVencimiento("2026-09-28", "2026-09-28").estado, "por_vencer");
+  assert.equal(estadoVencimiento("2026-10-28", "2026-09-28").estado, "por_vencer");
+  assert.equal(estadoVencimiento("2026-10-29", "2026-09-28").estado, "vigente");
+  assert.equal(estadoVencimiento("2026-10-29", "2026-09-28").dias, 31);
 });
