@@ -42,6 +42,11 @@ export function GraficaApilada({ barras, titulo, alto = 180, onClickBarra, barra
   const anchoBarra = Math.min(36, paso * 0.6);
   const escala = (v: number) => (v / maximo) * altoPlot;
   const ticks = [0, Math.ceil(maximo / 2), maximo];
+  // Con muchas barras (60 días) las etiquetas del eje se encimaban: se
+  // muestran como máximo ~10 repartidas, la última y la barra activa.
+  const cadaN = Math.max(1, Math.ceil(barras.length / 10));
+  const ultima = barras.length - 1;
+  const mostrarEtiqueta = (i: number) => i === barraActiva || (i % cadaN === 0 && (ultima - i >= cadaN / 2 || i === ultima)) || (i === ultima && ultima % cadaN !== 0 && ultima - Math.floor(ultima / cadaN) * cadaN >= cadaN / 2);
 
   return (
     <div className="rounded border border-slate-200 bg-white p-3">
@@ -135,9 +140,11 @@ export function GraficaApilada({ barras, titulo, alto = 180, onClickBarra, barra
                     {total}
                   </text>
                 )}
-                <text x={x + anchoBarra / 2} y={alto - 8} fontSize={9} textAnchor="middle" fill={barraActiva === i ? COLOR.texto : COLOR.textoSec} fontWeight={barraActiva === i ? 700 : 400}>
-                  {b.etiqueta}
-                </text>
+                {mostrarEtiqueta(i) && (
+                  <text x={x + anchoBarra / 2} y={alto - 8} fontSize={9} textAnchor="middle" fill={barraActiva === i ? COLOR.texto : COLOR.textoSec} fontWeight={barraActiva === i ? 700 : 400}>
+                    {b.etiqueta}
+                  </text>
+                )}
               </g>
             );
           })}
