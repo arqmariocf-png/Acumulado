@@ -214,8 +214,11 @@ export function Accesos() {
                           disabled={crearAcceso.isPending}
                           className="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
                         >
-                          {crearAcceso.isPending ? "Creando…" : "Crear acceso y mandar al celular"}
+                          {crearAcceso.isPending ? "Guardando…" : "Guardar rol y crear acceso"}
                         </button>
+                        <span className="text-[11px] text-slate-500">
+                          Elige el rol y da clic en Guardar: se crea la cuenta con ese rol y se abre WhatsApp con el link para el celular. No hay otro botón de guardar.
+                        </span>
                       </div>
                     ) : (
                       <span className="text-slate-400">Completa el expediente para crear la cuenta</span>
