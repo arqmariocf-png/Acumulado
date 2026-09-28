@@ -21,12 +21,12 @@ export function RequisicionesLayout() {
         </NavLink>
         {puedeResolver && (
           <NavLink
-            to="/requisiciones/resolucion"
+            to="/requisiciones/oc-pendientes"
             className={({ isActive }) =>
               `border-b-2 px-3 py-2 text-sm ${isActive ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`
             }
           >
-            Resolución
+            OC pendientes
           </NavLink>
         )}
       </div>

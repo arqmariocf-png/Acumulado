@@ -129,8 +129,9 @@ export function Resolucion() {
 
   return (
     <div>
+      <h2 className="mb-1 text-base font-semibold text-slate-900">OC pendientes</h2>
       <p className="mb-4 max-w-2xl text-sm text-slate-500">
-        Por cada renglón: <b>Comprar en un paso</b> (proveedor, costo y cotización, y la orden RQ sale de una vez) o <b>Entregar / resolver</b> para
+        Renglones de requisiciones que todavía no tienen orden de compra. Por cada renglón: <b>Comprar en un paso</b> (proveedor, costo y cotización, y la orden RQ sale de una vez) o <b>Entregar / resolver</b> para
         surtir de existencia y mandar el resto a compra. Se puede resolver en partes conforme llegan más compras.
       </p>
 

@@ -183,7 +183,9 @@ function Enrutador() {
           <Route element={<ProtectedRoute modulo="requisiciones" oPermiso={(p) => (p.modulos ?? []).includes("proyectos")} />}>
           <Route path="/requisiciones" element={<RequisicionesLayout />}>
             <Route index element={<MisRequisiciones />} />
-            <Route element={<ProtectedRoute roles={["admin", "corporativo"]} />}>
+            {/* Almacén (Alma) también: cotiza y genera la OC RQ desde aquí. */}
+            <Route element={<ProtectedRoute roles={["admin", "corporativo", "almacen"]} />}>
+              <Route path="oc-pendientes" element={<Resolucion />} />
               <Route path="resolucion" element={<Resolucion />} />
             </Route>
           </Route>
