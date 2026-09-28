@@ -156,10 +156,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   su rol con `multiempresa = true` (incluye operativo y supervisor por
   Paola, Brenda, Fernanda y Mauro): nadie ve más ni menos que antes. Mario
   decide después qué apaga.
-- Pendiente (fase C): selector de "empresa activa" en el encabezado para
-  quien maneja varias, con "Todas" solo en saldos, indicadores y socio; las
-  ~31 pantallas que filtran por `perfil.empresa_id` o `veTodasLasEmpresas`
-  pasan a la empresa activa.
+- **Empresa activa (fase C, 28-sep-2026)**: `useAuth().empresaActiva`
+  (localStorage por usuario; una sola → fija; varias → la guardada, "todas"
+  para quien ve todas). Selector compacto en el encabezado
+  (`components/SelectorEmpresa.tsx`, `useEmpresasAlcance()` acota la lista
+  al alcance). Las pantallas usan `useEmpresaFiltro()` (= empresa activa) y
+  `<SelectorEmpresa>` en vez de su propio `useState(perfil.empresa_id)` +
+  `veTodasLasEmpresas ? <select>`: carga, inventario (productos, existencias,
+  match, movimientos, remisiones), gastos, perfil fiscal, proyectos,
+  requisiciones, movimientos bancarios. Saldos por empresa, panel de
+  indicadores y socio siguen consolidados. Toda pantalla nueva con filtro
+  de empresa usa esos dos.
+- **"Ver como" (solo admin, 28-sep-2026)**: botón en el encabezado
+  (`Layout.tsx` → `VerComo`): elige rol y empresa y la app se pinta con ese
+  perfil (`useAuth().perfil` simulado; `perfilReal` es el de la sesión;
+  sessionStorage). Solo cambia la interfaz: RLS sigue siendo la del admin.
+  Los roles básicos se ven con todos los módulos. Banner ámbar arriba y
+  "Volver a mi vista".
 
 ## Nivel socio y organizaciones (25-sep-2026)
 - `/` para admin = **vista de socio** (`pages/Socio.tsx`): organizaciones

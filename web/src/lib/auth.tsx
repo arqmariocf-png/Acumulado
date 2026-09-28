@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { modulosEfectivos } from "./modulos";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { MODULOS_ASIGNABLES, esRolBasico, modulosEfectivos } from "./modulos";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import type { Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
+import type { AppRol, Grupo, ModuloClave, Profile, Suscripcion } from "../types/database";
 import { aplicarMarca, recordarOrganizacion, urlPublicaDelLogo } from "./marca";
 
 interface AuthState {
@@ -19,6 +19,18 @@ interface AuthState {
   empresasAlcance: string[];
   /** El rol tiene prendido el interruptor "maneja varias empresas". */
   rolMultiempresa: boolean;
+  /** Empresa activa (encabezado): todas las pantallas se filtran por ella.
+   * null = "todas", solo posible para quien ve todas. */
+  empresaActiva: string | null;
+  setEmpresaActiva: (empresaId: string | null) => void;
+  /** Maneja más de una empresa: se le muestra el selector del encabezado. */
+  eligeEmpresa: boolean;
+  /** Perfil real de la sesión (sin "ver como"). */
+  perfilReal: Profile | null;
+  /** Solo admin: navegar la app como otro rol y empresa (interfaz nada más;
+   * RLS sigue siendo la del admin). */
+  vistaComo: VistaComo | null;
+  setVistaComo: (v: VistaComo | null) => void;
   /** Organización (tenant) del usuario. null mientras no tenga una asignada. */
   grupo: Grupo | null;
   /** Módulos abiertos de la organización, para acotar el menú. null mientras no carga. */
@@ -37,16 +49,40 @@ interface AuthState {
   terminarRecuperacion: () => void;
 }
 
+export interface VistaComo {
+  rol: AppRol;
+  empresaId: string | null;
+}
+
 const AuthContext = createContext<AuthState | undefined>(undefined);
+
+function leerJson<T>(clave: string, almacen: Storage): T | null {
+  try {
+    const crudo = almacen.getItem(clave);
+    return crudo ? (JSON.parse(crudo) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function guardarJson(clave: string, valor: unknown, almacen: Storage) {
+  try {
+    if (valor === null || valor === undefined) almacen.removeItem(clave);
+    else almacen.setItem(clave, JSON.stringify(valor));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [perfil, setPerfil] = useState<Profile | null>(null);
+  const [perfilReal, setPerfil] = useState<Profile | null>(null);
   const [cargando, setCargando] = useState(true);
   const [grupo, setGrupo] = useState<Grupo | null>(null);
   const [modulos, setModulos] = useState<ModuloClave[]>([]);
   const [suscripcion, setSuscripcion] = useState<Suscripcion | null>(null);
   const [alcance, setAlcance] = useState<{ empresas: string[]; todas: boolean; multiempresa: boolean } | null>(null);
+  const [empresaActivaGuardada, setEmpresaActivaGuardada] = useState<string | null | undefined>(undefined);
+  const [vistaComo, setVistaComoEstado] = useState<VistaComo | null>(null);
   // Se activa cuando el link viene de generar-link-acceso con tipo
   // "recovery" (ver Usuarios.tsx / NuevaContrasena.tsx): supabase-js detecta
   // el token en el hash de la URL al cargar, sin importar en qué ruta cayó,
@@ -163,15 +199,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await cargarOrganizacion(perfil?.grupo_id ?? null);
   }
 
+  // "Ver como" (Mario, 28-sep-2026): el admin navega la app con otro rol y
+  // empresa para revisar qué ve cada quien. Solo cambia la interfaz.
+  useEffect(() => {
+    if (!perfilReal) {
+      setVistaComoEstado(null);
+      return;
+    }
+    setVistaComoEstado(perfilReal.rol === "admin" ? leerJson<VistaComo>(`vista-como-${perfilReal.id}`, sessionStorage) : null);
+    setEmpresaActivaGuardada(leerJson<string>(`empresa-activa-${perfilReal.id}`, localStorage));
+  }, [perfilReal]);
+  function setVistaComo(v: VistaComo | null) {
+    if (!perfilReal || perfilReal.rol !== "admin") return;
+    setVistaComoEstado(v);
+    guardarJson(`vista-como-${perfilReal.id}`, v, sessionStorage);
+  }
+  const perfil = useMemo<Profile | null>(() => {
+    if (!perfilReal || !vistaComo || perfilReal.rol !== "admin") return perfilReal;
+    const basico = esRolBasico(vistaComo.rol);
+    return {
+      ...perfilReal,
+      rol: vistaComo.rol,
+      empresa_id: vistaComo.empresaId,
+      todas_las_empresas: vistaComo.empresaId === null,
+      rh_nivel: vistaComo.rol === "rh" ? "directivo" : null,
+      modulos: basico ? MODULOS_ASIGNABLES.map((m) => m.clave) : modulosEfectivos(vistaComo.rol, []),
+    };
+  }, [perfilReal, vistaComo]);
+
   // Alcance por persona (28-sep-2026): lo dice la base (fn_mi_alcance).
   // Sin señal (perfil del caché) se cae a la regla vieja por rol.
+  const alcanceEfectivo = useMemo(() => {
+    if (vistaComo && perfilReal?.rol === "admin") {
+      const todas = alcance?.empresas ?? [];
+      return vistaComo.empresaId ? { empresas: [vistaComo.empresaId], todas: false, multiempresa: false } : { empresas: todas, todas: true, multiempresa: true };
+    }
+    return alcance;
+  }, [alcance, vistaComo, perfilReal]);
   const veTodasLasEmpresas = perfil
-    ? alcance
-      ? alcance.todas
+    ? alcanceEfectivo
+      ? alcanceEfectivo.todas
       : (perfil.rol === "corporativo" || perfil.rol === "admin" || perfil.empresa_id === null) && perfil.rol !== "pendiente"
     : false;
-  const empresasAlcance = alcance?.empresas ?? (perfil?.empresa_id ? [perfil.empresa_id] : []);
-  const rolMultiempresa = alcance?.multiempresa ?? false;
+  const empresasAlcance = useMemo(() => alcanceEfectivo?.empresas ?? (perfil?.empresa_id ? [perfil.empresa_id] : []), [alcanceEfectivo, perfil]);
+  const rolMultiempresa = alcanceEfectivo?.multiempresa ?? false;
+  const eligeEmpresa = empresasAlcance.length > 1;
+
+  // Empresa activa: una sola → esa; varias → la guardada si sigue en el
+  // alcance; si no, "todas" para quien ve todas y la primera para el resto.
+  const empresaActiva = useMemo<string | null>(() => {
+    if (!perfil) return null;
+    if (empresasAlcance.length === 1) return empresasAlcance[0];
+    const guardada = empresaActivaGuardada ?? null;
+    if (guardada && empresasAlcance.includes(guardada)) return guardada;
+    if (veTodasLasEmpresas) return null;
+    return empresasAlcance[0] ?? perfil.empresa_id ?? null;
+  }, [perfil, empresasAlcance, empresaActivaGuardada, veTodasLasEmpresas]);
+  function setEmpresaActiva(empresaId: string | null) {
+    if (!perfilReal) return;
+    if (empresaId === null && !veTodasLasEmpresas) return;
+    if (empresaId !== null && !empresasAlcance.includes(empresaId)) return;
+    setEmpresaActivaGuardada(empresaId);
+    guardarJson(`empresa-activa-${perfilReal.id}`, empresaId, localStorage);
+  }
 
   const esAdminGlobal = perfil?.rol === "admin" && grupo?.es_maestro === true;
   // Lo que la organización tiene abierto. El menú lo usa para no ofrecerle a
@@ -232,6 +322,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         veTodasLasEmpresas,
         empresasAlcance,
         rolMultiempresa,
+        empresaActiva,
+        setEmpresaActiva,
+        eligeEmpresa,
+        perfilReal,
+        vistaComo,
+        setVistaComo,
         grupo,
         alcanceOrganizacion,
         modulos,
@@ -255,4 +351,11 @@ export function useAuth(): AuthState {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth debe usarse dentro de <AuthProvider>");
   return ctx;
+}
+
+/** Filtro de empresa de una pantalla = la empresa activa del encabezado.
+ * "" significa todas (solo para quien ve todas). */
+export function useEmpresaFiltro(): [string, (empresaId: string) => void] {
+  const { empresaActiva, setEmpresaActiva } = useAuth();
+  return [empresaActiva ?? "", (v) => setEmpresaActiva(v || null)];
 }

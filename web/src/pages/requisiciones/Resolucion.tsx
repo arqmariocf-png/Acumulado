@@ -1,19 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { useAuth, useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { AvanceResolucionLinea, Existencia } from "../../types/database";
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 // Detalle (proyecto, empresa, concepto) de las líneas con algo sin resolver
 // -- la vista avance_resolucion_linea no trae FKs declaradas (es un view),
@@ -60,10 +51,9 @@ function useExistencias(empresaId: string) {
 }
 
 export function Resolucion() {
-  const { perfil, veTodasLasEmpresas } = useAuth();
+  const { veTodasLasEmpresas, eligeEmpresa } = useAuth();
   const queryClient = useQueryClient();
-  const { data: empresas } = useEmpresas();
-  const [empresaFiltro, setEmpresaFiltro] = useState(veTodasLasEmpresas ? "" : (perfil?.empresa_id ?? ""));
+  const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro();
 
   const { data: lineas, isLoading: cargandoLineas } = useLineasPendientes(empresaFiltro);
   const { data: avances } = useAvanceLineas();
@@ -141,16 +131,9 @@ export function Resolucion() {
         compras.
       </p>
 
-      {veTodasLasEmpresas && (
+      {eligeEmpresa && (
         <div className="mb-4">
-          <select value={empresaFiltro} onChange={(e) => setEmpresaFiltro(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Selecciona una empresa…</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
+          <SelectorEmpresa value={empresaFiltro} onChange={setEmpresaFiltro} vacio="Selecciona una empresa…" />
         </div>
       )}
 

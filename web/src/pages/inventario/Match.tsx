@@ -2,21 +2,12 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { cantidadTexto } from "../../lib/remision";
 import { dineroMx } from "../../lib/kpisEmpresa";
 import type { AvanceRecepcionOc, AvanceEmbarqueOv, EstadoRecepcion, EstadoEmbarque } from "../../types/database";
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function useAvanceRecepcion(empresaId: string) {
   return useQuery({
@@ -235,9 +226,7 @@ function PartidasOv({ ordenVentaId }: { ordenVentaId: string }) {
 }
 
 export function Match() {
-  const { veTodasLasEmpresas, perfil } = useAuth();
-  const { data: empresas } = useEmpresas();
-  const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const [vista, setVista] = useState<"oc" | "ov">("oc");
   // ?oc=<id>: llega del QR del comprobante de entrada -- abre esa orden con
   // sus partidas y, si hace falta, cambia a su empresa.
@@ -280,18 +269,7 @@ export function Match() {
       </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {veTodasLasEmpresas ? (
-          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Selecciona una empresa…</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <p className="text-sm text-slate-500">Empresa: la asignada a tu usuario.</p>
-        )}
+        <SelectorEmpresa value={empresaId} onChange={setEmpresaId} vacio="Selecciona una empresa…" />
         <div className="flex overflow-hidden rounded border border-slate-300">
           <button
             onClick={() => setVista("oc")}

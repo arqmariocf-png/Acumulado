@@ -6,9 +6,14 @@ import { useEsSocio } from "../lib/socio";
 import { AvisoVersion } from "./AvisoVersion";
 import { AvisoSuscripcion } from "./AvisoSuscripcion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "../lib/supabase";
+import { SelectorEmpresa, useEmpresasAlcance } from "./SelectorEmpresa";
+import { ETIQUETA_ROL, NIVELES_ROLES } from "../lib/accesosRoles";
+import type { AppRol } from "../types/database";
 
 export function Layout() {
-  const { perfil, grupo, alcanceOrganizacion, logoUrl, cerrarSesion } = useAuth();
+  const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
   // Menú por áreas con orientación de uso: la visibilidad por rol vive en
   // lib/menu.ts (misma fuente que el inicio y la guía).
   const secciones = seccionesPara(perfil, alcanceOrganizacion);
@@ -62,6 +67,10 @@ export function Layout() {
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
+            {/* Empresa activa (28-sep-2026): quien maneja varias elige aquí y
+                todas las pantallas se filtran por ella. */}
+            {eligeEmpresa && <SelectorEmpresa value={empresaActiva ?? ""} onChange={(v) => setEmpresaActiva(v || null)} compacto vacio="Todas" className="max-w-[140px] rounded border border-slate-300 px-2 py-1 text-xs" />}
+            {perfilReal?.rol === "admin" && <VerComo vistaComo={vistaComo} onCambiar={setVistaComo} />}
             <span className="hidden sm:inline">
               {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol}</span>
             </span>
@@ -72,6 +81,7 @@ export function Layout() {
           </div>
         </div>
       </header>
+      {vistaComo && <BannerVistaComo vistaComo={vistaComo} onSalir={() => setVistaComo(null)} />}
       <AvisoSuscripcion />
       <AvisoVersion />
       <main className="mx-auto max-w-7xl px-4 py-6">
@@ -220,6 +230,103 @@ function Niveles({ niveles, actual }: { niveles: NivelMenu[]; actual: string }) 
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const ROLES_VISTA: AppRol[] = NIVELES_ROLES.flatMap((n) => n.roles).filter((r) => r !== "pendiente");
+
+/** Solo admin: "ver como" otro rol y empresa (Mario, 28-sep-2026) para
+ * revisar menús y pantallas sin cambiar de cuenta. Es interfaz: RLS sigue
+ * siendo la del admin, así que los datos no se acotan. */
+function VerComo({ vistaComo, onCambiar }: { vistaComo: { rol: AppRol; empresaId: string | null } | null; onCambiar: (v: { rol: AppRol; empresaId: string | null } | null) => void }) {
+  const [abierto, setAbierto] = useState(false);
+  const [rol, setRol] = useState<AppRol>(vistaComo?.rol ?? "direccion");
+  const [empresaId, setEmpresaId] = useState<string>(vistaComo?.empresaId ?? "");
+  // Todas las empresas de la organización (RLS del admin), no solo las del
+  // alcance simulado: si no, al ver como "empresa" ya no podría cambiar.
+  const { data: empresas } = useQuery({
+    queryKey: ["empresas-todas-admin"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
+      if (error) throw error;
+      return (data ?? []) as { id: string; nombre: string }[];
+    },
+  });
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!abierto) return;
+    function fuera(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
+    }
+    document.addEventListener("mousedown", fuera);
+    return () => document.removeEventListener("mousedown", fuera);
+  }, [abierto]);
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setAbierto((v) => !v)} className={`rounded border px-2 py-1 text-xs ${vistaComo ? "border-amber-400 bg-amber-50 text-amber-900" : "border-slate-300 hover:bg-slate-100"}`} title="Navegar la app como otro rol y empresa">
+        {vistaComo ? `Viendo como ${ETIQUETA_ROL[vistaComo.rol]}` : "Ver como…"}
+      </button>
+      {abierto && (
+        <div className="absolute right-0 z-30 mt-1 w-72 rounded border border-slate-200 bg-white p-3 text-xs shadow-lg">
+          <p className="mb-2 font-semibold text-slate-800">Ver la app como</p>
+          <label className="mb-1 block text-slate-500">Rol</label>
+          <select value={rol} onChange={(e) => setRol(e.target.value as AppRol)} className="mb-2 w-full rounded border border-slate-300 px-2 py-1">
+            {ROLES_VISTA.map((r) => (
+              <option key={r} value={r}>
+                {ETIQUETA_ROL[r]}
+              </option>
+            ))}
+          </select>
+          <label className="mb-1 block text-slate-500">Empresa</label>
+          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="mb-3 w-full rounded border border-slate-300 px-2 py-1">
+            <option value="">Todas (sin empresa principal)</option>
+            {empresas?.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onCambiar({ rol, empresaId: empresaId || null });
+                setAbierto(false);
+              }}
+              className="rounded bg-slate-900 px-3 py-1 font-medium text-white"
+            >
+              Aplicar
+            </button>
+            {vistaComo && (
+              <button
+                type="button"
+                onClick={() => {
+                  onCambiar(null);
+                  setAbierto(false);
+                }}
+                className="rounded border border-slate-300 px-3 py-1"
+              >
+                Volver a admin
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">Cambia menús y pantallas; los datos siguen siendo los del administrador. Los roles de personal se ven con todos los módulos.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BannerVistaComo({ vistaComo, onSalir }: { vistaComo: { rol: AppRol; empresaId: string | null }; onSalir: () => void }) {
+  const { data: empresas } = useEmpresasAlcance();
+  const empresa = vistaComo.empresaId ? (empresas?.find((e) => e.id === vistaComo.empresaId)?.nombre ?? "una empresa") : "todas las empresas";
+  return (
+    <div className="border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-900">
+      Estás viendo la app como <b>{ETIQUETA_ROL[vistaComo.rol]}</b> · {empresa}. Solo cambia lo que se muestra.{" "}
+      <button type="button" onClick={onSalir} className="underline">
+        Volver a mi vista
+      </button>
     </div>
   );
 }

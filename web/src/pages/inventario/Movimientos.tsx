@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
-import { useAuth } from "../../lib/auth";
+import { useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import { idRemisionDesdeCodigo } from "../../lib/remision";
 import { imprimirRemision } from "./remisionQr";
@@ -416,16 +417,6 @@ function ItemSugeridoCard({
   );
 }
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function useAlmacen(empresaId: string) {
   return useQuery({
@@ -593,11 +584,9 @@ function AsignarOrdenFila({
 }
 
 export function Movimientos() {
-  const { veTodasLasEmpresas, perfil } = useAuth();
   const queryClient = useQueryClient();
-  const { data: empresas } = useEmpresas();
 
-  const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const [tipo, setTipo] = useState<TipoMovimientoInventario>("entrada");
   const [ordenId, setOrdenId] = useState("");
   // "__nueva__": OC que todavía no llega del backoffice (por ejemplo,
@@ -1076,21 +1065,10 @@ export function Movimientos() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        {veTodasLasEmpresas ? (
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Empresa</label>
-            <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-              <option value="">Selecciona…</option>
-              {empresas?.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <p className="text-sm text-slate-500">Empresa: la asignada a tu usuario.</p>
-        )}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Empresa</label>
+          <SelectorEmpresa value={empresaId} onChange={setEmpresaId} vacio="Selecciona…" />
+        </div>
 
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Tipo de movimiento</label>

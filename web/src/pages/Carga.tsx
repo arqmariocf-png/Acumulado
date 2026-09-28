@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
-import { useAuth } from "../lib/auth";
+import { useAuth, useEmpresaFiltro } from "../lib/auth";
+import { SelectorEmpresa } from "../components/SelectorEmpresa";
 import { sincronizarCatalogoOcOv } from "../lib/sincronizarOcOv";
 
 type Pestana = "estado_cuenta" | "cfdi" | "oc_ov";
@@ -13,16 +14,6 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "oc_ov", etiqueta: "Catálogo OC/OV (Excel)" },
 ];
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function useCuentas(empresaId: string) {
   return useQuery({
@@ -92,10 +83,9 @@ async function llamarFuncion(nombre: string, formData: FormData) {
 }
 
 export function Carga() {
-  const { veTodasLasEmpresas, perfil } = useAuth();
-  const { data: empresas } = useEmpresas();
+  const { perfil } = useAuth();
   const [pestana, setPestana] = useState<Pestana>("estado_cuenta");
-  const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const [resultado, setResultado] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -208,18 +198,7 @@ export function Carga() {
       </div>
 
       <div className="mb-4">
-        {veTodasLasEmpresas ? (
-          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Selecciona una empresa…</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <p className="text-sm text-slate-500">Empresa: la asignada a tu usuario.</p>
-        )}
+        <SelectorEmpresa value={empresaId} onChange={setEmpresaId} vacio="Selecciona una empresa…" />
       </div>
 
       {pestana === "estado_cuenta" && empresaId && (
