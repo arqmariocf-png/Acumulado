@@ -69,19 +69,23 @@ export function KpiChecador() {
   // Clic en un día de la gráfica → quién checó y quién no (Eréndira, 28-sep-2026).
   // Sin clic, se muestra el último día del periodo (hoy).
   const [diaSel, setDiaSel] = useState<number | null>(null);
-  const indiceDia = d ? (diaSel !== null && diaSel < d.por_dia.length ? diaSel : d.por_dia.length - 1) : null;
-  const diaISO = d && indiceDia !== null && indiceDia >= 0 ? d.por_dia[indiceDia].d : null;
+  // El selector de fecha permite ir a un día fuera del periodo de la gráfica.
+  const [diaLibre, setDiaLibre] = useState<string | null>(null);
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const indiceDia = d ? (diaLibre ? d.por_dia.findIndex((p) => p.d === diaLibre) : diaSel !== null && diaSel < d.por_dia.length ? diaSel : d.por_dia.length - 1) : null;
+  const diaISO = diaLibre ?? (d && indiceDia !== null && indiceDia >= 0 ? d.por_dia[indiceDia].d : null);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-600">Asistencias y retardos del personal activo con cuenta. Retardo: la primera entrada del día llega después de la hora de entrada más la tolerancia de su perfil de jornada.</p>
         <div className="flex gap-1">
-          {[7, 14, 30, 60].map((n) => (
-            <button key={n} onClick={() => setDias(n)} className={`rounded border px-2 py-1 text-xs ${dias === n ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
-              {n} días
+          {[1, 7, 14, 30, 60].map((n) => (
+            <button key={n} onClick={() => { setDias(n); setDiaLibre(null); setDiaSel(null); }} className={`rounded border px-2 py-1 text-xs ${dias === n ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
+              {n === 1 ? "Hoy" : `${n} días`}
             </button>
           ))}
+          <input type="date" value={diaLibre ?? ""} max={hoyISO} onChange={(e) => { setDiaLibre(e.target.value || null); setDiaSel(null); }} title="Ver un día en particular" className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600" />
         </div>
       </div>
       <Estado cargando={q.isPending} error={q.error} />
@@ -95,7 +99,7 @@ export function KpiChecador() {
           </div>
           <GraficaApilada
             titulo="Entradas por día · toca un día para ver quién checó"
-            onClickBarra={(i) => setDiaSel(i)}
+            onClickBarra={(i) => { setDiaLibre(null); setDiaSel(i); }}
             barraActiva={indiceDia}
             barras={d.por_dia.map((p) => ({
               etiqueta: etiquetaDia(p.d),
