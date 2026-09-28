@@ -173,7 +173,7 @@ export const SECCIONES: SeccionMenu[] = [
     entradas: [
       { ruta: "/inventario/remisiones", etiqueta: "Remisiones de salida", descripcion: "entregas de almacén con QR", uso: "Consultar, reimprimir y confirmar entregas escaneando el QR.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/match", etiqueta: "Match con OC/OV", descripcion: "avance de recepción y embarque por orden y partida", uso: "Qué falta por recibir o embarcar de cada orden; lo que el proveedor aún debe.", visible: veInventario , modulo: "inventario" },
-      { ruta: "/requisiciones", etiqueta: "Requisiciones", descripcion: "solicitudes de material por obra", uso: "El responsable pide; compras resuelve renglón por renglón.", visible: (p) => veOperacion(p) || modulo("requisiciones")(p) },
+      { ruta: "/requisiciones", etiqueta: "Requisiciones", descripcion: "solicitudes de material por obra", uso: "El responsable pide; compras resuelve renglón por renglón.", visible: (p) => veOperacion(p) || modulo("requisiciones")(p) || modulo("proyectos")(p) },
     ],
   },
   {

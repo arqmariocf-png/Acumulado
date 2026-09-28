@@ -2,13 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { administraProyectosDe } from "../../lib/modulos";
 import { CLASE_ETAPA, ETAPAS_REQUISICION, ETIQUETA_ETAPA, puedeMarcarEtapa, semaforoEtapa, siguienteEtapa, type EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { Producto, Proyecto } from "../../types/database";
 
+/** Un renglón trae producto del catálogo o descripción libre (empresas sin
+ * catálogo, como Ergodinova, 28-sep-2026). */
 interface FilaCarrito {
-  producto: Producto;
+  clave: string;
+  producto?: Producto;
+  descripcion?: string;
+  unidad: string;
   cantidad: number;
 }
+
+const UNIDADES_LIBRES = ["pza", "m", "m2", "m3", "kg", "ton", "lt", "bulto", "rollo", "caja", "juego", "lote", "servicio"];
 
 function useEmpresas() {
   return useQuery({
@@ -23,14 +31,17 @@ function useEmpresas() {
 
 // Para 'responsable': solo los proyectos donde él/ella está asignado. Para
 // admin/corporativo: cualquier proyecto activo (pueden capturar a nombre de
-// alguien mientras no todos los responsables tengan cuenta todavía).
-function useProyectosDisponibles(rol: string | undefined, userId: string | undefined) {
+// alguien mientras no todos los responsables tengan cuenta todavía). Para
+// empresa y los básicos con módulo proyectos (Jonathan): los de su empresa,
+// igual que en los tableros (policy requisiciones_insert, 28-sep-2026).
+function useProyectosDisponibles(rol: string | undefined, userId: string | undefined, empresaId: string | null | undefined) {
   return useQuery({
-    queryKey: ["proyectos-disponibles", rol, userId],
+    queryKey: ["proyectos-disponibles", rol, userId, empresaId],
     enabled: !!rol,
     queryFn: async () => {
       let query = supabase.from("proyectos").select("*").eq("activo", true).order("nombre");
       if (rol === "responsable") query = query.eq("responsable_id", userId);
+      else if (rol !== "admin" && rol !== "corporativo" && empresaId) query = query.eq("empresa_id", empresaId);
       const { data, error } = await query;
       if (error) throw error;
       return data as Proyecto[];
@@ -78,14 +89,17 @@ export function MisRequisiciones() {
   const { perfil, veTodasLasEmpresas } = useAuth();
   const queryClient = useQueryClient();
   const { data: empresas } = useEmpresas();
-  const { data: proyectosDisponibles } = useProyectosDisponibles(perfil?.rol, perfil?.id);
+  const { data: proyectosDisponibles } = useProyectosDisponibles(perfil?.rol, perfil?.id, perfil?.empresa_id);
 
-  const puedeCrear = perfil?.rol === "responsable" || perfil?.rol === "admin" || perfil?.rol === "corporativo";
+  const puedeCrear = perfil?.rol === "responsable" || perfil?.rol === "admin" || perfil?.rol === "corporativo" || administraProyectosDe(perfil, perfil?.empresa_id);
 
   const [proyectoId, setProyectoId] = useState("");
   const [comentario, setComentario] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [carrito, setCarrito] = useState<FilaCarrito[]>([]);
+  const [libreDescripcion, setLibreDescripcion] = useState("");
+  const [libreUnidad, setLibreUnidad] = useState("pza");
+  const [libreCantidad, setLibreCantidad] = useState("1");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -108,18 +122,27 @@ export function MisRequisiciones() {
 
   function agregarAlCarrito(producto: Producto) {
     setCarrito((prev) => {
-      const existente = prev.find((f) => f.producto.id === producto.id);
-      if (existente) return prev.map((f) => (f.producto.id === producto.id ? { ...f, cantidad: f.cantidad + 1 } : f));
-      return [...prev, { producto, cantidad: 1 }];
+      const existente = prev.find((f) => f.producto?.id === producto.id);
+      if (existente) return prev.map((f) => (f.producto?.id === producto.id ? { ...f, cantidad: f.cantidad + 1 } : f));
+      return [...prev, { clave: `p:${producto.id}`, producto, unidad: producto.unidad_medida, cantidad: 1 }];
     });
   }
 
-  function actualizarCantidad(productoId: string, cantidad: number) {
-    setCarrito((prev) => prev.map((f) => (f.producto.id === productoId ? { ...f, cantidad } : f)));
+  function agregarLibre() {
+    const descripcion = libreDescripcion.trim();
+    const cantidad = Number(libreCantidad);
+    if (!descripcion || !(cantidad > 0)) return;
+    setCarrito((prev) => [...prev, { clave: `t:${Date.now()}:${prev.length}`, descripcion, unidad: libreUnidad, cantidad }]);
+    setLibreDescripcion("");
+    setLibreCantidad("1");
   }
 
-  function quitarFila(productoId: string) {
-    setCarrito((prev) => prev.filter((f) => f.producto.id !== productoId));
+  function actualizarCantidad(clave: string, cantidad: number) {
+    setCarrito((prev) => prev.map((f) => (f.clave === clave ? { ...f, cantidad } : f)));
+  }
+
+  function quitarFila(clave: string) {
+    setCarrito((prev) => prev.filter((f) => f.clave !== clave));
   }
 
   async function onEnviar() {
@@ -146,9 +169,10 @@ export function MisRequisiciones() {
 
       const lineas = carrito.map((f) => ({
         requisicion_id: requisicion.id,
-        concepto_id: f.producto.id,
+        concepto_id: f.producto?.id ?? null,
+        descripcion: f.producto ? null : (f.descripcion ?? null),
         cantidad_solicitada: f.cantidad,
-        unidad_medida: f.producto.unidad_medida,
+        unidad_medida: f.unidad,
       }));
       const { error: errLineas } = await supabase.from("requisicion_lineas").insert(lineas);
       if (errLineas) throw errLineas;
@@ -181,14 +205,46 @@ export function MisRequisiciones() {
               ))}
             </select>
             {proyectosDisponibles?.length === 0 && (
-              <p className="mt-1 text-xs text-amber-600">No tienes proyectos asignados todavía -- pide a un admin que te asigne uno.</p>
+              <p className="mt-1 text-xs text-amber-600">
+                {perfil?.rol === "responsable" ? "No tienes proyectos asignados todavía -- pide a un admin que te asigne uno." : "Tu empresa no tiene proyectos activos todavía."}
+              </p>
             )}
           </div>
 
           {proyectoId && (
             <>
               <div className="mb-3">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Buscar concepto</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Material o servicio que necesitas</label>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={libreDescripcion}
+                    onChange={(e) => setLibreDescripcion(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        agregarLibre();
+                      }
+                    }}
+                    placeholder="Ej. Cemento gris 50 kg, varilla 3/8, flete…"
+                    className="min-w-[12rem] flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                  <input type="number" min="0.001" step="0.001" value={libreCantidad} onChange={(e) => setLibreCantidad(e.target.value)} className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Cantidad" />
+                  <select value={libreUnidad} onChange={(e) => setLibreUnidad(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Unidad">
+                    {UNIDADES_LIBRES.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={agregarLibre} disabled={!libreDescripcion.trim() || !(Number(libreCantidad) > 0)} className="rounded border border-slate-900 px-3 py-1.5 text-sm font-medium text-slate-900 disabled:opacity-40">
+                    Agregar
+                  </button>
+                </div>
+              </div>
+
+              {(productos?.length ?? 0) > 0 && (
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">O busca en el catálogo de productos</label>
                 <input
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
@@ -213,6 +269,7 @@ export function MisRequisiciones() {
                   </div>
                 )}
               </div>
+              )}
 
               {carrito.length > 0 && (
                 <div className="mb-3 overflow-x-auto rounded border border-slate-200">
@@ -226,9 +283,9 @@ export function MisRequisiciones() {
                     </thead>
                     <tbody>
                       {carrito.map((f) => (
-                        <tr key={f.producto.id} className="border-t border-slate-100">
+                        <tr key={f.clave} className="border-t border-slate-100">
                           <td className="px-3 py-2">
-                            {f.producto.nombre} <span className="text-xs text-slate-400">({f.producto.unidad_medida})</span>
+                            {f.producto ? f.producto.nombre : f.descripcion} <span className="text-xs text-slate-400">({f.unidad})</span>
                           </td>
                           <td className="px-3 py-2">
                             <input
@@ -236,12 +293,12 @@ export function MisRequisiciones() {
                               min="0.001"
                               step="0.001"
                               value={f.cantidad}
-                              onChange={(e) => actualizarCantidad(f.producto.id, Number(e.target.value))}
+                              onChange={(e) => actualizarCantidad(f.clave, Number(e.target.value))}
                               className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <button onClick={() => quitarFila(f.producto.id)} className="text-xs text-red-600 hover:underline">
+                            <button onClick={() => quitarFila(f.clave)} className="text-xs text-red-600 hover:underline">
                               Quitar
                             </button>
                           </td>

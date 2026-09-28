@@ -80,6 +80,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   empresa/almacén; recibida empresa/almacén/responsable o quien la pidió;
   admin/corporativo todo; regresar solo admin/corporativo/dirección). Reglas
   replicadas en `lib/requisicionEtapa.ts` (con pruebas) para los botones.
+- **Requerimientos (28-sep-2026)**: los crea quien opera los proyectos de
+  su empresa (`auth_opera_proyectos_empresa`: empresa, responsable, básicos
+  con módulo `proyectos`, ej. Jonathan) sobre proyectos de SU empresa, a su
+  nombre; el responsable además en los suyos (`requisiciones_insert`,
+  `20260928160000`). `/requisiciones` abre también con módulo `proyectos`
+  (`ProtectedRoute oPermiso`). Renglones de **texto libre**:
+  `requisicion_lineas.concepto_id` es nullable y hay `descripcion`
+  (check: uno de los dos; `20260928170000`) porque casi ninguna empresa
+  tiene catálogo de productos (solo AEP). Compras resuelve igual por
+  `requisicion_linea_id`; `avance_resolucion_linea` trae `descripcion`.
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,
