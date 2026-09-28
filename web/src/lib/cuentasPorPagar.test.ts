@@ -1,0 +1,61 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { filtrarYOrdenar, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
+
+function fila(p: Partial<FilaCxp>): FilaCxp {
+  return {
+    clave: "X", proveedor: "X", n_oc: 0, comprometido: 0, n_facturas: 0, facturado: 0, pagado: 0, por_pagar: 0, sin_facturar: 0,
+    linea_credito: null, dias_credito: null, notas: null, disponible: null, ultima_oc: null, ultima_factura: null, ultimo_pago: null, empresas: [],
+    ...p,
+  };
+}
+
+test("sin línea de crédito el semáforo es gris", () => {
+  assert.equal(semaforoCredito(5000, null).color, "gris");
+  assert.equal(semaforoCredito(5000, 0).color, "gris");
+  assert.equal(semaforoCredito(5000, null).pctUsado, null);
+});
+
+test("rojo si se rebasa la línea o queda menos del 10 %", () => {
+  assert.equal(semaforoCredito(120_000, 100_000).color, "rojo");
+  assert.equal(semaforoCredito(95_000, 100_000).color, "rojo");
+  assert.equal(semaforoCredito(95_000, 100_000).pctUsado, 95);
+});
+
+test("ámbar con menos del 30 % libre, verde con más", () => {
+  assert.equal(semaforoCredito(75_000, 100_000).color, "ambar");
+  assert.equal(semaforoCredito(50_000, 100_000).color, "verde");
+  assert.equal(semaforoCredito(0, 100_000).color, "verde");
+});
+
+test("filtra por texto sin acentos y por empresa, y ordena por lo que se debe", () => {
+  const filas = [
+    fila({ clave: "CEMEX", proveedor: "CEMEX S.A.B. DE C.V.", por_pagar: 100, empresas: ["e1"] }),
+    fila({ clave: "MAQUI PRINT", proveedor: "Maqui Print", por_pagar: 500, empresas: ["e2"] }),
+    fila({ clave: "LAMINAS", proveedor: "Láminas del Sur", por_pagar: 300, empresas: ["e1", "e2"] }),
+  ];
+  assert.deepEqual(filtrarYOrdenar(filas, "", "", "por_pagar", false).map((f) => f.clave), ["MAQUI PRINT", "LAMINAS", "CEMEX"]);
+  assert.deepEqual(filtrarYOrdenar(filas, "laminas", "", "por_pagar", false).map((f) => f.clave), ["LAMINAS"]);
+  assert.deepEqual(filtrarYOrdenar(filas, "", "e1", "proveedor", false).map((f) => f.clave), ["CEMEX", "LAMINAS"]);
+});
+
+test("solo con saldo deja fuera lo pagado y sin OC pendiente; disponible ordena lo apretado primero", () => {
+  const filas = [
+    fila({ clave: "A", proveedor: "A", por_pagar: 0, sin_facturar: 0, linea_credito: 10, disponible: 10 }),
+    fila({ clave: "B", proveedor: "B", por_pagar: 90, linea_credito: 100, disponible: 10 }),
+    fila({ clave: "C", proveedor: "C", por_pagar: 20, linea_credito: null, disponible: null }),
+    fila({ clave: "D", proveedor: "D", por_pagar: 0, sin_facturar: 40, linea_credito: 100, disponible: 100 }),
+  ];
+  assert.deepEqual(filtrarYOrdenar(filas, "", "", "disponible", true).map((f) => f.clave), ["B", "D", "C"]);
+});
+
+test("totales suman y cuentan rojos y líneas capturadas", () => {
+  const t = totalesCxp([
+    fila({ comprometido: 100, facturado: 80, pagado: 30, por_pagar: 50, sin_facturar: 20, linea_credito: 40 }),
+    fila({ comprometido: 10, facturado: 10, pagado: 10, por_pagar: 0, sin_facturar: 0, linea_credito: null }),
+  ]);
+  assert.equal(t.comprometido, 110);
+  assert.equal(t.por_pagar, 50);
+  assert.equal(t.con_linea, 1);
+  assert.equal(t.rojos, 1);
+});

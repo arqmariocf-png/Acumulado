@@ -17,6 +17,7 @@ const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then(
 const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ default: m.SaldosDiarios })));
 const SaldosEmpresas = lazy(() => import("./pages/finanzas/SaldosEmpresas").then((m) => ({ default: m.SaldosEmpresas })));
 const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
+const CuentasPorPagar = lazy(() => import("./pages/finanzas/CuentasPorPagar").then((m) => ({ default: m.CuentasPorPagar })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
@@ -150,6 +151,7 @@ function Enrutador() {
             <Route path="/saldos" element={<SaldosDiarios />} />
             <Route path="/finanzas/saldos" element={<SaldosEmpresas />} />
             <Route path="/finanzas/pagos" element={<ProgramacionPagos />} />
+            <Route path="/finanzas/proveedores" element={<CuentasPorPagar />} />
           </Route>
 
           {/* Sin roles restringidos aquí a propósito: además de admin/corporativo/

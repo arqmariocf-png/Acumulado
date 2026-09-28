@@ -42,6 +42,18 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
 
   return (
     <div>
+      {!compacto && perfil?.rol === "direccion" && (
+        <nav className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500" aria-label="Flujo de dirección">
+          <span className="rounded-full bg-slate-900 px-2.5 py-1 font-medium text-white">1 · Saldos</span>
+          <span>→</span>
+          <Link to="/movimientos" className="rounded-full border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-100">2 · Movimientos</Link>
+          <span>→</span>
+          <Link to="/finanzas/proveedores" className="rounded-full border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-100">3 · OC y cuentas por pagar</Link>
+          <span>→</span>
+          <Link to="/finanzas/pagos" className="rounded-full border border-slate-300 bg-white px-2.5 py-1 hover:bg-slate-100">4 · Programar pagos</Link>
+          <Link to="/inicio" className="ml-auto underline">Ver todo el inicio</Link>
+        </nav>
+      )}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold text-slate-900">Saldos por empresa</h2>
@@ -54,6 +66,9 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
           <button onClick={imprimir} disabled={grupos.length === 0} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">
             Imprimir / PDF
           </button>
+          <Link to="/finanzas/proveedores" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            Cuentas por pagar
+          </Link>
           <Link to="/finanzas/pagos" className="rounded bg-slate-900 px-4 py-1.5 text-sm font-medium text-white">
             Programación de pagos
           </Link>
@@ -93,7 +108,9 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
           </table>
         </div>
       )}
-      <p className="mt-2 text-xs text-slate-400">Saldo inicial = cierre del día anterior. Una cuenta sin estado de cuenta cargado ese día muestra su último cierre conocido.</p>
+      <p className="mt-2 text-xs text-slate-400">
+        Saldo inicial = cierre del día anterior. Una cuenta sin estado de cuenta cargado ese día muestra su último cierre conocido. Da clic en una empresa o cuenta para ver sus últimos movimientos.
+      </p>
     </div>
   );
 }
@@ -102,7 +119,11 @@ function GrupoFilas({ grupo: g, detalle }: { grupo: ReturnType<typeof agruparPor
   return (
     <>
       <tr className={`border-t border-slate-200 ${detalle ? "bg-slate-50 font-medium" : ""}`}>
-        <td className="px-3 py-2 text-slate-900">{g.empresa_nombre}</td>
+        <td className="px-3 py-2 text-slate-900">
+          <Link to={`/movimientos?empresa=${g.empresa_id}`} className="hover:underline" title="Ver los últimos movimientos de la empresa">
+            {g.empresa_nombre}
+          </Link>
+        </td>
         <td className="px-3 py-2 text-right tabular-nums">{moneda(g.saldo_inicial)}</td>
         <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{g.entradas ? moneda(g.entradas) : "—"}</td>
         <td className="px-3 py-2 text-right tabular-nums text-red-700">{g.salidas ? moneda(g.salidas) : "—"}</td>
@@ -112,7 +133,9 @@ function GrupoFilas({ grupo: g, detalle }: { grupo: ReturnType<typeof agruparPor
         g.cuentas.map((c) => (
           <tr key={c.cuenta_id} className="border-t border-slate-100 text-slate-600">
             <td className="px-3 py-1.5 pl-8">
-              {c.banco} {c.ultimos_4}
+              <Link to={`/movimientos?empresa=${c.empresa_id}&cuenta=${c.cuenta_id}`} className="hover:underline" title="Ver los últimos movimientos de esta cuenta">
+                {c.banco} {c.ultimos_4}
+              </Link>
               {c.alias && <span className="text-slate-400"> · {c.alias}</span>}
               {!c.tiene_movimientos && <span className="ml-1 text-[10px] text-amber-600">sin carga</span>}
             </td>

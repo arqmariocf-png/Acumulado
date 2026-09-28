@@ -89,6 +89,21 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   medium, system prompt cacheado, sin fallbacks); guarda cada corrida en
   `proyecto_bitacora_ia` con el cliente del usuario (RLS). Requiere
   `ANTHROPIC_API_KEY` válida en secrets; si no, devuelve error claro.
+- **Flujo de dirección / cuentas por pagar (28-sep-2026)**: Laura (rol
+  `direccion`) arranca en `/finanzas/saldos` (`InicioSegunRol` la redirige;
+  el inicio completo queda en `/inicio`). Cada empresa y cuenta de Saldos
+  por empresa es un link a `/movimientos?empresa=&cuenta=` (Movimientos lee
+  esos params y filtra por `cuenta_id`). "Primer candado" al revisar OC:
+  `/finanzas/proveedores` (`pages/finanzas/CuentasPorPagar.tsx`) sobre la
+  vista `v_cxp_proveedores`: comprometido (OC) → facturado (CFDI recibidos)
+  → pagado detectado (complementos + cargos bancarios con el mismo nombre)
+  → por pagar, contra `proveedores_credito` (línea y días; capturan admin/
+  corporativo/direccion). Los nombres se agrupan con `fn_proveedor_clave`
+  (quita acentos, puntuación y SA DE CV). Semáforo en `lib/cuentasPorPagar.ts`
+  (con pruebas): gris sin línea, rojo si se rebasa o queda <10 %, ámbar <30 %.
+  Detalle por proveedor con `fn_cxp_proveedor_detalle(clave)`. Ojo: el banco
+  rara vez trae el nombre del proveedor, así que "pagado" sale bajo y "por
+  pagar" alto hasta que se capturen complementos de pago.
 - **Organigrama de accesos por rol**: Admin → "Accesos por rol"
   (`pages/admin/Roles.tsx`, `lib/accesosRoles.ts`): "ve" se calcula del
   catálogo del menú con un perfil de muestra; "edita" es el mapa EDITA a
