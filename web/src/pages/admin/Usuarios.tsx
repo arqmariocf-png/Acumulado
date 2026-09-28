@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
+import { useAuth } from "../../lib/auth";
 import type { AppRol, Empresa, Profile } from "../../types/database";
 
 const ROLES: AppRol[] = ["pendiente", "operativo", "administrativo", "supervisor", "directivo", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "admin"];
@@ -21,7 +22,47 @@ function numeroWhatsapp(telefono: string): string {
 // lo es por default hasta que alguien lo cambie (ver trigger handle_new_user).
 export function Usuarios() {
   const queryClient = useQueryClient();
+  const { esAdminGlobal } = useAuth();
   const [busqueda, setBusqueda] = useState("");
+
+  // Alcance por persona (28-sep-2026): qué roles manejan varias empresas y
+  // qué empresas tiene asignadas cada quien además de la principal.
+  const { data: rolesAlcance } = useQuery({
+    queryKey: ["roles-alcance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("roles_alcance").select("rol, multiempresa");
+      if (error) throw error;
+      return Object.fromEntries((data ?? []).map((r) => [r.rol as AppRol, !!r.multiempresa])) as Partial<Record<AppRol, boolean>>;
+    },
+  });
+  const { data: asignaciones } = useQuery({
+    queryKey: ["profile-empresas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profile_empresas").select("profile_id, empresa_id");
+      if (error) throw error;
+      const mapa = new Map<string, string[]>();
+      for (const f of data ?? []) mapa.set(f.profile_id, [...(mapa.get(f.profile_id) ?? []), f.empresa_id]);
+      return mapa;
+    },
+  });
+  const alternarEmpresa = useMutation({
+    mutationFn: async ({ profileId, empresaId, activa }: { profileId: string; empresaId: string; activa: boolean }) => {
+      const { error } = activa
+        ? await supabase.from("profile_empresas").insert({ profile_id: profileId, empresa_id: empresaId })
+        : await supabase.from("profile_empresas").delete().eq("profile_id", profileId).eq("empresa_id", empresaId);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profile-empresas"] }),
+    onError: (e: Error) => alert(e.message),
+  });
+  const marcarTodas = useMutation({
+    mutationFn: async ({ id, todas }: { id: string; todas: boolean }) => {
+      const { error } = await supabase.from("profiles").update({ todas_las_empresas: todas }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }),
+    onError: (e: Error) => alert(e.message),
+  });
 
   const { data: perfiles, isLoading } = useQuery({
     queryKey: ["admin-usuarios"],
@@ -141,7 +182,8 @@ export function Usuarios() {
   return (
     <div>
       <p className="mb-4 text-sm text-slate-500">
-        rol='empresa' requiere una empresa asignada. rol='pendiente' o sin empresa asignada (salvo corporativo/admin) significa sin acceso a datos.
+        La empresa principal es donde la persona checa y donde está su expediente. "Maneja también" solo aplica si su rol tiene prendido el interruptor de varias empresas
+        {esAdminGlobal ? " (Admin → Accesos por rol)" : ""}; "todas" = todas las de la organización. rol='pendiente' significa sin acceso a datos.
       </p>
 
       <div className="mb-4">
@@ -200,7 +242,8 @@ export function Usuarios() {
             <tr>
               <th className="px-2 py-2">Nombre</th>
               <th className="px-2 py-2">Rol</th>
-              <th className="px-2 py-2">Empresa</th>
+              <th className="px-2 py-2">Empresa principal</th>
+              <th className="px-2 py-2">Maneja también</th>
               <th className="px-2 py-2">Activo</th>
               <th className="px-2 py-2">Teléfono (WhatsApp)</th>
               <th className="px-2 py-2">Acceso</th>
@@ -242,13 +285,42 @@ export function Usuarios() {
                     onChange={(e) => actualizar.mutate({ id: p.id, empresa_id: e.target.value || null })}
                     className="max-w-[110px] rounded border border-slate-300 px-1 py-1 text-sm"
                   >
-                    <option value="">— (todas)</option>
+                    <option value="">— sin principal</option>
                     {empresas?.map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.nombre}
                       </option>
                     ))}
                   </select>
+                </td>
+                <td className="px-2 py-2">
+                  {rolesAlcance && !rolesAlcance[p.rol] ? (
+                    <span className="text-[11px] text-slate-400" title="Prende el interruptor del rol en Admin → Accesos por rol para asignarle más empresas.">
+                      su rol maneja una sola
+                    </span>
+                  ) : (
+                    <div className="flex max-w-[220px] flex-col gap-0.5 text-xs">
+                      <label className="flex items-center gap-1 font-medium text-slate-800">
+                        <input type="checkbox" checked={p.todas_las_empresas} onChange={(e) => marcarTodas.mutate({ id: p.id, todas: e.target.checked })} />
+                        todas las de la organización
+                      </label>
+                      {!p.todas_las_empresas && (
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                          {empresas
+                            ?.filter((e) => e.id !== p.empresa_id)
+                            .map((e) => {
+                              const activa = (asignaciones?.get(p.id) ?? []).includes(e.id);
+                              return (
+                                <label key={e.id} className={`flex items-center gap-1 ${activa ? "text-slate-800" : "text-slate-500"}`}>
+                                  <input type="checkbox" checked={activa} onChange={(ev) => alternarEmpresa.mutate({ profileId: p.id, empresaId: e.id, activa: ev.target.checked })} />
+                                  {e.nombre}
+                                </label>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td className="px-2 py-2">
                   <input
