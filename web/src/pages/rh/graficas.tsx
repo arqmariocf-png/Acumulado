@@ -29,7 +29,7 @@ export interface BarraApilada {
 
 /** Barras apiladas verticales (una por periodo) con leyenda, tooltip por
  * segmento y vista de tabla. */
-export function GraficaApilada({ barras, titulo, alto = 180 }: { barras: BarraApilada[]; titulo: string; alto?: number }) {
+export function GraficaApilada({ barras, titulo, alto = 180, onClickBarra, barraActiva }: { barras: BarraApilada[]; titulo: string; alto?: number; onClickBarra?: (indice: number) => void; barraActiva?: number | null }) {
   const [tabla, setTabla] = useState(false);
   const [hover, setHover] = useState<{ b: number; s: number } | null>(null);
   const series = barras[0]?.segmentos.map((s) => ({ clave: s.clave, etiqueta: s.etiqueta, color: s.color })) ?? [];
@@ -99,6 +99,13 @@ export function GraficaApilada({ barras, titulo, alto = 180 }: { barras: BarraAp
             const total = b.segmentos.reduce((s, x) => s + x.valor, 0);
             return (
               <g key={b.etiqueta}>
+                {onClickBarra && (
+                  // Zona clicable de toda la columna (debajo de los segmentos, para no tapar sus tooltips):
+                  // un día sin marcas no tiene barra que tocar.
+                  <rect x={margen.izq + paso * i} y={margen.arr} width={paso} height={altoPlot + margen.abajo} fill="transparent" onClick={() => onClickBarra(i)} style={{ cursor: "pointer" }}>
+                    <title>{`${b.etiqueta}: ver quién checó`}</title>
+                  </rect>
+                )}
                 {b.segmentos.map((s, j) => {
                   const h = escala(s.valor);
                   const y = margen.arr + altoPlot - acumulado - h;
@@ -112,10 +119,12 @@ export function GraficaApilada({ barras, titulo, alto = 180 }: { barras: BarraAp
                       width={anchoBarra}
                       height={Math.max(0, h - (h > 2 ? 2 : 0))}
                       fill={s.color}
-                      opacity={hover && !activo ? 0.6 : 1}
+                      opacity={hover && !activo ? 0.6 : barraActiva != null && barraActiva !== i ? 0.45 : 1}
                       rx={j === b.segmentos.length - 1 ? 2 : 0}
                       onMouseEnter={() => setHover({ b: i, s: j })}
                       onMouseLeave={() => setHover(null)}
+                      onClick={onClickBarra ? () => onClickBarra(i) : undefined}
+                      style={onClickBarra ? { cursor: "pointer" } : undefined}
                     >
                       <title>{`${b.etiqueta} · ${s.etiqueta}: ${s.valor}`}</title>
                     </rect>
@@ -126,7 +135,7 @@ export function GraficaApilada({ barras, titulo, alto = 180 }: { barras: BarraAp
                     {total}
                   </text>
                 )}
-                <text x={x + anchoBarra / 2} y={alto - 8} fontSize={9} textAnchor="middle" fill={COLOR.textoSec}>
+                <text x={x + anchoBarra / 2} y={alto - 8} fontSize={9} textAnchor="middle" fill={barraActiva === i ? COLOR.texto : COLOR.textoSec} fontWeight={barraActiva === i ? 700 : 400}>
                   {b.etiqueta}
                 </text>
               </g>

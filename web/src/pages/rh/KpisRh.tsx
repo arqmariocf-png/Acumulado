@@ -66,6 +66,11 @@ export function KpiChecador() {
   });
   const d = q.data;
   const sinMarcar = d ? d.por_persona.filter((p) => p.asistencias === 0).length : 0;
+  // Clic en un día de la gráfica → quién checó y quién no (Eréndira, 28-sep-2026).
+  // Sin clic, se muestra el último día del periodo (hoy).
+  const [diaSel, setDiaSel] = useState<number | null>(null);
+  const indiceDia = d ? (diaSel !== null && diaSel < d.por_dia.length ? diaSel : d.por_dia.length - 1) : null;
+  const diaISO = d && indiceDia !== null && indiceDia >= 0 ? d.por_dia[indiceDia].d : null;
 
   return (
     <div className="space-y-3">
@@ -89,7 +94,9 @@ export function KpiChecador() {
             <Tarjeta etiqueta="Sin registrar" valor={String(sinMarcar)} detalle="personas sin ninguna entrada en el periodo" tono={sinMarcar === 0 ? "bueno" : "advertencia"} />
           </div>
           <GraficaApilada
-            titulo="Entradas por día"
+            titulo="Entradas por día · toca un día para ver quién checó"
+            onClickBarra={(i) => setDiaSel(i)}
+            barraActiva={indiceDia}
             barras={d.por_dia.map((p) => ({
               etiqueta: etiquetaDia(p.d),
               segmentos: [
@@ -98,6 +105,7 @@ export function KpiChecador() {
               ],
             }))}
           />
+          {diaISO && <DetalleDia dia={diaISO} />}
           <div className="rounded border border-slate-200 bg-white p-3">
             <h4 className="mb-2 text-sm font-semibold text-slate-700">Por persona</h4>
             {d.por_persona.length === 0 ? (
@@ -132,6 +140,92 @@ export function KpiChecador() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+interface DetalleDiaDatos {
+  dia: string;
+  plantilla: number;
+  checaron: number;
+  retardos: number;
+  sin_checar: number;
+  personas: { nombre: string; area: string | null; puesto: string | null; empresa: string | null; hora_entrada: string; entrada: string | null; salida: string | null; checo: boolean; retardo: boolean; minutos_tarde: number | null }[];
+}
+
+/** Quién checó y quién no en un día (fn_rh_kpi_checador_dia). */
+function DetalleDia({ dia }: { dia: string }) {
+  const q = useQuery({
+    queryKey: ["rh", "kpi_checador_dia", dia],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_rh_kpi_checador_dia", { p_dia: dia });
+      if (error) throw error;
+      return data as unknown as DetalleDiaDatos;
+    },
+  });
+  const d = q.data;
+  const fecha = new Date(`${dia}T00:00:00`).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+  return (
+    <div className="rounded border border-slate-200 bg-white p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold capitalize text-slate-700">{fecha}</h4>
+        {d && (
+          <div className="flex gap-3 text-xs text-slate-600">
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR.serie1 }} /> checaron {d.checaron}</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR.serie2 }} /> retardos {d.retardos}</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR.neutro }} /> sin checar {d.sin_checar}</span>
+            <span className="text-slate-400">de {d.plantilla}</span>
+          </div>
+        )}
+      </div>
+      <Estado cargando={q.isPending} error={q.error} />
+      {d && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase text-slate-500">Ya checaron ({d.checaron})</div>
+            {d.checaron === 0 ? (
+              <p className="text-xs text-slate-400">Nadie ha checado este día.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 text-sm">
+                {d.personas.filter((p) => p.checo).map((p) => (
+                  <li key={p.nombre} className="flex items-center justify-between gap-2 py-1">
+                    <div className="min-w-0">
+                      <div className="truncate text-slate-800">{p.nombre}</div>
+                      <div className="text-[11px] text-slate-400">{[p.empresa, p.puesto].filter(Boolean).join(" · ")}</div>
+                    </div>
+                    <div className="shrink-0 text-right text-xs tabular-nums">
+                      <div className={p.retardo ? "font-medium text-red-700" : "text-emerald-700"}>
+                        {p.entrada}
+                        {p.retardo && p.minutos_tarde != null && <span className="ml-1 rounded bg-red-50 px-1 text-[10px]">+{p.minutos_tarde} min</span>}
+                      </div>
+                      <div className="text-slate-400">{p.salida ? `salida ${p.salida}` : "sin salida"} · entra {p.hora_entrada}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase text-slate-500">Sin checar ({d.sin_checar})</div>
+            {d.sin_checar === 0 ? (
+              <p className="text-xs text-emerald-700">Toda la plantilla con cuenta ya checó.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 text-sm">
+                {d.personas.filter((p) => !p.checo).map((p) => (
+                  <li key={p.nombre} className="flex items-center justify-between gap-2 py-1">
+                    <div className="min-w-0">
+                      <div className="truncate text-slate-800">{p.nombre}</div>
+                      <div className="text-[11px] text-slate-400">{[p.empresa, p.puesto].filter(Boolean).join(" · ")}</div>
+                    </div>
+                    <div className="shrink-0 text-xs text-slate-400">entra {p.hora_entrada}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-slate-400">Solo cuenta el personal activo con cuenta en el sistema; quien no tiene cuenta no puede checar y no aparece.</p>
     </div>
   );
 }
