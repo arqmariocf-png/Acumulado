@@ -3,7 +3,8 @@ import { useAuth } from "../../lib/auth";
 
 export function RequisicionesLayout() {
   const { perfil } = useAuth();
-  const puedeResolver = perfil?.rol === "admin" || perfil?.rol === "corporativo";
+  // Almacén (Alma) resuelve, cotiza y genera la OC desde aquí (28-sep-2026).
+  const puedeResolver = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
 
   return (
     <div>

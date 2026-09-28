@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { AvanceResolucionLinea, Existencia } from "../../types/database";
+import { ComprasPorOrdenar } from "./ComprasPorOrdenar";
 
 
 // Detalle (proyecto, empresa, concepto) de las líneas con algo sin resolver
@@ -218,6 +219,8 @@ export function Resolucion() {
           {pendientes.length === 0 && <p className="rounded border border-dashed border-slate-300 px-3 py-8 text-center text-slate-400">Sin líneas pendientes de resolver.</p>}
         </div>
       )}
+
+      {(empresaFiltro || !veTodasLasEmpresas) && <ComprasPorOrdenar empresaId={empresaFiltro} />}
     </div>
   );
 }
