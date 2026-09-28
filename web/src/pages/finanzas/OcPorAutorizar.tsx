@@ -48,6 +48,24 @@ export function OcPorAutorizar() {
   const [abierta, setAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
+  // Un solo clic (Mario, 28-sep-2026): autoriza con pago a 7 días y cuenta
+  // por definir; "Revisar" es para ver partidas, cambiar fecha o rechazar.
+  const autorizarDirecto = useMutation({
+    mutationFn: async (o: OcPendiente) => {
+      const { error } = await supabase.rpc("fn_oc_autorizar", { p_oc_id: o.id, p_autorizar: true, p_motivo: null, p_fecha_pago: sumarDias(7), p_cuenta_id: null });
+      if (error) throw error;
+      return o;
+    },
+    onSuccess: (o) => {
+      setAviso(`Orden ${o.id_orden} autorizada: pago a ${o.proveedor ?? "proveedor"} programado para el ${sumarDias(7)}.`);
+      setAbierta(null);
+      queryClient.invalidateQueries({ queryKey: ["oc-por-autorizar"] });
+      queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
+      queryClient.invalidateQueries({ queryKey: ["cxp-proveedores"] });
+    },
+    onError: (e: Error) => setAviso(e.message),
+  });
+
   const { data: ocs, isLoading } = useQuery({
     queryKey: ["oc-por-autorizar"],
     queryFn: async () => {
@@ -90,8 +108,17 @@ export function OcPorAutorizar() {
                 <span className="font-mono text-xs font-semibold text-slate-900">{o.id_orden}</span> · <b>{o.proveedor ?? "sin proveedor"}</b>
                 <span className="text-slate-500"> · {o.empresas?.codigo ?? ""} · {o.proyecto ?? "sin proyecto"} · {o.fecha_creacion ?? ""}</span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold tabular-nums">{o.total != null ? moneda(o.total) : "—"}</span>
+              <div className="flex items-center gap-2">
+                <span className="mr-1 text-sm font-semibold tabular-nums">{o.total != null ? moneda(o.total) : "—"}</span>
+                <button
+                  type="button"
+                  onClick={() => autorizarDirecto.mutate(o)}
+                  disabled={autorizarDirecto.isPending}
+                  className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                  title="Autoriza y programa el pago a 7 días (la cuenta se define después en Programación de pagos)"
+                >
+                  Autorizar
+                </button>
                 <button type="button" onClick={() => setAbierta(abierta === o.id ? null : o.id)} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
                   {abierta === o.id ? "Cerrar" : "Revisar"}
                 </button>
@@ -113,7 +140,7 @@ export function OcPorAutorizar() {
           </div>
         ))}
       </div>
-      {aviso && <p className="mt-2 text-xs text-emerald-800">{aviso}</p>}
+      {aviso && <p className={`mt-2 text-xs ${aviso.startsWith("Orden") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
       <p className="mt-2 text-xs text-amber-800">
         Los pagos autorizados quedan en{" "}
         <Link to="/finanzas/pagos" className="underline">
