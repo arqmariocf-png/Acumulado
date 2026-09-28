@@ -231,6 +231,7 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
   const [linea, setLinea] = useState(f.linea_credito != null ? String(f.linea_credito) : "");
   const [dias, setDias] = useState(f.dias_credito != null ? String(f.dias_credito) : "");
   const [notas, setNotas] = useState(f.notas ?? "");
+  const [vencimiento, setVencimiento] = useState(f.vencimiento ?? "");
   const [aviso, setAviso] = useState<string | null>(null);
 
   const { data: detalle, isLoading } = useQuery({
@@ -248,7 +249,7 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
       const diasNum = dias.trim() === "" ? 0 : Number(dias);
       if (!Number.isFinite(lineaNum) || lineaNum < 0) throw new Error("La línea de crédito debe ser un número mayor o igual a cero.");
       if (!Number.isInteger(diasNum) || diasNum < 0) throw new Error("Los días de crédito deben ser un entero.");
-      const { error } = await supabase.from("proveedores_credito").upsert({ clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, notas: notas.trim() || null }, { onConflict: "clave" });
+      const { error } = await supabase.from("proveedores_credito").upsert({ clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, notas: notas.trim() || null, vencimiento: vencimiento || null }, { onConflict: "clave" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -280,7 +281,11 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
               <input value={dias} onChange={(e) => setDias(e.target.value)} inputMode="numeric" placeholder="0" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5" />
             </label>
             <label className="block">
-              <span className="text-xs text-slate-500">Notas (condiciones, contacto, vencimiento)</span>
+              <span className="text-xs text-slate-500">Vence el</span>
+              <input type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5" />
+            </label>
+            <label className="block">
+              <span className="text-xs text-slate-500">Notas (condiciones, contacto)</span>
               <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5" />
             </label>
             <div className="flex items-center gap-2">
@@ -296,6 +301,8 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
             <dd>{f.linea_credito != null ? moneda(f.linea_credito) : "sin capturar"}</dd>
             <dt className="mt-1 text-xs text-slate-500">Días</dt>
             <dd>{f.dias_credito ?? "—"}</dd>
+            <dt className="mt-1 text-xs text-slate-500">Vence</dt>
+            <dd>{f.vencimiento ?? "—"}</dd>
             {f.notas && (
               <>
                 <dt className="mt-1 text-xs text-slate-500">Notas</dt>

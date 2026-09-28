@@ -60,6 +60,7 @@ export const EDITA: Record<string, Partial<Record<AppRol, string>>> = {
   "/dashboard": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/finanzas/saldos": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/finanzas/proveedores": { admin: "captura líneas de crédito", corporativo: "captura líneas de crédito", direccion: "captura líneas de crédito" },
+  "/finanzas/lineas-credito": { admin: "captura", direccion: "captura (menú propio)" },
   "/finanzas/pagos": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/saldos": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/prestamos-intercompania": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },

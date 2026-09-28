@@ -18,6 +18,7 @@ const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ 
 const SaldosEmpresas = lazy(() => import("./pages/finanzas/SaldosEmpresas").then((m) => ({ default: m.SaldosEmpresas })));
 const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
 const CuentasPorPagar = lazy(() => import("./pages/finanzas/CuentasPorPagar").then((m) => ({ default: m.CuentasPorPagar })));
+const LineasCredito = lazy(() => import("./pages/finanzas/LineasCredito").then((m) => ({ default: m.LineasCredito })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
@@ -152,6 +153,11 @@ function Enrutador() {
             <Route path="/finanzas/saldos" element={<SaldosEmpresas />} />
             <Route path="/finanzas/pagos" element={<ProgramacionPagos />} />
             <Route path="/finanzas/proveedores" element={<CuentasPorPagar />} />
+          </Route>
+          {/* Menú exclusivo de dirección (Laura): líneas de crédito con
+              vencimiento. Admin siempre pasa. */}
+          <Route element={<ProtectedRoute roles={["direccion"]} />}>
+            <Route path="/finanzas/lineas-credito" element={<LineasCredito />} />
           </Route>
 
           {/* Sin roles restringidos aquí a propósito: además de admin/corporativo/

@@ -101,7 +101,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   corporativo/direccion). Los nombres se agrupan con `fn_proveedor_clave`
   (quita acentos, puntuación y SA DE CV). Semáforo en `lib/cuentasPorPagar.ts`
   (con pruebas): gris sin línea, rojo si se rebasa o queda <10 %, ámbar <30 %.
-  Detalle por proveedor con `fn_cxp_proveedor_detalle(clave)`. Ojo: el banco
+  Detalle por proveedor con `fn_cxp_proveedor_detalle(clave)`. **Menú
+  exclusivo de dirección** `/finanzas/lineas-credito`
+  (`pages/finanzas/LineasCredito.tsx`, ruta con `roles={["direccion"]}`):
+  captura de línea, días, `vencimiento` (date) y notas por renglón, con
+  semáforo de vencimiento (`estadoVencimiento`: vencida / por vencer ≤30 d).
+  Ojo: el banco
   rara vez trae el nombre del proveedor, así que "pagado" sale bajo y "por
   pagar" alto hasta que se capturen complementos de pago.
 - **Organigrama de accesos por rol**: Admin → "Accesos por rol"
@@ -171,6 +176,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   dentro de una policy (profiles solo deja leer el renglón propio y la
   frontera se vuelve invisible para RH). Usar `perfil_en_alcance(profile_id)`
   (definer; `20260926200000`). Síntoma: "Marca no encontrada o sin permiso".
+- **Checador con cámara en página (28-sep-2026)**: `components/CamaraSelfie.tsx`
+  (getUserMedia, cámara frontal, captura a canvas ≤1024 px). El botón de
+  entrada/salida abre la cámara y al capturar marca solo; la foto se respalda
+  en sessionStorage 15 min por si el navegador recarga; plan B: `<input
+  type=file>` sin `capture` ("elegir de la galería"). Motivo: en el Android de
+  Christian la app de cámara nunca regresaba el archivo y el botón "volvía a
+  pedir foto".
 - Evidencia (foto de nota/remisión) en Registrar movimiento es una sección
   siempre visible para entrada y salida (edge `ocr-nota-entrega` v8 valida con
   `auth_puede_escribir_inventario`). No se guardan líneas ni remisiones en 0.

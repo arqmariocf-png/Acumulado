@@ -4,6 +4,47 @@ import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 import { eliminarPendiente, esErrorDeRed, guardarPendiente, listarPendientes, nuevoId, type MarcaPendiente } from "../lib/colaOffline";
+import { CamaraSelfie } from "../components/CamaraSelfie";
+
+/** La foto tomada se respalda en sessionStorage (ya comprimida, ~100-200 KB)
+ * para sobrevivir a que el navegador recargue la página mientras se pide
+ * la ubicación o se abre la cámara del teléfono. Caduca a los 15 minutos. */
+const LLAVE_FOTO = "checador.foto";
+const VIGENCIA_FOTO_MS = 15 * 60 * 1000;
+function respaldarFoto(foto: Blob | null) {
+  try {
+    if (!foto) {
+      sessionStorage.removeItem(LLAVE_FOTO);
+      return;
+    }
+    const lector = new FileReader();
+    lector.onload = () => {
+      try {
+        sessionStorage.setItem(LLAVE_FOTO, JSON.stringify({ en: Date.now(), datos: lector.result }));
+      } catch {
+        /* sin espacio: se sigue sin respaldo */
+      }
+    };
+    lector.readAsDataURL(foto);
+  } catch {
+    /* sessionStorage bloqueado */
+  }
+}
+async function recuperarFoto(): Promise<Blob | null> {
+  try {
+    const crudo = sessionStorage.getItem(LLAVE_FOTO);
+    if (!crudo) return null;
+    const { en, datos } = JSON.parse(crudo) as { en: number; datos: string };
+    if (!datos || Date.now() - en > VIGENCIA_FOTO_MS) {
+      sessionStorage.removeItem(LLAVE_FOTO);
+      return null;
+    }
+    const r = await fetch(datos);
+    return await r.blob();
+  } catch {
+    return null;
+  }
+}
 
 export type TipoMarca = "entrada" | "salida" | "comida_inicio" | "comida_fin";
 
@@ -56,7 +97,7 @@ function obtenerUbicacion(): Promise<{ lat: number; lng: number; precision: numb
 
 /** Reduce la foto a máximo 1024 px de lado y JPEG, para que suba rápido
  * desde datos móviles (una selfie de cámara suele pesar 3-5 MB). */
-async function comprimirFoto(archivo: File): Promise<Blob> {
+async function comprimirFoto(archivo: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(archivo).catch(() => null);
   if (!bitmap) return archivo;
   const escala = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
@@ -295,43 +336,87 @@ export function Checador() {
   const historial = useMemo(() => agruparPorDia(registros ?? []), [registros]);
 
   const inputFoto = useRef<HTMLInputElement>(null);
-  const [foto, setFoto] = useState<File | null>(null);
+  const [foto, setFoto] = useState<Blob | null>(null);
   const [vistaPrevia, setVistaPrevia] = useState<string | null>(null);
-  // Sin foto el botón de entrada/salida se veía apagado y "no hacía nada"
-  // (Christian, 28-sep-2026): ahora avisa y abre la cámara directo.
+  // La cámara se abre dentro de la página (CamaraSelfie). Al tomar la foto
+  // desde el botón de entrada/salida se marca en el mismo paso, sin segundo
+  // clic (Christian, 28-sep-2026: en su Android la app de cámara no
+  // regresaba la foto y el botón "volvía a pedirla").
+  const [camaraAbierta, setCamaraAbierta] = useState(false);
+  const [tipoAlCapturar, setTipoAlCapturar] = useState<"entrada" | "salida" | null>(null);
   const [avisoFoto, setAvisoFoto] = useState<string | null>(null);
-  function marcarConFoto(tipo: "entrada" | "salida") {
-    if (!foto) {
-      setAvisoFoto("Primero toma tu foto (paso 1). Se abre la cámara…");
-      inputFoto.current?.click();
-      return;
-    }
-    setAvisoFoto(null);
-    marcar.mutate(tipo);
-  }
   const [paso, setPaso] = useState<string | null>(null);
 
-  function onFotoElegida(archivo: File | null) {
+  const onFotoElegida = useCallback((archivo: Blob | null) => {
     setFoto(archivo);
+    respaldarFoto(archivo);
     if (archivo) setAvisoFoto(null);
     setVistaPrevia((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return archivo ? URL.createObjectURL(archivo) : null;
     });
+  }, []);
+
+  // Si la página se recargó con una foto recién tomada, se recupera.
+  useEffect(() => {
+    recuperarFoto().then((f) => {
+      if (f) onFotoElegida(f);
+    });
+  }, [onFotoElegida]);
+
+  function abrirCamara(tipo: "entrada" | "salida" | null) {
+    setAvisoFoto(null);
+    setTipoAlCapturar(tipo);
+    setCamaraAbierta(true);
+  }
+  function marcarConFoto(tipo: "entrada" | "salida") {
+    if (!foto) {
+      abrirCamara(tipo);
+      return;
+    }
+    setAvisoFoto(null);
+    marcar.mutate({ tipo, foto });
+  }
+  const sinCamara = useCallback((motivo: string) => {
+    setCamaraAbierta(false);
+    setAvisoFoto(motivo);
+    inputFoto.current?.click();
+  }, []);
+  async function onFotoCapturada(blob: Blob) {
+    setCamaraAbierta(false);
+    onFotoElegida(blob);
+    if (tipoAlCapturar) {
+      const tipo = tipoAlCapturar;
+      setTipoAlCapturar(null);
+      marcar.mutate({ tipo, foto: blob });
+    }
+  }
+  async function onArchivoElegido(archivo: File | null) {
+    if (!archivo) return;
+    setPaso("Preparando foto…");
+    const comprimida = await comprimirFoto(archivo).catch(() => archivo as Blob);
+    setPaso(null);
+    onFotoElegida(comprimida);
+    if (tipoAlCapturar) {
+      const tipo = tipoAlCapturar;
+      setTipoAlCapturar(null);
+      marcar.mutate({ tipo, foto: comprimida });
+    }
   }
 
   // La marca va por el edge function checador-marcar con foto + GPS; la
   // inserción directa en la tabla está cerrada para que nadie marque sin
   // evidencia.
   const marcar = useMutation({
-    mutationFn: async (tipo: TipoMarca): Promise<"enviada" | "guardada"> => {
+    mutationFn: async ({ tipo, foto: fotoMarca }: { tipo: TipoMarca; foto?: Blob | null }): Promise<"enviada" | "guardada"> => {
       const pideFoto = tipo === "entrada" || tipo === "salida";
-      if (pideFoto && !foto) throw new Error("Primero toma tu foto.");
+      const fotoUsada = fotoMarca ?? foto;
+      if (pideFoto && !fotoUsada) throw new Error("Primero toma tu foto.");
       setAviso(null);
       setPaso("Obteniendo ubicación…");
       const ubicacion = await obtenerUbicacion();
       setPaso("Preparando foto…");
-      const comprimida = pideFoto && foto ? await comprimirFoto(foto) : null;
+      const comprimida = pideFoto && fotoUsada ? await comprimirFoto(fotoUsada) : null;
       const pendiente: MarcaPendiente = {
         id: nuevoId(),
         profileId,
@@ -428,48 +513,49 @@ export function Checador() {
           {estado === "dentro" ? "Dentro" : estado === "comida" ? "En comida" : "Fuera"}
         </p>
         <div className="mx-auto mb-4 flex max-w-xs flex-col items-center gap-2">
-          <input
-            ref={inputFoto}
-            type="file"
-            accept="image/*"
-            capture="user"
-            className="hidden"
-            onChange={(e) => onFotoElegida(e.target.files?.[0] ?? null)}
-          />
+          <CamaraSelfie abierta={camaraAbierta} onCaptura={onFotoCapturada} onCerrar={() => { setCamaraAbierta(false); setTipoAlCapturar(null); }} onSinCamara={sinCamara} />
+          {/* Plan B sin `capture`: el selector normal del teléfono (cámara o
+              galería), que en Android sí regresa el archivo. */}
+          <input ref={inputFoto} type="file" accept="image/*" className="hidden" onChange={(e) => { onArchivoElegido(e.target.files?.[0] ?? null); e.target.value = ""; }} />
           {vistaPrevia ? (
             <img src={vistaPrevia} alt="Tu foto para esta marca" className="h-32 w-32 rounded-full object-cover ring-2 ring-slate-300" />
           ) : (
             <div className="flex h-32 w-32 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-400">sin foto</div>
           )}
-          <button type="button" onClick={() => inputFoto.current?.click()} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700">
-            {foto ? "Tomar otra foto" : "1. Tomar foto"}
-          </button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={() => abrirCamara(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700">
+              {foto ? "Tomar otra foto" : "1. Tomar foto"}
+            </button>
+            <button type="button" onClick={() => { setTipoAlCapturar(null); inputFoto.current?.click(); }} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-500" title="Si la cámara de la página no abre en tu teléfono">
+              elegir de la galería
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
           {estado === "fuera" && (
             <button onClick={() => marcarConFoto("entrada")} disabled={marcar.isPending} className={`rounded px-6 py-3 text-lg font-semibold text-white disabled:opacity-50 ${foto ? "bg-emerald-700" : "bg-emerald-700/60"}`}>
-              {marcar.isPending ? (paso ?? "Marcando…") : "2. Marcar entrada"}
+              {marcar.isPending ? (paso ?? "Marcando…") : foto ? "2. Marcar entrada" : "Marcar entrada (toma la foto)"}
             </button>
           )}
           {estado === "dentro" && (
             <>
-              <button onClick={() => marcar.mutate("comida_inicio")} disabled={marcar.isPending} className="rounded bg-amber-500 px-5 py-3 text-base font-semibold text-white disabled:opacity-50">
+              <button onClick={() => marcar.mutate({ tipo: "comida_inicio" })} disabled={marcar.isPending} className="rounded bg-amber-500 px-5 py-3 text-base font-semibold text-white disabled:opacity-50">
                 {marcar.isPending ? (paso ?? "Marcando…") : "Salir a comer"}
               </button>
               <button onClick={() => marcarConFoto("salida")} disabled={marcar.isPending} className={`rounded px-6 py-3 text-lg font-semibold text-white disabled:opacity-50 ${foto ? "bg-slate-900" : "bg-slate-900/60"}`}>
-                {marcar.isPending ? (paso ?? "Marcando…") : "2. Marcar salida"}
+                {marcar.isPending ? (paso ?? "Marcando…") : foto ? "2. Marcar salida" : "Marcar salida (toma la foto)"}
               </button>
             </>
           )}
           {estado === "comida" && (
-            <button onClick={() => marcar.mutate("comida_fin")} disabled={marcar.isPending} className="rounded bg-amber-600 px-6 py-3 text-lg font-semibold text-white disabled:opacity-50">
+            <button onClick={() => marcar.mutate({ tipo: "comida_fin" })} disabled={marcar.isPending} className="rounded bg-amber-600 px-6 py-3 text-lg font-semibold text-white disabled:opacity-50">
               {marcar.isPending ? (paso ?? "Marcando…") : "Regresar de comer"}
             </button>
           )}
         </div>
         {avisoFoto && <p className="mt-2 text-sm font-medium text-amber-700">{avisoFoto}</p>}
         {!foto && (estado === "fuera" || estado === "dentro") && !avisoFoto && (
-          <p className="mt-2 text-xs text-amber-700">Para marcar {estado === "fuera" ? "entrada" : "salida"} primero toma tu foto (paso 1).</p>
+          <p className="mt-2 text-xs text-amber-700">Al marcar {estado === "fuera" ? "entrada" : "salida"} se abre la cámara aquí mismo: toma tu foto y la marca se envía sola.</p>
         )}
         <p className="mt-2 text-xs text-slate-400">
           Entrada y salida guardan tu foto y tu ubicación; la comida solo la ubicación. La pausa de comida no cuenta como horas trabajadas.
