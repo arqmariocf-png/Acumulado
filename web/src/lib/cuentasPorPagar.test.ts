@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estadoVencimiento, filtrarYOrdenar, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
+import { csvCxp, estadoVencimiento, filtrarYOrdenar, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
 
 function fila(p: Partial<FilaCxp>): FilaCxp {
   return {
@@ -67,4 +67,24 @@ test("vencimiento de la línea: vencida, por vencer a 30 días, vigente", () => 
   assert.equal(estadoVencimiento("2026-10-28", "2026-09-28").estado, "por_vencer");
   assert.equal(estadoVencimiento("2026-10-29", "2026-09-28").estado, "vigente");
   assert.equal(estadoVencimiento("2026-10-29", "2026-09-28").dias, 31);
+});
+
+test("filtro por línea: con línea, sin línea, todos", () => {
+  const filas = [
+    fila({ clave: "A", proveedor: "A", linea_credito: 100 }),
+    fila({ clave: "B", proveedor: "B", linea_credito: 0 }),
+    fila({ clave: "C", proveedor: "C", linea_credito: null }),
+  ];
+  assert.deepEqual(filtrarYOrdenar(filas, "", "", "proveedor", false, "con_linea").map((f) => f.clave), ["A"]);
+  assert.deepEqual(filtrarYOrdenar(filas, "", "", "proveedor", false, "sin_linea").map((f) => f.clave), ["B", "C"]);
+  assert.equal(filtrarYOrdenar(filas, "", "", "proveedor", false, "todos").length, 3);
+});
+
+test("csv escapa comas y comillas y trae encabezado", () => {
+  const csv = csvCxp([fila({ proveedor: 'Aceros "Norte", SA', por_pagar: 1234.5, empresas: ["e1"] })], (id) => (id === "e1" ? "ERG" : "?"));
+  const lineas = csv.split("\r\n");
+  assert.equal(lineas.length, 2);
+  assert.ok(lineas[0].startsWith("\ufeffProveedor,Empresas"));
+  assert.ok(lineas[1].startsWith('"Aceros ""Norte"", SA",ERG,'));
+  assert.ok(lineas[1].includes(",1234.50,"));
 });

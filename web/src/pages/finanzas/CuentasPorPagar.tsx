@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { moneda } from "../../lib/saldosEmpresas";
-import { filtrarYOrdenar, semaforoCredito, totalesCxp, type ColorCredito, type FilaCxp, type OrdenCxp } from "../../lib/cuentasPorPagar";
+import { csvCxp, filtrarYOrdenar, semaforoCredito, tieneLinea, totalesCxp, type ColorCredito, type FilaCxp, type FiltroLinea, type OrdenCxp } from "../../lib/cuentasPorPagar";
 
 const PUNTO: Record<ColorCredito, string> = {
   gris: "bg-slate-300",
@@ -46,6 +46,9 @@ export function CuentasPorPagar() {
   const [empresaId, setEmpresaId] = useState("");
   const [orden, setOrden] = useState<OrdenCxp>("por_pagar");
   const [soloConSaldo, setSoloConSaldo] = useState(true);
+  // Laura (28-sep-2026): por defecto solo los que tienen línea de crédito;
+  // los que no, se ven aparte para trabajarlos con otra área.
+  const [filtroLinea, setFiltroLinea] = useState<FiltroLinea>("con_linea");
   const [abierto, setAbierto] = useState<string | null>(null);
 
   const { data: filas, isLoading, error } = useQuery({
@@ -57,9 +60,24 @@ export function CuentasPorPagar() {
     },
   });
 
-  const lista = useMemo(() => filtrarYOrdenar(filas ?? [], texto, empresaId, orden, soloConSaldo), [filas, texto, empresaId, orden, soloConSaldo]);
+  const lista = useMemo(() => filtrarYOrdenar(filas ?? [], texto, empresaId, orden, soloConSaldo, filtroLinea), [filas, texto, empresaId, orden, soloConSaldo, filtroLinea]);
+  const conteoLinea = useMemo(() => {
+    const base = filtrarYOrdenar(filas ?? [], texto, empresaId, orden, soloConSaldo, "todos");
+    const con = base.filter(tieneLinea).length;
+    return { con, sin: base.length - con };
+  }, [filas, texto, empresaId, orden, soloConSaldo]);
   const totales = useMemo(() => totalesCxp(lista), [lista]);
   const nombreEmpresa = useMemo(() => new Map((empresas ?? []).map((e) => [e.id, e.codigo || e.nombre])), [empresas]);
+
+  function descargarCsv() {
+    const csv = csvCxp(lista, (id) => nombreEmpresa.get(id) ?? "");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cuentas-por-pagar-${filtroLinea}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   return (
     <div>
@@ -87,6 +105,19 @@ export function CuentasPorPagar() {
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="inline-flex overflow-hidden rounded border border-slate-300 text-sm">
+          {(
+            [
+              ["con_linea", `Con línea (${conteoLinea.con})`],
+              ["sin_linea", `Sin línea (${conteoLinea.sin})`],
+              ["todos", "Todos"],
+            ] as [FiltroLinea, string][]
+          ).map(([v, etiqueta]) => (
+            <button key={v} type="button" onClick={() => setFiltroLinea(v)} className={`px-3 py-1.5 ${filtroLinea === v ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}>
+              {etiqueta}
+            </button>
+          ))}
+        </div>
         <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar proveedor…" className="w-56 rounded border border-slate-300 px-2 py-1.5 text-sm" />
         <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
           <option value="">Todas las empresas</option>
@@ -106,7 +137,19 @@ export function CuentasPorPagar() {
           <input type="checkbox" checked={soloConSaldo} onChange={(e) => setSoloConSaldo(e.target.checked)} />
           Solo con saldo pendiente
         </label>
+        <button type="button" onClick={descargarCsv} disabled={lista.length === 0} className="ml-auto rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50" title="Descarga la lista tal como está filtrada, para compartirla con otra área">
+          Descargar lista (CSV)
+        </button>
       </div>
+      {filtroLinea === "sin_linea" && (
+        <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Proveedores sin línea de crédito capturada: esta es la lista para negociar o registrar con la otra área. Las líneas se capturan en{" "}
+          <Link to="/finanzas/lineas-credito" className="underline">
+            Líneas de crédito
+          </Link>
+          .
+        </p>
+      )}
 
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{(error as Error).message}</p>}
       {isLoading && <p className="text-sm text-slate-400">Cargando proveedores…</p>}
@@ -138,7 +181,7 @@ export function CuentasPorPagar() {
               {lista.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
-                    Sin proveedores para este filtro.
+                    {filtroLinea === "con_linea" ? "Ningún proveedor tiene línea de crédito capturada todavía. Captúralas en Líneas de crédito o cambia a \"Sin línea\"." : "Sin proveedores para este filtro."}
                   </td>
                 </tr>
               )}
