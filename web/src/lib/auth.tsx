@@ -10,7 +10,15 @@ interface AuthState {
   session: Session | null;
   perfil: Profile | null;
   puedeEscribirEnEmpresa: (empresaId: string) => boolean;
+  /** Ve todas las empresas de su organización (admin, o rol multiempresa
+   * con la marca "todas"). Alguien con dos empresas asignadas NO ve todas:
+   * ve las dos (empresasAlcance). */
   veTodasLasEmpresas: boolean;
+  /** Empresas que la persona maneja (fn_mi_alcance): principal + asignadas,
+   * o todas las de la organización. Vacío mientras carga. */
+  empresasAlcance: string[];
+  /** El rol tiene prendido el interruptor "maneja varias empresas". */
+  rolMultiempresa: boolean;
   /** Organización (tenant) del usuario. null mientras no tenga una asignada. */
   grupo: Grupo | null;
   /** Módulos abiertos de la organización, para acotar el menú. null mientras no carga. */
@@ -38,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [grupo, setGrupo] = useState<Grupo | null>(null);
   const [modulos, setModulos] = useState<ModuloClave[]>([]);
   const [suscripcion, setSuscripcion] = useState<Suscripcion | null>(null);
+  const [alcance, setAlcance] = useState<{ empresas: string[]; todas: boolean; multiempresa: boolean } | null>(null);
   // Se activa cuando el link viene de generar-link-acceso con tipo
   // "recovery" (ver Usuarios.tsx / NuevaContrasena.tsx): supabase-js detecta
   // el token en el hash de la URL al cargar, sin importar en qué ruta cayó,
@@ -76,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setGrupo(null);
       setModulos([]);
       setSuscripcion(null);
+      setAlcance(null);
       setCargando(false);
       return;
     }
@@ -87,13 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     Promise.all([
       supabase
         .from("profiles")
-        .select("id, nombre, rol, grupo_id, empresa_id, activo, bbva_mantenimiento, rh_nivel")
+        .select("id, nombre, rol, grupo_id, empresa_id, todas_las_empresas, activo, bbva_mantenimiento, rh_nivel")
         .eq("id", session.user.id)
         .single(),
       supabase.from("permisos_modulo").select("modulo").eq("profile_id", session.user.id),
+      supabase.rpc("fn_mi_alcance"),
     ])
-      .then(([{ data: fila, error }, { data: permisos }]) => {
+      .then(([{ data: fila, error }, { data: permisos }, { data: alcanceData }]) => {
         if (!activo) return;
+        const a = alcanceData as { empresas?: string[]; todas?: boolean; multiempresa?: boolean } | null;
+        setAlcance(a ? { empresas: a.empresas ?? [], todas: !!a.todas, multiempresa: !!a.multiempresa } : null);
         const data = fila ? { ...(fila as Omit<Profile, "modulos">), modulos: modulosEfectivos((fila as { rol: Profile["rol"] }).rol, (permisos ?? []).map((m) => String(m.modulo))) } : null;
         if (data) {
           setPerfil(data as Profile);
@@ -150,7 +163,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await cargarOrganizacion(perfil?.grupo_id ?? null);
   }
 
-  const veTodasLasEmpresas = perfil ? (perfil.rol === "corporativo" || perfil.rol === "admin" || perfil.empresa_id === null) && perfil.rol !== "pendiente" : false;
+  // Alcance por persona (28-sep-2026): lo dice la base (fn_mi_alcance).
+  // Sin señal (perfil del caché) se cae a la regla vieja por rol.
+  const veTodasLasEmpresas = perfil
+    ? alcance
+      ? alcance.todas
+      : (perfil.rol === "corporativo" || perfil.rol === "admin" || perfil.empresa_id === null) && perfil.rol !== "pendiente"
+    : false;
+  const empresasAlcance = alcance?.empresas ?? (perfil?.empresa_id ? [perfil.empresa_id] : []);
+  const rolMultiempresa = alcance?.multiempresa ?? false;
 
   const esAdminGlobal = perfil?.rol === "admin" && grupo?.es_maestro === true;
   // Lo que la organización tiene abierto. El menú lo usa para no ofrecerle a
@@ -188,8 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function puedeEscribirEnEmpresa(empresaId: string): boolean {
     if (!suscripcionPermiteEscribir) return false;
     if (!perfil || perfil.rol === "pendiente" || perfil.rol === "direccion") return false;
-    if (perfil.rol === "corporativo" || perfil.rol === "admin") return true;
-    return perfil.empresa_id === empresaId;
+    if (perfil.rol === "admin") return true;
+    if (veTodasLasEmpresas) return true;
+    return perfil.empresa_id === empresaId || empresasAlcance.includes(empresaId);
   }
 
   async function cerrarSesion() {
@@ -208,6 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         perfil,
         puedeEscribirEnEmpresa,
         veTodasLasEmpresas,
+        empresasAlcance,
+        rolMultiempresa,
         grupo,
         alcanceOrganizacion,
         modulos,

@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../lib/auth";
 import { DESCRIPCION_ROL, ETIQUETA_ROL, NIVELES_ROLES, accesosDelRol, esRolPersonal } from "../../lib/accesosRoles";
 import type { AppRol } from "../../types/database";
 
@@ -11,6 +14,28 @@ export function Roles() {
   const [abierto, setAbierto] = useState<AppRol | null>("admin");
   const [busqueda, setBusqueda] = useState("");
   const q = busqueda.trim().toLowerCase();
+  const { esAdminGlobal } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Interruptor por rol (Mario, 28-sep-2026): qué roles manejan más de una
+  // empresa. Apagado: cada persona ve solo su empresa principal, aunque
+  // tenga otras asignadas. Lo prende solo el admin de la plataforma.
+  const { data: rolesAlcance } = useQuery({
+    queryKey: ["roles-alcance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("roles_alcance").select("rol, multiempresa");
+      if (error) throw error;
+      return Object.fromEntries((data ?? []).map((r) => [r.rol as AppRol, !!r.multiempresa])) as Partial<Record<AppRol, boolean>>;
+    },
+  });
+  const cambiarAlcance = useMutation({
+    mutationFn: async ({ rol, multiempresa }: { rol: AppRol; multiempresa: boolean }) => {
+      const { error } = await supabase.from("roles_alcance").upsert({ rol, multiempresa }, { onConflict: "rol" });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roles-alcance"] }),
+    onError: (e: Error) => alert(e.message),
+  });
 
   return (
     <div>
@@ -42,6 +67,20 @@ export function Roles() {
                       <div className="mt-0.5 text-[11px] text-slate-500">{DESCRIPCION_ROL[rol]}</div>
                       {esRolPersonal(rol) && <div className="mt-0.5 text-[11px] text-indigo-700">Rol de personal: módulos extra por RH.</div>}
                     </button>
+                    {rol !== "pendiente" && rolesAlcance && (
+                      <label
+                        className={`flex items-center gap-1.5 border-t border-slate-100 px-3 py-1.5 text-[11px] ${rolesAlcance[rol] ? "text-emerald-800" : "text-slate-500"} ${esAdminGlobal ? "cursor-pointer" : ""}`}
+                        title="Prendido: las personas con este rol ven las empresas que se les asignen (o todas, si se les marca). Apagado: solo su empresa principal."
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!rolesAlcance[rol]}
+                          disabled={!esAdminGlobal || rol === "admin" || cambiarAlcance.isPending}
+                          onChange={(e) => cambiarAlcance.mutate({ rol, multiempresa: e.target.checked })}
+                        />
+                        {rol === "admin" ? "Maneja todas las empresas" : rolesAlcance[rol] ? "Maneja varias empresas" : "Una sola empresa"}
+                      </label>
+                    )}
                     {expandido && (
                       <div className="border-t border-slate-100 px-3 py-2">
                         {accesos.length === 0 && <p className="text-xs text-slate-400">No ve ningún menú{q ? " con ese filtro" : ""}.</p>}

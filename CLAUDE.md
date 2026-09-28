@@ -132,6 +132,35 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (requiere `ANTHROPIC_API_KEY` válida en secrets de Edge Functions; la actual
   daba `invalid x-api-key` el 21-sep-2026).
 
+## Alcance por empresa: por persona y por rol (28-sep-2026)
+- Mario: "cada empresa funciona por separado; yo activo qué roles manejan
+  más de una". Tres piezas (`20260928180000_alcance_multiempresa.sql`):
+  1. `roles_alcance(rol, multiempresa)`: interruptor por rol, lo prende el
+     admin maestro en Admin → Accesos por rol. Apagado = cada persona ve
+     solo su empresa principal aunque tenga otras asignadas.
+  2. `profiles.empresa_id` = empresa **principal** (donde checa y está su
+     expediente); `profiles.todas_las_empresas` = todas las de su
+     organización; `profile_empresas(profile_id, empresa_id)` = las demás
+     que maneja. Se asignan en Admin → Usuarios ("Maneja también").
+  3. `empresa_en_alcance(e)` y `auth_ve_todas_empresas()` aplican esa regla
+     en UNA consulta sobre profiles. `auth_ve_todas_empresas()` ahora
+     significa "admin, o rol multiempresa con la marca todas"; alguien con
+     dos empresas asignadas NO ve todas. `auth_empresas_alcance()` /
+     `fn_mi_alcance()` alimentan `useAuth().empresasAlcance`,
+     `veTodasLasEmpresas` y `rolMultiempresa`.
+- **Ya no se escribe `empresa_id = auth_empresa_id()` en policies ni
+  funciones**: la migración reescribió las 39 policies y 13 funciones que lo
+  hacían por `empresa_en_alcance(empresa_id)` (regexp sobre pg_policy /
+  pg_proc). Toda policy nueva usa `empresa_en_alcance()`.
+- Siembra: quien tenía empresa en blanco quedó con `todas_las_empresas`, y
+  su rol con `multiempresa = true` (incluye operativo y supervisor por
+  Paola, Brenda, Fernanda y Mauro): nadie ve más ni menos que antes. Mario
+  decide después qué apaga.
+- Pendiente (fase C): selector de "empresa activa" en el encabezado para
+  quien maneja varias, con "Todas" solo en saldos, indicadores y socio; las
+  ~31 pantallas que filtran por `perfil.empresa_id` o `veTodasLasEmpresas`
+  pasan a la empresa activa.
+
 ## Nivel socio y organizaciones (25-sep-2026)
 - `/` para admin = **vista de socio** (`pages/Socio.tsx`): organizaciones
   (`grupos`: LOMA maestro, ARSSA ejemplo) → empresas → KPIs por empresa, con

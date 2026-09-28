@@ -111,7 +111,7 @@ begin
     and t.rowsecurity
     and t.tablename not in ('grupos', 'modulos', 'planes', 'plan_escalones', 'config_sistema',
                             'eventos_pasarela', 'empresas', 'profiles', 'suscripciones', 'pagos',
-                            'audit_log', 'grupo_modulos')
+                            'audit_log', 'grupo_modulos', 'roles_alcance')
     and not exists (
       select 1 from pg_policies p
       where p.schemaname = 'public' and p.tablename = t.tablename
