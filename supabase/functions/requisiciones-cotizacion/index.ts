@@ -55,7 +55,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (errNec) return jsonResponse({ error: errNec.message }, 500);
     if (!necesidad) return jsonResponse({ error: "Necesidad no encontrada o sin permiso" }, 404);
-    if (necesidad.estado !== "pendiente") return jsonResponse({ error: "Esta necesidad ya tiene orden de compra" }, 400);
+    // 'vinculada' también: en el flujo de un paso la orden se crea primero y
+    // la cotización se adjunta justo después.
+    if (necesidad.estado === "cancelada") return jsonResponse({ error: "Esta necesidad está cancelada" }, 400);
     const empresaId = (necesidad as { requisicion_lineas?: { requisiciones?: { empresa_id?: string } } }).requisicion_lineas?.requisiciones?.empresa_id ?? "sin-empresa";
 
     let rutaStorage: string | null = necesidad.cotizacion_path ?? null;

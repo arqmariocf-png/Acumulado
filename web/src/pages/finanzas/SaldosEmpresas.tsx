@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { agruparPorEmpresa, htmlSaldosEmpresas, moneda, type FilaSaldoCuenta } from "../../lib/saldosEmpresas";
+import { OcPorAutorizar } from "./OcPorAutorizar";
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 function fechaTexto(iso: string): string {
@@ -78,6 +79,7 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
 
       {aviso && <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{aviso}</p>}
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{(error as Error).message}</p>}
+      {!compacto && perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol) && <OcPorAutorizar />}
       {isLoading && <p className="text-sm text-slate-400">Cargando saldos…</p>}
 
       {grupos.length > 0 && (
