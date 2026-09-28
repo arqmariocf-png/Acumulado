@@ -800,6 +800,8 @@ export interface Tarjeta {
   corresponsables: string[];
   creado_por: string;
   fecha_limite: string | null;
+  /** Veces que se movió la fecha compromiso con autorización (KPI). */
+  fecha_cambios: number;
   orden: number;
   archivada: boolean;
   created_at: string;

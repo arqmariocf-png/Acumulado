@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
+import { FechaCompromiso } from "./FechaCompromiso";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, TableroColumna, Tarjeta, TarjetaActividad, TarjetaArchivo, TarjetaComentario } from "../../types/database";
 
@@ -90,7 +91,16 @@ const TEXTO_ACTIVIDAD: Record<string, (detalle: any) => string> = {
         : d?.nombre ? `la asignó a ${d.nombre}` : "quitó la asignación",
   archivada: () => "archivó la tarjeta",
   reabierta: () => "reabrió la tarjeta",
-  editada: (d) => (d?.accion === "archivo_agregado" ? `adjuntó "${d.nombre_original}"` : "editó la tarjeta"),
+  editada: (d) =>
+    d?.accion === "archivo_agregado"
+      ? `adjuntó "${d.nombre_original}"`
+      : d?.accion === "fecha_solicitud"
+        ? `pidió mover la fecha compromiso de ${d.de ?? "—"} a ${d.a ?? "—"}: ${d.motivo ?? ""}`
+        : d?.accion === "fecha_autorizada"
+          ? `autorizó mover la fecha compromiso de ${d.de ?? "—"} a ${d.a ?? "—"}${d.comentario ? ` (${d.comentario})` : ""}`
+          : d?.accion === "fecha_rechazada"
+            ? `rechazó mover la fecha compromiso a ${d.a ?? "—"}${d.comentario ? ` (${d.comentario})` : ""}`
+            : "editó la tarjeta",
 };
 
 export function TarjetaPanel({
@@ -399,16 +409,7 @@ export function TarjetaPanel({
               </div>
             </details>
           </div>
-          <div>
-            <label className={etiquetaCampo}>Fecha límite</label>
-            <input
-              type="date"
-              key={tarjeta.fecha_limite ?? "sin-fecha"}
-              defaultValue={tarjeta.fecha_limite ?? ""}
-              onBlur={(e) => actualizar.mutate({ fecha_limite: e.target.value || null })}
-              className={campoTexto}
-            />
-          </div>
+          <FechaCompromiso tarjeta={tarjeta} nombrePorId={nombrePorId} onCambio={invalidarTodo} />
           <div>
             <label className={etiquetaCampo}>Orden de venta</label>
             {ordenVenta ? (

@@ -108,6 +108,11 @@ function TarjetaCard({ tarjeta, nombreAsignado, nombreSupervisor, onClick, onDra
           </span>
         )}
         {tarjeta.orden_venta_id && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">OV</span>}
+        {(tarjeta.fecha_cambios ?? 0) > 0 && (
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700" title="Veces que se movió la fecha compromiso con autorización">
+            fecha movida {tarjeta.fecha_cambios}×
+          </span>
+        )}
       </div>
     </div>
   );
