@@ -132,6 +132,18 @@ export const INDICADORES: Indicador[] = [
     },
   },
   {
+    clave: "fin_oc_por_autorizar",
+    etiqueta: "Órdenes de compra por autorizar",
+    ruta: "/finanzas/saldos",
+    area: "finanzas",
+    descripcion: "Órdenes generadas por almacén desde requisiciones (serie RQ) que dirección no ha autorizado.",
+    visible: finanzas,
+    consulta: async () => {
+      const n = await contar(supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).eq("fuente", "requisicion").is("autorizada_en", null));
+      return { valor: n, alerta: n > 0, detalle: "esperan a dirección" };
+    },
+  },
+  {
     clave: "fin_pagos_vencidos",
     etiqueta: "Pagos programados vencidos",
     ruta: "/finanzas/pagos",

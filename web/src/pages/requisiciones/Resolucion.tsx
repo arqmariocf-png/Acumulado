@@ -5,6 +5,7 @@ import { useAuth, useEmpresaFiltro } from "../../lib/auth";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { AvanceResolucionLinea, Existencia } from "../../types/database";
 import { ComprasPorOrdenar } from "./ComprasPorOrdenar";
+import { CompraEnUnPaso } from "./CompraEnUnPaso";
 
 
 // Detalle (proyecto, empresa, concepto) de las líneas con algo sin resolver
@@ -61,6 +62,8 @@ export function Resolucion() {
   const { data: existencias } = useExistencias(empresaFiltro);
 
   const [abierta, setAbierta] = useState<string | null>(null);
+  const [compraAbierta, setCompraAbierta] = useState<string | null>(null);
+  const [folioGenerado, setFolioGenerado] = useState<string | null>(null);
   const [cantidadEntrega, setCantidadEntrega] = useState<number>(0);
   const [cantidadCompra, setCantidadCompra] = useState<number>(0);
   const [proveedor, setProveedor] = useState("");
@@ -127,9 +130,8 @@ export function Resolucion() {
   return (
     <div>
       <p className="mb-4 max-w-2xl text-sm text-slate-500">
-        Por cada línea, decide cuánto se entrega directo del almacén (existencia real) y cuánto se manda a comprar. La
-        suma no puede exceder lo solicitado -- se puede resolver en partes (parcialidades) conforme llegan más
-        compras.
+        Por cada renglón: <b>Comprar en un paso</b> (proveedor, costo y cotización, y la orden RQ sale de una vez) o <b>Entregar / resolver</b> para
+        surtir de existencia y mandar el resto a compra. Se puede resolver en partes conforme llegan más compras.
       </p>
 
       {eligeEmpresa && (
@@ -141,6 +143,7 @@ export function Resolucion() {
       {!empresaFiltro && veTodasLasEmpresas && <p className="text-sm text-slate-500">Selecciona una empresa para ver sus pendientes.</p>}
       {cargandoLineas && <p className="text-sm text-slate-500">Cargando…</p>}
 
+      {folioGenerado && <p className="mb-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Orden de compra <b>{folioGenerado}</b> generada. Dirección la verá en sus pendientes para autorizar y programar el pago.</p>}
       {(empresaFiltro || !veTodasLasEmpresas) && lineas && (
         <div className="space-y-3">
           {pendientes.map((l: any) => {
@@ -162,15 +165,44 @@ export function Resolucion() {
                     <p>Sin resolver: <span className="font-medium text-amber-700">{avance.cantidad_sin_resolver}</span></p>
                     <p>Existencia actual: {existencia}</p>
                   </div>
-                  {abierta !== l.id && (
-                    <button
-                      onClick={() => abrirResolucion(l.id, avance.cantidad_sin_resolver, existencia)}
-                      className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
-                    >
-                      Resolver
-                    </button>
+                  {abierta !== l.id && compraAbierta !== l.id && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setAbierta(null);
+                          setCompraAbierta(l.id);
+                          setFolioGenerado(null);
+                        }}
+                        className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white"
+                        title="Proveedor, costo y cotización: la orden de compra RQ se genera de una vez"
+                      >
+                        Comprar en un paso
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCompraAbierta(null);
+                          abrirResolucion(l.id, avance.cantidad_sin_resolver, existencia);
+                        }}
+                        className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        title="Entregar de existencia y/o mandar a compra sin generar la orden todavía"
+                      >
+                        Entregar / resolver
+                      </button>
+                    </div>
                   )}
                 </div>
+                {compraAbierta === l.id && (
+                  <CompraEnUnPaso
+                    lineaId={l.id}
+                    sinResolver={Number(avance.cantidad_sin_resolver)}
+                    unidad={l.unidad_medida}
+                    onListo={(folio) => {
+                      setCompraAbierta(null);
+                      setFolioGenerado(folio);
+                    }}
+                    onCancelar={() => setCompraAbierta(null)}
+                  />
+                )}
 
                 {abierta === l.id && (
                   <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3">

@@ -102,6 +102,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   backoffice no las toca: solo borra/actualiza `fuente = 'api'`), partidas
   con `clave` = id de la necesidad, necesidades → `vinculada`. Pantalla:
   `requisiciones/ComprasPorOrdenar.tsx` dentro de Resolución.
+  **Un solo paso** (`fn_oc_desde_lineas(p_lineas [{linea_id, cantidad,
+  costo}], proveedor, fecha, iva, nota)`, `20260928200000`): desde el
+  renglón, "Comprar en un paso" (`requisiciones/CompraEnUnPaso.tsx`) crea
+  la necesidad con la cotización y la OC de una vez; el archivo se adjunta
+  después por la edge (acepta `vinculada`). **Autorización de dirección**:
+  `ordenes_compra.autorizada_en/_por/pago_programado_id/creada_por`;
+  `fn_oc_autorizar(oc, bool, motivo, fecha_pago, cuenta)`: autorizar crea el
+  `pagos_programados` (beneficiario = proveedor, concepto "OC RQ-…") y pasa
+  la requisición a `autorizada`; rechazar borra la OC y regresa las
+  necesidades a `pendiente` con el motivo en la nota. Laura lo ve en Saldos
+  por empresa (`finanzas/OcPorAutorizar.tsx`) y KPI `fin_oc_por_autorizar`.
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,
