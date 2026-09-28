@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
-import { useAuth } from "../lib/auth";
+import { useAuth, useEmpresaFiltro } from "../lib/auth";
+import { SelectorEmpresa } from "../components/SelectorEmpresa";
 import { Semaforo } from "../components/Semaforo";
 import type { EstadoClasificacion, Movimiento } from "../types/database";
 
@@ -17,16 +18,6 @@ const ESTADOS: { valor: EstadoClasificacion | "todos"; etiqueta: string }[] = [
   { valor: "resuelto", etiqueta: "Resuelto" },
 ];
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre, codigo").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function formatoMoneda(valor: number | null): string {
   if (valor == null) return "—";
@@ -34,15 +25,20 @@ function formatoMoneda(valor: number | null): string {
 }
 
 export function Movimientos() {
-  const { veTodasLasEmpresas, perfil } = useAuth();
-  const { data: empresas } = useEmpresas();
+  const { veTodasLasEmpresas, eligeEmpresa, perfil } = useAuth();
   const queryClient = useQueryClient();
 
   // Desde Saldos por empresa se llega con ?empresa=&cuenta= (Laura arranca en
   // saldos y da clic para ver los últimos movimientos de esa cuenta).
   const [params, setParams] = useSearchParams();
-  const [empresaId, setEmpresaId] = useState<string>(params.get("empresa") ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const cuentaId = params.get("cuenta") ?? "";
+  // Desde Saldos por empresa llega ?empresa=: se vuelve la empresa activa.
+  const empresaParam = params.get("empresa");
+  useEffect(() => {
+    if (empresaParam) setEmpresaId(empresaParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaParam]);
   const [estado, setEstado] = useState<EstadoClasificacion | "todos">("todos");
   const [soloDuplicados, setSoloDuplicados] = useState(false);
   const [cuentaReclasificando, setCuentaReclasificando] = useState<string | null>(null);
@@ -125,16 +121,7 @@ export function Movimientos() {
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Movimientos</h1>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {veTodasLasEmpresas && (
-          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Todas las empresas</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        )}
+        {eligeEmpresa && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}
         <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoClasificacion | "todos")} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
           {ESTADOS.map((o) => (
             <option key={o.valor} value={o.valor}>

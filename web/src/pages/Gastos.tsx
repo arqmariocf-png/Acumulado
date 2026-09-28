@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
-import { useAuth } from "../lib/auth";
+import { useAuth, useEmpresaFiltro } from "../lib/auth";
+import { SelectorEmpresa } from "../components/SelectorEmpresa";
 import { dineroMx } from "../lib/kpisEmpresa";
 
 /** Comprobación de gastos / caja chica: el supervisor sube la factura o nota
@@ -51,22 +52,14 @@ function useComprobaciones() {
 }
 
 export function Gastos() {
-  const { perfil, veTodasLasEmpresas } = useAuth();
+  const { perfil } = useAuth();
   const queryClient = useQueryClient();
   const revisa = !!perfil && REVISA.includes(perfil.rol);
   const { data: lista, isLoading, error } = useComprobaciones();
   const [vista, setVista] = useState<"mias" | "revisar" | "todas">(revisa ? "revisar" : "mias");
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  const { data: empresas } = useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw new Error(error.message);
-      return (data ?? []) as { id: string; nombre: string }[];
-    },
-  });
-  const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const { data: proyectos } = useQuery({
     queryKey: ["proyectos-activos", empresaId],
     enabled: !!empresaId,
@@ -144,18 +137,7 @@ export function Gastos() {
         <div className="sm:col-span-2 lg:col-span-4">
           <p className="text-sm font-semibold text-slate-800">Nueva comprobación</p>
         </div>
-        {veTodasLasEmpresas ? (
-          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} required className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Empresa…</option>
-            {(empresas ?? []).map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <p className="self-center text-xs text-slate-500">Empresa: la asignada a tu usuario.</p>
-        )}
+        <SelectorEmpresa value={empresaId} onChange={setEmpresaId} vacio="Empresa…" required />
         <select name="proyectoId" className="rounded border border-slate-300 px-2 py-1.5 text-sm" defaultValue="">
           <option value="">Obra (proyecto)…</option>
           {(proyectos ?? []).map((p) => (

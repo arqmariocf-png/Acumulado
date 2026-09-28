@@ -1,20 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { BarcodeScanner } from "../../components/BarcodeScanner";
 import type { Producto } from "../../types/database";
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function useProductos(empresaId: string) {
   return useQuery({
@@ -29,10 +20,8 @@ function useProductos(empresaId: string) {
 }
 
 export function Productos() {
-  const { veTodasLasEmpresas, perfil } = useAuth();
   const queryClient = useQueryClient();
-  const { data: empresas } = useEmpresas();
-  const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const { data: productos, isLoading, error: errorLista } = useProductos(empresaId);
 
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -92,18 +81,7 @@ export function Productos() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          {veTodasLasEmpresas ? (
-            <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-              <option value="">Selecciona una empresa…</option>
-              {empresas?.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nombre}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <p className="text-sm text-slate-500">Empresa: la asignada a tu usuario.</p>
-          )}
+          <SelectorEmpresa value={empresaId} onChange={setEmpresaId} vacio="Selecciona una empresa…" />
         </div>
         {empresaId && (
           <button onClick={abrirNuevo} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { useAuth, useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { administraProyectosDe } from "../../lib/modulos";
 import { CLASE_ETAPA, ETAPAS_REQUISICION, ETIQUETA_ETAPA, puedeMarcarEtapa, semaforoEtapa, siguienteEtapa, type EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { Producto, Proyecto } from "../../types/database";
@@ -18,16 +19,6 @@ interface FilaCarrito {
 
 const UNIDADES_LIBRES = ["pza", "m", "m2", "m3", "kg", "ton", "lt", "bulto", "rollo", "caja", "juego", "lote", "servicio"];
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 // Para 'responsable': solo los proyectos donde él/ella está asignado. Para
 // admin/corporativo: cualquier proyecto activo (pueden capturar a nombre de
@@ -86,9 +77,8 @@ const ESTADO_ESTILO: Record<string, string> = {
 };
 
 export function MisRequisiciones() {
-  const { perfil, veTodasLasEmpresas } = useAuth();
+  const { perfil, eligeEmpresa } = useAuth();
   const queryClient = useQueryClient();
-  const { data: empresas } = useEmpresas();
   const { data: proyectosDisponibles } = useProyectosDisponibles(perfil?.rol, perfil?.id, perfil?.empresa_id);
 
   const puedeCrear = perfil?.rol === "responsable" || perfil?.rol === "admin" || perfil?.rol === "corporativo" || administraProyectosDe(perfil, perfil?.empresa_id);
@@ -103,7 +93,7 @@ export function MisRequisiciones() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
-  const [empresaFiltro, setEmpresaFiltro] = useState(veTodasLasEmpresas ? "" : (perfil?.empresa_id ?? ""));
+  const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro();
 
   const proyectoSeleccionado = proyectosDisponibles?.find((p) => p.id === proyectoId);
   const { data: productos } = useProductosEmpresa(proyectoSeleccionado?.empresa_id ?? "");
@@ -335,16 +325,7 @@ export function MisRequisiciones() {
 
       <div className="mb-3 flex items-center gap-3">
         <h2 className="text-sm font-semibold text-slate-700">Requisiciones</h2>
-        {veTodasLasEmpresas && (
-          <select value={empresaFiltro} onChange={(e) => setEmpresaFiltro(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
-            <option value="">Todas las empresas</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        )}
+        {eligeEmpresa && <SelectorEmpresa value={empresaFiltro} onChange={setEmpresaFiltro} className="rounded border border-slate-300 px-2 py-1 text-sm" />}
       </div>
 
       {cargandoRequisiciones && <p className="text-sm text-slate-500">Cargando…</p>}

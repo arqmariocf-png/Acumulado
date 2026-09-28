@@ -2,21 +2,12 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { useAuth, useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { Proyecto, PuEstado } from "../../types/database";
 import { PuntosSemaforoPu } from "./SemaforoPreciosUnitarios";
 import { AlmacenPorProyecto, PuntosAlmacen, useRequisicionesPorProyecto } from "./AlmacenProyectos";
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").eq("activo", true).order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function useProyectos(empresaId: string, busqueda: string, incluirInactivos: boolean) {
   return useQuery({
@@ -52,10 +43,9 @@ function useSemaforoProyectos(ids: string[]) {
 }
 
 export function Proyectos() {
-  const { perfil, veTodasLasEmpresas } = useAuth();
+  const { perfil, veTodasLasEmpresas, eligeEmpresa } = useAuth();
   const queryClient = useQueryClient();
-  const { data: empresas } = useEmpresas();
-  const [empresaId, setEmpresaId] = useState("");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const [busqueda, setBusqueda] = useState("");
   const [verInactivos, setVerInactivos] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,16 +74,7 @@ export function Proyectos() {
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Proyectos</h1>
 
       <div className="mb-4 flex flex-wrap gap-3">
-        {veTodasLasEmpresas && (
-          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Todas las empresas</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        )}
+        {eligeEmpresa && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}

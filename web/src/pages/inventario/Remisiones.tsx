@@ -2,21 +2,12 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { cantidadTexto } from "../../lib/remision";
 import { imprimirRemision } from "./remisionQr";
 import type { RemisionSalida } from "../../types/database";
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function useRemisiones(empresaId: string) {
   return useQuery({
@@ -39,9 +30,7 @@ export function EstatusRemisionChip({ estatus }: { estatus: RemisionSalida["esta
 }
 
 export function Remisiones() {
-  const { veTodasLasEmpresas, perfil } = useAuth();
-  const { data: empresas } = useEmpresas();
-  const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const [busqueda, setBusqueda] = useState("");
   const [soloAbiertas, setSoloAbiertas] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,18 +59,7 @@ export function Remisiones() {
         Cada salida guardada con remisión aparece aquí con su folio. Imprímela con su QR o ábrela para confirmar la entrega.
       </p>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {veTodasLasEmpresas ? (
-          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Selecciona una empresa…</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="text-sm text-slate-600">{empresas?.find((e) => e.id === empresaId)?.nombre}</span>
-        )}
+        <SelectorEmpresa value={empresaId} onChange={setEmpresaId} vacio="Selecciona una empresa…" />
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}

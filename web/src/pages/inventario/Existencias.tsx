@@ -1,22 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { Existencia } from "../../types/database";
 import { dineroMx } from "../../lib/kpisEmpresa";
 
 const pu = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
-function useEmpresas() {
-  return useQuery({
-    queryKey: ["empresas"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
 
 function useExistencias(empresaId: string) {
   return useQuery({
@@ -31,9 +22,7 @@ function useExistencias(empresaId: string) {
 }
 
 export function Existencias() {
-  const { veTodasLasEmpresas, perfil } = useAuth();
-  const { data: empresas } = useEmpresas();
-  const [empresaId, setEmpresaId] = useState(perfil?.empresa_id ?? "");
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const [busqueda, setBusqueda] = useState("");
 
   const { data: existencias, isLoading, error } = useExistencias(empresaId);
@@ -50,18 +39,7 @@ export function Existencias() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {veTodasLasEmpresas ? (
-          <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
-            <option value="">Selecciona una empresa…</option>
-            {empresas?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.nombre}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <p className="text-sm text-slate-500">Empresa: la asignada a tu usuario.</p>
-        )}
+        <SelectorEmpresa value={empresaId} onChange={setEmpresaId} vacio="Selecciona una empresa…" />
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
