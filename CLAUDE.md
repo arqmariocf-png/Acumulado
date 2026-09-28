@@ -90,6 +90,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (check: uno de los dos; `20260928170000`) porque casi ninguna empresa
   tiene catálogo de productos (solo AEP). Compras resuelve igual por
   `requisicion_linea_id`; `avance_resolucion_linea` trae `descripcion`.
+- **Compras desde requisiciones por almacén (28-sep-2026)**: Alma (rol
+  `almacen`) entra a Requisiciones → Resolución (antes solo admin/
+  corporativo): resuelve compra/entrega, sube la **cotización** de cada
+  necesidad (edge `requisiciones-cotizacion`: archivo al bucket `cargas/
+  cotizaciones/…`, proveedor, costo unitario sin IVA, nota; columnas
+  `necesidades_compra.cotizacion_*`) y genera la **orden de compra** con
+  `fn_oc_desde_necesidades(p_lineas, proveedor, fecha, iva)`: folio propio
+  **RQ-<codigo empresa>-0001** (`folios_series` + `fn_siguiente_folio`,
+  definer), `ordenes_compra.fuente = 'requisicion'` (la sincronización del
+  backoffice no las toca: solo borra/actualiza `fuente = 'api'`), partidas
+  con `clave` = id de la necesidad, necesidades → `vinculada`. Pantalla:
+  `requisiciones/ComprasPorOrdenar.tsx` dentro de Resolución.
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,
