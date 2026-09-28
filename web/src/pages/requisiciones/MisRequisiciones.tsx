@@ -58,7 +58,7 @@ function useRequisiciones(empresaId: string) {
     queryFn: async () => {
       let query = supabase
         .from("requisiciones")
-        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, proyectos(nombre, responsable_id, comprador_id), profiles(nombre)")
+        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, proyectos(nombre, responsable_id, comprador_id), profiles!requisiciones_solicitado_por_fkey(nombre)")
         .order("created_at", { ascending: false })
         .limit(100);
       if (empresaId) query = query.eq("empresa_id", empresaId);
@@ -97,7 +97,7 @@ export function MisRequisiciones() {
 
   const proyectoSeleccionado = proyectosDisponibles?.find((p) => p.id === proyectoId);
   const { data: productos } = useProductosEmpresa(proyectoSeleccionado?.empresa_id ?? "");
-  const { data: requisiciones, isLoading: cargandoRequisiciones } = useRequisiciones(empresaFiltro);
+  const { data: requisiciones, isLoading: cargandoRequisiciones, error: errorRequisiciones } = useRequisiciones(empresaFiltro);
 
   useEffect(() => {
     if (proyectosDisponibles?.length === 1) setProyectoId(proyectosDisponibles[0].id);
@@ -329,6 +329,7 @@ export function MisRequisiciones() {
       </div>
 
       {cargandoRequisiciones && <p className="text-sm text-slate-500">Cargando…</p>}
+      {errorRequisiciones && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">No se pudo cargar la lista: {(errorRequisiciones as Error).message}</p>}
       {requisiciones && (
         <div className="overflow-x-auto rounded border border-slate-200 bg-white">
           <table className="w-full text-sm">
