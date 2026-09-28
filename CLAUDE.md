@@ -247,6 +247,20 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   finanzas/RH por rol); solo lo que no está ahí se consulta vista por vista.
   Síntoma si se rompe: "canceling statement due to statement timeout" en
   ráfagas al abrir el inicio.
+- **Helpers una vez por consulta (28-sep-2026)**: Postgres evalúa
+  `(select f())` dentro de una policy UNA vez por consulta (InitPlan); una
+  llamada directa `f()` corre por fila (0.4-2 ms cada una: 1-8 s en tablas
+  de 2-3 mil renglones). `20260928210000_rls_helpers_una_vez_por_consulta.sql`
+  (aplicada en producción como `rls_helpers_en_policies`) reescribió las
+  371 policies: `helper()` → `(select public.helper_definer())` (copias
+  idénticas de los 19 helpers sin argumentos), `empresa_en_alcance(X)` →
+  `X = any ((select public.auth_empresas_alcance())::uuid[])` (el `::uuid[]`
+  es obligatorio), y lo mismo con `auth_empresas_organizacion()`,
+  `auth_grupos_alcance()`, `auth_perfiles_alcance()`,
+  `auth_modulos_habilitados()`, `auth_modulos_asignados()`. **Regla: en una
+  policy nunca se llama a un helper directo por fila; y NO envolver el
+  `(select …)` dentro de una función SQL (no se inlina y sale peor).**
+  Medido como Laura: movimientos 4.4 s → 0.04 s, partidas de OC 6 s → 0.24 s.
 - **Frontera por profile_id**: nunca `exists (select 1 from profiles …)`
   dentro de una policy (profiles solo deja leer el renglón propio y la
   frontera se vuelve invisible para RH). Usar `perfil_en_alcance(profile_id)`
