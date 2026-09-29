@@ -536,4 +536,15 @@ Cambios chicos partiendo de `main`, mezclando pronto.
 - Módulo de pagos en efectivo / caja (Jaime): hoy solo existe la condición
   'efectivo' y `pagos_programados.metodo`; falta el fondo de caja, entregas
   a Jaime, comprobantes y arqueo.
-- Backoffice: pedir a su desarrollador caché de 5–10 min y filtro por fecha en los API.
+- Backoffice (desarrollador: **Gonzalo**): Mario ya le pidió (29-sep-2026)
+  un endpoint con las OC **pendientes de autorización** ("necesitamos todo
+  el global"). Plan cuando llegue: mismo JSON que `api_ocs_aut`
+  (`ordersProject` con Id_Orden, Tipo_orden, Empresa_solicitante,
+  Proveedor, TOTAL, Creado, Proyecto) más un campo de estatus; en
+  `sincronizar_catalogo_oc_ov` se descarga junto con los otros cuatro y se
+  upserta con fuente 'api' y una columna nueva `origen_estado`
+  ('pendiente' | 'autorizada'); `v_oc_pagos.autorizacion` para api =
+  `coalesce(origen_estado, 'autorizada')`. Una OC que estaba pendiente y
+  aparece en `api_ocs_aut` pasa a autorizada sola; una que desaparece de
+  las dos listas se archiva como rechazada con motivo "ya no está en el
+  backoffice". Pedirle también caché de 5–10 min y filtro por fecha.
