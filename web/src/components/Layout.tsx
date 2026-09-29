@@ -13,7 +13,7 @@ import { ETIQUETA_ROL, NIVELES_ROLES } from "../lib/accesosRoles";
 import type { AppRol } from "../types/database";
 
 export function Layout() {
-  const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
+  const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, cambiarContrasena, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
   // Menú por áreas con orientación de uso: la visibilidad por rol vive en
   // lib/menu.ts (misma fuente que el inicio y la guía).
   const secciones = seccionesPara(perfil, alcanceOrganizacion);
@@ -75,6 +75,9 @@ export function Layout() {
               {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol}</span>
             </span>
             {perfil && <BotonNotificaciones profileId={perfil.id} />}
+            <button onClick={cambiarContrasena} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100" title="Cambiar mi contraseña">
+              Contraseña
+            </button>
             <button onClick={cerrarSesion} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100">
               Salir
             </button>

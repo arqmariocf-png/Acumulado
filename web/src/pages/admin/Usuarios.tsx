@@ -153,6 +153,27 @@ export function Usuarios() {
     onError: (err) => alert((err as Error).message),
   });
 
+  // Contraseña temporal (29-sep-2026): la genera generar-link-acceso con
+  // tipo "contrasena" y se muestra una sola vez.
+  const contrasenaTemporal = useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const respuesta = await fetch(urlFuncion("generar-link-acceso"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, tipo: "contrasena" }),
+      });
+      const json = await respuesta.json();
+      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
+      return json as { contrasena: string; email: string };
+    },
+    onSuccess: ({ contrasena, email }) => {
+      navigator.clipboard?.writeText(contrasena).catch(() => {});
+      window.prompt(`Contraseña temporal de ${email} (ya copiada). Solo se muestra esta vez; que la cambie al entrar:`, contrasena);
+    },
+    onError: (err) => alert((err as Error).message),
+  });
+
   // Alta directa sin correo: el mailer de Supabase rebota "email rate limit
   // exceeded" en "Crear cuenta" cuando varias personas se registran el
   // mismo día (Luis Gutiérrez, 21-sep-2026). admin-crear-usuario crea la
@@ -390,6 +411,19 @@ export function Usuarios() {
                       title="Genera un link para que la persona defina una contraseña nueva. Con teléfono guardado, abre WhatsApp listo para enviar; si no, lo copia para pegarlo en cualquier canal."
                     >
                       Nueva contraseña
+                    </button>
+                    <button
+                      type="button"
+                      disabled={contrasenaTemporal.isPending}
+                      onClick={() => {
+                        if (window.confirm(`¿Poner una contraseña temporal a ${p.nombre ?? "esta cuenta"}? La que tenga dejará de servir.`)) {
+                          contrasenaTemporal.mutate({ userId: p.id });
+                        }
+                      }}
+                      className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      title="Genera una contraseña temporal y la muestra para dictarla o mandarla por WhatsApp."
+                    >
+                      Contraseña temporal
                     </button>
                   </div>
                 </td>

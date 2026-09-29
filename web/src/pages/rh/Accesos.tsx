@@ -101,6 +101,20 @@ export function Accesos() {
     onError: (e) => setError((e as Error).message),
   });
 
+  // Contraseña temporal (Mario, 29-sep-2026): para quien no puede abrir el
+  // link en su celular. La genera la edge function y se muestra una sola vez
+  // aquí; RH se la dicta o se la manda por WhatsApp y la persona la cambia
+  // después desde su cuenta.
+  const [temporal, setTemporal] = useState<{ nombre: string; email: string; contrasena: string; telefono: string | null } | null>(null);
+  const contrasenaTemporal = useMutation({
+    mutationFn: async (p: PersonaAcceso) => {
+      const r = (await llamar("generar-link-acceso", { userId: p.profile_id, tipo: "contrasena" })) as { contrasena: string; email: string };
+      return { ...r, nombre: p.nombre, telefono: p.telefono };
+    },
+    onSuccess: (r) => setTemporal(r),
+    onError: (e) => setError((e as Error).message),
+  });
+
   const cambiarRol = useMutation({
     mutationFn: async ({ profileId, rol }: { profileId: string; rol: AppRol }) => {
       const { error: err } = await supabase.rpc("rh_asignar_rol_basico", { p_profile_id: profileId, p_rol: rol });
@@ -147,6 +161,44 @@ export function Accesos() {
         celular por WhatsApp y la persona entra con rol <b>operativo</b> (solo checador). Los módulos adicionales se asignan aquí uno por uno.
       </p>
       <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar persona…" className="mb-3 w-full max-w-sm rounded border border-slate-300 px-2 py-1.5 text-sm" />
+      {temporal && (
+        <div className="mb-3 max-w-xl rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          <div className="font-medium">Contraseña temporal de {temporal.nombre}</div>
+          <div className="mt-1">
+            Usuario: <b>{temporal.email}</b>
+          </div>
+          <div>
+            Contraseña: <b className="font-mono text-base">{temporal.contrasena}</b>
+          </div>
+          <div className="mt-1 text-xs text-emerald-800">Solo se muestra esta vez. Pídele que la cambie al entrar.</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={() => navigator.clipboard?.writeText(temporal.contrasena).catch(() => {})}
+              className="rounded border border-emerald-300 bg-white px-2 py-1 text-xs"
+            >
+              Copiar contraseña
+            </button>
+            {temporal.telefono && (
+              <button
+                onClick={() =>
+                  window.open(
+                    `https://wa.me/${numeroWhatsapp(temporal.telefono!)}?text=${encodeURIComponent(
+                      `Hola, tu acceso al sistema de Grupo Loma: entra a ${window.location.origin} con el usuario ${temporal.email} y la contraseña temporal ${temporal.contrasena}. Cámbiala al entrar.`,
+                    )}`,
+                    "_blank",
+                  )
+                }
+                className="rounded border border-emerald-300 bg-white px-2 py-1 text-xs"
+              >
+                Mandar por WhatsApp
+              </button>
+            )}
+            <button onClick={() => setTemporal(null)} className="px-2 py-1 text-xs underline">
+              cerrar
+            </button>
+          </div>
+        </div>
+      )}
       {error && (
         <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}{" "}
@@ -195,6 +247,17 @@ export function Accesos() {
                         <button onClick={() => reenviar.mutate(p)} disabled={reenviar.isPending} className="mt-1 text-slate-600 underline">
                           Reenviar link al celular
                         </button>
+                        {editable && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`¿Poner una contraseña temporal a ${p.nombre}? La que tenga dejará de servir.`)) contrasenaTemporal.mutate(p);
+                            }}
+                            disabled={contrasenaTemporal.isPending}
+                            className="mt-1 block text-slate-600 underline"
+                          >
+                            {contrasenaTemporal.isPending ? "Generando…" : "Contraseña temporal"}
+                          </button>
+                        )}
                       </div>
                     ) : docsOk ? (
                       <div className="grid gap-1">

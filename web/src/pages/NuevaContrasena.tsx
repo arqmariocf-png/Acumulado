@@ -6,7 +6,9 @@ import { useAuth } from "../lib/auth";
 /** Pantalla que reemplaza toda la app mientras `recuperandoContrasena` está
  * activo (ver lib/auth.tsx) -- llega aquí quien abrió un link generado con
  * tipo "recovery" desde Admin -> Usuarios, sin depender de que le llegue el
- * correo de recuperación normal. supabase.auth.updateUser ya opera con la
+ * correo de recuperación normal. También se abre desde el botón
+ * "Contraseña" del encabezado (quien entró con una contraseña temporal que le
+ * dio RH o el admin, 29-sep-2026). supabase.auth.updateUser ya opera con la
  * sesión temporal que trae el link, no hace falta contraseña anterior. */
 export function NuevaContrasena() {
   const { terminarRecuperacion } = useAuth();
@@ -46,7 +48,7 @@ export function NuevaContrasena() {
         {lista ? (
           <>
             <p className="mb-4 text-sm text-emerald-600">
-              ✔ Contraseña actualizada. Ya puedes entrar con ella la próxima vez (o seguir usando magic link, lo que prefieras).
+              ✔ Contraseña actualizada. Ya puedes entrar con ella la próxima vez.
             </p>
             <button
               type="button"
@@ -86,6 +88,9 @@ export function NuevaContrasena() {
               className="w-full rounded bg-slate-900 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {guardando ? "Guardando…" : "Guardar contraseña"}
+            </button>
+            <button type="button" onClick={terminarRecuperacion} className="mt-3 w-full text-sm text-slate-500 underline">
+              Cancelar
             </button>
           </form>
         )}
