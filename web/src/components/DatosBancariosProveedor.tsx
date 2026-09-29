@@ -39,7 +39,7 @@ export function DatosBancariosProveedor({ datos, compacto = false }: { datos: Da
       const clabeLimpia = clabe.replace(/\s/g, "");
       if (clabeLimpia && !/^\d{18}$/.test(clabeLimpia)) throw new Error("La CLABE debe tener 18 dígitos.");
       const { error: err } = await supabase.from("proveedores_datos_bancarios").upsert(
-        { clave: datos.clave, nombre: datos.nombre ?? datos.clave, beneficiario: beneficiario.trim() || null, banco: banco.trim() || null, clabe: clabeLimpia || null, cuenta: cuenta.trim() || null, rfc: rfc.trim().toUpperCase() || null, correo: correo.trim() || null, updated_by: perfil?.id, updated_at: new Date().toISOString() },
+        { clave: datos.clave, nombre: datos.nombre ?? datos.clave, beneficiario: beneficiario.trim() || null, banco: banco.trim() || null, clabe: clabeLimpia || null, cuenta: cuenta.trim() || null, rfc: rfc.trim().toUpperCase() || null, correo: correo.trim() || null, origen: "captura", updated_by: perfil?.id, updated_at: new Date().toISOString() },
         { onConflict: "clave" },
       );
       if (err) throw err;

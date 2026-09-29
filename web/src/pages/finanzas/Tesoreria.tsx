@@ -34,6 +34,19 @@ interface PagoVista {
   rfc_proveedor: string | null;
   correo_proveedor: string | null;
   comprobante_nombre: string | null;
+  /** Cómo se paga según la OC del backoffice (Tipo_pago). */
+  tipo_pago_backoffice: string | null;
+}
+
+/** "Transferencia electrónica de fondos" → etiqueta corta; la tarjeta no
+ * necesita CLABE del proveedor. */
+function formaDePago(tipo: string | null): { texto: string; tarjeta: boolean } | null {
+  if (!tipo) return null;
+  const t = tipo.toLowerCase();
+  if (t.includes("transferencia")) return { texto: "Transferencia", tarjeta: false };
+  if (t.includes("efectivo")) return { texto: "Efectivo", tarjeta: false };
+  if (t.includes("tarjeta")) return { texto: tipo, tarjeta: true };
+  return { texto: tipo, tarjeta: false };
 }
 
 interface Cuenta {
@@ -236,6 +249,7 @@ function Seccion({ titulo, grupos, vacio, render }: { titulo: string; grupos: [s
 
 function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta: string | null; hoy: string; onMarcar: (pagado: boolean) => void; ocupado: boolean }) {
   const vencido = p.estatus === "pendiente" && p.fecha_programada < hoy;
+  const forma = formaDePago(p.tipo_pago_backoffice);
   return (
     <tr key={p.id} className={`border-t border-slate-100 ${p.estatus === "pagado" ? "text-slate-500" : ""}`}>
       <td className="px-3 py-2 align-top">
@@ -251,6 +265,14 @@ function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta:
           )}
           {p.notas && ` · ${p.notas}`}
         </div>
+        {forma && (
+          <div className="mt-0.5 text-xs">
+            <span className={`rounded-full px-2 py-0.5 ${forma.tarjeta ? "bg-violet-100 text-violet-800" : "bg-sky-100 text-sky-800"}`} title="Forma de pago que trae la OC del backoffice">
+              Pagar por: {forma.texto}
+            </span>
+            {forma.tarjeta && <span className="ml-1 text-slate-500">no requiere CLABE del proveedor</span>}
+          </div>
+        )}
         <div className="mt-0.5">
           <DatosBancariosProveedor datos={{ clave: p.clave, nombre: p.beneficiario, beneficiario_bancario: p.beneficiario_bancario, banco_proveedor: p.banco_proveedor, clabe: p.clabe, cuenta_proveedor: p.cuenta_proveedor, rfc_proveedor: p.rfc_proveedor, correo_proveedor: p.correo_proveedor }} compacto />
         </div>
