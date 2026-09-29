@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { moneda } from "../../lib/saldosEmpresas";
 import { useSaldosDia } from "./SaldosEmpresas";
+import { OrdenesPorPagar } from "./OrdenesPorPagar";
 
 interface PagoProgramado {
   id: string;
@@ -178,7 +179,7 @@ export function ProgramacionPagos() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Programación de pagos</h1>
           <p className="text-sm text-slate-500">
-            Pagos comprometidos por empresa contra el saldo de cierre de hoy.{" "}
+            Órdenes de compra del día y con saldo, y pagos comprometidos por empresa contra el saldo de cierre de hoy.{" "}
             <Link to="/finanzas/saldos" className="underline">
               Ver saldos
             </Link>
@@ -293,6 +294,8 @@ export function ProgramacionPagos() {
           </table>
         </div>
       )}
+
+      <OrdenesPorPagar filtroEmpresa={filtroEmpresa} hoy={hoy} nombreEmpresa={nombreEmpresa} cuentas={cuentas ?? []} />
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
       {(

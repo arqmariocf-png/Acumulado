@@ -141,6 +141,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   entrega registrada no se borra, no se baja la cantidad por debajo de lo
   resuelto ni se cambia unidad/concepto; "Cancelar requisición" solo si
   nada está resuelto y no hay OC.
+- **Pagos por orden de compra (29-sep-2026)**: `pagos_programados.
+  orden_compra_id` liga cada pago a su OC; `ordenes_compra.condicion_pago`
+  (contado / credito / anticipo, la pone dirección) y el **saldo se
+  calcula** en `v_oc_pagos` (total − pagos con estatus 'pagado'; trae
+  programado, próximo pago y la línea de crédito del proveedor por
+  `fn_proveedor_clave`). En Programación de pagos, arriba de los pagos:
+  `finanzas/OrdenesPorPagar.tsx` con pestañas "De hoy" (fecha_creacion =
+  hoy, todas las fuentes) y "Con saldo pendiente" (meses pasados incluidos,
+  filtro por proveedor/folio y "solo con línea de crédito"); por OC:
+  selector de condición (`fn_oc_condicion_pago`) y "Programar pago"
+  (`fn_oc_programar_pago(oc, condicion, monto, fecha, cuenta, notas)`:
+  beneficiario y concepto salen de la OC; crédito sugiere fecha OC + días
+  de crédito; anticipo sugiere la mitad; valida monto ≤ saldo). Reglas
+  puras en `lib/pagosOc.ts` (con pruebas). `fn_oc_autorizar` también liga
+  el pago y deja condición contado por defecto; al rechazar borra los
+  pagos pendientes de esa OC. **Seguimiento**: trigger
+  `pagos_programados_avanza_requisicion` (pago → 'pagado') pasa la
+  requisición ligada a `pagada`; almacén confirma cantidades por partida en
+  `oc_recepciones` (`v_oc_rq_recepcion`, botón "Recibir" en el detalle de
+  la requisición, `requisiciones/RecepcionOc.tsx`); trigger
+  `oc_recepciones_avanza_requisicion`: parcial → `en_bodega`, todas las
+  partidas de todas las OC de la requisición completas → `recibida`
+  (`20260929120000`). Las OC del backoffice (api) siguen recibiéndose por
+  inventario (`v_oc_lineas_avance`); `oc_recepciones` es solo para las RQ.
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,
