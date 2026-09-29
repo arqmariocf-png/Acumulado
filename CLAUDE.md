@@ -113,6 +113,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   la requisición a `autorizada`; rechazar borra la OC y regresa las
   necesidades a `pendiente` con el motivo en la nota. Laura lo ve en Saldos
   por empresa (`finanzas/OcPorAutorizar.tsx`) y KPI `fin_oc_por_autorizar`.
+  **Una sola pantalla (29-sep-2026, Mario: "simplifica")**: ya no hay
+  pestaña de resolución (`Resolucion.tsx` y `ComprasPorOrdenar.tsx` se
+  borraron; `/requisiciones/oc-pendientes` y `/resolucion` redirigen). En la
+  lista de `/requisiciones` cada renglón tiene "Abrir / comprar" →
+  `requisiciones/DetalleRequisicion.tsx`: renglones con solicitado / en
+  compra / surtido / falta, botón **Comprar** (= `CompraEnUnPaso`) y
+  **Surtir** (necesidades_entrega, solo con producto de catálogo), y abajo
+  las OC de esa requisición (`v_requisicion_ordenes`, security_invoker) con
+  **Ver orden** (`requisiciones/VerOrdenCompra.tsx` → `lib/ordenCompraRq.ts`,
+  HTML imprimible con pruebas; logo en `/logos/<codigo>.png`). Laura también
+  tiene "Ver orden" en OC por autorizar. `requisiciones.solicitante_nombre`
+  se llena por trigger al crear (profiles solo deja leer el renglón propio,
+  así que el embed a profiles salía en blanco para almacén). Policies de
+  `requisicion_lineas` / `necesidades_*` select: heredan de `requisiciones`
+  (`exists … requisiciones r`), antes Jonathan no veía sus propios renglones
+  ni almacén sin "todas las empresas" (`20260929100000`).
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,

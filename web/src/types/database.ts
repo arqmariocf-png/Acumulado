@@ -599,6 +599,8 @@ export interface Requisicion {
   etapa_en: string;
   etapa_por: string | null;
   comentario: string | null;
+  /** Nombre de quien la pidió, guardado al crearla (profiles solo deja leer el renglón propio). */
+  solicitante_nombre: string | null;
   created_at: string;
 }
 

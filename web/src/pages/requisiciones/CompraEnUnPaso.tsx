@@ -51,10 +51,9 @@ export function CompraEnUnPaso({ lineaId, sinResolver, unidad, onListo, onCancel
       return r;
     },
     onSuccess: (r) => {
-      queryClient.invalidateQueries({ queryKey: ["avance-resolucion-linea"] });
-      queryClient.invalidateQueries({ queryKey: ["requisicion-lineas-pendientes"] });
-      queryClient.invalidateQueries({ queryKey: ["necesidades-compra-pendientes"] });
-      queryClient.invalidateQueries({ queryKey: ["oc-desde-requisicion"] });
+      queryClient.invalidateQueries({ queryKey: ["requisicion-detalle"] });
+      queryClient.invalidateQueries({ queryKey: ["requisiciones"] });
+      queryClient.invalidateQueries({ queryKey: ["oc-por-autorizar"] });
       onListo(r.id_orden);
     },
     onError: (e: Error) => setError(e.message),

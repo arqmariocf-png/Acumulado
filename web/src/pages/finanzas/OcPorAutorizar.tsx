@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
+import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 
 interface OcPendiente {
   id: string;
@@ -122,6 +123,7 @@ export function OcPorAutorizar() {
                 <button type="button" onClick={() => setAbierta(abierta === o.id ? null : o.id)} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
                   {abierta === o.id ? "Cerrar" : "Revisar"}
                 </button>
+                <BotonVerOc ocId={o.id} />
               </div>
             </div>
             {abierta === o.id && (

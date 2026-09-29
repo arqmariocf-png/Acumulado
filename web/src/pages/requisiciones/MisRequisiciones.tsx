@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
@@ -6,6 +6,7 @@ import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { administraProyectosDe } from "../../lib/modulos";
 import { CLASE_ETAPA, ETAPAS_REQUISICION, ETIQUETA_ETAPA, puedeMarcarEtapa, semaforoEtapa, siguienteEtapa, type EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { Producto, Proyecto } from "../../types/database";
+import { DetalleRequisicion } from "./DetalleRequisicion";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
  * catálogo, como Ergodinova, 28-sep-2026). */
@@ -58,7 +59,7 @@ function useRequisiciones(empresaId: string) {
     queryFn: async () => {
       let query = supabase
         .from("requisiciones")
-        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, proyectos(nombre, responsable_id, comprador_id), profiles!requisiciones_solicitado_por_fkey(nombre)")
+        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
         .order("created_at", { ascending: false })
         .limit(100);
       if (empresaId) query = query.eq("empresa_id", empresaId);
@@ -82,6 +83,7 @@ export function MisRequisiciones() {
   const { data: proyectosDisponibles } = useProyectosDisponibles(perfil?.rol, perfil?.id, perfil?.empresa_id);
 
   const puedeCrear = perfil?.rol === "responsable" || perfil?.rol === "admin" || perfil?.rol === "corporativo" || administraProyectosDe(perfil, perfil?.empresa_id);
+  const puedeComprarAqui = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
 
   const [proyectoId, setProyectoId] = useState("");
   const [comentario, setComentario] = useState("");
@@ -94,6 +96,7 @@ export function MisRequisiciones() {
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro();
+  const [abierta, setAbierta] = useState<string | null>(null);
 
   const proyectoSeleccionado = proyectosDisponibles?.find((p) => p.id === proyectoId);
   const { data: productos } = useProductosEmpresa(proyectoSeleccionado?.empresa_id ?? "");
@@ -323,9 +326,10 @@ export function MisRequisiciones() {
         </div>
       )}
 
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <h2 className="text-sm font-semibold text-slate-700">Requisiciones</h2>
         {eligeEmpresa && <SelectorEmpresa value={empresaFiltro} onChange={setEmpresaFiltro} className="rounded border border-slate-300 px-2 py-1 text-sm" />}
+        <p className="text-xs text-slate-500">Abre una requisición para ver sus renglones{puedeComprarAqui ? ", comprar en un paso y ver la orden de compra" : " y sus órdenes de compra"}.</p>
       </div>
 
       {cargandoRequisiciones && <p className="text-sm text-slate-500">Cargando…</p>}
@@ -341,26 +345,43 @@ export function MisRequisiciones() {
                 <th className="px-3 py-2">Solicitado por</th>
                 <th className="px-3 py-2">Estado</th>
                 <th className="px-3 py-2">Suministro</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
               {requisiciones.map((r: any) => (
-                <tr key={r.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">#{r.folio}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{r.fecha}</td>
-                  <td className="px-3 py-2">{r.proyectos?.nombre}</td>
-                  <td className="px-3 py-2">{r.profiles?.nombre}</td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ESTADO_ESTILO[r.estado] ?? ""}`}>{r.estado}</span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <CeldaEtapa r={r} />
-                  </td>
-                </tr>
+                <Fragment key={r.id}>
+                  <tr className="border-t border-slate-100">
+                    <td className="whitespace-nowrap px-3 py-2">
+                      #{r.folio} <span className="text-xs text-slate-400">{r.empresas?.codigo ?? ""}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2">{r.fecha}</td>
+                    <td className="px-3 py-2">{r.proyectos?.nombre}</td>
+                    <td className="px-3 py-2">{r.solicitante_nombre ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ESTADO_ESTILO[r.estado] ?? ""}`}>{r.estado}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <CeldaEtapa r={r} />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button type="button" onClick={() => setAbierta(abierta === r.id ? null : r.id)} className={`rounded px-2.5 py-1 text-xs font-medium ${abierta === r.id ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700 hover:bg-slate-100"}`}>
+                        {abierta === r.id ? "Cerrar" : puedeComprarAqui ? "Abrir / comprar" : "Abrir"}
+                      </button>
+                    </td>
+                  </tr>
+                  {abierta === r.id && (
+                    <tr>
+                      <td colSpan={7} className="p-0">
+                        <DetalleRequisicion requisicionId={r.id} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
               {requisiciones.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
                     Sin requisiciones todavía.
                   </td>
                 </tr>
