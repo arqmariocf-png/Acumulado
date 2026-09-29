@@ -31,7 +31,7 @@ insert into auth.users (id, email) values
 
 -- el trigger handle_new_user ya creó los profiles en rol 'pendiente'
 update public.profiles set nombre='Admin Loma', rol='admin', grupo_id=(select id from grupos where codigo='LOMA') where id='11111111-1111-1111-1111-111111111111';
-update public.profiles set nombre='Corporativo Loma', rol='corporativo', grupo_id=(select id from grupos where codigo='LOMA') where id='22222222-2222-2222-2222-222222222222';
+update public.profiles set nombre='Corporativo Loma', rol='corporativo', todas_las_empresas=true, grupo_id=(select id from grupos where codigo='LOMA') where id='22222222-2222-2222-2222-222222222222';
 update public.profiles set nombre='Admin ARSSA', rol='admin', grupo_id=(select id from grupos where codigo='ARSSA') where id='33333333-3333-3333-3333-333333333333';
 
 -- Empresa de ARSSA + su usuario de tesorería
@@ -174,7 +174,10 @@ exception when insufficient_privilege or raise_exception then
 end $$;
 reset role;
 
--- Y con el pago al corriente sí captura.
+-- Y con el pago al corriente sí captura. (El claim de la sesión se limpia
+-- antes: si sigue apuntando al admin suspendido, el candado solo_consulta
+-- bloquea también este update de preparación.)
+select set_config('request.jwt.claim.sub', '', false);
 update public.suscripciones set estado = 'activa', periodo_fin = now() + interval '30 days'
  where grupo_id = (select id from grupos where codigo='ARSSA');
 set role authenticated;
