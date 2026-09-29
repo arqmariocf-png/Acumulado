@@ -16,6 +16,12 @@ export interface OrdenCompraDoc {
   autorizada_en: string | null;
   autorizada_por: string | null;
   nota: string | null;
+  /** Forma de pago y datos bancarios del proveedor (Laura, 29-sep-2026). */
+  forma_pago?: string | null;
+  banco?: string | null;
+  clabe?: string | null;
+  cuenta?: string | null;
+  beneficiario?: string | null;
 }
 
 export interface LineaOrdenCompra {
@@ -121,6 +127,8 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
     <div><span>Proyecto / obra</span>${esc(oc.proyecto) || "—"}</div>
     <div><span>Requisición</span>${oc.requisicion_folio != null ? `#${esc(oc.requisicion_folio)}` : "—"}${oc.solicitante ? ` · solicitó ${esc(oc.solicitante)}` : ""}</div>
     <div><span>Elaboró</span>${esc(oc.creada_por) || "—"}</div>
+    <div><span>Forma de pago</span>${esc(oc.forma_pago) || "—"}</div>
+    <div><span>Pagar a</span>${esc(oc.beneficiario) || esc(oc.proveedor) || "—"}${oc.banco ? ` · ${esc(oc.banco)}` : ""}${oc.clabe ? ` · CLABE ${esc(oc.clabe)}` : ""}${oc.cuenta ? ` · cuenta ${esc(oc.cuenta)}` : ""}${!oc.banco && !oc.clabe && !oc.cuenta ? " · sin datos bancarios capturados" : ""}</div>
   </div>
   <table>
     <thead><tr><th class="c" style="width:32px">#</th><th>Concepto</th><th class="c" style="width:60px">Unidad</th><th class="r" style="width:80px">Cantidad</th><th class="r" style="width:95px">P. unitario</th><th class="r" style="width:105px">Importe</th></tr></thead>

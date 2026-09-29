@@ -7,6 +7,8 @@ import { moneda } from "../../lib/saldosEmpresas";
 import { useSaldosDia } from "./SaldosEmpresas";
 import { OrdenesPorPagar } from "./OrdenesPorPagar";
 import { BotonSincronizarOcOv } from "../../components/BotonSincronizarOcOv";
+import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
+import { ComprobantePago } from "../../components/ComprobantePago";
 
 interface PagoProgramado {
   id: string;
@@ -26,6 +28,7 @@ interface PagoProgramado {
   id_orden: string | null;
   clabe: string | null;
   banco_proveedor: string | null;
+  comprobante_nombre: string | null;
 }
 
 interface Cuenta {
@@ -340,6 +343,10 @@ export function ProgramacionPagos() {
                         {p.clabe && ` · ${p.banco_proveedor ?? ""} CLABE ${p.clabe}`}
                         {p.estatus === "pagado" && p.pagado_en && ` · pagado ${p.pagado_en}`}
                         {p.estatus === "cancelado" && " · cancelado"}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs">
+                        {p.orden_compra_id && <BotonVerOc ocId={p.orden_compra_id} etiqueta={`ver OC ${p.id_orden ?? ""}`} className="text-slate-600 underline" />}
+                        <ComprobantePago pagoId={p.id} nombre={p.comprobante_nombre} compacto />
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right font-medium tabular-nums">{moneda(Number(p.monto))}</td>

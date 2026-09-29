@@ -35,6 +35,9 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
         solicitante = req?.solicitante_nombre ?? null;
         nota = (nec as { cotizacion_nota?: string | null } | null)?.cotizacion_nota ?? null;
       }
+      // Forma de pago y datos bancarios del proveedor (Laura, 29-sep-2026).
+      const { data: pago } = await supabase.from("v_oc_pagos").select("condicion_pago, tipo_pago_backoffice, banco_proveedor, clabe, cuenta_proveedor, beneficiario_bancario").eq("id", ocId).maybeSingle();
+      const formaPago = [pago?.condicion_pago ? ({ contado: "Contado", credito: "Crédito", anticipo: "Anticipo", efectivo: "Efectivo" } as Record<string, string>)[pago.condicion_pago] : null, pago?.tipo_pago_backoffice].filter(Boolean).join(" · ") || null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const o = oc as any;
       const codigo: string = o.empresas?.codigo ?? "";
@@ -53,6 +56,11 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
           autorizada_en: o.autorizada_en,
           autorizada_por: o.autorizador?.nombre ?? null,
           nota,
+          forma_pago: formaPago,
+          banco: pago?.banco_proveedor ?? null,
+          clabe: pago?.clabe ?? null,
+          cuenta: pago?.cuenta_proveedor ?? null,
+          beneficiario: pago?.beneficiario_bancario ?? null,
         },
         (lineas ?? []) as LineaOrdenCompra[],
         codigo ? `${window.location.origin}/logos/${codigo.toLowerCase()}.png` : null,

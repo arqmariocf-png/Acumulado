@@ -233,6 +233,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `pagos_programados.metodo` (transferencia/efectivo/cheque); el pago en
   efectivo no cuenta contra el saldo bancario. Pendiente: módulo completo
   de caja / pagos en efectivo a cargo de Jaime (`20260929160000`).
+  **Cadena Laura → Delia → Alma (29-sep-2026)**: por autorizar → por
+  programar → **programado a pago** (Laura) → **pagada** (Delia marca y sube
+  el comprobante: `pagos_programados.comprobante_*`, edge
+  `pagos-comprobante`, bucket `cargas/pagos/…`, componente
+  `ComprobantePago`) → **recibida** (Alma u obra). `etapaOc()` en
+  `lib/pagosOc.ts` pinta la barra de pasos en la lista de OC. Recepción de
+  CUALQUIER OC: `v_oc_recepcion` (confirmaciones `oc_recepciones` con
+  `lugar` bodega/obra + entradas de inventario ligadas a la partida),
+  `v_oc_por_recibir` (pagadas aquí o en el backoffice), pestaña **Por
+  recibir** en Inventario (`inventario/PorRecibir.tsx`, roles almacén,
+  empresa, responsable, admin, corporativo) con `RecepcionOc` (partida por
+  partida o "Recibir todo lo que falta" → `fn_oc_marcar_recibida(oc, lugar,
+  nota)`; `ordenes_compra.recibida_*`). Tesorería muestra también los
+  "programados a pago para después". Lista de OC: casillas con **suma
+  automática** y "Programar a pago N" en lote (condición inicial de cada
+  una y fecha sugerida); la OC impresa trae forma de pago, beneficiario,
+  banco y CLABE (`20260929190000`).
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
   sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).

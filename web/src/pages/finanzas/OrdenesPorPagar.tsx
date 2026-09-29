@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
+import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, PASOS_OC, estadoPagoOc, etapaOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
@@ -39,6 +39,7 @@ export interface OcPago {
   estatus_backoffice: string | null;
   tipo_pago_backoffice: string | null;
   pagada_backoffice: boolean;
+  recepcion_estado: "recibida" | "parcial" | "sin_recibir" | "sin_partidas";
 }
 
 /** Condición inicial cuando dirección aún no la capturó: lo que dice el
@@ -82,6 +83,10 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   const [verPagadasBackoffice, setVerPagadasBackoffice] = useState(false);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Selección con suma automática y programación en lote (Laura, 29-sep-2026:
+  // "para que no las tenga que ir sumando manual").
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["oc-pagos", pestana, filtroEmpresa, verPagadasBackoffice],
@@ -107,6 +112,32 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   }, [data, busqueda, soloConLinea]);
 
   const totalSaldo = visibles.reduce((s, o) => s + saldoOc(o), 0);
+  const seleccionadas = visibles.filter((o) => seleccion.has(o.id));
+  const totalSeleccion = seleccionadas.reduce((s, o) => s + saldoOc(o), 0);
+  const programables = seleccionadas.filter((o) => o.autorizacion === "autorizada" && saldoOc(o) > 0 && !o.pagada_backoffice);
+
+  const programarLote = useMutation({
+    mutationFn: async () => {
+      if (programables.length === 0) throw new Error("Ninguna de las seleccionadas se puede programar (falta autorización o no tienen saldo).");
+      if (!window.confirm(`¿Programar a pago ${programables.length} orden(es) por ${moneda(programables.reduce((s, o) => s + saldoOc(o), 0))}? Cada una con su condición (crédito si el proveedor tiene línea, efectivo si el backoffice lo dice, si no contado) y la fecha sugerida.`)) return null;
+      const errores: string[] = [];
+      let n = 0;
+      for (const o of programables) {
+        const c = condicionInicialDe(o);
+        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: saldoOc(o), p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: null, p_notas: null });
+        if (err) errores.push(`${o.id_orden}: ${err.message}`);
+        else n += 1;
+      }
+      return { n, errores };
+    },
+    onSuccess: (r) => {
+      if (!r) return;
+      setAviso(`Programadas a pago ${r.n} orden(es).${r.errores.length ? ` No se pudieron: ${r.errores.join(" · ")}` : ""}`);
+      setSeleccion(new Set());
+      for (const k of [["oc-pagos"], ["pagos-programados"], ["cxp-proveedores"], ["tesoreria"]]) queryClient.invalidateQueries({ queryKey: k });
+    },
+    onError: (e: Error) => setAviso(e.message),
+  });
 
   return (
     <div className="mb-4 rounded border border-slate-200 bg-white">
@@ -138,6 +169,17 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
         <span className="ml-auto text-xs text-slate-500">
           {visibles.length} órdenes · saldo <b className="tabular-nums">{moneda(totalSaldo)}</b>
         </span>
+        {seleccionadas.length > 0 && (
+          <span className="flex w-full flex-wrap items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-900">
+            {seleccionadas.length} seleccionada(s) · suma <b className="tabular-nums">{moneda(totalSeleccion)}</b>
+            <button type="button" onClick={() => programarLote.mutate()} disabled={programarLote.isPending || programables.length === 0} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
+              {programarLote.isPending ? "Programando…" : `Programar a pago ${programables.length}`}
+            </button>
+            <button type="button" onClick={() => setSeleccion(new Set())} className="underline">
+              quitar selección
+            </button>
+          </span>
+        )}
       </div>
       {pestana === "autorizar" && (
         <div className="p-3">
@@ -154,6 +196,9 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
+              <th className="px-2 py-2">
+                <input type="checkbox" aria-label="Seleccionar todas" checked={visibles.length > 0 && visibles.every((o) => seleccion.has(o.id))} onChange={(e) => setSeleccion(e.target.checked ? new Set(visibles.map((o) => o.id)) : new Set())} />
+              </th>
               <th className="px-3 py-2">Orden</th>
               <th className="px-3 py-2">Proveedor / beneficiario</th>
               <th className="px-3 py-2">Línea de crédito</th>
@@ -166,7 +211,25 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
           </thead>
           <tbody>
             {visibles.map((o) => (
-              <FilaOc key={o.id} oc={o} hoy={hoy} empresa={nombreEmpresa.get(o.empresa_id) ?? ""} cuentas={cuentas.filter((c) => c.empresa_id === o.empresa_id)} abierta={abierta === o.id} onAbrir={() => setAbierta(abierta === o.id ? null : o.id)} onAviso={setAviso} />
+              <FilaOc
+                key={o.id}
+                oc={o}
+                hoy={hoy}
+                empresa={nombreEmpresa.get(o.empresa_id) ?? ""}
+                cuentas={cuentas.filter((c) => c.empresa_id === o.empresa_id)}
+                abierta={abierta === o.id}
+                onAbrir={() => setAbierta(abierta === o.id ? null : o.id)}
+                onAviso={setAviso}
+                seleccionada={seleccion.has(o.id)}
+                onSeleccionar={(v) =>
+                  setSeleccion((prev) => {
+                    const n = new Set(prev);
+                    if (v) n.add(o.id);
+                    else n.delete(o.id);
+                    return n;
+                  })
+                }
+              />
             ))}
           </tbody>
         </table>
@@ -175,7 +238,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   );
 }
 
-function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: OcPago; hoy: string; empresa: string; cuentas: Cuenta[]; abierta: boolean; onAbrir: () => void; onAviso: (m: string | null) => void }) {
+function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccionada, onSeleccionar }: { oc: OcPago; hoy: string; empresa: string; cuentas: Cuenta[]; abierta: boolean; onAbrir: () => void; onAviso: (m: string | null) => void; seleccionada: boolean; onSeleccionar: (v: boolean) => void }) {
   const queryClient = useQueryClient();
   // Sin condición capturada: crédito si el proveedor tiene línea, si no contado.
   const condicionInicial: CondicionPago = condicionInicialDe(oc);
@@ -186,6 +249,8 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
   const [notas, setNotas] = useState("");
   const saldo = saldoOc(oc);
   const [etiqueta, clase] = ESTADO_PAGO[estadoPagoOc(oc)];
+  const etapa = etapaOc(oc);
+  const pasoActual = PASOS_OC.indexOf(etapa);
   const autorizada = oc.autorizacion === "autorizada";
   const venc = vencimientoCredito(oc.vence, hoy);
   const claseVenc = venc?.estado === "vencida" ? "text-red-700 font-medium" : venc?.estado === "por_vencer" ? "text-amber-700 font-medium" : "text-slate-500";
@@ -231,6 +296,9 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
   return (
     <>
       <tr className="border-t border-slate-100">
+        <td className="px-2 py-2 align-top">
+          <input type="checkbox" checked={seleccionada} onChange={(e) => onSeleccionar(e.target.checked)} aria-label={`Seleccionar ${oc.id_orden}`} />
+        </td>
         <td className="whitespace-nowrap px-3 py-2">
           <span className="font-mono text-xs font-semibold text-slate-900">{oc.id_orden}</span>
           <div className="text-xs text-slate-400">
@@ -272,7 +340,14 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
         <td className="px-3 py-2 text-right">
           <span className="font-medium tabular-nums">{moneda(saldo)}</span>
           <div>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] ${clase}`}>{etiqueta}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] ${clase}`} title={ETIQUETA_ETAPA_OC[etapa]}>
+              {etapa === "programada" ? "programado a pago" : etapa === "recibida" ? "recibida" : etapa === "pagada" ? (oc.recepcion_estado === "parcial" ? "pagada · recepción parcial" : "pagada · por recibir") : etiqueta}
+            </span>
+            <div className="mt-0.5 flex gap-0.5" aria-hidden="true">
+              {PASOS_OC.map((p, i) => (
+                <span key={p} className={`h-1 w-4 rounded-sm ${etapa !== "rechazada" && i <= pasoActual ? "bg-emerald-500" : "bg-slate-200"}`} title={ETIQUETA_ETAPA_OC[p]} />
+              ))}
+            </div>
           </div>
         </td>
         <td className="px-3 py-2">
@@ -303,7 +378,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
       </tr>
       {abierta && (
         <tr>
-          <td colSpan={8} className="bg-slate-50 px-3 pb-3 pt-2">
+          <td colSpan={9} className="bg-slate-50 px-3 pb-3 pt-2">
             <form
               onSubmit={(e) => {
                 e.preventDefault();

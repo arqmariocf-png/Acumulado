@@ -7,6 +7,7 @@ import { armarTesoreria, semaforoTesoreria, type ColorTesoreria } from "../../li
 import { useSaldosDia } from "./SaldosEmpresas";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
+import { ComprobantePago } from "../../components/ComprobantePago";
 
 interface PagoVista {
   id: string;
@@ -32,6 +33,7 @@ interface PagoVista {
   cuenta_proveedor: string | null;
   rfc_proveedor: string | null;
   correo_proveedor: string | null;
+  comprobante_nombre: string | null;
 }
 
 interface Cuenta {
@@ -78,7 +80,7 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
       const { data, error: err } = await supabase
         .from("v_pagos_programados")
         .select("*")
-        .or(`and(estatus.eq.pendiente,fecha_programada.lte.${hoy}),and(estatus.eq.pagado,pagado_en.eq.${hoy})`)
+        .or(`estatus.eq.pendiente,and(estatus.eq.pagado,pagado_en.eq.${hoy})`)
         .order("fecha_programada")
         .order("beneficiario");
       if (err) throw err;
@@ -117,7 +119,10 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
     onError: (e: Error) => setAviso(e.message),
   });
 
-  const pendientes = (pagos ?? []).filter((p) => p.estatus === "pendiente" && (!filtroEmpresa || p.empresa_id === filtroEmpresa));
+  const pendientes = (pagos ?? []).filter((p) => p.estatus === "pendiente" && p.fecha_programada <= hoy && (!filtroEmpresa || p.empresa_id === filtroEmpresa));
+  // Todo lo que dirección dejó "programado a pago" para después: Delia lo ve
+  // venir aunque no sea de hoy (Mario, 29-sep-2026).
+  const proximos = (pagos ?? []).filter((p) => p.estatus === "pendiente" && p.fecha_programada > hoy && (!filtroEmpresa || p.empresa_id === filtroEmpresa));
   const pagadosHoy = (pagos ?? []).filter((p) => p.estatus === "pagado" && (!filtroEmpresa || p.empresa_id === filtroEmpresa));
   const porEmpresa = (lista: PagoVista[]) => {
     const m = new Map<string, PagoVista[]>();
@@ -190,7 +195,7 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
 
       {compacto ? (
         <p className="text-xs text-slate-500">
-          {pendientes.length} pago(s) por hacer hoy.{" "}
+          {pendientes.length} pago(s) por hacer hoy · {proximos.length} programado(s) para después.{" "}
           <Link to="/finanzas/tesoreria" className="underline">
             Abrir tesorería
           </Link>
@@ -199,6 +204,7 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
         <>
           <Seccion titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
           <Seccion titulo="Pagados hoy" grupos={porEmpresa(pagadosHoy)} vacio="Todavía no se marca ningún pago hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
+          <Seccion titulo="Programados a pago para después" grupos={porEmpresa(proximos)} vacio="Dirección no ha programado pagos para los próximos días." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
         </>
       )}
     </div>
@@ -247,6 +253,9 @@ function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta:
         </div>
         <div className="mt-0.5">
           <DatosBancariosProveedor datos={{ clave: p.clave, nombre: p.beneficiario, beneficiario_bancario: p.beneficiario_bancario, banco_proveedor: p.banco_proveedor, clabe: p.clabe, cuenta_proveedor: p.cuenta_proveedor, rfc_proveedor: p.rfc_proveedor, correo_proveedor: p.correo_proveedor }} compacto />
+        </div>
+        <div className="mt-0.5">
+          <ComprobantePago pagoId={p.id} nombre={p.comprobante_nombre} compacto />
         </div>
       </td>
       <td className="whitespace-nowrap px-3 py-2 align-top text-xs text-slate-500">
