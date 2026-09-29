@@ -16,6 +16,8 @@ interface OcPendiente {
   fecha_creacion: string | null;
   created_at: string;
   fuente: string;
+  rechazada_en: string | null;
+  rechazo_motivo: string | null;
   empresas: { nombre: string; codigo: string } | null;
 }
 
@@ -49,6 +51,9 @@ export function OcPorAutorizar() {
   const queryClient = useQueryClient();
   const [abierta, setAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Archivadas = rechazadas (p. ej. la carga de Excel de julio-2026 que no
+  // coincidía con el backoffice). Se pueden reactivar con "Autorizar".
+  const [verArchivadas, setVerArchivadas] = useState(false);
 
   // Un solo clic (Mario, 28-sep-2026): autoriza con pago a 7 días y cuenta
   // por definir; "Revisar" es para ver partidas, cambiar fecha o rechazar.
@@ -62,6 +67,7 @@ export function OcPorAutorizar() {
       setAviso(o.fuente === "requisicion" ? `Orden ${o.id_orden} autorizada: pago a ${o.proveedor ?? "proveedor"} programado para el ${sumarDias(7)}.` : `Orden ${o.id_orden} autorizada; ya se le puede programar pago.`);
       setAbierta(null);
       queryClient.invalidateQueries({ queryKey: ["oc-por-autorizar"] });
+      queryClient.invalidateQueries({ queryKey: ["oc-archivadas-n"] });
       queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
       queryClient.invalidateQueries({ queryKey: ["cxp-proveedores"] });
       queryClient.invalidateQueries({ queryKey: ["oc-pagos"] });
@@ -70,17 +76,26 @@ export function OcPorAutorizar() {
   });
 
   const { data: ocs, isLoading } = useQuery({
-    queryKey: ["oc-por-autorizar"],
+    queryKey: ["oc-por-autorizar", verArchivadas],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("ordenes_compra")
-        .select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, created_at, fuente, empresas(nombre, codigo)")
+        .select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, created_at, fuente, rechazada_en, rechazo_motivo, empresas(nombre, codigo)")
         .in("fuente", ["requisicion", "excel"])
         .is("autorizada_en", null)
-        .is("rechazada_en", null)
         .order("created_at", { ascending: false });
+      q = verArchivadas ? q.not("rechazada_en", "is", null).limit(300) : q.is("rechazada_en", null);
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as OcPendiente[];
+    },
+  });
+  const { data: nArchivadas } = useQuery({
+    queryKey: ["oc-archivadas-n"],
+    queryFn: async () => {
+      const { count, error } = await supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).in("fuente", ["requisicion", "excel"]).is("autorizada_en", null).not("rechazada_en", "is", null);
+      if (error) throw error;
+      return count ?? 0;
     },
   });
 
@@ -94,24 +109,33 @@ export function OcPorAutorizar() {
   });
 
   if (isLoading) return null;
-  if (!ocs || ocs.length === 0) return null;
+  if ((!ocs || ocs.length === 0) && !verArchivadas && !(nArchivadas ?? 0)) return null;
 
   return (
-    <div className="mb-5 rounded border border-amber-300 bg-amber-50 p-3">
+    <div className={`mb-5 rounded border p-3 ${verArchivadas ? "border-slate-300 bg-slate-50" : "border-amber-300 bg-amber-50"}`}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-amber-900">
-          Órdenes de compra por autorizar <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs">{ocs.length}</span>
+        <h3 className={`text-sm font-semibold ${verArchivadas ? "text-slate-800" : "text-amber-900"}`}>
+          {verArchivadas ? "Órdenes archivadas (rechazadas)" : "Órdenes de compra por autorizar"} <span className={`rounded-full px-2 py-0.5 text-xs ${verArchivadas ? "bg-slate-200" : "bg-amber-200"}`}>{ocs?.length ?? 0}</span>
         </h3>
-        <p className="text-xs text-amber-800">Sin autorización no se programa pago. Las RQ las genera almacén (al autorizar se programa el pago y la requisición avanza); las de Excel se cargaron a mano.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-amber-800">{verArchivadas ? "No se pagan. \"Autorizar\" las reactiva." : "Sin autorización no se programa pago. Las RQ las genera almacén (al autorizar se programa el pago y la requisición avanza); las de Excel se cargaron a mano."}</p>
+          {(nArchivadas ?? 0) > 0 && (
+            <button type="button" onClick={() => setVerArchivadas((v) => !v)} className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100">
+              {verArchivadas ? "Ver por autorizar" : `Ver archivadas (${nArchivadas})`}
+            </button>
+          )}
+        </div>
       </div>
+      {ocs?.length === 0 && <p className="text-xs text-slate-500">{verArchivadas ? "No hay archivadas." : "No hay órdenes pendientes de autorización."}</p>}
       <div className="space-y-2">
-        {ocs.map((o) => (
+        {(ocs ?? []).map((o) => (
           <div key={o.id} className="rounded border border-amber-200 bg-white p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm">
                 <span className="font-mono text-xs font-semibold text-slate-900">{o.id_orden}</span>
                 {o.fuente === "excel" && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-600">excel</span>} · <b>{o.proveedor ?? "sin proveedor"}</b>
                 <span className="text-slate-500"> · {o.empresas?.codigo ?? ""} · {o.proyecto ?? "sin proyecto"} · {o.fecha_creacion ?? ""}</span>
+                {o.rechazo_motivo && <div className="text-xs text-slate-500">{o.rechazo_motivo}</div>}
               </div>
               <div className="flex items-center gap-2">
                 <span className="mr-1 text-sm font-semibold tabular-nums">{o.total != null ? moneda(o.total) : "—"}</span>
@@ -138,6 +162,7 @@ export function OcPorAutorizar() {
                   setAviso(m);
                   setAbierta(null);
                   queryClient.invalidateQueries({ queryKey: ["oc-por-autorizar"] });
+      queryClient.invalidateQueries({ queryKey: ["oc-archivadas-n"] });
                   queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
                   queryClient.invalidateQueries({ queryKey: ["cxp-proveedores"] });
                   queryClient.invalidateQueries({ queryKey: ["oc-pagos"] });
