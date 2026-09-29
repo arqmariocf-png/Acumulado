@@ -180,6 +180,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   15 días = 10-oct). Semáforo `vencimientoCredito` en `lib/pagosOc.ts`
   (rojo vencida, ámbar ≤7 días); pestaña "Crédito y vencimientos"
   (`20260929140000`).
+  **La sincronización ya no bloquea (29-sep-2026)**: Laura recibía
+  "canceling statement due to statement timeout" al poner condición
+  mientras corría la sincronización: hacía http_get (30-60 s cada uno)
+  intercalado con los upserts en UNA transacción y las 1,653 OC quedaban
+  con candado ~2 min. `sincronizar_catalogo_oc_ov` ahora descarga los 4
+  payloads primero y escribe al final solo las filas que cambiaron
+  (`on conflict … do update … where … is distinct from`);
+  `20260929150000`. Regla: en cualquier job que llame al backoffice, las
+  descargas van antes de la primera escritura.
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
   sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).
