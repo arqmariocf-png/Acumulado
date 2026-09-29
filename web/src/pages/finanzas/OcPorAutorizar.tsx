@@ -15,6 +15,7 @@ interface OcPendiente {
   total: number | null;
   fecha_creacion: string | null;
   created_at: string;
+  fuente: string;
   empresas: { nombre: string; codigo: string } | null;
 }
 
@@ -58,11 +59,12 @@ export function OcPorAutorizar() {
       return o;
     },
     onSuccess: (o) => {
-      setAviso(`Orden ${o.id_orden} autorizada: pago a ${o.proveedor ?? "proveedor"} programado para el ${sumarDias(7)}.`);
+      setAviso(o.fuente === "requisicion" ? `Orden ${o.id_orden} autorizada: pago a ${o.proveedor ?? "proveedor"} programado para el ${sumarDias(7)}.` : `Orden ${o.id_orden} autorizada; ya se le puede programar pago.`);
       setAbierta(null);
       queryClient.invalidateQueries({ queryKey: ["oc-por-autorizar"] });
       queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
       queryClient.invalidateQueries({ queryKey: ["cxp-proveedores"] });
+      queryClient.invalidateQueries({ queryKey: ["oc-pagos"] });
     },
     onError: (e: Error) => setAviso(e.message),
   });
@@ -72,9 +74,10 @@ export function OcPorAutorizar() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ordenes_compra")
-        .select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, created_at, empresas(nombre, codigo)")
-        .eq("fuente", "requisicion")
+        .select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, created_at, fuente, empresas(nombre, codigo)")
+        .in("fuente", ["requisicion", "excel"])
         .is("autorizada_en", null)
+        .is("rechazada_en", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as OcPendiente[];
@@ -99,14 +102,15 @@ export function OcPorAutorizar() {
         <h3 className="text-sm font-semibold text-amber-900">
           Órdenes de compra por autorizar <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs">{ocs.length}</span>
         </h3>
-        <p className="text-xs text-amber-800">Las genera almacén desde las requisiciones (serie RQ). Al autorizar se programa el pago y la requisición avanza.</p>
+        <p className="text-xs text-amber-800">Sin autorización no se programa pago. Las RQ las genera almacén (al autorizar se programa el pago y la requisición avanza); las de Excel se cargaron a mano.</p>
       </div>
       <div className="space-y-2">
         {ocs.map((o) => (
           <div key={o.id} className="rounded border border-amber-200 bg-white p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm">
-                <span className="font-mono text-xs font-semibold text-slate-900">{o.id_orden}</span> · <b>{o.proveedor ?? "sin proveedor"}</b>
+                <span className="font-mono text-xs font-semibold text-slate-900">{o.id_orden}</span>
+                {o.fuente === "excel" && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-600">excel</span>} · <b>{o.proveedor ?? "sin proveedor"}</b>
                 <span className="text-slate-500"> · {o.empresas?.codigo ?? ""} · {o.proyecto ?? "sin proyecto"} · {o.fecha_creacion ?? ""}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -116,7 +120,7 @@ export function OcPorAutorizar() {
                   onClick={() => autorizarDirecto.mutate(o)}
                   disabled={autorizarDirecto.isPending}
                   className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-                  title="Autoriza y programa el pago a 7 días (la cuenta se define después en Programación de pagos)"
+                  title={o.fuente === "requisicion" ? "Autoriza y programa el pago a 7 días (la cuenta se define después en Programación de pagos)" : "Autoriza; el pago se programa después con su condición"}
                 >
                   Autorizar
                 </button>
@@ -136,6 +140,7 @@ export function OcPorAutorizar() {
                   queryClient.invalidateQueries({ queryKey: ["oc-por-autorizar"] });
                   queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
                   queryClient.invalidateQueries({ queryKey: ["cxp-proveedores"] });
+                  queryClient.invalidateQueries({ queryKey: ["oc-pagos"] });
                 }}
               />
             )}
@@ -176,7 +181,7 @@ function DetalleOc({ oc, cuentas, onResuelta }: { oc: OcPendiente; cuentas: Cuen
       if (error) throw error;
       return autorizar;
     },
-    onSuccess: (autorizar) => onResuelta(autorizar ? `Orden ${oc.id_orden} autorizada: pago programado para el ${fechaPago}.` : `Orden ${oc.id_orden} rechazada; almacén la ve para recotizar.`),
+    onSuccess: (autorizar) => onResuelta(autorizar ? (oc.fuente === "requisicion" ? `Orden ${oc.id_orden} autorizada: pago programado para el ${fechaPago}.` : `Orden ${oc.id_orden} autorizada; ya se le puede programar pago.`) : oc.fuente === "requisicion" ? `Orden ${oc.id_orden} rechazada; almacén la ve para recotizar.` : `Orden ${oc.id_orden} rechazada.`),
     onError: (e: Error) => setError(e.message),
   });
 
@@ -213,9 +218,11 @@ function DetalleOc({ oc, cuentas, onResuelta }: { oc: OcPendiente; cuentas: Cuen
               <td className="py-1 pr-2 text-right tabular-nums">{p.costo != null ? moneda(p.costo) : "—"}</td>
               <td className="py-1 pr-2 text-right tabular-nums">{p.costo != null && p.cantidad != null ? moneda(p.costo * p.cantidad) : "—"}</td>
               <td className="py-1 text-right">
-                <button type="button" onClick={() => verCotizacion(p.clave)} className="text-slate-600 underline">
-                  cotización
-                </button>
+                {oc.fuente === "requisicion" && (
+                  <button type="button" onClick={() => verCotizacion(p.clave)} className="text-slate-600 underline">
+                    cotización
+                  </button>
+                )}
               </td>
             </tr>
           ))}
@@ -243,7 +250,7 @@ function DetalleOc({ oc, cuentas, onResuelta }: { oc: OcPendiente; cuentas: Cuen
         </button>
         <div className="ml-auto flex items-end gap-2">
           <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo del rechazo" className="w-48 rounded border border-slate-300 px-2 py-1 text-sm" />
-          <button type="button" onClick={() => window.confirm(`¿Rechazar la orden ${oc.id_orden}? Se borra y almacén vuelve a cotizar.`) && resolver.mutate(false)} disabled={resolver.isPending} className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">
+          <button type="button" onClick={() => window.confirm(oc.fuente === "requisicion" ? `¿Rechazar la orden ${oc.id_orden}? Se borra y almacén vuelve a cotizar.` : `¿Rechazar la orden ${oc.id_orden}? Queda registrada como rechazada y no se paga.`) && resolver.mutate(false)} disabled={resolver.isPending} className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50">
             Rechazar
           </button>
         </div>
