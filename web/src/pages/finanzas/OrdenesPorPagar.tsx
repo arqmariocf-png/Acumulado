@@ -36,6 +36,17 @@ export interface OcPago {
   banco_proveedor: string | null;
   clabe: string | null;
   cuenta_proveedor: string | null;
+  estatus_backoffice: string | null;
+  tipo_pago_backoffice: string | null;
+  pagada_backoffice: boolean;
+}
+
+/** Condición inicial cuando dirección aún no la capturó: lo que dice el
+ * backoffice (efectivo) o crédito si el proveedor tiene línea. */
+function condicionInicialDe(oc: OcPago): CondicionPago {
+  if (oc.condicion_pago) return oc.condicion_pago;
+  if ((oc.tipo_pago_backoffice ?? "").toLowerCase().startsWith("efectivo")) return "efectivo";
+  return oc.dias_credito != null ? "credito" : "contado";
 }
 
 interface Cuenta {
@@ -65,18 +76,25 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   const [pestana, setPestana] = useState<"autorizar" | "hoy" | "saldo" | "credito">("hoy");
   const [busqueda, setBusqueda] = useState("");
   const [soloConLinea, setSoloConLinea] = useState(false);
+  // El backoffice ya registra pagadas las que están en Pendiente Factura /
+  // Pendiente Comprobante / Completada: se ocultan de "Con saldo" salvo
+  // que se pidan.
+  const [verPagadasBackoffice, setVerPagadasBackoffice] = useState(false);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["oc-pagos", pestana, filtroEmpresa],
+    queryKey: ["oc-pagos", pestana, filtroEmpresa, verPagadasBackoffice],
     enabled: pestana !== "autorizar",
     queryFn: async () => {
       let q = supabase.from("v_oc_pagos").select("*");
       if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
       if (pestana === "hoy") q = q.eq("fecha_creacion", hoy).order("id_orden");
-      else if (pestana === "credito") q = q.eq("es_credito", true).gt("saldo", 0.01).neq("autorizacion", "rechazada").order("vence", { ascending: true, nullsFirst: false }).limit(400);
-      else q = q.gt("saldo", 0.01).neq("autorizacion", "rechazada").order("fecha_creacion", { ascending: false }).limit(400);
+      else if (pestana === "credito") q = q.eq("es_credito", true).gt("saldo", 0.01).neq("autorizacion", "rechazada").eq("pagada_backoffice", false).order("vence", { ascending: true, nullsFirst: false }).limit(400);
+      else {
+        q = q.gt("saldo", 0.01).neq("autorizacion", "rechazada").order("fecha_creacion", { ascending: false }).limit(400);
+        if (!verPagadasBackoffice) q = q.eq("pagada_backoffice", false);
+      }
       const { data: filas, error: err } = await q;
       if (err) throw err;
       return (filas ?? []) as OcPago[];
@@ -112,6 +130,11 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
         <label className="flex items-center gap-1 text-xs text-slate-600">
           <input type="checkbox" checked={soloConLinea} onChange={(e) => setSoloConLinea(e.target.checked)} /> solo proveedores con línea de crédito
         </label>
+        {pestana === "saldo" && (
+          <label className="flex items-center gap-1 text-xs text-slate-600" title="Pendiente Factura, Pendiente Comprobante o Completada en el backoffice">
+            <input type="checkbox" checked={verPagadasBackoffice} onChange={(e) => setVerPagadasBackoffice(e.target.checked)} /> incluir pagadas en el backoffice
+          </label>
+        )}
         <span className="ml-auto text-xs text-slate-500">
           {visibles.length} órdenes · saldo <b className="tabular-nums">{moneda(totalSaldo)}</b>
         </span>
@@ -120,7 +143,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
         <div className="p-3">
           <p className="mb-2 text-xs text-slate-500">Las órdenes del backoffice llegan ya autorizadas. Las RQ (almacén) y las de Excel esperan a dirección: mientras no se autoricen no se programa pago.</p>
           <OcPorAutorizar />
-          <p className="text-xs text-slate-400">Si aquí no aparece nada, no hay órdenes pendientes de autorización. Las que el backoffice todavía no autoriza no llegan al sistema: solo entran ya autorizadas.</p>
+          <PendientesBackoffice filtroEmpresa={filtroEmpresa} nombreEmpresa={nombreEmpresa} />
         </div>
       )}
       {pestana !== "autorizar" && isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}
@@ -155,7 +178,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
 function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: OcPago; hoy: string; empresa: string; cuentas: Cuenta[]; abierta: boolean; onAbrir: () => void; onAviso: (m: string | null) => void }) {
   const queryClient = useQueryClient();
   // Sin condición capturada: crédito si el proveedor tiene línea, si no contado.
-  const condicionInicial: CondicionPago = oc.condicion_pago ?? (oc.dias_credito != null ? "credito" : "contado");
+  const condicionInicial: CondicionPago = condicionInicialDe(oc);
   const [condicion, setCondicion] = useState<CondicionPago>(condicionInicial);
   const [monto, setMonto] = useState(String(montoPagoSugerido(condicionInicial, oc)));
   const [fecha, setFecha] = useState(fechaPagoSugerida(condicionInicial, oc, hoy));
@@ -215,10 +238,17 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
             {oc.fuente !== "api" && <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[10px] uppercase">{oc.fuente === "requisicion" ? "RQ" : oc.fuente}</span>}
           </div>
           {!autorizada && (
-            <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] ${oc.autorizacion === "rechazada" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`} title={oc.rechazo_motivo ?? ""}>
+            <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] ${oc.autorizacion === "rechazada" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`} title={oc.rechazo_motivo ?? oc.estatus_backoffice ?? ""}>
               {ETIQUETA_AUTORIZACION[oc.autorizacion]}
+              {oc.fuente === "api" && " (backoffice)"}
             </span>
           )}
+          {oc.pagada_backoffice && (
+            <span className="mt-0.5 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800" title={`Backoffice: ${oc.estatus_backoffice}`}>
+              pagada en backoffice · {oc.estatus_backoffice?.toLowerCase()}
+            </span>
+          )}
+          {oc.fuente === "api" && !oc.pagada_backoffice && oc.estatus_backoffice && <div className="text-[11px] text-slate-400">backoffice: {oc.estatus_backoffice.toLowerCase()}{oc.tipo_pago_backoffice ? ` · ${oc.tipo_pago_backoffice.toLowerCase()}` : ""}</div>}
         </td>
         <td className="px-3 py-2">
           {oc.proveedor ?? <span className="text-slate-400">sin proveedor</span>}
@@ -315,5 +345,50 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
         </tr>
       )}
     </>
+  );
+}
+
+/** OC que el backoffice tiene en "Pendiente de Autorización": se autorizan
+ * allá, no aquí; se listan para que dirección vea el global. */
+function PendientesBackoffice({ filtroEmpresa, nombreEmpresa }: { filtroEmpresa: string; nombreEmpresa: Map<string, string> }) {
+  const { data } = useQuery({
+    queryKey: ["oc-pendientes-backoffice", filtroEmpresa],
+    queryFn: async () => {
+      let q = supabase.from("v_oc_pagos").select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, tipo_pago_backoffice").eq("fuente", "api").eq("estatus_backoffice", "Pendiente de Autorización").order("fecha_creacion", { ascending: false }).limit(200);
+      if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
+      const { data: filas, error } = await q;
+      if (error) throw error;
+      return (filas ?? []) as Pick<OcPago, "id" | "id_orden" | "empresa_id" | "proveedor" | "proyecto" | "total" | "fecha_creacion" | "tipo_pago_backoffice">[];
+    },
+  });
+  if (!data || data.length === 0) return <p className="text-xs text-slate-400">El backoffice no tiene órdenes pendientes de autorización.</p>;
+  return (
+    <div className="rounded border border-slate-200 bg-white p-3">
+      <p className="mb-1 text-sm font-semibold text-slate-700">
+        Pendientes de autorización en el backoffice <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs">{data.length}</span>
+      </p>
+      <p className="mb-2 text-xs text-slate-500">Se autorizan en el backoffice; aquí solo se ven. En cuanto cambien de estatus allá, la siguiente actualización las mueve a "Con saldo pendiente" ({moneda(data.reduce((s, o) => s + Number(o.total ?? 0), 0))} en total).</p>
+      <table className="w-full text-xs">
+        <tbody>
+          {data.map((o) => (
+            <tr key={o.id} className="border-t border-slate-100">
+              <td className="whitespace-nowrap py-1 pr-2 font-mono font-semibold text-slate-900">{o.id_orden}</td>
+              <td className="py-1 pr-2 text-slate-500">
+                {nombreEmpresa.get(o.empresa_id) ?? ""} · {o.fecha_creacion ?? ""}
+              </td>
+              <td className="py-1 pr-2">
+                {o.proveedor ?? "—"}
+                {o.proyecto && <span className="text-slate-400"> · {o.proyecto}</span>}
+              </td>
+              <td className="py-1 pr-2 text-slate-500">{o.tipo_pago_backoffice?.toLowerCase() ?? ""}</td>
+              <td className="py-1 text-right tabular-nums">{o.total != null ? moneda(Number(o.total)) : "—"}</td>
+              <td className="py-1 pl-2 text-right">
+                <BotonVerOc ocId={o.id} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

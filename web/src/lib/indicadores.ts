@@ -136,11 +136,12 @@ export const INDICADORES: Indicador[] = [
     etiqueta: "Órdenes de compra por autorizar",
     ruta: "/finanzas/pagos",
     area: "finanzas",
-    descripcion: "Órdenes de almacén (serie RQ) y cargadas a mano (Excel) que dirección no ha autorizado; sin autorización no se programa pago.",
+    descripcion: "Órdenes de almacén (RQ) y de Excel que dirección no ha autorizado, más las que el backoffice tiene en Pendiente de Autorización; sin autorización no se programa pago.",
     visible: finanzas,
     consulta: async () => {
-      const n = await contar(supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).in("fuente", ["requisicion", "excel"]).is("autorizada_en", null).is("rechazada_en", null));
-      return { valor: n, alerta: n > 0, detalle: "esperan a dirección" };
+      const propias = await contar(supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).in("fuente", ["requisicion", "excel"]).is("autorizada_en", null).is("rechazada_en", null));
+      const backoffice = await contar(supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).eq("fuente", "api").eq("estatus_backoffice", "Pendiente de Autorización"));
+      return { valor: propias + backoffice, alerta: propias > 0, detalle: `${propias} esperan a dirección · ${backoffice} en el backoffice` };
     },
   },
   {
