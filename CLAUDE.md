@@ -198,6 +198,24 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   no cuenta OC rechazadas. El backoffice solo expone OC autorizadas
   (`api_ocs_aut`): las pendientes de autorización de allá NO llegan; si
   Laura las quiere aquí, pedir al desarrollador un endpoint de pendientes.
+  **El backoffice sí manda el estatus (29-sep-2026, corrige lo de arriba)**:
+  `api_ocs_aut` trae TODAS las OC con `Estatus` (Pendiente de Autorización,
+  Pendiente de Pago, Pendiente Factura, Pendiente Comprobante, Completada,
+  Cancelada) y `Tipo_pago` (Transferencia electrónica de fondos, Efectivo,
+  Tarjeta de débito/crédito); también `Comprador`, `Categoria_orden`,
+  `Fecha_entrega`, `Tipo_movimiento`, `saleOrder`. Se guardan en
+  `ordenes_compra.estatus_backoffice` / `tipo_pago_backoffice`
+  (`20260929180000`). `v_oc_pagos.autorizacion` para api: Pendiente de
+  Autorización → pendiente (se lista aparte en "Por autorizar", solo
+  lectura: se autorizan allá), Cancelada → rechazada; `pagada_backoffice`
+  = Pendiente Factura / Pendiente Comprobante / Completada (ya pagada
+  allá: oculta de "Con saldo" salvo el check "incluir pagadas en el
+  backoffice"). Condición inicial: efectivo si el backoffice dice
+  Efectivo. `fn_oc_programar_pago` bloquea api pendientes/canceladas;
+  `v_cxp_proveedores` las excluye. **Ni el encabezado ni las partidas
+  traen datos bancarios del proveedor**: se capturan en la app
+  (`proveedores_datos_bancarios`) o se le piden a Gonzalo como campos
+  nuevos (CLABE, banco, beneficiario, RFC) o un endpoint de proveedores.
   **Tesorería (Delia, rol corporativo; 29-sep-2026)**: `/finanzas/tesoreria`
   (`pages/finanzas/Tesoreria.tsx`, también compacta arriba del inicio de
   corporativo/dirección/admin): semáforo por empresa (`lib/tesoreria.ts`,
@@ -536,15 +554,8 @@ Cambios chicos partiendo de `main`, mezclando pronto.
 - Módulo de pagos en efectivo / caja (Jaime): hoy solo existe la condición
   'efectivo' y `pagos_programados.metodo`; falta el fondo de caja, entregas
   a Jaime, comprobantes y arqueo.
-- Backoffice (desarrollador: **Gonzalo**): Mario ya le pidió (29-sep-2026)
-  un endpoint con las OC **pendientes de autorización** ("necesitamos todo
-  el global"). Plan cuando llegue: mismo JSON que `api_ocs_aut`
-  (`ordersProject` con Id_Orden, Tipo_orden, Empresa_solicitante,
-  Proveedor, TOTAL, Creado, Proyecto) más un campo de estatus; en
-  `sincronizar_catalogo_oc_ov` se descarga junto con los otros cuatro y se
-  upserta con fuente 'api' y una columna nueva `origen_estado`
-  ('pendiente' | 'autorizada'); `v_oc_pagos.autorizacion` para api =
-  `coalesce(origen_estado, 'autorizada')`. Una OC que estaba pendiente y
-  aparece en `api_ocs_aut` pasa a autorizada sola; una que desaparece de
-  las dos listas se archiva como rechazada con motivo "ya no está en el
-  backoffice". Pedirle también caché de 5–10 min y filtro por fecha.
+- Backoffice (desarrollador: **Gonzalo**): las pendientes de autorización
+  YA vienen en `api_ocs_aut` (campo `Estatus`); no hace falta endpoint
+  nuevo para eso. Lo que sí pedirle: datos bancarios del proveedor
+  (beneficiario, banco, CLABE, RFC) en la OC o un endpoint de proveedores,
+  caché de 5–10 min y filtro por fecha.
