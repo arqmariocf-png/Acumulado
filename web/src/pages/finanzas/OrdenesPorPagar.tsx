@@ -5,6 +5,7 @@ import { moneda } from "../../lib/saldosEmpresas";
 import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
+import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 
 export interface OcPago {
   id: string;
@@ -30,6 +31,11 @@ export interface OcPago {
   vence: string | null;
   es_credito: boolean;
   rechazo_motivo: string | null;
+  clave: string | null;
+  beneficiario_bancario: string | null;
+  banco_proveedor: string | null;
+  clabe: string | null;
+  cuenta_proveedor: string | null;
 }
 
 interface Cuenta {
@@ -217,6 +223,9 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
         <td className="px-3 py-2">
           {oc.proveedor ?? <span className="text-slate-400">sin proveedor</span>}
           {oc.proyecto && <div className="text-xs text-slate-400">{oc.proyecto}</div>}
+          <div className="mt-0.5">
+            <DatosBancariosProveedor datos={{ clave: oc.clave, nombre: oc.proveedor, beneficiario_bancario: oc.beneficiario_bancario, banco_proveedor: oc.banco_proveedor, clabe: oc.clabe, cuenta_proveedor: oc.cuenta_proveedor }} compacto />
+          </div>
         </td>
         <td className="px-3 py-2 text-xs text-slate-600">
           {oc.linea_credito != null ? (
@@ -281,7 +290,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
                 <label className="mb-1 block text-xs font-medium text-slate-600">Pagar el</label>
                 <input type="date" value={fecha} min={hoy} onChange={(e) => setFecha(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
               </div>
-              <div>
+              <div className={condicion === "efectivo" ? "hidden" : ""}>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Cuenta de salida</label>
                 <select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
                   <option value="">Por definir</option>
@@ -300,7 +309,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
               <button type="submit" disabled={programar.isPending} className="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
                 {programar.isPending ? "Guardando…" : `Programar ${ETIQUETA_CONDICION[condicion].toLowerCase()}`}
               </button>
-              <span className="text-xs text-slate-400">Beneficiario: {oc.proveedor ?? "—"}. {condicion === "credito" ? `Fecha sugerida = fecha de la OC + ${oc.dias_credito ?? 30} días de crédito.` : condicion === "anticipo" ? "El resto queda como saldo de la orden." : ""}</span>
+              <span className="text-xs text-slate-400">Beneficiario: {oc.proveedor ?? "—"}. {condicion === "credito" ? `Fecha sugerida = fecha de la OC + ${oc.dias_credito ?? 30} días de crédito.` : condicion === "anticipo" ? "El resto queda como saldo de la orden." : condicion === "efectivo" ? "Se paga en efectivo (caja); no sale de una cuenta bancaria." : ""}</span>
             </form>
           </td>
         </tr>

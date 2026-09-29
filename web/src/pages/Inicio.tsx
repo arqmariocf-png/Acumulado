@@ -8,6 +8,7 @@ import { esRolBasico } from "../lib/modulos";
 import { SECCIONES, rutaPermitida, seccionDeRuta } from "../lib/menu";
 import { Indicadores } from "../components/Indicadores";
 import { MisActividades } from "./tareas/MisActividades";
+import { Tesoreria } from "./finanzas/Tesoreria";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
 // esperando ahí. La idea es abrirlo desde el celular y saber de un vistazo
@@ -448,6 +449,14 @@ export function Inicio() {
             : "No tienes nada pendiente."}
         </p>
       </div>
+
+      {/* Tesorería (Delia, corporativo): semáforo de pagos de hoy por
+          empresa antes que nada (29-sep-2026). */}
+      {veSaldos && (
+        <div className="mb-6 rounded border border-slate-200 bg-white p-4">
+          <Tesoreria compacto />
+        </div>
+      )}
 
       <Indicadores tienePersonal={!!miPersonal} />
 

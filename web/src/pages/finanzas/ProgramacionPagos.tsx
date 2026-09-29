@@ -21,6 +21,11 @@ interface PagoProgramado {
   referencia: string | null;
   notas: string | null;
   created_at: string;
+  metodo: "transferencia" | "efectivo" | "cheque";
+  orden_compra_id: string | null;
+  id_orden: string | null;
+  clabe: string | null;
+  banco_proveedor: string | null;
 }
 
 interface Cuenta {
@@ -77,7 +82,7 @@ export function ProgramacionPagos() {
   const { data: pagos, isLoading } = useQuery({
     queryKey: ["pagos-programados"],
     queryFn: async () => {
-      const { data, error: err } = await supabase.from("pagos_programados").select("*").order("fecha_programada").order("created_at");
+      const { data, error: err } = await supabase.from("v_pagos_programados").select("*").order("fecha_programada").order("created_at");
       if (err) throw err;
       return data as PagoProgramado[];
     },
@@ -183,6 +188,10 @@ export function ProgramacionPagos() {
             Órdenes de compra del día y con saldo, y pagos comprometidos por empresa contra el saldo de cierre de hoy.{" "}
             <Link to="/finanzas/saldos" className="underline">
               Ver saldos
+            </Link>
+            {" · "}
+            <Link to="/finanzas/tesoreria" className="underline">
+              Tesorería: pagos de hoy
             </Link>
           </p>
         </div>
@@ -327,6 +336,8 @@ export function ProgramacionPagos() {
                         {p.cuenta_id && ` · ${cuentaTexto.get(p.cuenta_id) ?? ""}`}
                         {p.concepto && ` · ${p.concepto}`}
                         {p.referencia && ` · ref. ${p.referencia}`}
+                        {p.metodo === "efectivo" && " · efectivo"}
+                        {p.clabe && ` · ${p.banco_proveedor ?? ""} CLABE ${p.clabe}`}
                         {p.estatus === "pagado" && p.pagado_en && ` · pagado ${p.pagado_en}`}
                         {p.estatus === "cancelado" && " · cancelado"}
                       </div>
