@@ -145,3 +145,16 @@ begin
 end;
 $$;
 grant execute on function public.fn_oc_marcar_recibida(uuid, text, text) to authenticated;
+
+-- Almacén y responsable ven los pagos LIGADOS A UNA OC (no nómina ni otros):
+-- sin esto, una OC pagada aquí no les aparecía en "Por recibir" (solo las
+-- pagadas en el backoffice).
+drop policy if exists pagos_programados_select on public.pagos_programados;
+create policy pagos_programados_select on public.pagos_programados for select
+  using (
+    ((select public.auth_rol_definer()) = any (array['direccion'::app_rol, 'corporativo'::app_rol, 'admin'::app_rol, 'empresa'::app_rol])
+      and ((select public.auth_ve_todas_empresas_definer()) or empresa_id = any ((select public.auth_empresas_alcance())::uuid[])))
+    or ((select public.auth_rol_definer()) = any (array['almacen'::app_rol, 'responsable'::app_rol])
+      and orden_compra_id is not null
+      and empresa_id = any ((select public.auth_empresas_alcance())::uuid[]))
+  );
