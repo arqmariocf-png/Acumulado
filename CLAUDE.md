@@ -165,6 +165,21 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   partidas de todas las OC de la requisición completas → `recibida`
   (`20260929120000`). Las OC del backoffice (api) siguen recibiéndose por
   inventario (`v_oc_lineas_avance`); `oc_recepciones` es solo para las RQ.
+  **Autorización como factor de pago (29-sep-2026)**: `v_oc_pagos.
+  autorizacion` = autorizada (api, o `autorizada_en`), pendiente (Excel y
+  RQ sin autorizar) o rechazada (`ordenes_compra.rechazada_en/_por/
+  rechazo_motivo`). `fn_oc_autorizar` acepta también fuente 'excel'
+  (autoriza sin crear pago; el rechazo se registra, no se borra);
+  `fn_oc_programar_pago` exige OC autorizada. Pestaña "Por autorizar" en
+  Programación de pagos reutiliza `OcPorAutorizar` (RQ + Excel); KPI
+  `fin_oc_por_autorizar` cuenta ambas. **Vencimiento por OC**:
+  `v_oc_pagos.vence` = fecha OC + días de crédito del proveedor, para las
+  OC a crédito y las sin condición cuyo proveedor tiene línea
+  (`es_credito`); ojo, `proveedores_credito.vencimiento` es de la LÍNEA,
+  no de la OC (Laura confundió las dos con la 41007 de Cruz Azul: 25-sep +
+  15 días = 10-oct). Semáforo `vencimientoCredito` en `lib/pagosOc.ts`
+  (rojo vencida, ámbar ≤7 días); pestaña "Crédito y vencimientos"
+  (`20260929140000`).
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
   sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).
