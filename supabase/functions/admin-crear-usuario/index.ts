@@ -26,7 +26,7 @@
 // administrativo, supervisor o directivo.
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { sincronizarUsuariosFacturables } from "../_shared/usuarios-facturables.ts";
 
 const ROLES_ASIGNABLES = ["pendiente", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "operativo", "administrativo", "supervisor", "directivo"];
@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
       autorizado = perfilLlamador?.rol === "admin" || perfilLlamador?.rol === "rh";
     }
     if (!autorizado) return jsonResponse({ error: "No autorizado" }, 401);
+    if (perfilLlamador?.soloConsulta) return respuestaSoloConsulta();
 
     const cuerpo = await req.json();
     const esRh = perfilLlamador?.rol === "rh";

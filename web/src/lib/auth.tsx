@@ -42,6 +42,8 @@ interface AuthState {
   suscripcion: Suscripcion | null;
   /** false cuando la suscripción venció: se consulta y exporta, pero no se captura. */
   suscripcionPermiteEscribir: boolean;
+  /** Espectador u organización sin suscripción: solo ve. */
+  soloConsulta: boolean;
   logoUrl: string | null;
   recargarOrganizacion: () => Promise<void>;
   cerrarSesion: () => Promise<void>;
@@ -133,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     Promise.all([
       supabase
         .from("profiles")
-        .select("id, nombre, rol, grupo_id, empresa_id, todas_las_empresas, activo, bbva_mantenimiento, rh_nivel")
+        .select("id, nombre, rol, grupo_id, empresa_id, todas_las_empresas, activo, bbva_mantenimiento, rh_nivel, espectador")
         .eq("id", session.user.id)
         .single(),
       supabase.from("permisos_modulo").select("modulo").eq("profile_id", session.user.id),
@@ -294,7 +296,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // espejo de lo que ya impone RLS (suscripcion_permite_escribir) -- aquí sirve
   // para no ofrecer botones que la base va a rechazar. Sin organización
   // cargada se deja pasar, por lo mismo de arriba.
-  const suscripcionPermiteEscribir = esAdminGlobal || !suscripcion || suscripcion.puede_escribir;
+  //
+  // Solo consulta (29-sep-2026, espejo de auth_solo_consulta): el perfil
+  // espectador, y una organización cliente ya cargada que no tiene
+  // suscripción (no contratada = no escribe, igual que en la base).
+  const soloConsulta = !esAdminGlobal && (!!perfilReal?.espectador || (!!grupo && !grupo.es_maestro && !suscripcion));
+  const suscripcionPermiteEscribir = esAdminGlobal || (!soloConsulta && (!suscripcion || suscripcion.puede_escribir));
 
   function puedeEscribirEnEmpresa(empresaId: string): boolean {
     if (!suscripcionPermiteEscribir) return false;
@@ -335,6 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         esAdminGlobal,
         suscripcion,
         suscripcionPermiteEscribir,
+        soloConsulta,
         logoUrl,
         recargarOrganizacion,
         cerrarSesion,

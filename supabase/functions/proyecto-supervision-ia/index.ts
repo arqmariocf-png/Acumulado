@@ -17,7 +17,7 @@
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.122.0";
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 
 const TIPOS = ["reporte_diario", "minuta", "resumen_documento", "comparativa_cotizaciones", "avance_cliente"] as const;
 type Tipo = (typeof TIPOS)[number];
@@ -110,6 +110,7 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
     if (perfil.rol === "pendiente") return jsonResponse({ error: "Tu cuenta todavía no tiene acceso." }, 403);
 
     const body = (await req.json().catch(() => ({}))) as { proyectoId?: string; tipo?: string; texto?: string };

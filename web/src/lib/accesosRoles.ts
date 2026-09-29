@@ -99,7 +99,7 @@ export const EDITA: Record<string, Partial<Record<AppRol, string>>> = {
 
 function perfilDeMuestra(rol: AppRol, modulos: string[]): Profile {
   const veTodas = rol === "admin" || rol === "corporativo" || rol === "direccion";
-  return { id: "muestra", nombre: "", rol, grupo_id: "g", empresa_id: veTodas ? null : "e", todas_las_empresas: veTodas, activo: true, telefono: null, bbva_mantenimiento: false, rh_nivel: null, modulos };
+  return { id: "muestra", nombre: "", rol, grupo_id: "g", empresa_id: veTodas ? null : "e", todas_las_empresas: veTodas, activo: true, telefono: null, bbva_mantenimiento: false, espectador: false, rh_nivel: null, modulos };
 }
 
 export interface AccesoRuta {

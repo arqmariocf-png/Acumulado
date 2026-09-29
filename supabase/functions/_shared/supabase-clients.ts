@@ -14,6 +14,7 @@
 // entorno del edge function (Supabase la inyecta automáticamente).
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { jsonResponse } from "./cors.ts";
 
 export function clienteComoUsuario(req: Request): SupabaseClient {
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -34,6 +35,10 @@ export interface PerfilAutenticado {
   grupoId: string | null;
   empresaId: string | null;
   bbvaMantenimiento: boolean;
+  /** Espectador, u organización sin suscripción que permita escribir
+   * (auth_solo_consulta). Las funciones que escriben con la service_role se
+   * saltan el trigger solo_consulta de la base: tienen que preguntarlo aquí. */
+  soloConsulta: boolean;
 }
 
 /** Lee el profile del usuario autenticado usando su propio JWT (así RLS ya
@@ -50,6 +55,10 @@ export async function obtenerPerfilAutenticado(req: Request): Promise<PerfilAute
   const { data: perfil, error } = await cliente.from("profiles").select("id, nombre, rol, grupo_id, empresa_id, bbva_mantenimiento").eq("id", user.id).single();
   if (error || !perfil) return null;
 
+  // Si la consulta falla se asume solo consulta: mejor rechazar una escritura
+  // legítima que dejar pasar una bloqueada.
+  const { data: soloConsulta, error: errSolo } = await cliente.rpc("auth_solo_consulta");
+
   return {
     id: perfil.id,
     nombre: perfil.nombre,
@@ -57,10 +66,17 @@ export async function obtenerPerfilAutenticado(req: Request): Promise<PerfilAute
     grupoId: perfil.grupo_id,
     empresaId: perfil.empresa_id,
     bbvaMantenimiento: !!perfil.bbva_mantenimiento,
+    soloConsulta: errSolo ? true : soloConsulta === true,
   };
 }
 
+/** Respuesta estándar para quien solo puede consultar. */
+export function respuestaSoloConsulta(): Response {
+  return jsonResponse({ error: "Cuenta de solo consulta: puedes ver la información, pero no capturar, editar ni borrar." }, 403);
+}
+
 export function puedeEscribirEnEmpresa(perfil: PerfilAutenticado, empresaId: string): boolean {
+  if (perfil.soloConsulta) return false;
   if (perfil.rol === "pendiente" || perfil.rol === "direccion") return false;
   if (perfil.rol === "corporativo" || perfil.rol === "admin") return true;
   return perfil.empresaId === empresaId;

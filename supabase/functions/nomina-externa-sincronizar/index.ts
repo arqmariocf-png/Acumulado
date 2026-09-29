@@ -16,7 +16,7 @@
 // secrets de edge function desde este entorno, así que el secreto vive en
 // la base, no en una variable de entorno).
 
-import { clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { normalizeBatch, type FieldGuess } from "../_shared/nomina-externa.ts";
 
@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
     if (!(await esLlamadaDeCronAutorizada(req))) {
       const perfil = await obtenerPerfilAutenticado(req);
       if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+      if (perfil.soloConsulta) return respuestaSoloConsulta();
       if (perfil.rol !== "admin" && perfil.rol !== "rh") {
         return jsonResponse({ error: "Solo un admin o Recursos Humanos pueden sincronizar la nómina externa" }, 403);
       }

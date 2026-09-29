@@ -11,10 +11,32 @@ function diasRestantes(hasta: string | null): number | null {
 // idea es que nadie descubra el bloqueo al intentar guardar -- se dice antes,
 // y se dice qué hacer.
 export function AvisoSuscripcion() {
-  const { suscripcion, suscripcionPermiteEscribir, perfil, esAdminGlobal } = useAuth();
-  if (!suscripcion || esAdminGlobal) return null;
+  const { suscripcion, suscripcionPermiteEscribir, soloConsulta, perfil, perfilReal, esAdminGlobal } = useAuth();
+  if (esAdminGlobal) return null;
 
   const esAdmin = perfil?.rol === "admin";
+
+  // Espectador, o una organización que todavía no contrata: se dice desde el
+  // principio que es solo para consultar, antes de que alguien intente guardar.
+  if (soloConsulta && (perfilReal?.espectador || !suscripcion)) {
+    return (
+      <div className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+          <span>
+            {perfilReal?.espectador
+              ? "Tu cuenta es de solo consulta: puedes ver y exportar la información, pero no capturar, editar ni borrar."
+              : "Tu organización todavía no tiene la suscripción activa: puedes consultar, pero no capturar ni cargar nada."}
+          </span>
+          {esAdmin && !suscripcion && (
+            <Link to="/admin/suscripcion" className="shrink-0 rounded bg-sky-700 px-3 py-1 font-medium text-white">
+              Activar suscripción
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (!suscripcion) return null;
   const dias = diasRestantes(suscripcion.escribe_hasta);
 
   if (!suscripcionPermiteEscribir) {

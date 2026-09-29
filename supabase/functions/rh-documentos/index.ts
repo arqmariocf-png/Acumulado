@@ -19,7 +19,7 @@
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.122.0";
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, type PerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, type PerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 
 const TAMANO_MAXIMO_BYTES = 20 * 1024 * 1024;
 const ROLES_SUBEN = new Set(["rh", "rh_documentos", "admin"]);
@@ -283,7 +283,10 @@ Deno.serve(async (req) => {
       if (!documentoId) return jsonResponse({ error: "documentoId es requerido" }, 400);
       return await verArchivo(req, documentoId);
     }
-    if (req.method === "POST") return await subir(req, perfil);
+    if (req.method === "POST") {
+      if (perfil.soloConsulta) return respuestaSoloConsulta();
+      return await subir(req, perfil);
+    }
     return jsonResponse({ error: "Método no soportado" }, 405);
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
