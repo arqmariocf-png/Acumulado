@@ -1,4 +1,4 @@
--- Prueba del candado de solo consulta (20260929140000_solo_consulta_espectador.sql).
+-- Prueba del candado de solo consulta (20260929170000_solo_consulta_espectador.sql).
 --
 -- Lo que importa demostrar es que BLOQUEA:
 --   1. una organización sin suscripción no escribe en NINGUNA tabla, ni en

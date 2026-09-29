@@ -501,7 +501,7 @@ Cambios chicos partiendo de `main`, mezclando pronto.
 
 ## Solo consulta: espectadores y organizaciones sin pago (29-sep-2026)
 - Mario: "los que no han pagado no pueden manipular nada; genera un rol
-  únicamente de espectador". `20260929140000_solo_consulta_espectador.sql`
+  únicamente de espectador". `20260929170000_solo_consulta_espectador.sql`
   (aplicada en producción): trigger **a nivel sentencia** `solo_consulta` en
   las 98 tablas de public (menos `push_subscripciones`) que llama
   `bloquear_solo_consulta()` → `auth_solo_consulta()`: true si el perfil es
