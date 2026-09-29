@@ -14,7 +14,7 @@
 //
 // POST body: {} (no requiere empresaId -- sincroniza todas)
 
-import { clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
@@ -23,6 +23,7 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
     // Escribe en las 8 empresas a la vez -- no aplica el permiso "por
     // empresa" (puedeEscribirEnEmpresa), se requiere el rol que ya ve el
     // consolidado de todas ellas.

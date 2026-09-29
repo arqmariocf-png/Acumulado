@@ -169,6 +169,12 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    // Espejo de auth_solo_consulta (ver _shared/supabase-clients.ts): esta
+    // función sube la foto con la service_role, que se salta el trigger.
+    const { data: soloConsulta, error: errSolo } = await clienteComoUsuario(req).rpc("auth_solo_consulta");
+    if (errSolo || soloConsulta === true) {
+      return jsonResponse({ error: "Cuenta de solo consulta: puedes ver la información, pero no capturar, editar ni borrar." }, 403);
+    }
 
     const form = await req.formData();
     const empresaId = String(form.get("empresaId") ?? "");

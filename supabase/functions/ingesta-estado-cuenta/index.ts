@@ -24,7 +24,7 @@
 // (cuentas_bancarias.banco), NO el contenido del archivo -- un banco sin
 // parser NO se debe intentar adivinar con el mismo regex de otro banco.
 
-import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
 
     const form = await req.formData();
     const empresaId = String(form.get("empresaId") ?? "");

@@ -10,7 +10,7 @@
 // fijo para todo el archivo era, en el mejor caso, redundante con lo que ya
 // trae cada fila, y en el peor, una fuente de error si no coincidía.
 
-import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, empresaOperableEnModulo, puedeEscribirEnEmpresa, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { parseCsv, filasAObjetos } from "../_shared/ingesta/csv.ts";
 import { todasLasHojas } from "../_shared/ingesta/xlsx-cargador.ts";
@@ -25,6 +25,7 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
 
     const form = await req.formData();
     const empresaId = String(form.get("empresaId") ?? "");
