@@ -165,6 +165,9 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   partidas de todas las OC de la requisición completas → `recibida`
   (`20260929120000`). Las OC del backoffice (api) siguen recibiéndose por
   inventario (`v_oc_lineas_avance`); `oc_recepciones` es solo para las RQ.
+  Botón **"Actualizar OC/OV"** en Programación de pagos
+  (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
+  sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,
