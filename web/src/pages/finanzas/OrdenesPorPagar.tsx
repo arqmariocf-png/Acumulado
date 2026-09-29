@@ -40,6 +40,10 @@ interface Cuenta {
   alias: string | null;
 }
 
+function mensajeError(e: Error): string {
+  return /statement timeout/i.test(e.message) ? "El catálogo de OC se está actualizando en este momento; espera un minuto y vuelve a intentar." : e.message;
+}
+
 const ESTADO_PAGO: Record<ReturnType<typeof estadoPagoOc>, [string, string]> = {
   pagada: ["pagada", "bg-emerald-100 text-emerald-800"],
   parcial: ["saldo pendiente", "bg-amber-100 text-amber-800"],
@@ -176,7 +180,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
       onAviso(`Condición de ${oc.id_orden}: ${ETIQUETA_CONDICION[c].toLowerCase()}.`);
       invalidar();
     },
-    onError: (e: Error) => onAviso(e.message),
+    onError: (e: Error) => onAviso(mensajeError(e)),
   });
 
   const programar = useMutation({
@@ -192,7 +196,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
       onAbrir();
       invalidar();
     },
-    onError: (e: Error) => onAviso(e.message),
+    onError: (e: Error) => onAviso(mensajeError(e)),
   });
 
   return (

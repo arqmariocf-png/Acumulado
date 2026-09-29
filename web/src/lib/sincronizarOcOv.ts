@@ -13,7 +13,10 @@ export interface ResultadoSincronizacionOcOv {
 // que termine. Corre en segundo plano (pg_cron, ver
 // solicitar_sincronizacion_oc_ov): el API tarda 30-60 s y esperarlo en una
 // sola petición HTTP terminaba en "HTTP request cancelled" (23-sep-2026).
-// Se usa desde Carga (admin) y desde Inventario > Registrar movimiento.
+// Se usa desde Carga (admin), Inventario > Registrar movimiento y Finanzas >
+// Programación de pagos. Desde el 29-sep-2026 la función descarga primero y
+// escribe al final solo lo que cambió, así que ya no bloquea las OC mientras
+// espera al backoffice.
 export async function sincronizarCatalogoOcOv(maxEsperaMs = 4 * 60 * 1000): Promise<ResultadoSincronizacionOcOv> {
   const { data: id, error: errSolicitud } = await supabase.rpc("solicitar_sincronizacion_oc_ov");
   if (errSolicitud) throw errSolicitud;
