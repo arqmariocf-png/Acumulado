@@ -48,7 +48,6 @@ const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m)
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
 const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
 const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
-const Resolucion = lazy(() => import("./pages/requisiciones/Resolucion").then((m) => ({ default: m.Resolucion })));
 const InventarioLayout = lazy(() => import("./pages/inventario/InventarioLayout").then((m) => ({ default: m.InventarioLayout })));
 const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos").then((m) => ({ default: m.Movimientos })));
 const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
@@ -183,11 +182,9 @@ function Enrutador() {
           <Route element={<ProtectedRoute modulo="requisiciones" oPermiso={(p) => (p.modulos ?? []).includes("proyectos")} />}>
           <Route path="/requisiciones" element={<RequisicionesLayout />}>
             <Route index element={<MisRequisiciones />} />
-            {/* Almacén (Alma) también: cotiza y genera la OC RQ desde aquí. */}
-            <Route element={<ProtectedRoute roles={["admin", "corporativo", "almacen"]} />}>
-              <Route path="oc-pendientes" element={<Resolucion />} />
-              <Route path="resolucion" element={<Resolucion />} />
-            </Route>
+            {/* Rutas viejas de resolución: todo vive en la lista (29-sep-2026). */}
+            <Route path="oc-pendientes" element={<Navigate to="/requisiciones" replace />} />
+            <Route path="resolucion" element={<Navigate to="/requisiciones" replace />} />
           </Route>
           </Route>
 
