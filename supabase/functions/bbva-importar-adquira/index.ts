@@ -7,7 +7,7 @@
 // POST multipart/form-data: file
 // -> { ok: true, pedidos, importe_total, fecha_exportacion }
 
-import { clienteComoUsuario, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { XLSX } from "../_shared/ingesta/xlsx-cargador.ts";
 import { fechaExportacionDeNombre, procesarFilasAdquira } from "../_shared/bbva-adquira.ts";
@@ -20,6 +20,7 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
     // Mismo criterio que bbva_adquira_pedidos_insert: contabilidad
     // (corporativo, ej. Belén) o admin.
     if (perfil.rol !== "admin" && perfil.rol !== "corporativo") {

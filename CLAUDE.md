@@ -508,7 +508,49 @@ en paralelo, y el esquema combinado ni siquiera aplicaba. **Antes de agregar un
 módulo, revisa `supabase/migrations/` y `web/src/pages/` a ver si ya está.**
 Cambios chicos partiendo de `main`, mezclando pronto.
 
-## Estudio K (siguiente empresa, arranca en la próxima sesión)
+## Solo consulta: espectadores y organizaciones sin pago (29-sep-2026)
+- Mario: "los que no han pagado no pueden manipular nada; genera un rol
+  únicamente de espectador". `20260929170000_solo_consulta_espectador.sql`
+  (aplicada en producción): trigger **a nivel sentencia** `solo_consulta` en
+  las 98 tablas de public (menos `push_subscripciones`) que llama
+  `bloquear_solo_consulta()` → `auth_solo_consulta()`: true si el perfil es
+  `espectador` o si su organización no tiene suscripción que permita
+  escribir (sin suscripción = no contratada). Nunca el admin maestro ni
+  procesos sin usuario. Cubre también las funciones SECURITY DEFINER (no se
+  saltan triggers). Antes, 66 tablas escribían sin revisar la suscripción.
+  Storage: tres restrictivas `solo_consulta_*` en `storage.objects`.
+- **Toda tabla nueva necesita su trigger `solo_consulta`**
+  (`supabase/tests/solo_consulta.sql` falla si falta).
+- `profiles.espectador` es una marca, no un valor de `app_rol`: así ve lo
+  que su rol ve (un admin espectador ve toda su organización). Solo el admin
+  maestro la cambia (trigger `profiles_guarda_espectador`; columna
+  "Espectador" en Admin → Usuarios). Frontend: `useAuth().soloConsulta` y
+  `suscripcionPermiteEscribir` la incluyen; `AvisoSuscripcion` lo avisa.
+- Edge functions que escriben con la service_role se saltan el trigger: el
+  código ya pregunta `perfil.soloConsulta` (`_shared/supabase-clients.ts`,
+  `respuestaSoloConsulta()`), **pero falta desplegarlas**: el `_shared` de
+  cada función desplegada difiere del repo (ingesta-*, motor-conciliacion
+  importan `empresaOperableEnModulo`, que no está en git). Reconciliar con
+  `get_edge_function` antes de desplegar; hasta entonces, por esas rutas un
+  usuario sin pago puede escribir **solo en su propia organización**.
+- ARSSA está en 'prueba' hasta 25-oct-2026: al vencer queda en solo
+  consulta en TODO, no solo en proyectos.
+
+## Estudio K (dado de alta 29-sep-2026)
+- **Organización aparte** (`grupos.codigo = 'EK'`, link
+  `https://acumulado-nine.vercel.app/?org=ek`), sin suscripción → solo
+  consulta hasta que pague. Módulos abiertos: rh, conciliacion, inventario.
+  Mario quiere además **punto de venta** (módulo nuevo, sin diseñar: faltan
+  respuestas sobre servicios/productos, comisiones, formas de pago, caja,
+  citas, CFDI).
+- Empresa `EK`: ESPECIALISTA EN BELLEZA PLPA, S.A. de C.V., RFC
+  EBP2208174A0, Cda. de la Carcaña 3202 int. 4, Col. Cholula, San Pedro
+  Cholula, Pue., C.P. 72760 (salón de belleza). Falta `empresas_perfil_legal`
+  (pide representante legal), cuentas bancarias y logo.
+- María Alejandra Ibañez Alcocer (aialcocerspb@gmail.com): admin de Estudio
+  K, **espectador**, socia (inicio en vista de socio).
+
+## Estudio K (plan original, 28-sep-2026)
 - Presentación del alcance por rol y plan de implementación (28-sep-2026):
   https://claude.ai/artifact/YUoceRAiht5pXw8VGTQyeP
 - Toda la base para dar de alta una empresa nueva ya existe: alcance por

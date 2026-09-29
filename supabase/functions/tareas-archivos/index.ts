@@ -10,7 +10,7 @@
 // DELETE json: { archivoId }                            -> borra el registro (RLS decide permiso) y el objeto
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 
 // Sin límite de cantidad de archivos por tarjeta; cada uno hasta 50 MB.
 const TAMANO_MAXIMO_BYTES = 50 * 1024 * 1024;
@@ -32,6 +32,7 @@ async function tarjetaVisible(req: Request, tarjetaId: string): Promise<boolean>
 async function subir(req: Request): Promise<Response> {
   const perfil = await obtenerPerfilAutenticado(req);
   if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+  if (perfil.soloConsulta) return respuestaSoloConsulta();
 
   const form = await req.formData();
   const tarjetaId = String(form.get("tarjetaId") ?? "");

@@ -8,7 +8,7 @@
 // GET ?id=<necesidad>: URL firmada (1 h) del archivo, si RLS deja ver la fila.
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
 const TIPOS_PERMITIDOS = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -36,6 +36,9 @@ Deno.serve(async (req) => {
 
     if (req.method !== "POST") return jsonResponse({ error: "Método no permitido" }, 405);
     if (!ROLES_COTIZAN.includes(perfil.rol)) return jsonResponse({ error: "Tu rol no cotiza compras" }, 403);
+
+    // Ver una foto o archivo sí se puede; capturar no.
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
 
     const form = await req.formData();
     const necesidadId = String(form.get("necesidadId") ?? "").trim();

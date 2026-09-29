@@ -11,7 +11,7 @@
 
 import webpush from "npm:web-push@3.6.7";
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 
 const TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024;
 const TIPOS_PERMITIDOS = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -83,6 +83,9 @@ Deno.serve(async (req) => {
     const { data: puede, error: errPuede } = await usuario.rpc("auth_puede_comprobar_gasto");
     if (errPuede) return jsonResponse({ error: errPuede.message }, 500);
     if (!puede) return jsonResponse({ error: "Tu rol no puede comprobar gastos" }, 403);
+
+    // Ver una foto o archivo sí se puede; capturar no.
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
 
     const form = await req.formData();
     const empresaId = String(form.get("empresaId") ?? "");
