@@ -189,6 +189,7 @@ begin
     select p.oid, p.proname, pg_get_functiondef(p.oid) def
     from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
     where ns.nspname = 'public'
+      and p.prokind = 'f'  -- pg_get_functiondef falla con agregados (validar-sql desde cero)
       and p.proname not in ('auth_ve_todas_empresas', 'empresa_en_alcance', 'auth_empresa_id', 'auth_empresas_alcance', 'fn_mi_alcance')
       and (pg_get_functiondef(p.oid) ~ '[a-z_.]+ (=|<>) public\.auth_empresa_id\(\)'
         or pg_get_functiondef(p.oid) ~ 'public\.auth_empresa_id\(\) (= p_empresa_id|is null or )')

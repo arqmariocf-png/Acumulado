@@ -141,6 +141,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   entrega registrada no se borra, no se baja la cantidad por debajo de lo
   resuelto ni se cambia unidad/concepto; "Cancelar requisición" solo si
   nada está resuelto y no hay OC.
+- **Seguimiento por renglón (29-sep-2026, Jonathan + Mario: "bases del
+  punto de venta")**: bitácora `requisicion_linea_eventos` (tipo pedido /
+  entregado / devolucion / cambio / comentario, cantidad, nota, quién;
+  `20260929200000`). Totales calculados en `lib/seguimientoLinea.ts` (con
+  pruebas): pedido = Σpedido − Σdevolución; entregado = Σentregado −
+  Σdevolución − Σcambio; **devolución** no se repone, **cambio** sí (queda
+  por entregar). Motivo obligatorio en devolución/cambio; no se devuelve más
+  de lo entregado (trigger). Todos los renglones entregados → requisición
+  `recibida`. Marca quien ve la requisición, a su nombre; borra quien la
+  puso o admin/corporativo. Columnas Pedido / Entregado / Comentarios y
+  panel `requisiciones/SeguimientoLinea.tsx` en el detalle. Independiente
+  de "En compra"/"Surtido" (OC del sistema): sirve para lo comprado por fuera.
 - **Pagos por orden de compra (29-sep-2026)**: `pagos_programados.
   orden_compra_id` liga cada pago a su OC; `ordenes_compra.condicion_pago`
   (contado / credito / anticipo, la pone dirección) y el **saldo se
@@ -536,6 +548,11 @@ npm test                  # módulos puros (node --test)
 ./scripts/validar-sql.sh  # aplica TODAS las migraciones desde cero + pruebas de RLS
 cd web && npm run build && npm run lint
 ```
+
+(29-sep-2026: estaba roto desde `20260928180000`, que leía la definición
+de agregados; ya filtra `prokind = 'f'`, y las pruebas de frontera y
+aislamiento marcan `todas_las_empresas` al corporativo y limpian el claim
+antes de preparar datos. Vuelve a pasar completo.)
 
 `./scripts/validar-sql.sh` es el que importa para cualquier cambio de esquema o
 de policies. Que aplique **desde cero** no es un detalle: es lo que permite

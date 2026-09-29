@@ -16,10 +16,10 @@ insert into auth.users (id, email) values
   ('cccccccc-0000-0000-0000-000000000001', 'corp.loma@test'),
   ('cccccccc-0000-0000-0000-000000000002', 'corp.arssa@test');
 
-update public.profiles set nombre='Corporativo Loma', rol='corporativo',
+update public.profiles set nombre='Corporativo Loma', rol='corporativo', todas_las_empresas=true,
   grupo_id=(select id from public.grupos where codigo='LOMA')
  where id='cccccccc-0000-0000-0000-000000000001';
-update public.profiles set nombre='Corporativo ARSSA', rol='corporativo',
+update public.profiles set nombre='Corporativo ARSSA', rol='corporativo', todas_las_empresas=true,
   grupo_id=(select id from public.grupos where codigo='ARSSA')
  where id='cccccccc-0000-0000-0000-000000000002';
 

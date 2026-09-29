@@ -7,6 +7,16 @@ import { CompraEnUnPaso } from "./CompraEnUnPaso";
 import { BotonVerOc } from "./VerOrdenCompra";
 import { RecepcionOc } from "./RecepcionOc";
 import { ETIQUETA_CONDICION, type CondicionPago } from "../../lib/pagosOc";
+import { ETIQUETA_SEGUIMIENTO, seguimientoLinea, type EstadoSeguimiento, type EventoLinea, type Seguimiento, type TipoEvento } from "../../lib/seguimientoLinea";
+import { SeguimientoLinea } from "./SeguimientoLinea";
+
+const COLOR_SEGUIMIENTO: Record<EstadoSeguimiento, string> = {
+  sin_pedir: "bg-slate-100 text-slate-600",
+  pedido_parcial: "bg-amber-100 text-amber-800",
+  pedido: "bg-sky-100 text-sky-800",
+  entregado_parcial: "bg-amber-100 text-amber-800",
+  entregado: "bg-emerald-100 text-emerald-800",
+};
 
 const UNIDADES = ["pza", "m", "m2", "m3", "kg", "ton", "lt", "bulto", "rollo", "caja", "juego", "lote", "servicio"];
 
@@ -42,8 +52,12 @@ interface OrdenDeRequisicion {
  * almacén, y las órdenes de compra que ya salieron de ella con "Ver orden"
  * (Mario, 29-sep-2026: todo en una sola pantalla). */
 export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { requisicionId: string; solicitadoPor?: string; estado?: string }) {
-  const { perfil } = useAuth();
+  const { perfil, soloConsulta } = useAuth();
   const queryClient = useQueryClient();
+  // Pedido / entregado / devolución / comentarios: cualquiera que vea la
+  // requisición (Jonathan, 29-sep-2026). La base exige que sea a su nombre.
+  const puedeMarcar = !!perfil && !soloConsulta;
+  const [seguimientoAbierto, setSeguimientoAbierto] = useState<{ lineaId: string; tipo: TipoEvento } | null>(null);
   const puedeComprar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
   // Quien la pidió puede seguir agregando renglones mientras esté enviada
   // (policy requisicion_lineas_write): a Maria Fernanda se le fue con uno solo.
@@ -77,17 +91,21 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
   const { data, isLoading, error } = useQuery({
     queryKey: ["requisicion-detalle", requisicionId],
     queryFn: async () => {
-      const [lineas, avance, ordenes] = await Promise.all([
+      const [lineas, avance, ordenes, eventos] = await Promise.all([
         supabase.from("requisicion_lineas").select("id, cantidad_solicitada, unidad_medida, descripcion, productos(id, nombre, sku)").eq("requisicion_id", requisicionId).order("created_at"),
         supabase.from("avance_resolucion_linea").select("requisicion_linea_id, cantidad_a_compra, cantidad_a_entrega, cantidad_sin_resolver").eq("requisicion_id", requisicionId),
         supabase.from("v_requisicion_ordenes").select("orden_compra_id, id_orden, proveedor, total, fecha_creacion, autorizada_en, condicion_pago, pagado, saldo").eq("requisicion_id", requisicionId).order("created_at", { ascending: false }),
+        supabase.from("requisicion_linea_eventos").select("id, requisicion_linea_id, tipo, cantidad, nota, created_by, created_by_nombre, created_at").eq("requisicion_id", requisicionId).order("created_at"),
       ]);
+      if (eventos.error) throw eventos.error;
+      const eventosPorLinea = new Map<string, EventoLinea[]>();
+      (eventos.data as EventoLinea[]).forEach((e) => eventosPorLinea.set(e.requisicion_linea_id, [...(eventosPorLinea.get(e.requisicion_linea_id) ?? []), e]));
       if (lineas.error) throw lineas.error;
       if (avance.error) throw avance.error;
       if (ordenes.error) throw ordenes.error;
       const porLinea = new Map<string, AvanceLinea>();
       (avance.data as AvanceLinea[]).forEach((a) => porLinea.set(a.requisicion_linea_id, a));
-      return { lineas: lineas.data as unknown as LineaDetalle[], porLinea, ordenes: ordenes.data as OrdenDeRequisicion[] };
+      return { lineas: lineas.data as unknown as LineaDetalle[], porLinea, ordenes: ordenes.data as OrdenDeRequisicion[], eventosPorLinea };
     },
   });
 
@@ -167,7 +185,8 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
 
   return (
     <div className="border-t border-slate-100 bg-slate-50 px-3 py-3">
-      <table className="w-full text-xs">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[56rem] text-xs">
         <thead className="text-left uppercase text-slate-400">
           <tr>
             <th className="py-1 pr-2">Concepto</th>
@@ -175,7 +194,10 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
             <th className="py-1 pr-2 text-right">En compra</th>
             <th className="py-1 pr-2 text-right">Surtido</th>
             <th className="py-1 pr-2 text-right">Falta</th>
-            {(puedeComprar || puedeEditar) && <th className="py-1" />}
+            <th className="py-1 pr-2 text-right">Pedido</th>
+            <th className="py-1 pr-2 text-right">Entregado</th>
+            <th className="py-1 pr-2">Comentarios</th>
+            <th className="py-1" />
           </tr>
         </thead>
         <tbody>
@@ -183,9 +205,22 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
             const a = data.porLinea.get(l.id);
             const falta = Number(a?.cantidad_sin_resolver ?? l.cantidad_solicitada);
             const resuelto = Number(a?.cantidad_a_compra ?? 0) + Number(a?.cantidad_a_entrega ?? 0);
+            const eventosLinea = data.eventosPorLinea.get(l.id) ?? [];
+            const seg = seguimientoLinea(Number(l.cantidad_solicitada), eventosLinea);
+            const abiertoSeg = seguimientoAbierto?.lineaId === l.id ? seguimientoAbierto : null;
             return (
               <FilaLinea
                 key={l.id}
+                requisicionId={requisicionId}
+                seguimiento={seg}
+                eventos={eventosLinea}
+                puedeMarcar={puedeMarcar}
+                seguimientoTipo={abiertoSeg?.tipo ?? null}
+                onSeguimiento={(tipo) => {
+                  setCompraAbierta(null);
+                  setEditando(null);
+                  setSeguimientoAbierto(tipo && !(abiertoSeg && abiertoSeg.tipo === tipo) ? { lineaId: l.id, tipo } : null);
+                }}
                 linea={l}
                 avance={a}
                 falta={falta}
@@ -217,13 +252,14 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
           })}
           {data.lineas.length === 0 && (
             <tr>
-              <td colSpan={6} className="py-2 text-slate-400">
+              <td colSpan={9} className="py-2 text-slate-400">
                 Sin renglones.
               </td>
             </tr>
           )}
         </tbody>
       </table>
+      </div>
 
       {puedeEditar && (
         <form
@@ -298,6 +334,12 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
 }
 
 interface FilaLineaProps {
+  requisicionId: string;
+  seguimiento: Seguimiento;
+  eventos: EventoLinea[];
+  puedeMarcar: boolean;
+  seguimientoTipo: TipoEvento | null;
+  onSeguimiento: (tipo: TipoEvento | null) => void;
   linea: LineaDetalle;
   avance: AvanceLinea | undefined;
   falta: number;
@@ -314,7 +356,7 @@ interface FilaLineaProps {
   onListo: (folio: string) => void;
 }
 
-function FilaLinea({ linea, avance, falta, resuelto, puedeComprar, puedeEditar, editando, abierta, onEditar, onGuardar, onQuitar, onComprar, onSurtir, onListo }: FilaLineaProps) {
+function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, seguimientoTipo, onSeguimiento, linea, avance, falta, resuelto, puedeComprar, puedeEditar, editando, abierta, onEditar, onGuardar, onQuitar, onComprar, onSurtir, onListo }: FilaLineaProps) {
   const [descripcion, setDescripcion] = useState(linea.descripcion ?? "");
   const [cantidad, setCantidad] = useState(String(linea.cantidad_solicitada));
   const [unidad, setUnidad] = useState(linea.unidad_medida);
@@ -349,7 +391,7 @@ function FilaLinea({ linea, avance, falta, resuelto, puedeComprar, puedeEditar, 
                 )}
               </span>
             </td>
-            <td colSpan={3} className="py-1.5 pr-2 text-right text-slate-500">{intacta ? "" : `ya hay ${resuelto} resueltos: solo puede subir la cantidad`}</td>
+            <td colSpan={6} className="py-1.5 pr-2 text-right text-slate-500">{intacta ? "" : `ya hay ${resuelto} resueltos: solo puede subir la cantidad`}</td>
             <td className="py-1.5 text-right">
               <span className="inline-flex gap-1">
                 <button type="button" onClick={() => onGuardar({ descripcion, cantidad: Number(cantidad), unidad })} className="rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
@@ -373,9 +415,46 @@ function FilaLinea({ linea, avance, falta, resuelto, puedeComprar, puedeEditar, 
             <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{avance?.cantidad_a_compra ?? 0}</td>
             <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{avance?.cantidad_a_entrega ?? 0}</td>
             <td className={`py-1.5 pr-2 text-right tabular-nums font-medium ${falta > 0 ? "text-amber-700" : "text-emerald-700"}`}>{falta}</td>
-            {(puedeComprar || puedeEditar) && (
-              <td className="py-1.5 text-right">
+            <td className="py-1.5 pr-2 text-right tabular-nums text-slate-700">{seguimiento.pedido}</td>
+            <td className="py-1.5 pr-2 text-right">
+              <span className="tabular-nums text-slate-700">{seguimiento.entregado}</span>{" "}
+              <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] ${COLOR_SEGUIMIENTO[seguimiento.estado]}`}>{ETIQUETA_SEGUIMIENTO[seguimiento.estado]}</span>
+              {seguimiento.enCambio > 0 && <div className="text-[10px] text-amber-700">{seguimiento.enCambio} en cambio</div>}
+            </td>
+            <td className="max-w-[14rem] py-1.5 pr-2 text-slate-600">
+              {seguimiento.comentarios[0] ? (
+                <button type="button" onClick={() => onSeguimiento("comentario")} className="text-left hover:underline" title="Ver la bitácora del renglón">
+                  <span className="line-clamp-2">{seguimiento.comentarios[0].nota}</span>
+                  <span className="text-[10px] text-slate-400">
+                    {seguimiento.comentarios[0].created_by_nombre ?? ""}
+                    {seguimiento.comentarios.length > 1 ? ` · +${seguimiento.comentarios.length - 1}` : ""}
+                  </span>
+                </button>
+              ) : (
+                puedeMarcar && (
+                  <button type="button" onClick={() => onSeguimiento("comentario")} className="text-slate-400 underline">
+                    comentar
+                  </button>
+                )
+              )}
+            </td>
+            <td className="py-1.5 text-right">
                 <span className="inline-flex flex-wrap justify-end gap-1">
+                  {puedeMarcar && seguimiento.porPedir > 0 && (
+                    <button type="button" onClick={() => onSeguimiento("pedido")} className="rounded border border-sky-300 px-2 py-1 text-xs text-sky-800 hover:bg-sky-50">
+                      Pedido
+                    </button>
+                  )}
+                  {puedeMarcar && seguimiento.estado !== "entregado" && (
+                    <button type="button" onClick={() => onSeguimiento("entregado")} className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-800 hover:bg-emerald-50">
+                      Entregado
+                    </button>
+                  )}
+                  {puedeMarcar && seguimiento.entregado > 0 && (
+                    <button type="button" onClick={() => onSeguimiento("cambio")} className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-800 hover:bg-amber-50" title="Cambio de piezas o devolución">
+                      Devolver
+                    </button>
+                  )}
                   {puedeComprar && falta > 0 && (
                     <button type="button" onClick={onComprar} className="rounded bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white">
                       {abierta ? "Cerrar" : "Comprar"}
@@ -399,13 +478,29 @@ function FilaLinea({ linea, avance, falta, resuelto, puedeComprar, puedeEditar, 
                   )}
                 </span>
               </td>
-            )}
           </>
         )}
       </tr>
+      {seguimientoTipo && (
+        <tr>
+          <td colSpan={9} className="pb-2">
+            <SeguimientoLinea
+              key={seguimientoTipo}
+              lineaId={linea.id}
+              requisicionId={requisicionId}
+              solicitado={Number(linea.cantidad_solicitada)}
+              unidad={linea.unidad_medida}
+              seguimiento={seguimiento}
+              eventos={eventos}
+              tipoInicial={seguimientoTipo}
+              onCerrar={() => onSeguimiento(null)}
+            />
+          </td>
+        </tr>
+      )}
       {abierta && (
         <tr>
-          <td colSpan={6} className="pb-2">
+          <td colSpan={9} className="pb-2">
             <div className="rounded border border-emerald-200 bg-white px-3 pb-3">
               <CompraEnUnPaso lineaId={linea.id} sinResolver={falta} unidad={linea.unidad_medida} onListo={onListo} onCancelar={onComprar} />
             </div>
