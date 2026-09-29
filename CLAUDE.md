@@ -483,6 +483,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   CURP y comprobante de domicilio (`admin-crear-usuario` con `personalId`: correo
   generado `nombre.apellido@grupoloma.mx`, link por WhatsApp al celular). RH cambia
   rol dentro de la familia básica con `rh_asignar_rol_basico`, nunca a admin.
+- **Contraseña temporal (29-sep-2026)**: RH (Accesos, "Contraseña temporal")
+  y admin (Usuarios) la generan con `generar-link-acceso` tipo `contrasena`
+  (formato `Loma-XXXX-9999`, se muestra una sola vez, botón WhatsApp). RH solo
+  a personal con rol básico (`rh_administra_perfil`). La función ahora exige
+  la **misma organización** salvo el admin maestro (`auth_admin_global`):
+  antes un admin de otro cliente podía generar links para gente de LOMA.
+  La persona la cambia con el botón "Contraseña" del encabezado
+  (`cambiarContrasena()` en `useAuth` → `NuevaContrasena`).
 
 ## Personas y roles (referencia rápida)
 Mario (admin, todas las empresas) · Laura Ortaza (direccion/finanzas, todas) ·

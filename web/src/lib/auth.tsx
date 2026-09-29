@@ -49,6 +49,9 @@ interface AuthState {
   cerrarSesion: () => Promise<void>;
   recuperandoContrasena: boolean;
   terminarRecuperacion: () => void;
+  /** Abre la pantalla de contraseña nueva con la sesión normal (quien entró
+   * con una contraseña temporal que le dio RH o el admin). */
+  cambiarContrasena: () => void;
 }
 
 export interface VistaComo {
@@ -319,6 +322,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRecuperandoContrasena(false);
   }
 
+  function cambiarContrasena() {
+    setRecuperandoContrasena(true);
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -348,6 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         cerrarSesion,
         recuperandoContrasena,
         terminarRecuperacion,
+        cambiarContrasena,
       }}
     >
       {children}

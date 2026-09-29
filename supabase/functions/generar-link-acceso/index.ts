@@ -18,10 +18,34 @@
 // recordara y siempre entraba por magic link; esto le permite dejar una
 // definitiva sin depender de que le llegue el correo de recuperación.
 //
-// POST { userId: string, tipo?: "magiclink" | "recovery" } -> { link: string, email: string }
+// tipo "contrasena": pone una contraseña temporal generada aquí y la
+// devuelve para que RH o el admin se la pase a la persona (Mario,
+// 29-sep-2026: "deja a RH que asigne contraseña temporal"). La persona la
+// cambia después desde su cuenta.
+//
+// Frontera: fuera del admin de la organización maestra, solo se atiende a
+// cuentas de la MISMA organización de quien llama (antes un admin de otro
+// cliente podía generar un link para alguien de Grupo Loma).
+//
+// POST { userId: string, tipo?: "magiclink" | "recovery" | "contrasena" }
+//   -> { link: string, email: string } | { contrasena: string, email: string }
 
-import { clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
+
+// Sin letras ni números que se confundan al dictarla (0/O, 1/l/I).
+const LETRAS = "ABCDEFGHJKMNPQRSTUVWXYZ";
+const DIGITOS = "23456789";
+
+function elegir(alfabeto: string, n: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(n));
+  return Array.from(bytes, (b) => alfabeto[b % alfabeto.length]).join("");
+}
+
+/** Ej. "Loma-KXPD-4827": fácil de dictar por teléfono, 8 caracteres al azar. */
+function contrasenaTemporal(): string {
+  return `Loma-${elegir(LETRAS, 4)}-${elegir(DIGITOS, 4)}`;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return respuestaCors();
@@ -41,19 +65,35 @@ Deno.serve(async (req) => {
     // cuentas financieras/admin).
     if (perfil.rol === "rh") {
       const { data: ok } = await clienteServicio().rpc("rh_administra_perfil", { p_profile_id: userId });
-      if (!ok) return jsonResponse({ error: "RH solo puede generar links para personal contratado." }, 403);
+      if (!ok) return jsonResponse({ error: "RH solo puede dar acceso a personal contratado con rol básico." }, 403);
     }
-    if (tipo && tipo !== "magiclink" && tipo !== "recovery") {
-      return jsonResponse({ error: "tipo debe ser 'magiclink' o 'recovery'" }, 400);
+    if (tipo && tipo !== "magiclink" && tipo !== "recovery" && tipo !== "contrasena") {
+      return jsonResponse({ error: "tipo debe ser 'magiclink', 'recovery' o 'contrasena'" }, 400);
     }
 
     const dbServicio = clienteServicio();
+
+    // Frontera de organización: solo el admin maestro atiende a otras.
+    const { data: esAdminGlobal } = await clienteComoUsuario(req).rpc("auth_admin_global");
+    if (esAdminGlobal !== true) {
+      const { data: destino } = await dbServicio.from("profiles").select("grupo_id").eq("id", userId).maybeSingle();
+      if (!destino || !perfil.grupoId || destino.grupo_id !== perfil.grupoId) {
+        return jsonResponse({ error: "Esa cuenta no es de tu organización." }, 403);
+      }
+    }
 
     const { data: userData, error: errUser } = await dbServicio.auth.admin.getUserById(userId);
     if (errUser || !userData.user?.email) {
       return jsonResponse({ error: errUser?.message ?? "Usuario sin correo registrado" }, 404);
     }
     const email = userData.user.email;
+
+    if (tipo === "contrasena") {
+      const contrasena = contrasenaTemporal();
+      const { error: errPw } = await dbServicio.auth.admin.updateUserById(userId, { password: contrasena, email_confirm: true });
+      if (errPw) return jsonResponse({ error: errPw.message }, 500);
+      return jsonResponse({ contrasena, email });
+    }
 
     // magiclink: inicia sesión directo, sin pedir/crear contraseña -- el
     // usuario conserva la que ya tenía (o ninguna, si entró por invitación y
