@@ -120,7 +120,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
         <div className="p-3">
           <p className="mb-2 text-xs text-slate-500">Las órdenes del backoffice llegan ya autorizadas. Las RQ (almacén) y las de Excel esperan a dirección: mientras no se autoricen no se programa pago.</p>
           <OcPorAutorizar />
-          <p className="text-xs text-slate-400">Si aquí no aparece nada, no hay órdenes pendientes de autorización.</p>
+          <p className="text-xs text-slate-400">Si aquí no aparece nada, no hay órdenes pendientes de autorización. Las que el backoffice todavía no autoriza no llegan al sistema: solo entran ya autorizadas.</p>
         </div>
       )}
       {pestana !== "autorizar" && isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}

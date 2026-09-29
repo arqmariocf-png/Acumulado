@@ -189,6 +189,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`on conflict … do update … where … is distinct from`);
   `20260929150000`. Regla: en cualquier job que llame al backoffice, las
   descargas van antes de la primera escritura.
+  **Las 188 OC 'excel' (29-sep-2026)**: venían de un solo archivo cargado
+  por Mario el 25-ago ("OC S y Detalle del 1 al 29 jul 26.xlsx", CSC,
+  julio); las que el backoffice autorizó se volvieron 'api' por el upsert
+  y las 188 restantes no coincidían con nada. Se archivaron como
+  rechazadas con motivo (`20260929170000`); "Ver archivadas" en Por
+  autorizar las lista y "Autorizar" las reactiva. `v_cxp_proveedores` ya
+  no cuenta OC rechazadas. El backoffice solo expone OC autorizadas
+  (`api_ocs_aut`): las pendientes de autorización de allá NO llegan; si
+  Laura las quiere aquí, pedir al desarrollador un endpoint de pendientes.
   **Tesorería (Delia, rol corporativo; 29-sep-2026)**: `/finanzas/tesoreria`
   (`pages/finanzas/Tesoreria.tsx`, también compacta arriba del inicio de
   corporativo/dirección/admin): semáforo por empresa (`lib/tesoreria.ts`,
