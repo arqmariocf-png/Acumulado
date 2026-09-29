@@ -62,7 +62,7 @@ export const EDITA: Record<string, Partial<Record<AppRol, string>>> = {
   "/finanzas/proveedores": { admin: "captura líneas de crédito", corporativo: "captura líneas de crédito", direccion: "captura líneas de crédito" },
   "/finanzas/lineas-credito": { admin: "captura", direccion: "captura (menú propio)" },
   "/finanzas/tesoreria": { admin: "todo", corporativo: "marca pagado con referencia, captura datos bancarios del proveedor", direccion: "igual que corporativo" },
-  "/finanzas/pagos": { admin: "todo", corporativo: "todo", direccion: "programa pagos por OC (contado / crédito / anticipo), marca pagado; el saldo por OC se calcula" },
+  "/finanzas/pagos": { admin: "todo", corporativo: "todo", direccion: "programa pagos por OC (contado / crédito / anticipo / efectivo), marca pagado; el saldo por OC se calcula", almacen: "solo lee los pagos ligados a OC (para Por recibir)", responsable: "solo lee los pagos ligados a OC" },
   "/saldos": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/prestamos-intercompania": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/gastos": { admin: "revisa y aprueba", corporativo: "revisa y aprueba", direccion: "revisa y aprueba", empresa: "comprueba", responsable: "comprueba", supervisor: "comprueba", directivo: "comprueba", administrativo: "comprueba" },
