@@ -39,6 +39,9 @@ declare
   v_error_det text;
 begin
   perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '115000');
+  -- El connect timeout por defecto es 1 s y el backoffice a veces tarda más
+  -- en aceptar la conexión ("Failed to connect … after 1001 ms").
+  perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS', '20000');
 
   -- 1. Descargas (lo lento) ANTES de tocar cualquier tabla.
   select (content::jsonb) -> 'ordersProject' into v_oc from extensions.http_get('https://reports.grupoloma.mx/dash/api_ocs_aut');
