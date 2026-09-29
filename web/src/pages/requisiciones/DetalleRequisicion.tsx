@@ -42,7 +42,8 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
   const puedeComprar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
   // Quien la pidió puede seguir agregando renglones mientras esté enviada
   // (policy requisicion_lineas_write): a Maria Fernanda se le fue con uno solo.
-  const puedeAgregar = estado === "enviada" && !!perfil && (perfil.id === solicitadoPor || perfil.rol === "admin" || perfil.rol === "corporativo");
+  const puedeEditar = estado === "enviada" && !!perfil && (perfil.id === solicitadoPor || perfil.rol === "admin" || perfil.rol === "corporativo");
+  const [editando, setEditando] = useState<string | null>(null);
   const [compraAbierta, setCompraAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [nuevaDescripcion, setNuevaDescripcion] = useState("");
@@ -103,6 +104,57 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
     onError: (e: Error) => setAviso(e.message),
   });
 
+  // Editar / quitar renglones y cancelar la requisición mientras nada se haya
+  // comprado ni surtido (Mario, 29-sep-2026: "para no hacer tantos folios
+  // por errores sencillos"). El trigger requisicion_lineas_guarda_resueltas
+  // protege lo ya resuelto aunque alguien lo intente desde fuera.
+  const guardarRenglon = useMutation({
+    mutationFn: async ({ lineaId, descripcion, cantidad, unidad, esCatalogo }: { lineaId: string; descripcion: string; cantidad: number; unidad: string; esCatalogo: boolean }) => {
+      if (!esCatalogo && !descripcion.trim()) throw new Error("Escribe qué material o servicio necesitas.");
+      if (!(cantidad > 0)) throw new Error("La cantidad debe ser mayor a 0.");
+      const cambios: Record<string, unknown> = { cantidad_solicitada: cantidad, unidad_medida: unidad };
+      if (!esCatalogo) cambios.descripcion = descripcion.trim();
+      const { error: err } = await supabase.from("requisicion_lineas").update(cambios).eq("id", lineaId);
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setAviso("Renglón actualizado.");
+      setEditando(null);
+      queryClient.invalidateQueries({ queryKey: ["requisicion-detalle", requisicionId] });
+    },
+    onError: (e: Error) => setAviso(e.message),
+  });
+
+  const quitarRenglon = useMutation({
+    mutationFn: async (lineaId: string) => {
+      if (!window.confirm("¿Quitar este renglón de la requisición?")) return false;
+      const { error: err } = await supabase.from("requisicion_lineas").delete().eq("id", lineaId);
+      if (err) throw err;
+      return true;
+    },
+    onSuccess: (hecho) => {
+      if (!hecho) return;
+      setAviso("Renglón quitado.");
+      queryClient.invalidateQueries({ queryKey: ["requisicion-detalle", requisicionId] });
+    },
+    onError: (e: Error) => setAviso(e.message),
+  });
+
+  const cancelar = useMutation({
+    mutationFn: async () => {
+      if (!window.confirm("¿Cancelar esta requisición completa? El folio queda como cancelada.")) return false;
+      const { error: err } = await supabase.from("requisiciones").update({ estado: "cancelada" }).eq("id", requisicionId);
+      if (err) throw err;
+      return true;
+    },
+    onSuccess: (hecho) => {
+      if (!hecho) return;
+      queryClient.invalidateQueries({ queryKey: ["requisiciones"] });
+      queryClient.invalidateQueries({ queryKey: ["requisicion-detalle", requisicionId] });
+    },
+    onError: (e: Error) => setAviso(e.message),
+  });
+
   if (isLoading) return <p className="px-3 py-2 text-xs text-slate-500">Cargando renglones…</p>;
   if (error) return <p className="px-3 py-2 text-xs text-red-600">No se pudieron cargar los renglones: {(error as Error).message}</p>;
   if (!data) return null;
@@ -117,13 +169,14 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
             <th className="py-1 pr-2 text-right">En compra</th>
             <th className="py-1 pr-2 text-right">Surtido</th>
             <th className="py-1 pr-2 text-right">Falta</th>
-            {puedeComprar && <th className="py-1" />}
+            {(puedeComprar || puedeEditar) && <th className="py-1" />}
           </tr>
         </thead>
         <tbody>
           {data.lineas.map((l) => {
             const a = data.porLinea.get(l.id);
             const falta = Number(a?.cantidad_sin_resolver ?? l.cantidad_solicitada);
+            const resuelto = Number(a?.cantidad_a_compra ?? 0) + Number(a?.cantidad_a_entrega ?? 0);
             return (
               <FilaLinea
                 key={l.id}
@@ -131,6 +184,16 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
                 avance={a}
                 falta={falta}
                 puedeComprar={puedeComprar}
+                puedeEditar={puedeEditar}
+                resuelto={resuelto}
+                editando={editando === l.id}
+                onEditar={() => {
+                  setAviso(null);
+                  setCompraAbierta(null);
+                  setEditando(editando === l.id ? null : l.id);
+                }}
+                onGuardar={(v) => guardarRenglon.mutate({ lineaId: l.id, esCatalogo: !!l.productos, ...v })}
+                onQuitar={() => quitarRenglon.mutate(l.id)}
                 abierta={compraAbierta === l.id}
                 onComprar={() => {
                   setAviso(null);
@@ -156,7 +219,7 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
         </tbody>
       </table>
 
-      {puedeAgregar && (
+      {puedeEditar && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -177,6 +240,11 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
           <button type="submit" disabled={agregarRenglon.isPending} className="rounded border border-slate-900 px-2.5 py-1 text-xs font-medium text-slate-900 disabled:opacity-50">
             Agregar renglón
           </button>
+          {data.ordenes.length === 0 && data.lineas.every((l) => Number(data.porLinea.get(l.id)?.cantidad_a_compra ?? 0) + Number(data.porLinea.get(l.id)?.cantidad_a_entrega ?? 0) === 0) && (
+            <button type="button" onClick={() => cancelar.mutate()} disabled={cancelar.isPending} className="ml-auto text-xs text-red-700 underline disabled:opacity-50" title="Solo mientras nada se haya comprado ni surtido">
+              Cancelar requisición
+            </button>
+          )}
         </form>
       )}
 
@@ -201,37 +269,110 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
   );
 }
 
-function FilaLinea({ linea, avance, falta, puedeComprar, abierta, onComprar, onSurtir, onListo }: { linea: LineaDetalle; avance: AvanceLinea | undefined; falta: number; puedeComprar: boolean; abierta: boolean; onComprar: () => void; onSurtir: () => void; onListo: (folio: string) => void }) {
+interface FilaLineaProps {
+  linea: LineaDetalle;
+  avance: AvanceLinea | undefined;
+  falta: number;
+  resuelto: number;
+  puedeComprar: boolean;
+  puedeEditar: boolean;
+  editando: boolean;
+  abierta: boolean;
+  onEditar: () => void;
+  onGuardar: (v: { descripcion: string; cantidad: number; unidad: string }) => void;
+  onQuitar: () => void;
+  onComprar: () => void;
+  onSurtir: () => void;
+  onListo: (folio: string) => void;
+}
+
+function FilaLinea({ linea, avance, falta, resuelto, puedeComprar, puedeEditar, editando, abierta, onEditar, onGuardar, onQuitar, onComprar, onSurtir, onListo }: FilaLineaProps) {
+  const [descripcion, setDescripcion] = useState(linea.descripcion ?? "");
+  const [cantidad, setCantidad] = useState(String(linea.cantidad_solicitada));
+  const [unidad, setUnidad] = useState(linea.unidad_medida);
+  const intacta = resuelto <= 0;
   return (
     <>
       <tr className="border-t border-slate-200">
-        <td className="py-1.5 pr-2 text-slate-800">
-          {linea.productos?.nombre ?? linea.descripcion}
-          {linea.productos && <span className="ml-1 text-slate-400">({linea.productos.sku})</span>}
-        </td>
-        <td className="py-1.5 pr-2 text-right tabular-nums">
-          {linea.cantidad_solicitada} {linea.unidad_medida}
-        </td>
-        <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{avance?.cantidad_a_compra ?? 0}</td>
-        <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{avance?.cantidad_a_entrega ?? 0}</td>
-        <td className={`py-1.5 pr-2 text-right tabular-nums font-medium ${falta > 0 ? "text-amber-700" : "text-emerald-700"}`}>{falta}</td>
-        {puedeComprar && (
-          <td className="py-1.5 text-right">
-            {falta > 0 ? (
-              <span className="inline-flex gap-1">
-                <button type="button" onClick={onComprar} className="rounded bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white">
-                  {abierta ? "Cerrar" : "Comprar"}
-                </button>
-                {linea.productos && (
-                  <button type="button" onClick={onSurtir} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100" title="Entregar de existencia sin comprar">
-                    Surtir
-                  </button>
+        {editando ? (
+          <>
+            <td className="py-1.5 pr-2">
+              {linea.productos ? (
+                <span className="text-slate-800">
+                  {linea.productos.nombre} <span className="text-slate-400">({linea.productos.sku})</span>
+                </span>
+              ) : (
+                <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1 text-xs" aria-label="Descripción" />
+              )}
+            </td>
+            <td className="py-1.5 pr-2 text-right">
+              <span className="inline-flex items-center gap-1">
+                <input type="number" min={intacta ? "0.001" : String(resuelto)} step="0.001" value={cantidad} onChange={(e) => setCantidad(e.target.value)} className="w-20 rounded border border-slate-300 px-2 py-1 text-right text-xs" aria-label="Cantidad" />
+                {intacta && !linea.productos ? (
+                  <select value={unidad} onChange={(e) => setUnidad(e.target.value)} className="rounded border border-slate-300 px-1 py-1 text-xs" aria-label="Unidad">
+                    {UNIDADES.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-slate-600">{linea.unidad_medida}</span>
                 )}
               </span>
-            ) : (
-              <span className="text-xs text-emerald-700">resuelto</span>
+            </td>
+            <td colSpan={3} className="py-1.5 pr-2 text-right text-slate-500">{intacta ? "" : `ya hay ${resuelto} resueltos: solo puede subir la cantidad`}</td>
+            <td className="py-1.5 text-right">
+              <span className="inline-flex gap-1">
+                <button type="button" onClick={() => onGuardar({ descripcion, cantidad: Number(cantidad), unidad })} className="rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
+                  Guardar
+                </button>
+                <button type="button" onClick={onEditar} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
+                  Cancelar
+                </button>
+              </span>
+            </td>
+          </>
+        ) : (
+          <>
+            <td className="py-1.5 pr-2 text-slate-800">
+              {linea.productos?.nombre ?? linea.descripcion}
+              {linea.productos && <span className="ml-1 text-slate-400">({linea.productos.sku})</span>}
+            </td>
+            <td className="py-1.5 pr-2 text-right tabular-nums">
+              {linea.cantidad_solicitada} {linea.unidad_medida}
+            </td>
+            <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{avance?.cantidad_a_compra ?? 0}</td>
+            <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{avance?.cantidad_a_entrega ?? 0}</td>
+            <td className={`py-1.5 pr-2 text-right tabular-nums font-medium ${falta > 0 ? "text-amber-700" : "text-emerald-700"}`}>{falta}</td>
+            {(puedeComprar || puedeEditar) && (
+              <td className="py-1.5 text-right">
+                <span className="inline-flex flex-wrap justify-end gap-1">
+                  {puedeComprar && falta > 0 && (
+                    <button type="button" onClick={onComprar} className="rounded bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white">
+                      {abierta ? "Cerrar" : "Comprar"}
+                    </button>
+                  )}
+                  {puedeComprar && falta > 0 && linea.productos && (
+                    <button type="button" onClick={onSurtir} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100" title="Entregar de existencia sin comprar">
+                      Surtir
+                    </button>
+                  )}
+                  {puedeComprar && falta <= 0 && <span className="px-1 text-xs text-emerald-700">resuelto</span>}
+                  {puedeEditar && (
+                    <button type="button" onClick={onEditar} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
+                      Editar
+                    </button>
+                  )}
+                  {puedeEditar && intacta && (
+                    <button type="button" onClick={onQuitar} className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50">
+                      Quitar
+                    </button>
+                  )}
+                </span>
+              </td>
             )}
-          </td>
+          </>
         )}
       </tr>
       {abierta && (

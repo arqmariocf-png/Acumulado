@@ -134,6 +134,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   también (`filaPendiente`); y quien pidió la requisición (o admin/
   corporativo) puede agregar renglones desde el detalle mientras esté
   `enviada`. Motivo: Maria Fernanda mandó una con un solo renglón.
+  **Editar sin abrir otro folio (29-sep-2026)**: en el detalle, quien pidió
+  (o admin/corporativo) edita descripción/cantidad/unidad, quita renglones y
+  cancela la requisición mientras esté `enviada`. Trigger
+  `requisicion_lineas_guarda_resueltas` (`20260929110000`): con compra o
+  entrega registrada no se borra, no se baja la cantidad por debajo de lo
+  resuelto ni se cambia unidad/concepto; "Cancelar requisición" solo si
+  nada está resuelto y no hay OC.
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,
