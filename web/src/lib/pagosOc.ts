@@ -2,9 +2,9 @@
 // en node. La regla de verdad vive en fn_oc_programar_pago; aquí se replica
 // para proponer monto y fecha en la pantalla.
 
-export type CondicionPago = "contado" | "credito" | "anticipo";
+export type CondicionPago = "contado" | "credito" | "anticipo" | "efectivo";
 
-export const ETIQUETA_CONDICION: Record<CondicionPago, string> = { contado: "Contado", credito: "Crédito", anticipo: "Anticipo" };
+export const ETIQUETA_CONDICION: Record<CondicionPago, string> = { contado: "Contado", credito: "Crédito", anticipo: "Anticipo", efectivo: "Efectivo" };
 
 export interface OcConSaldo {
   total: number | null;
@@ -48,4 +48,35 @@ export function estadoPagoOc(oc: OcConSaldo & { programado?: number }): "pagada"
   if (Number(oc.pagado ?? 0) > 0) return "parcial";
   if (Number(oc.programado ?? 0) > 0) return "programada";
   return "sin_programar";
+}
+
+export type Autorizacion = "autorizada" | "pendiente" | "rechazada";
+
+export const ETIQUETA_AUTORIZACION: Record<Autorizacion, string> = { autorizada: "autorizada", pendiente: "pendiente de autorización", rechazada: "rechazada" };
+
+export type EstadoVencimientoOc = "vencida" | "por_vencer" | "vigente";
+
+function diasEntre(a: string, b: string): number {
+  const x = Date.UTC(Number(a.slice(0, 4)), Number(a.slice(5, 7)) - 1, Number(a.slice(8, 10)));
+  const y = Date.UTC(Number(b.slice(0, 4)), Number(b.slice(5, 7)) - 1, Number(b.slice(8, 10)));
+  return Math.round((x - y) / 86_400_000);
+}
+
+/** Vencimiento del crédito de una OC (fecha OC + días del proveedor): rojo
+ * vencida, ámbar a 7 días o menos, verde vigente. Null si no es a crédito. */
+export function vencimientoCredito(vence: string | null | undefined, hoy: string): { estado: EstadoVencimientoOc; dias: number } | null {
+  if (!vence) return null;
+  const dias = diasEntre(vence, hoy);
+  if (dias < 0) return { estado: "vencida", dias };
+  if (dias <= 7) return { estado: "por_vencer", dias };
+  return { estado: "vigente", dias };
+}
+
+/** Texto corto del vencimiento para la lista. */
+export function textoVencimiento(v: { estado: EstadoVencimientoOc; dias: number } | null): string {
+  if (!v) return "";
+  if (v.estado === "vencida") return v.dias === -1 ? "vencida ayer" : `vencida hace ${-v.dias} días`;
+  if (v.dias === 0) return "vence hoy";
+  if (v.dias === 1) return "vence mañana";
+  return `vence en ${v.dias} días`;
 }

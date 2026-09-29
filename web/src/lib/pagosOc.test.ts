@@ -31,3 +31,21 @@ test("estadoPagoOc", () => {
   assert.equal(estadoPagoOc({ ...oc, pagado: 500 }), "parcial");
   assert.equal(estadoPagoOc({ ...oc, pagado: 1160 }), "pagada");
 });
+
+import { textoVencimiento, vencimientoCredito } from "./pagosOc.ts";
+
+test("vencimientoCredito: vencida, por vencer (≤7 días) y vigente", () => {
+  assert.equal(vencimientoCredito(null, "2026-09-29"), null);
+  assert.deepEqual(vencimientoCredito("2026-09-25", "2026-09-29"), { estado: "vencida", dias: -4 });
+  assert.deepEqual(vencimientoCredito("2026-09-29", "2026-09-29"), { estado: "por_vencer", dias: 0 });
+  assert.deepEqual(vencimientoCredito("2026-10-06", "2026-09-29"), { estado: "por_vencer", dias: 7 });
+  assert.deepEqual(vencimientoCredito("2026-10-07", "2026-09-29"), { estado: "vigente", dias: 8 });
+});
+
+test("textoVencimiento", () => {
+  assert.equal(textoVencimiento(vencimientoCredito("2026-09-25", "2026-09-29")), "vencida hace 4 días");
+  assert.equal(textoVencimiento(vencimientoCredito("2026-09-28", "2026-09-29")), "vencida ayer");
+  assert.equal(textoVencimiento(vencimientoCredito("2026-09-29", "2026-09-29")), "vence hoy");
+  assert.equal(textoVencimiento(vencimientoCredito("2026-09-30", "2026-09-29")), "vence mañana");
+  assert.equal(textoVencimiento(vencimientoCredito("2026-10-10", "2026-09-29")), "vence en 11 días");
+});

@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { ETIQUETA_CONDICION, estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, type CondicionPago } from "../../lib/pagosOc";
+import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
+import { OcPorAutorizar } from "./OcPorAutorizar";
+import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 
 export interface OcPago {
   id: string;
@@ -25,6 +27,15 @@ export interface OcPago {
   linea_credito: number | null;
   dias_credito: number | null;
   credito_vencimiento: string | null;
+  autorizacion: Autorizacion;
+  vence: string | null;
+  es_credito: boolean;
+  rechazo_motivo: string | null;
+  clave: string | null;
+  beneficiario_bancario: string | null;
+  banco_proveedor: string | null;
+  clabe: string | null;
+  cuenta_proveedor: string | null;
 }
 
 interface Cuenta {
@@ -33,6 +44,10 @@ interface Cuenta {
   banco: string;
   ultimos_4: string;
   alias: string | null;
+}
+
+function mensajeError(e: Error): string {
+  return /statement timeout/i.test(e.message) ? "El catálogo de OC se está actualizando en este momento; espera un minuto y vuelve a intentar." : e.message;
 }
 
 const ESTADO_PAGO: Record<ReturnType<typeof estadoPagoOc>, [string, string]> = {
@@ -47,7 +62,7 @@ const ESTADO_PAGO: Record<ReturnType<typeof estadoPagoOc>, [string, string]> = {
  * dirección asigna contado / crédito / anticipo y programa el pago con el
  * saldo calculado (total menos pagos hechos). */
 export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: { filtroEmpresa: string; hoy: string; nombreEmpresa: Map<string, string>; cuentas: Cuenta[] }) {
-  const [pestana, setPestana] = useState<"hoy" | "saldo">("hoy");
+  const [pestana, setPestana] = useState<"autorizar" | "hoy" | "saldo" | "credito">("hoy");
   const [busqueda, setBusqueda] = useState("");
   const [soloConLinea, setSoloConLinea] = useState(false);
   const [abierta, setAbierta] = useState<string | null>(null);
@@ -55,11 +70,13 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["oc-pagos", pestana, filtroEmpresa],
+    enabled: pestana !== "autorizar",
     queryFn: async () => {
       let q = supabase.from("v_oc_pagos").select("*");
       if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
       if (pestana === "hoy") q = q.eq("fecha_creacion", hoy).order("id_orden");
-      else q = q.gt("saldo", 0.01).order("fecha_creacion", { ascending: false }).limit(400);
+      else if (pestana === "credito") q = q.eq("es_credito", true).gt("saldo", 0.01).neq("autorizacion", "rechazada").order("vence", { ascending: true, nullsFirst: false }).limit(400);
+      else q = q.gt("saldo", 0.01).neq("autorizacion", "rechazada").order("fecha_creacion", { ascending: false }).limit(400);
       const { data: filas, error: err } = await q;
       if (err) throw err;
       return (filas ?? []) as OcPago[];
@@ -78,12 +95,18 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2">
         <p className="text-sm font-semibold text-slate-700">Órdenes de compra</p>
         <div className="flex rounded border border-slate-200 text-xs">
-          <button type="button" onClick={() => setPestana("hoy")} className={`px-2.5 py-1 ${pestana === "hoy" ? "bg-slate-900 text-white" : "text-slate-600"}`}>
-            De hoy
-          </button>
-          <button type="button" onClick={() => setPestana("saldo")} className={`px-2.5 py-1 ${pestana === "saldo" ? "bg-slate-900 text-white" : "text-slate-600"}`}>
-            Con saldo pendiente
-          </button>
+          {(
+            [
+              ["autorizar", "Por autorizar"],
+              ["hoy", "De hoy"],
+              ["saldo", "Con saldo pendiente"],
+              ["credito", "Crédito y vencimientos"],
+            ] as const
+          ).map(([clave, etiqueta]) => (
+            <button key={clave} type="button" onClick={() => setPestana(clave)} className={`px-2.5 py-1 ${pestana === clave ? "bg-slate-900 text-white" : "text-slate-600"}`}>
+              {etiqueta}
+            </button>
+          ))}
         </div>
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Proveedor, folio o proyecto…" className="w-52 rounded border border-slate-300 px-2 py-1 text-xs" />
         <label className="flex items-center gap-1 text-xs text-slate-600">
@@ -93,11 +116,18 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
           {visibles.length} órdenes · saldo <b className="tabular-nums">{moneda(totalSaldo)}</b>
         </span>
       </div>
-      {isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}
+      {pestana === "autorizar" && (
+        <div className="p-3">
+          <p className="mb-2 text-xs text-slate-500">Las órdenes del backoffice llegan ya autorizadas. Las RQ (almacén) y las de Excel esperan a dirección: mientras no se autoricen no se programa pago.</p>
+          <OcPorAutorizar />
+          <p className="text-xs text-slate-400">Si aquí no aparece nada, no hay órdenes pendientes de autorización.</p>
+        </div>
+      )}
+      {pestana !== "autorizar" && isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}
       {error && <p className="px-3 py-3 text-sm text-red-600">{(error as Error).message}</p>}
       {aviso && <p className={`px-3 py-2 text-xs ${aviso.startsWith("Pago") || aviso.startsWith("Condición") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
-      {!isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : "No hay órdenes con saldo pendiente."}</p>}
-      {visibles.length > 0 && (
+      {pestana !== "autorizar" && !isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : pestana === "credito" ? "No hay órdenes a crédito con saldo." : "No hay órdenes con saldo pendiente."}</p>}
+      {pestana !== "autorizar" && visibles.length > 0 && (
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
@@ -107,7 +137,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
               <th className="px-3 py-2 text-right">Total</th>
               <th className="px-3 py-2 text-right">Pagado</th>
               <th className="px-3 py-2 text-right">Saldo</th>
-              <th className="px-3 py-2">Condición</th>
+              <th className="px-3 py-2">Condición / vencimiento</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -124,13 +154,18 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
 
 function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: OcPago; hoy: string; empresa: string; cuentas: Cuenta[]; abierta: boolean; onAbrir: () => void; onAviso: (m: string | null) => void }) {
   const queryClient = useQueryClient();
-  const [condicion, setCondicion] = useState<CondicionPago>(oc.condicion_pago ?? "contado");
-  const [monto, setMonto] = useState(String(montoPagoSugerido(oc.condicion_pago ?? "contado", oc)));
-  const [fecha, setFecha] = useState(fechaPagoSugerida(oc.condicion_pago ?? "contado", oc, hoy));
+  // Sin condición capturada: crédito si el proveedor tiene línea, si no contado.
+  const condicionInicial: CondicionPago = oc.condicion_pago ?? (oc.dias_credito != null ? "credito" : "contado");
+  const [condicion, setCondicion] = useState<CondicionPago>(condicionInicial);
+  const [monto, setMonto] = useState(String(montoPagoSugerido(condicionInicial, oc)));
+  const [fecha, setFecha] = useState(fechaPagoSugerida(condicionInicial, oc, hoy));
   const [cuentaId, setCuentaId] = useState("");
   const [notas, setNotas] = useState("");
   const saldo = saldoOc(oc);
   const [etiqueta, clase] = ESTADO_PAGO[estadoPagoOc(oc)];
+  const autorizada = oc.autorizacion === "autorizada";
+  const venc = vencimientoCredito(oc.vence, hoy);
+  const claseVenc = venc?.estado === "vencida" ? "text-red-700 font-medium" : venc?.estado === "por_vencer" ? "text-amber-700 font-medium" : "text-slate-500";
 
   const invalidar = () => {
     queryClient.invalidateQueries({ queryKey: ["oc-pagos"] });
@@ -151,7 +186,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
       onAviso(`Condición de ${oc.id_orden}: ${ETIQUETA_CONDICION[c].toLowerCase()}.`);
       invalidar();
     },
-    onError: (e: Error) => onAviso(e.message),
+    onError: (e: Error) => onAviso(mensajeError(e)),
   });
 
   const programar = useMutation({
@@ -167,7 +202,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
       onAbrir();
       invalidar();
     },
-    onError: (e: Error) => onAviso(e.message),
+    onError: (e: Error) => onAviso(mensajeError(e)),
   });
 
   return (
@@ -177,18 +212,26 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
           <span className="font-mono text-xs font-semibold text-slate-900">{oc.id_orden}</span>
           <div className="text-xs text-slate-400">
             {empresa} · {oc.fecha_creacion ?? ""}
-            {oc.fuente === "requisicion" && !oc.autorizada_en && " · sin autorizar"}
+            {oc.fuente !== "api" && <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[10px] uppercase">{oc.fuente === "requisicion" ? "RQ" : oc.fuente}</span>}
           </div>
+          {!autorizada && (
+            <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] ${oc.autorizacion === "rechazada" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`} title={oc.rechazo_motivo ?? ""}>
+              {ETIQUETA_AUTORIZACION[oc.autorizacion]}
+            </span>
+          )}
         </td>
         <td className="px-3 py-2">
           {oc.proveedor ?? <span className="text-slate-400">sin proveedor</span>}
           {oc.proyecto && <div className="text-xs text-slate-400">{oc.proyecto}</div>}
+          <div className="mt-0.5">
+            <DatosBancariosProveedor datos={{ clave: oc.clave, nombre: oc.proveedor, beneficiario_bancario: oc.beneficiario_bancario, banco_proveedor: oc.banco_proveedor, clabe: oc.clabe, cuenta_proveedor: oc.cuenta_proveedor }} compacto />
+          </div>
         </td>
         <td className="px-3 py-2 text-xs text-slate-600">
           {oc.linea_credito != null ? (
             <>
               {moneda(Number(oc.linea_credito))} · {oc.dias_credito ?? 0} días
-              {oc.credito_vencimiento && <div className="text-slate-400">vence {oc.credito_vencimiento}</div>}
+              {oc.credito_vencimiento && <div className="text-slate-400">línea vence {oc.credito_vencimiento}</div>}
             </>
           ) : (
             <span className="text-slate-400">sin línea</span>
@@ -210,14 +253,20 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
               </option>
             ))}
           </select>
+          {oc.vence && (
+            <div className={`mt-0.5 text-xs ${claseVenc}`} title={`Fecha de la OC (${oc.fecha_creacion ?? ""}) + ${oc.dias_credito ?? 30} días de crédito${oc.condicion_pago ? "" : " (condición por defecto: crédito)"}`}>
+              OC vence {oc.vence} · {textoVencimiento(venc)}
+            </div>
+          )}
         </td>
         <td className="whitespace-nowrap px-3 py-2 text-right">
           <span className="inline-flex gap-1">
-            {saldo > 0 && (
+            {saldo > 0 && autorizada && (
               <button type="button" onClick={onAbrir} className={`rounded px-2.5 py-1 text-xs font-medium ${abierta ? "bg-slate-900 text-white" : "bg-emerald-700 text-white"}`}>
                 {abierta ? "Cerrar" : "Programar pago"}
               </button>
             )}
+            {saldo > 0 && !autorizada && <span className="px-1 text-xs text-slate-400" title="Autorízala en la pestaña Por autorizar">{oc.autorizacion === "rechazada" ? "no se paga" : "falta autorizar"}</span>}
             <BotonVerOc ocId={oc.id} />
           </span>
         </td>
@@ -241,7 +290,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
                 <label className="mb-1 block text-xs font-medium text-slate-600">Pagar el</label>
                 <input type="date" value={fecha} min={hoy} onChange={(e) => setFecha(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
               </div>
-              <div>
+              <div className={condicion === "efectivo" ? "hidden" : ""}>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Cuenta de salida</label>
                 <select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
                   <option value="">Por definir</option>
@@ -260,7 +309,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso }: { oc: 
               <button type="submit" disabled={programar.isPending} className="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
                 {programar.isPending ? "Guardando…" : `Programar ${ETIQUETA_CONDICION[condicion].toLowerCase()}`}
               </button>
-              <span className="text-xs text-slate-400">Beneficiario: {oc.proveedor ?? "—"}. {condicion === "credito" ? `Fecha sugerida = fecha de la OC + ${oc.dias_credito ?? 30} días de crédito.` : condicion === "anticipo" ? "El resto queda como saldo de la orden." : ""}</span>
+              <span className="text-xs text-slate-400">Beneficiario: {oc.proveedor ?? "—"}. {condicion === "credito" ? `Fecha sugerida = fecha de la OC + ${oc.dias_credito ?? 30} días de crédito.` : condicion === "anticipo" ? "El resto queda como saldo de la orden." : condicion === "efectivo" ? "Se paga en efectivo (caja); no sale de una cuenta bancaria." : ""}</span>
             </form>
           </td>
         </tr>

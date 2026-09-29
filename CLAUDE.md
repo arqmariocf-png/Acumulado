@@ -165,6 +165,47 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   partidas de todas las OC de la requisición completas → `recibida`
   (`20260929120000`). Las OC del backoffice (api) siguen recibiéndose por
   inventario (`v_oc_lineas_avance`); `oc_recepciones` es solo para las RQ.
+  **Autorización como factor de pago (29-sep-2026)**: `v_oc_pagos.
+  autorizacion` = autorizada (api, o `autorizada_en`), pendiente (Excel y
+  RQ sin autorizar) o rechazada (`ordenes_compra.rechazada_en/_por/
+  rechazo_motivo`). `fn_oc_autorizar` acepta también fuente 'excel'
+  (autoriza sin crear pago; el rechazo se registra, no se borra);
+  `fn_oc_programar_pago` exige OC autorizada. Pestaña "Por autorizar" en
+  Programación de pagos reutiliza `OcPorAutorizar` (RQ + Excel); KPI
+  `fin_oc_por_autorizar` cuenta ambas. **Vencimiento por OC**:
+  `v_oc_pagos.vence` = fecha OC + días de crédito del proveedor, para las
+  OC a crédito y las sin condición cuyo proveedor tiene línea
+  (`es_credito`); ojo, `proveedores_credito.vencimiento` es de la LÍNEA,
+  no de la OC (Laura confundió las dos con la 41007 de Cruz Azul: 25-sep +
+  15 días = 10-oct). Semáforo `vencimientoCredito` en `lib/pagosOc.ts`
+  (rojo vencida, ámbar ≤7 días); pestaña "Crédito y vencimientos"
+  (`20260929140000`).
+  **La sincronización ya no bloquea (29-sep-2026)**: Laura recibía
+  "canceling statement due to statement timeout" al poner condición
+  mientras corría la sincronización: hacía http_get (30-60 s cada uno)
+  intercalado con los upserts en UNA transacción y las 1,653 OC quedaban
+  con candado ~2 min. `sincronizar_catalogo_oc_ov` ahora descarga los 4
+  payloads primero y escribe al final solo las filas que cambiaron
+  (`on conflict … do update … where … is distinct from`);
+  `20260929150000`. Regla: en cualquier job que llame al backoffice, las
+  descargas van antes de la primera escritura.
+  **Tesorería (Delia, rol corporativo; 29-sep-2026)**: `/finanzas/tesoreria`
+  (`pages/finanzas/Tesoreria.tsx`, también compacta arriba del inicio de
+  corporativo/dirección/admin): semáforo por empresa (`lib/tesoreria.ts`,
+  con pruebas: saldo del banco de hoy vs pagos por transferencia
+  pendientes de hoy y vencidos; rojo si no alcanza, ámbar si falta pagar o
+  si lo pagado aún no aparece en el banco, verde cuando cuadra) y los pagos
+  de hoy por empresa con **datos bancarios del proveedor** y "Pagado" con
+  referencia. Dirección programa, tesorería paga. `proveedores_datos_
+  bancarios` (clave = `fn_proveedor_clave`; beneficiario, banco, CLABE 18
+  dígitos, cuenta, RFC, correo; nunca tarjeta; ven admin/corporativo/
+  direccion/empresa, NO almacén; capturan admin/corporativo/direccion) con
+  editor `components/DatosBancariosProveedor.tsx` en la OC y en el pago.
+  Vistas `v_pagos_programados` (pago + OC + bancarios) y `v_oc_pagos` con
+  bancarios. **Efectivo**: condición 'efectivo' en la OC y
+  `pagos_programados.metodo` (transferencia/efectivo/cheque); el pago en
+  efectivo no cuenta contra el saldo bancario. Pendiente: módulo completo
+  de caja / pagos en efectivo a cargo de Jaime (`20260929160000`).
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
   sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).
@@ -525,4 +566,7 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   hoy solo ERG tiene logo (`web/public/logo-ergodinova.png`) y `remisionProduccion`
   busca `/logos/<codigo>.png`. `empresas_perfil_legal` guarda razón social y domicilio.
 - Módulo "Abarrotes Neto" (nueva división tipo BBVA) sin definir.
+- Módulo de pagos en efectivo / caja (Jaime): hoy solo existe la condición
+  'efectivo' y `pagos_programados.metodo`; falta el fondo de caja, entregas
+  a Jaime, comprobantes y arqueo.
 - Backoffice: pedir a su desarrollador caché de 5–10 min y filtro por fecha en los API.
