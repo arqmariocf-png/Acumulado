@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { sincronizarCatalogoOcOv } from "../lib/sincronizarOcOv";
+import { sincronizarCatalogoOcOv, textoResultadoSincronizacion } from "../lib/sincronizarOcOv";
 
 /** Pide al backoffice las OC/OV autorizadas y espera el resultado (corre
  * en segundo plano, 1-2 min). Se usa en Finanzas → Programación de pagos
@@ -16,7 +16,7 @@ export function BotonSincronizarOcOv({ queryKeys = [], className }: { queryKeys?
     try {
       const res = await sincronizarCatalogoOcOv();
       for (const k of [["oc-pagos"], ["ordenes-para-match"], ["cxp-proveedores"], ...queryKeys]) queryClient.invalidateQueries({ queryKey: k });
-      setAviso(`Catálogo actualizado: ${res.oc_guardadas ?? 0} OC/OS y ${res.ov_guardadas ?? 0} OV del backoffice (solo las ya autorizadas).`);
+      setAviso(textoResultadoSincronizacion(res));
     } catch (err) {
       setAviso(`No se pudo actualizar: ${(err as Error).message}`);
     } finally {

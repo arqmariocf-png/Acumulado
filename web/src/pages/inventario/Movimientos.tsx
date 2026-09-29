@@ -10,7 +10,7 @@ import { idRemisionDesdeCodigo } from "../../lib/remision";
 import { imprimirRemision } from "./remisionQr";
 import { imprimirComprobanteEntrada } from "./comprobanteEntradaQr";
 import { cantidadTexto } from "../../lib/remision";
-import { sincronizarCatalogoOcOv } from "../../lib/sincronizarOcOv";
+import { sincronizarCatalogoOcOv, textoResultadoSincronizacion } from "../../lib/sincronizarOcOv";
 import type { ItemSugeridoNota, Producto, TipoMovimientoInventario } from "../../types/database";
 
 interface FilaCarrito {
@@ -777,7 +777,7 @@ export function Movimientos() {
     try {
       const res = await sincronizarCatalogoOcOv();
       queryClient.invalidateQueries({ queryKey: ["ordenes-para-match"] });
-      setAvisoSyncOc(`Catálogo actualizado: ${res.oc_guardadas ?? 0} OC/OS y ${res.ov_guardadas ?? 0} OV del backoffice (solo las ya autorizadas).`);
+      setAvisoSyncOc(textoResultadoSincronizacion(res));
     } catch (err) {
       setAvisoSyncOc(`No se pudo actualizar: ${(err as Error).message}`);
     } finally {
