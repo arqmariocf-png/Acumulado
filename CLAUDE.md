@@ -129,6 +129,11 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `requisicion_lineas` / `necesidades_*` select: heredan de `requisiciones`
   (`exists … requisiciones r`), antes Jonathan no veía sus propios renglones
   ni almacén sin "todas las empresas" (`20260929100000`).
+  **Captura de renglones (29-sep-2026)**: Enter en descripción, cantidad o
+  unidad agrega el renglón; lo que quede escrito sin agregar se envía
+  también (`filaPendiente`); y quien pidió la requisición (o admin/
+  corporativo) puede agregar renglones desde el detalle mientras esté
+  `enviada`. Motivo: Maria Fernanda mandó una con un solo renglón.
 - **Supervisión con IA por proyecto (28-sep-2026)**: pestaña "Supervisión
   IA" (`proyectos/SupervisionIA.tsx`) con reporte diario, minuta (con
   acciones → tarjetas del tablero de avance), resumen de hilo/documento,

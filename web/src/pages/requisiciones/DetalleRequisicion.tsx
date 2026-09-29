@@ -6,6 +6,8 @@ import { moneda } from "../../lib/saldosEmpresas";
 import { CompraEnUnPaso } from "./CompraEnUnPaso";
 import { BotonVerOc } from "./VerOrdenCompra";
 
+const UNIDADES = ["pza", "m", "m2", "m3", "kg", "ton", "lt", "bulto", "rollo", "caja", "juego", "lote", "servicio"];
+
 interface LineaDetalle {
   id: string;
   cantidad_solicitada: number;
@@ -34,12 +36,36 @@ interface OrdenDeRequisicion {
  * botón "Comprar" (un paso: proveedor, costo, cotización → OC RQ) para
  * almacén, y las órdenes de compra que ya salieron de ella con "Ver orden"
  * (Mario, 29-sep-2026: todo en una sola pantalla). */
-export function DetalleRequisicion({ requisicionId }: { requisicionId: string }) {
+export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { requisicionId: string; solicitadoPor?: string; estado?: string }) {
   const { perfil } = useAuth();
   const queryClient = useQueryClient();
   const puedeComprar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
+  // Quien la pidió puede seguir agregando renglones mientras esté enviada
+  // (policy requisicion_lineas_write): a Maria Fernanda se le fue con uno solo.
+  const puedeAgregar = estado === "enviada" && !!perfil && (perfil.id === solicitadoPor || perfil.rol === "admin" || perfil.rol === "corporativo");
   const [compraAbierta, setCompraAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [nuevaDescripcion, setNuevaDescripcion] = useState("");
+  const [nuevaCantidad, setNuevaCantidad] = useState("1");
+  const [nuevaUnidad, setNuevaUnidad] = useState("pza");
+
+  const agregarRenglon = useMutation({
+    mutationFn: async () => {
+      const descripcion = nuevaDescripcion.trim();
+      const cantidad = Number(nuevaCantidad);
+      if (!descripcion) throw new Error("Escribe qué material o servicio necesitas.");
+      if (!(cantidad > 0)) throw new Error("La cantidad debe ser mayor a 0.");
+      const { error: err } = await supabase.from("requisicion_lineas").insert({ requisicion_id: requisicionId, concepto_id: null, descripcion, cantidad_solicitada: cantidad, unidad_medida: nuevaUnidad });
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setAviso("Renglón agregado.");
+      setNuevaDescripcion("");
+      setNuevaCantidad("1");
+      queryClient.invalidateQueries({ queryKey: ["requisicion-detalle", requisicionId] });
+    },
+    onError: (e: Error) => setAviso(e.message),
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["requisicion-detalle", requisicionId],
@@ -130,7 +156,31 @@ export function DetalleRequisicion({ requisicionId }: { requisicionId: string })
         </tbody>
       </table>
 
-      {aviso && <p className={`mt-2 text-xs ${aviso.startsWith("Orden") || aviso.startsWith("Surtido") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
+      {puedeAgregar && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setAviso(null);
+            agregarRenglon.mutate();
+          }}
+          className="mt-2 flex flex-wrap items-center gap-2"
+        >
+          <input value={nuevaDescripcion} onChange={(e) => setNuevaDescripcion(e.target.value)} placeholder="Agregar otro material o servicio…" className="min-w-[12rem] flex-1 rounded border border-slate-300 px-2 py-1 text-xs" />
+          <input type="number" min="0.001" step="0.001" value={nuevaCantidad} onChange={(e) => setNuevaCantidad(e.target.value)} className="w-20 rounded border border-slate-300 px-2 py-1 text-xs" aria-label="Cantidad" />
+          <select value={nuevaUnidad} onChange={(e) => setNuevaUnidad(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs" aria-label="Unidad">
+            {UNIDADES.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+          <button type="submit" disabled={agregarRenglon.isPending} className="rounded border border-slate-900 px-2.5 py-1 text-xs font-medium text-slate-900 disabled:opacity-50">
+            Agregar renglón
+          </button>
+        </form>
+      )}
+
+      {aviso && <p className={`mt-2 text-xs ${aviso.startsWith("Orden") || aviso.startsWith("Surtido") || aviso.startsWith("Renglón") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
 
       <div className="mt-3">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Órdenes de compra de esta requisición</p>

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
@@ -92,6 +92,7 @@ export function MisRequisiciones() {
   const [libreDescripcion, setLibreDescripcion] = useState("");
   const [libreUnidad, setLibreUnidad] = useState("pza");
   const [libreCantidad, setLibreCantidad] = useState("1");
+  const descripcionRef = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -121,13 +122,35 @@ export function MisRequisiciones() {
     });
   }
 
-  function agregarLibre() {
+  // Lo que está escrito en los campos de texto libre y todavía no se agregó
+  // a la lista. Se toma en cuenta al enviar: Maria Fernanda escribió el
+  // segundo material, dio "Enviar" y solo se guardó el primero (29-sep-2026).
+  const filaPendiente = useMemo((): FilaCarrito | null => {
     const descripcion = libreDescripcion.trim();
     const cantidad = Number(libreCantidad);
-    if (!descripcion || !(cantidad > 0)) return;
-    setCarrito((prev) => [...prev, { clave: `t:${Date.now()}:${prev.length}`, descripcion, unidad: libreUnidad, cantidad }]);
+    if (!descripcion || !(cantidad > 0)) return null;
+    return { clave: `t:pendiente`, descripcion, unidad: libreUnidad, cantidad };
+  }, [libreDescripcion, libreCantidad, libreUnidad]);
+
+  function agregarLibre() {
+    if (!filaPendiente) {
+      setError(libreDescripcion.trim() ? "La cantidad debe ser mayor a 0." : "Escribe qué material o servicio necesitas.");
+      return;
+    }
+    setError(null);
+    setCarrito((prev) => [...prev, { ...filaPendiente, clave: `t:${Date.now()}:${prev.length}` }]);
     setLibreDescripcion("");
     setLibreCantidad("1");
+    descripcionRef.current?.focus();
+  }
+
+  // Enter en cualquiera de los tres campos agrega el renglón (antes solo en
+  // la descripción; en la cantidad no hacía nada).
+  function enterAgrega(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      agregarLibre();
+    }
   }
 
   function actualizarCantidad(clave: string, cantidad: number) {
@@ -139,7 +162,8 @@ export function MisRequisiciones() {
   }
 
   async function onEnviar() {
-    if (!proyectoId || carrito.length === 0) return;
+    const filas = filaPendiente ? [...carrito, filaPendiente] : carrito;
+    if (!proyectoId || filas.length === 0) return;
     setEnviando(true);
     setError(null);
     setMensaje(null);
@@ -160,7 +184,7 @@ export function MisRequisiciones() {
         .single();
       if (errReq) throw errReq;
 
-      const lineas = carrito.map((f) => ({
+      const lineas = filas.map((f) => ({
         requisicion_id: requisicion.id,
         concepto_id: f.producto?.id ?? null,
         descripcion: f.producto ? null : (f.descripcion ?? null),
@@ -170,8 +194,10 @@ export function MisRequisiciones() {
       const { error: errLineas } = await supabase.from("requisicion_lineas").insert(lineas);
       if (errLineas) throw errLineas;
 
-      setMensaje(`Requisición enviada con ${carrito.length} línea(s).`);
+      setMensaje(`Requisición enviada con ${filas.length} línea(s).`);
       setCarrito([]);
+      setLibreDescripcion("");
+      setLibreCantidad("1");
       setComentario("");
       queryClient.invalidateQueries({ queryKey: ["requisiciones"] });
     } catch (err) {
@@ -210,29 +236,27 @@ export function MisRequisiciones() {
                 <label className="mb-1 block text-xs font-medium text-slate-600">Material o servicio que necesitas</label>
                 <div className="flex flex-wrap gap-2">
                   <input
+                    ref={descripcionRef}
                     value={libreDescripcion}
                     onChange={(e) => setLibreDescripcion(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        agregarLibre();
-                      }
-                    }}
+                    onKeyDown={enterAgrega}
+                    enterKeyHint="enter"
                     placeholder="Ej. Cemento gris 50 kg, varilla 3/8, flete…"
                     className="min-w-[12rem] flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
                   />
-                  <input type="number" min="0.001" step="0.001" value={libreCantidad} onChange={(e) => setLibreCantidad(e.target.value)} className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Cantidad" />
-                  <select value={libreUnidad} onChange={(e) => setLibreUnidad(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Unidad">
+                  <input type="number" min="0.001" step="0.001" value={libreCantidad} onChange={(e) => setLibreCantidad(e.target.value)} onKeyDown={enterAgrega} enterKeyHint="enter" className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Cantidad" />
+                  <select value={libreUnidad} onChange={(e) => setLibreUnidad(e.target.value)} onKeyDown={enterAgrega} className="rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Unidad">
                     {UNIDADES_LIBRES.map((u) => (
                       <option key={u} value={u}>
                         {u}
                       </option>
                     ))}
                   </select>
-                  <button type="button" onClick={agregarLibre} disabled={!libreDescripcion.trim() || !(Number(libreCantidad) > 0)} className="rounded border border-slate-900 px-3 py-1.5 text-sm font-medium text-slate-900 disabled:opacity-40">
+                  <button type="button" onClick={agregarLibre} className="rounded border border-slate-900 px-3 py-1.5 text-sm font-medium text-slate-900">
                     Agregar
                   </button>
                 </div>
+                <p className="mt-1 text-xs text-slate-400">Escribe cada material y da Enter o "Agregar"; se van juntando abajo. Lo que quede escrito sin agregar también se envía.</p>
               </div>
 
               {(productos?.length ?? 0) > 0 && (
@@ -313,10 +337,10 @@ export function MisRequisiciones() {
 
               <button
                 onClick={onEnviar}
-                disabled={enviando || carrito.length === 0}
+                disabled={enviando || (carrito.length === 0 && !filaPendiente)}
                 className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
-                {enviando ? "Enviando…" : `Enviar requisición (${carrito.length} línea(s))`}
+                {enviando ? "Enviando…" : `Enviar requisición (${carrito.length + (filaPendiente ? 1 : 0)} línea(s))`}
               </button>
             </>
           )}
@@ -373,7 +397,7 @@ export function MisRequisiciones() {
                   {abierta === r.id && (
                     <tr>
                       <td colSpan={7} className="p-0">
-                        <DetalleRequisicion requisicionId={r.id} />
+                        <DetalleRequisicion requisicionId={r.id} solicitadoPor={r.solicitado_por} estado={r.estado} />
                       </td>
                     </tr>
                   )}
