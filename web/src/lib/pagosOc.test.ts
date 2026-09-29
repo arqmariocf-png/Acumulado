@@ -49,3 +49,18 @@ test("textoVencimiento", () => {
   assert.equal(textoVencimiento(vencimientoCredito("2026-09-30", "2026-09-29")), "vence mañana");
   assert.equal(textoVencimiento(vencimientoCredito("2026-10-10", "2026-09-29")), "vence en 11 días");
 });
+
+import { etapaOc } from "./pagosOc.ts";
+
+test("etapaOc: la cadena por autorizar → por programar → programado a pago → pagada → recibida", () => {
+  const base = { autorizacion: "autorizada" as const, total: 1000, pagado: 0 };
+  assert.equal(etapaOc({ ...base, autorizacion: "pendiente" }), "por_autorizar");
+  assert.equal(etapaOc({ ...base, autorizacion: "rechazada" }), "rechazada");
+  assert.equal(etapaOc(base), "por_programar");
+  assert.equal(etapaOc({ ...base, programado: 1000 }), "programada");
+  assert.equal(etapaOc({ ...base, pagado: 400 }), "programada");
+  assert.equal(etapaOc({ ...base, pagado: 1000 }), "pagada");
+  assert.equal(etapaOc({ ...base, pagada_backoffice: true }), "pagada");
+  assert.equal(etapaOc({ ...base, pagado: 1000, recepcion_estado: "parcial" }), "pagada");
+  assert.equal(etapaOc({ ...base, pagado: 1000, recepcion_estado: "recibida" }), "recibida");
+});

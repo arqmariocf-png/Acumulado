@@ -31,6 +31,7 @@ test("htmlOrdenCompra escapa texto y muestra folio, proveedor, requisición y se
     "/logos/erg.png",
   );
   assert.match(html, /RQ-ERG-0001/);
+  assert.match(html, /sin datos bancarios capturados/);
   assert.match(html, /Ergodinova &lt;SA&gt;/);
   assert.match(html, /Aceros &amp; Cía/);
   assert.match(html, /#7 · solicitó Jonathan/);
@@ -50,4 +51,14 @@ test("htmlOrdenCompra con autorización muestra el sello y quién autorizó", ()
   assert.match(html, /Laura/);
   assert.match(html, /urgente/);
   assert.doesNotMatch(html, /<img/);
+});
+
+test("htmlOrdenCompra imprime forma de pago, banco y CLABE cuando existen", () => {
+  const html = htmlOrdenCompra(
+    { id_orden: "41007", fecha: "2026-09-25", empresa_nombre: "AEP", empresa_rfc: null, empresa_codigo: "AEP", proveedor: "Cruz Azul", proyecto: null, requisicion_folio: null, solicitante: null, creada_por: null, autorizada_en: null, autorizada_por: null, nota: null, forma_pago: "Crédito · transferencia", banco: "BBVA", clabe: "012180001234567897", cuenta: null, beneficiario: "BODEGA CRUZ AZUL DEL CENTRO SA DE CV" },
+    [],
+    null,
+  );
+  assert.match(html, /Crédito · transferencia/);
+  assert.match(html, /BODEGA CRUZ AZUL DEL CENTRO SA DE CV · BBVA · CLABE 012180001234567897/);
 });

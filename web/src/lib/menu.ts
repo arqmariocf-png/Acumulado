@@ -163,6 +163,7 @@ export const SECCIONES: SeccionMenu[] = [
     proposito: "Entradas y salidas de almacén contra OC/OV, existencias y productos.",
     entradas: [
       { ruta: "/inventario", etiqueta: "Registrar movimiento", descripcion: "entradas y salidas contra las partidas de la OC/OV", uso: "Al recibir material: elige la OC, marca las partidas que llegaron y guarda; sale el comprobante con QR.", visible: veInventario , modulo: "inventario" },
+      { ruta: "/inventario/por-recibir", etiqueta: "Por recibir", descripcion: "OC ya pagadas que faltan de confirmar, en bodega u obra", uso: "Tesorería pagó; almacén u obra confirma qué llegó y cuánto, partida por partida.", visible: veInventario, modulo: "inventario" },
       { ruta: "/inventario/existencias", etiqueta: "Existencias", descripcion: "lo que hay en cada almacén", uso: "Para consultar stock antes de pedir o de prometer entrega.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/productos", etiqueta: "Productos", descripcion: "catálogo de productos por empresa", uso: "Corregir nombres, unidades y códigos de barras.", visible: veInventario , modulo: "inventario" },
     ],

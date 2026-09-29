@@ -20,7 +20,7 @@ function sumarDias(iso: string, n: number): string {
 }
 
 /** Saldo pendiente de la OC: total menos lo pagado (nunca negativo). */
-export function saldoOc(oc: OcConSaldo): number {
+export function saldoOc(oc: Pick<OcConSaldo, "total" | "pagado">): number {
   return Math.max(0, Math.round((Number(oc.total ?? 0) - Number(oc.pagado ?? 0)) * 100) / 100);
 }
 
@@ -79,4 +79,39 @@ export function textoVencimiento(v: { estado: EstadoVencimientoOc; dias: number 
   if (v.dias === 0) return "vence hoy";
   if (v.dias === 1) return "vence mañana";
   return `vence en ${v.dias} días`;
+}
+
+/** Cadena Laura → Delia → Alma (29-sep-2026): en qué paso va la OC. */
+export type EtapaOc = "por_autorizar" | "rechazada" | "por_programar" | "programada" | "pagada" | "recibida";
+
+export const ETIQUETA_ETAPA_OC: Record<EtapaOc, string> = {
+  por_autorizar: "por autorizar",
+  rechazada: "rechazada",
+  por_programar: "por programar",
+  programada: "programado a pago",
+  pagada: "pagada",
+  recibida: "recibida",
+};
+
+export interface OcEnCadena {
+  autorizacion: Autorizacion;
+  total: number | null;
+  pagado: number;
+  programado?: number;
+  pagada_backoffice?: boolean;
+  recepcion_estado?: "recibida" | "parcial" | "sin_recibir" | "sin_partidas" | null;
+}
+
+/** Orden de los pasos para pintar el avance (rechazada no avanza). */
+export const PASOS_OC: EtapaOc[] = ["por_autorizar", "por_programar", "programada", "pagada", "recibida"];
+
+export function etapaOc(oc: OcEnCadena): EtapaOc {
+  if (oc.autorizacion === "rechazada") return "rechazada";
+  if (oc.autorizacion === "pendiente") return "por_autorizar";
+  const saldo = saldoOc(oc);
+  const pagada = saldo <= 0.005 || !!oc.pagada_backoffice;
+  if (pagada && oc.recepcion_estado === "recibida") return "recibida";
+  if (pagada) return "pagada";
+  if (Number(oc.pagado ?? 0) > 0 || Number(oc.programado ?? 0) > 0) return "programada";
+  return "por_programar";
 }
