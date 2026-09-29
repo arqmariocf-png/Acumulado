@@ -6,6 +6,7 @@ import { abrirParaImprimir } from "../../lib/imprimir";
 import { moneda } from "../../lib/saldosEmpresas";
 import { useSaldosDia } from "./SaldosEmpresas";
 import { OrdenesPorPagar } from "./OrdenesPorPagar";
+import { BotonSincronizarOcOv } from "../../components/BotonSincronizarOcOv";
 
 interface PagoProgramado {
   id: string;
@@ -197,6 +198,7 @@ export function ProgramacionPagos() {
           <label className="flex items-center gap-1 text-xs text-slate-600">
             <input type="checkbox" checked={verCerrados} onChange={(e) => setVerCerrados(e.target.checked)} /> ver pagados y cancelados
           </label>
+          <BotonSincronizarOcOv queryKeys={[["pagos-programados"]]} />
           <button onClick={imprimir} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
             Imprimir / PDF
           </button>
