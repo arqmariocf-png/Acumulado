@@ -6,7 +6,7 @@
 // POST multipart/form-data: file
 // -> { ok: true, id, fecha_corte, kpi }
 
-import { clienteComoUsuario, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 import { procesarLibroFoliosBbva } from "../_shared/bbva-folios.ts";
 
@@ -18,6 +18,7 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
     // Mismo criterio que la policy bbva_mantenimiento_insert -- se valida
     // aquí también para poder devolver un mensaje claro en vez de que la
     // RLS lo rechace en silencio con un 42501 genérico.

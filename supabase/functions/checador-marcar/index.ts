@@ -12,7 +12,7 @@
 //   dueño de la marca, rh o admin)
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 
 const FOTO_MAXIMA_BYTES = 6 * 1024 * 1024;
 
@@ -35,6 +35,9 @@ Deno.serve(async (req) => {
       if (errFirma || !firmada) return jsonResponse({ error: errFirma?.message ?? "No se pudo firmar la foto" }, 500);
       return jsonResponse({ url: firmada.signedUrl });
     }
+
+    // Ver una foto o archivo sí se puede; capturar no.
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
 
     const form = await req.formData();
     const tipo = String(form.get("tipo") ?? "");

@@ -20,7 +20,7 @@
 //
 // POST { userId: string, tipo?: "magiclink" | "recovery" } -> { link: string, email: string }
 
-import { clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { jsonResponse, respuestaCors } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
   try {
     const perfil = await obtenerPerfilAutenticado(req);
     if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+    if (perfil.soloConsulta) return respuestaSoloConsulta();
     if (perfil.rol !== "admin" && perfil.rol !== "rh") {
       return jsonResponse({ error: "Solo un administrador o RH pueden generar links de acceso directo." }, 403);
     }

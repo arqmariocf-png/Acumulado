@@ -13,7 +13,7 @@
 // DELETE json: { planoId }                       -> borra el registro (RLS decide permiso) y el objeto
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado } from "../_shared/supabase-clients.ts";
+import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 
 const TAMANO_MAXIMO_BYTES = 50 * 1024 * 1024;
 
@@ -45,6 +45,7 @@ async function proyectoVisible(req: Request, proyectoId: string): Promise<boolea
 async function subir(req: Request): Promise<Response> {
   const perfil = await obtenerPerfilAutenticado(req);
   if (!perfil) return jsonResponse({ error: "No autenticado" }, 401);
+  if (perfil.soloConsulta) return respuestaSoloConsulta();
 
   const form = await req.formData();
   const proyectoId = String(form.get("proyectoId") ?? "");

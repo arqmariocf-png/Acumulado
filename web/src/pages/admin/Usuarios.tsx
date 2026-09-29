@@ -55,6 +55,14 @@ export function Usuarios() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profile-empresas"] }),
     onError: (e: Error) => alert(e.message),
   });
+  const marcarEspectador = useMutation({
+    mutationFn: async ({ id, espectador }: { id: string; espectador: boolean }) => {
+      const { error } = await supabase.from("profiles").update({ espectador }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }),
+    onError: (e: Error) => alert(e.message),
+  });
   const marcarTodas = useMutation({
     mutationFn: async ({ id, todas }: { id: string; todas: boolean }) => {
       const { error } = await supabase.from("profiles").update({ todas_las_empresas: todas }).eq("id", id);
@@ -245,6 +253,11 @@ export function Usuarios() {
               <th className="px-2 py-2">Empresa principal</th>
               <th className="px-2 py-2">Maneja también</th>
               <th className="px-2 py-2">Activo</th>
+              {esAdminGlobal && (
+                <th className="px-2 py-2" title="Solo consulta: ve lo que su rol permite pero no captura, edita ni borra nada.">
+                  Espectador
+                </th>
+              )}
               <th className="px-2 py-2">Teléfono (WhatsApp)</th>
               <th className="px-2 py-2">Acceso</th>
             </tr>
@@ -335,6 +348,16 @@ export function Usuarios() {
                     }
                   />
                 </td>
+                {esAdminGlobal && (
+                  <td className="px-2 py-2">
+                    <input
+                      type="checkbox"
+                      checked={p.espectador}
+                      title="Solo consulta"
+                      onChange={(e) => marcarEspectador.mutate({ id: p.id, espectador: e.target.checked })}
+                    />
+                  </td>
+                )}
                 <td className="px-2 py-2">
                   <input
                     type="tel"

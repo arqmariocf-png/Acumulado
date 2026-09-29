@@ -122,6 +122,9 @@ export interface Profile {
   activo: boolean;
   telefono: string | null;
   bbva_mantenimiento: boolean;
+  /** Solo consulta: ve lo que su rol permite, no captura ni edita nada
+   * (trigger solo_consulta en la base). Solo el admin maestro lo cambia. */
+  espectador: boolean;
   /** Solo rol rh: 'directivo' (todo RH, accesos y roles) o 'administrativo' (flujo operativo). Null = directivo. */
   rh_nivel: "administrativo" | "directivo" | null;
   /** Módulos asignados uno por uno (permisos_modulo); solo aplican a los
