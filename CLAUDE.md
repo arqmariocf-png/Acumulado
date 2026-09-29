@@ -431,6 +431,25 @@ en paralelo, y el esquema combinado ni siquiera aplicaba. **Antes de agregar un
 módulo, revisa `supabase/migrations/` y `web/src/pages/` a ver si ya está.**
 Cambios chicos partiendo de `main`, mezclando pronto.
 
+## Estudio K (siguiente empresa, arranca en la próxima sesión)
+- Presentación del alcance por rol y plan de implementación (28-sep-2026):
+  https://claude.ai/artifact/YUoceRAiht5pXw8VGTQyeP
+- Toda la base para dar de alta una empresa nueva ya existe: alcance por
+  empresa y por rol (`roles_alcance`, empresa principal + "Maneja también"),
+  empresa activa, "Ver como" para probar cada rol, requisiciones → OC RQ →
+  autorización de dirección, checador con cámara.
+- Orden sugerido: 1) Mario confirma si Estudio K es una **empresa más de
+  Grupo Loma** (Admin → Empresas, código corto p. ej. `EK`) o una
+  **organización aparte** tipo ARSSA (skill `abrir-modulo`); 2) razón
+  social, RFC, domicilio (`empresas_perfil_legal`), logo en
+  `web/public/logos/<codigo>.png`; 3) cuentas bancarias; 4) personas y
+  roles: quién es `empresa`, `responsable`, `almacen`, básicos con módulo
+  `proyectos`; 5) proyectos iniciales; 6) Mario decide qué roles apaga en
+  multiempresa (`roles_alcance`).
+- Faltan de Mario: datos de Estudio K, `ANTHROPIC_API_KEY` válida, rol de
+  Timoteo, cuenta de Aldo/ARSSA, si baja la frecuencia de la sincronización
+  horaria del backoffice (~105 s por corrida).
+
 ## Pendientes conocidos
 - Clave `ANTHROPIC_API_KEY` válida para lectura de fotos.
 - Membrete por empresa (logo + razón social, RFC, domicilio, teléfono, correo):
