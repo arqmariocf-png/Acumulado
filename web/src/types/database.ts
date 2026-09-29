@@ -604,6 +604,17 @@ export interface Requisicion {
   created_at: string;
 }
 
+/** Confirmación de almacén por partida de una OC RQ (29-sep-2026). */
+export interface OcRecepcion {
+  id: string;
+  orden_compra_linea_id: string;
+  cantidad: number;
+  fecha: string;
+  nota: string | null;
+  recibido_por: string | null;
+  created_at: string;
+}
+
 export interface RequisicionLinea {
   id: string;
   requisicion_id: string;

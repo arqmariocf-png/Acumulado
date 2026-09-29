@@ -5,6 +5,8 @@ import { useAuth } from "../../lib/auth";
 import { moneda } from "../../lib/saldosEmpresas";
 import { CompraEnUnPaso } from "./CompraEnUnPaso";
 import { BotonVerOc } from "./VerOrdenCompra";
+import { RecepcionOc } from "./RecepcionOc";
+import { ETIQUETA_CONDICION, type CondicionPago } from "../../lib/pagosOc";
 
 const UNIDADES = ["pza", "m", "m2", "m3", "kg", "ton", "lt", "bulto", "rollo", "caja", "juego", "lote", "servicio"];
 
@@ -30,6 +32,9 @@ interface OrdenDeRequisicion {
   total: number | null;
   fecha_creacion: string | null;
   autorizada_en: string | null;
+  condicion_pago: CondicionPago | null;
+  pagado: number;
+  saldo: number;
 }
 
 /** Una requisición abierta: sus renglones con lo que falta por resolver, el
@@ -46,6 +51,7 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
   const [editando, setEditando] = useState<string | null>(null);
   const [compraAbierta, setCompraAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [ocAbierta, setOcAbierta] = useState<string | null>(null);
   const [nuevaDescripcion, setNuevaDescripcion] = useState("");
   const [nuevaCantidad, setNuevaCantidad] = useState("1");
   const [nuevaUnidad, setNuevaUnidad] = useState("pza");
@@ -74,7 +80,7 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
       const [lineas, avance, ordenes] = await Promise.all([
         supabase.from("requisicion_lineas").select("id, cantidad_solicitada, unidad_medida, descripcion, productos(id, nombre, sku)").eq("requisicion_id", requisicionId).order("created_at"),
         supabase.from("avance_resolucion_linea").select("requisicion_linea_id, cantidad_a_compra, cantidad_a_entrega, cantidad_sin_resolver").eq("requisicion_id", requisicionId),
-        supabase.from("v_requisicion_ordenes").select("orden_compra_id, id_orden, proveedor, total, fecha_creacion, autorizada_en").eq("requisicion_id", requisicionId).order("created_at", { ascending: false }),
+        supabase.from("v_requisicion_ordenes").select("orden_compra_id, id_orden, proveedor, total, fecha_creacion, autorizada_en, condicion_pago, pagado, saldo").eq("requisicion_id", requisicionId).order("created_at", { ascending: false }),
       ]);
       if (lineas.error) throw lineas.error;
       if (avance.error) throw avance.error;
@@ -254,15 +260,37 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Órdenes de compra de esta requisición</p>
         {data.ordenes.length === 0 && <p className="text-xs text-slate-400">Todavía no hay órdenes de compra.</p>}
         <ul className="space-y-1">
-          {data.ordenes.map((o) => (
-            <li key={o.orden_compra_id} className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-mono font-semibold text-slate-900">{o.id_orden}</span>
-              <span className="text-slate-600">{o.proveedor ?? "sin proveedor"}</span>
-              <span className="tabular-nums text-slate-700">{o.total != null ? moneda(o.total) : ""}</span>
-              <span className={`rounded-full px-2 py-0.5 ${o.autorizada_en ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{o.autorizada_en ? "autorizada" : "por autorizar"}</span>
-              <BotonVerOc ocId={o.orden_compra_id} />
-            </li>
-          ))}
+          {data.ordenes.map((o) => {
+            const pagada = Number(o.saldo) <= 0.005;
+            return (
+              <li key={o.orden_compra_id} className="text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono font-semibold text-slate-900">{o.id_orden}</span>
+                  <span className="text-slate-600">{o.proveedor ?? "sin proveedor"}</span>
+                  <span className="tabular-nums text-slate-700">{o.total != null ? moneda(o.total) : ""}</span>
+                  <span className={`rounded-full px-2 py-0.5 ${o.autorizada_en ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{o.autorizada_en ? "autorizada" : "por autorizar"}</span>
+                  <span className={`rounded-full px-2 py-0.5 ${pagada ? "bg-emerald-100 text-emerald-800" : Number(o.pagado) > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`} title={o.condicion_pago ? ETIQUETA_CONDICION[o.condicion_pago] : "sin condición de pago"}>
+                    {pagada ? "pagada" : Number(o.pagado) > 0 ? `saldo ${moneda(Number(o.saldo))}` : "sin pagar"}
+                    {o.condicion_pago ? ` · ${ETIQUETA_CONDICION[o.condicion_pago].toLowerCase()}` : ""}
+                  </span>
+                  <BotonVerOc ocId={o.orden_compra_id} />
+                  <button type="button" onClick={() => setOcAbierta(ocAbierta === o.orden_compra_id ? null : o.orden_compra_id)} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
+                    {ocAbierta === o.orden_compra_id ? "Cerrar" : puedeComprar ? "Recibir" : "Recepción"}
+                  </button>
+                </div>
+                {ocAbierta === o.orden_compra_id && (
+                  <RecepcionOc
+                    ocId={o.orden_compra_id}
+                    puedeRecibir={puedeComprar}
+                    onCambio={() => {
+                      queryClient.invalidateQueries({ queryKey: ["requisiciones"] });
+                      queryClient.invalidateQueries({ queryKey: ["requisicion-detalle", requisicionId] });
+                    }}
+                  />
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>
