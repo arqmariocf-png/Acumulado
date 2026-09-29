@@ -189,6 +189,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`on conflict … do update … where … is distinct from`);
   `20260929150000`. Regla: en cualquier job que llame al backoffice, las
   descargas van antes de la primera escritura.
+  **Tesorería (Delia, rol corporativo; 29-sep-2026)**: `/finanzas/tesoreria`
+  (`pages/finanzas/Tesoreria.tsx`, también compacta arriba del inicio de
+  corporativo/dirección/admin): semáforo por empresa (`lib/tesoreria.ts`,
+  con pruebas: saldo del banco de hoy vs pagos por transferencia
+  pendientes de hoy y vencidos; rojo si no alcanza, ámbar si falta pagar o
+  si lo pagado aún no aparece en el banco, verde cuando cuadra) y los pagos
+  de hoy por empresa con **datos bancarios del proveedor** y "Pagado" con
+  referencia. Dirección programa, tesorería paga. `proveedores_datos_
+  bancarios` (clave = `fn_proveedor_clave`; beneficiario, banco, CLABE 18
+  dígitos, cuenta, RFC, correo; nunca tarjeta; ven admin/corporativo/
+  direccion/empresa, NO almacén; capturan admin/corporativo/direccion) con
+  editor `components/DatosBancariosProveedor.tsx` en la OC y en el pago.
+  Vistas `v_pagos_programados` (pago + OC + bancarios) y `v_oc_pagos` con
+  bancarios. **Efectivo**: condición 'efectivo' en la OC y
+  `pagos_programados.metodo` (transferencia/efectivo/cheque); el pago en
+  efectivo no cuenta contra el saldo bancario. Pendiente: módulo completo
+  de caja / pagos en efectivo a cargo de Jaime (`20260929160000`).
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
   sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).
@@ -507,4 +524,7 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   hoy solo ERG tiene logo (`web/public/logo-ergodinova.png`) y `remisionProduccion`
   busca `/logos/<codigo>.png`. `empresas_perfil_legal` guarda razón social y domicilio.
 - Módulo "Abarrotes Neto" (nueva división tipo BBVA) sin definir.
+- Módulo de pagos en efectivo / caja (Jaime): hoy solo existe la condición
+  'efectivo' y `pagos_programados.metodo`; falta el fondo de caja, entregas
+  a Jaime, comprobantes y arqueo.
 - Backoffice: pedir a su desarrollador caché de 5–10 min y filtro por fecha en los API.

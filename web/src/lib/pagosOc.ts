@@ -2,9 +2,9 @@
 // en node. La regla de verdad vive en fn_oc_programar_pago; aquí se replica
 // para proponer monto y fecha en la pantalla.
 
-export type CondicionPago = "contado" | "credito" | "anticipo";
+export type CondicionPago = "contado" | "credito" | "anticipo" | "efectivo";
 
-export const ETIQUETA_CONDICION: Record<CondicionPago, string> = { contado: "Contado", credito: "Crédito", anticipo: "Anticipo" };
+export const ETIQUETA_CONDICION: Record<CondicionPago, string> = { contado: "Contado", credito: "Crédito", anticipo: "Anticipo", efectivo: "Efectivo" };
 
 export interface OcConSaldo {
   total: number | null;
