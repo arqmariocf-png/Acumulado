@@ -17,6 +17,14 @@ export interface ResultadoSincronizacionOcOv {
 // Programación de pagos. Desde el 29-sep-2026 la función descarga primero y
 // escribe al final solo lo que cambió, así que ya no bloquea las OC mientras
 // espera al backoffice.
+/** Texto para la pantalla: desde el 29-sep-2026 "guardadas" son solo las
+ * filas que cambiaron, así que se dice cuántas se revisaron y cuántas
+ * cambiaron. */
+export function textoResultadoSincronizacion(res: ResultadoSincronizacionOcOv): string {
+  const cambios = (res.oc_guardadas ?? 0) + (res.ov_guardadas ?? 0);
+  return `Catálogo al día: ${res.oc_procesadas ?? 0} OC/OS y ${res.ov_procesadas ?? 0} OV revisadas del backoffice (solo las ya autorizadas); ${cambios === 0 ? "sin cambios" : `${cambios} con cambios`}.`;
+}
+
 export async function sincronizarCatalogoOcOv(maxEsperaMs = 4 * 60 * 1000): Promise<ResultadoSincronizacionOcOv> {
   const { data: id, error: errSolicitud } = await supabase.rpc("solicitar_sincronizacion_oc_ov");
   if (errSolicitud) throw errSolicitud;
