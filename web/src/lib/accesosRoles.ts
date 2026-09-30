@@ -9,7 +9,7 @@ import type { AppRol, Profile } from "../types/database";
 // la base: si cambia una policy, hay que actualizar EDITA. Sin DOM.
 
 export const ETIQUETA_ROL: Record<AppRol, string> = {
-  admin: "Administrador",
+  admin: "Director general (admin)",
   corporativo: "Corporativo",
   direccion: "Dirección / finanzas",
   empresa: "Empresa (dirección de una empresa)",
@@ -27,7 +27,7 @@ export const ETIQUETA_ROL: Record<AppRol, string> = {
 };
 
 export const DESCRIPCION_ROL: Record<AppRol, string> = {
-  admin: "Todo el sistema, todas las organizaciones. Da roles y accesos.",
+  admin: "Director general: ve y edita todo el sistema (policy director_general en todas las tablas), todas las organizaciones. Da roles y accesos.",
   corporativo: "Todas las empresas de su organización; captura y resuelve.",
   direccion: "Todas las empresas, finanzas y autorizaciones; consulta sin capturar operación.",
   empresa: "Su empresa completa: proyectos, precios unitarios, tableros y control de obra.",
