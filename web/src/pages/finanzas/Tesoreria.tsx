@@ -7,6 +7,7 @@ import { armarTesoreria, semaforoTesoreria, type ColorTesoreria } from "../../li
 import { useSaldosDia } from "./SaldosEmpresas";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 import { desgloseIvaPago } from "../../lib/ivaPago";
+import { ImportarBancariosProveedores } from "../../components/ImportarBancariosProveedores";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
 
@@ -162,6 +163,11 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
               Programación completa
             </Link>
           </p>
+          {!compacto && (
+            <div className="mt-1">
+              <ImportarBancariosProveedores />
+            </div>
+          )}
         </div>
         {!compacto && (
           <select value={filtroEmpresa} onChange={(e) => setFiltroEmpresa(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
