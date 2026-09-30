@@ -92,7 +92,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   // Selección con suma automática y programación en lote (Laura, 29-sep-2026:
   // "para que no las tenga que ir sumando manual").
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
-  const [orden, setOrden] = useState<OrdenOc>("folio_desc");
+  const [orden, setOrden] = useState<OrdenOc>("fecha_desc");
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -102,8 +102,8 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
       if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
       // Pendientes de autorizar (backoffice, RQ, Excel); las del backoffice
       // autorizadas aquí siguen en la lista hasta que se les programa pago.
-      if (pestana === "autorizar") q = q.neq("autorizacion", "rechazada").gt("saldo", 0.01).eq("programado", 0).or('autorizacion.eq.pendiente,estatus_backoffice.eq."Pendiente de Autorización"').limit(400);
-      else if (pestana === "hoy") q = q.eq("fecha_creacion", hoy).order("id_orden");
+      if (pestana === "autorizar") q = q.neq("autorizacion", "rechazada").gt("saldo", 0.01).eq("programado", 0).or('autorizacion.eq.pendiente,estatus_backoffice.eq."Pendiente de Autorización"').order("fecha_creacion", { ascending: false, nullsFirst: false }).limit(400);
+      else if (pestana === "hoy") q = q.eq("fecha_creacion", hoy);
       else if (pestana === "credito") q = q.eq("es_credito", true).gt("saldo", 0.01).neq("autorizacion", "rechazada").eq("pagada_backoffice", false).order("vence", { ascending: true, nullsFirst: false }).limit(400);
       else {
         q = q.gt("saldo", 0.01).neq("autorizacion", "rechazada").order("fecha_creacion", { ascending: false }).limit(400);

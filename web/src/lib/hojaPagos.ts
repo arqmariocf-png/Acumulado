@@ -81,10 +81,11 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     h.renglones.push({ tipo: "saldo", oc: null, proveedor: `SALDO INICIAL ${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`.toUpperCase(), abono: monto, cargo: null, saldo: h.saldo, forma_pago: null, proyecto: null, comentarios: null });
   }
   const delDia = pagos.filter((p) => p.estatus !== "cancelado" && (p.fecha_programada === fecha || (p.estatus === "pendiente" && p.fecha_programada < fecha)));
-  // OC por folio (como número), luego los pagos sin OC (nómina, préstamos…).
+  // OC de la más reciente a la más vieja (folio como número), luego los
+  // pagos sin OC (nómina, préstamos…).
   delDia.sort((a, b) => {
     if (!!a.id_orden !== !!b.id_orden) return a.id_orden ? -1 : 1;
-    return (a.id_orden ?? "").localeCompare(b.id_orden ?? "", "es", { numeric: true }) || a.beneficiario.localeCompare(b.beneficiario, "es");
+    return (b.id_orden ?? "").localeCompare(a.id_orden ?? "", "es", { numeric: true }) || a.beneficiario.localeCompare(b.beneficiario, "es");
   });
   for (const p of delDia) {
     const h = hoja(p.empresa_id, p.empresa_nombre);

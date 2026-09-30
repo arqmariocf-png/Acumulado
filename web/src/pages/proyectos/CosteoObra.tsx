@@ -57,7 +57,7 @@ function useCosteo(proyecto: Proy) {
           .from("v_oc_pagos")
           .select("id, id_orden, fecha_creacion, proveedor, total, estatus_backoffice, pagado, pagada_backoffice, empresa_id, autorizacion")
           .ilike("proyecto", proyecto.nombre)
-          .order("fecha_creacion"),
+          .order("fecha_creacion", { ascending: false, nullsFirst: false }),
       ]);
       for (const r of [c, pres, dir, imss, tab, planos, ocs]) if (r.error) throw r.error;
       const ocIds = (ocs.data ?? []).map((o) => o.id);

@@ -22,10 +22,10 @@ test("hoja de Laura (30-sep): saldo inicial por cuenta, cargos y saldo corrido",
   assert.equal(h.abonos, 210275.45);
   assert.equal(h.cargos, 137383.72);
   assert.equal(h.saldo, 72891.73);
-  assert.deepEqual(h.renglones.map((r) => r.saldo), [21005.95, 41824.92, 210275.45, 125155.42, 92478.47, 90095.07, 81961.87, 72891.73]);
-  assert.deepEqual(h.renglones.filter((r) => r.tipo === "pago").map((r) => r.oc), ["40770", "41069", "41074", "41075", null]);
-  assert.equal(h.renglones[5].forma_pago, "Tarjeta de débito");
-  assert.equal(h.renglones[5].comentarios, "Jorge");
+  assert.deepEqual(h.renglones.map((r) => r.saldo), [21005.95, 41824.92, 210275.45, 202142.25, 199758.85, 167081.9, 81961.87, 72891.73]);
+  assert.deepEqual(h.renglones.filter((r) => r.tipo === "pago").map((r) => r.oc), ["41075", "41074", "41069", "40770", null]);
+  assert.equal(h.renglones[4].forma_pago, "Tarjeta de débito");
+  assert.equal(h.renglones[4].comentarios, "Jorge");
   assert.equal(h.renglones[7].forma_pago, "Transferencia");
 });
 
@@ -39,9 +39,9 @@ test("vencidos pendientes entran con comentario; efectivo va aparte; cancelados 
     pago({ id_orden: "41005", beneficiario: "F", monto: 20, estatus: "pagado", referencia: "123" }),
   ];
   const [h] = armarHojaPagos([], pagos, "2026-09-30");
-  assert.deepEqual(h.renglones.map((r) => r.oc), ["41000", "41005"]);
-  assert.equal(h.renglones[0].comentarios, "vencido del 28/09");
-  assert.equal(h.renglones[1].comentarios, "pagado · ref 123");
+  assert.deepEqual(h.renglones.map((r) => r.oc), ["41005", "41000"]);
+  assert.equal(h.renglones[1].comentarios, "vencido del 28/09");
+  assert.equal(h.renglones[0].comentarios, "pagado · ref 123");
   assert.equal(h.cargos, 120);
   assert.equal(h.saldo, -120);
   assert.equal(h.efectivo, 70);
