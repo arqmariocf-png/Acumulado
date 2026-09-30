@@ -29,6 +29,77 @@ function useProyecto(id: string) {
   });
 }
 
+/** Encargados de la obra (responsable y supervisor/comprador): el admin los
+ * asigna aquí mismo, sin ir a Admin → Proyectos (Mario, 30-sep-2026). Solo el
+ * admin puede listar cuentas (profiles); los demás ven los nombres. */
+function EncargadosObra({ proyecto }: { proyecto: Proyecto }) {
+  const { perfil } = useAuth();
+  const queryClient = useQueryClient();
+  const esAdmin = perfil?.rol === "admin";
+  const [error, setError] = useState<string | null>(null);
+  const { data: personas } = useQuery({
+    queryKey: ["personas-para-obra"],
+    enabled: esAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("id, nombre, rol").neq("rol", "pendiente").order("nombre");
+      if (error) throw error;
+      return data as { id: string; nombre: string | null; rol: string }[];
+    },
+  });
+  const asignar = useMutation({
+    mutationFn: async ({ campo, valor }: { campo: "responsable" | "comprador"; valor: string }) => {
+      const nombre = personas?.find((p) => p.id === valor)?.nombre ?? null;
+      const { error } = await supabase
+        .from("proyectos")
+        .update({ [`${campo}_id`]: valor || null, [`${campo}_nombre`]: valor ? nombre : null })
+        .eq("id", proyecto.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["proyecto-detalle", proyecto.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-proyectos"] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const campos = [
+    { campo: "responsable" as const, etiqueta: "Responsable", id: proyecto.responsable_id, nombre: proyecto.responsable_nombre },
+    { campo: "comprador" as const, etiqueta: "Supervisor / comprador", id: proyecto.comprador_id, nombre: proyecto.comprador_nombre },
+  ];
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+      <span className="font-medium text-slate-700">Encargados:</span>
+      {campos.map((c) =>
+        esAdmin ? (
+          <label key={c.campo} className="inline-flex items-center gap-1">
+            {c.etiqueta}
+            <select
+              value={c.id ?? ""}
+              disabled={asignar.isPending}
+              onChange={(e) => asignar.mutate({ campo: c.campo, valor: e.target.value })}
+              className="rounded border border-slate-300 px-1.5 py-0.5 text-xs"
+            >
+              <option value="">Sin asignar</option>
+              {personas?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre ?? "(sin nombre)"} · {p.rol}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span key={c.campo}>
+            {c.etiqueta}: <span className="text-slate-900">{c.nombre ?? "sin asignar"}</span>
+          </span>
+        ),
+      )}
+      {error && <span className="text-red-600">{error}</span>}
+    </div>
+  );
+}
+
 export function ProyectoDetalle() {
   const { id } = useParams<{ id: string }>();
   const { perfil } = useAuth();
@@ -83,6 +154,7 @@ export function ProyectoDetalle() {
           <p className="text-xs text-slate-500">
             {proyecto.empresas?.nombre} {proyecto.cliente && `· Cliente: ${proyecto.cliente}`}
           </p>
+          <EncargadosObra proyecto={proyecto} />
           {errorActivo && <p className="mt-1 text-xs text-red-600">{errorActivo}</p>}
         </div>
         {puedeDesactivar && (
