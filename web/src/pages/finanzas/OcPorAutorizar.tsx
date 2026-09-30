@@ -38,6 +38,11 @@ interface Cuenta {
   alias: string | null;
 }
 
+// RQ (almacén), Excel (carga manual) y las del backoffice que allá siguen
+// "Pendiente de Autorización": dirección las autoriza aquí para poder
+// programar su pago (Laura, 30-sep-2026).
+const FILTRO_POR_AUTORIZAR = 'fuente.in.(requisicion,excel),and(fuente.eq.api,estatus_backoffice.eq."Pendiente de Autorización")';
+
 function sumarDias(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() + n);
@@ -81,7 +86,7 @@ export function OcPorAutorizar() {
       let q = supabase
         .from("ordenes_compra")
         .select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, created_at, fuente, rechazada_en, rechazo_motivo, empresas(nombre, codigo)")
-        .in("fuente", ["requisicion", "excel"])
+        .or(FILTRO_POR_AUTORIZAR)
         .is("autorizada_en", null)
         .order("created_at", { ascending: false });
       q = verArchivadas ? q.not("rechazada_en", "is", null).limit(300) : q.is("rechazada_en", null);
@@ -93,7 +98,7 @@ export function OcPorAutorizar() {
   const { data: nArchivadas } = useQuery({
     queryKey: ["oc-archivadas-n"],
     queryFn: async () => {
-      const { count, error } = await supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).in("fuente", ["requisicion", "excel"]).is("autorizada_en", null).not("rechazada_en", "is", null);
+      const { count, error } = await supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).or(FILTRO_POR_AUTORIZAR).is("autorizada_en", null).not("rechazada_en", "is", null);
       if (error) throw error;
       return count ?? 0;
     },
@@ -118,7 +123,7 @@ export function OcPorAutorizar() {
           {verArchivadas ? "Órdenes archivadas (rechazadas)" : "Órdenes de compra por autorizar"} <span className={`rounded-full px-2 py-0.5 text-xs ${verArchivadas ? "bg-slate-200" : "bg-amber-200"}`}>{ocs?.length ?? 0}</span>
         </h3>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs text-amber-800">{verArchivadas ? "No se pagan. \"Autorizar\" las reactiva." : "Sin autorización no se programa pago. Las RQ las genera almacén (al autorizar se programa el pago y la requisición avanza); las de Excel se cargaron a mano."}</p>
+          <p className="text-xs text-amber-800">{verArchivadas ? "No se pagan. \"Autorizar\" las reactiva." : "Sin autorización no se programa pago. Las RQ las genera almacén (al autorizar se programa el pago y la requisición avanza); las del backoffice están allá como \"Pendiente de Autorización\" (al autorizarlas aquí ya se les programa pago); las de Excel se cargaron a mano."}</p>
           {(nArchivadas ?? 0) > 0 && (
             <button type="button" onClick={() => setVerArchivadas((v) => !v)} className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100">
               {verArchivadas ? "Ver por autorizar" : `Ver archivadas (${nArchivadas})`}
@@ -133,7 +138,8 @@ export function OcPorAutorizar() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm">
                 <span className="font-mono text-xs font-semibold text-slate-900">{o.id_orden}</span>
-                {o.fuente === "excel" && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-600">excel</span>} · <b>{o.proveedor ?? "sin proveedor"}</b>
+                {o.fuente === "excel" && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-600">excel</span>}
+                {o.fuente === "api" && <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] uppercase text-sky-800">backoffice</span>} · <b>{o.proveedor ?? "sin proveedor"}</b>
                 <span className="text-slate-500"> · {o.empresas?.codigo ?? ""} · {o.proyecto ?? "sin proyecto"} · {o.fecha_creacion ?? ""}</span>
                 {o.rechazo_motivo && <div className="text-xs text-slate-500">{o.rechazo_motivo}</div>}
               </div>
@@ -254,10 +260,13 @@ function DetalleOc({ oc, cuentas, onResuelta }: { oc: OcPendiente; cuentas: Cuen
         </tbody>
       </table>
       <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Pagar el</label>
-          <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
-        </div>
+        {oc.fuente === "requisicion" && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Pagar el</label>
+            <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+          </div>
+        )}
+        {oc.fuente === "requisicion" && (
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Cuenta</label>
           <select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
@@ -270,8 +279,9 @@ function DetalleOc({ oc, cuentas, onResuelta }: { oc: OcPendiente; cuentas: Cuen
             ))}
           </select>
         </div>
+        )}
         <button type="button" onClick={() => resolver.mutate(true)} disabled={resolver.isPending} className="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-          Autorizar y programar pago
+          {oc.fuente === "requisicion" ? "Autorizar y programar pago" : "Autorizar"}
         </button>
         <div className="ml-auto flex items-end gap-2">
           <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo del rechazo" className="w-48 rounded border border-slate-300 px-2 py-1 text-sm" />

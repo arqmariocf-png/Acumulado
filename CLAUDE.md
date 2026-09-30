@@ -627,6 +627,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   lote terminado; al cerrarlo se actualiza su entrada de producto
   terminado en vez de duplicarla. Ojo: `v_remisiones_produccion` no es
   security_invoker (corre como dueño).
+- **OC del backoffice pendientes de autorizar (30-sep-2026, Laura)**: las
+  api con `estatus_backoffice = 'Pendiente de Autorización'` salen en "Por
+  autorizar" (`OcPorAutorizar`, etiqueta backoffice) y dirección las
+  autoriza AQUÍ: `fn_oc_autorizar` las acepta (solo ese estatus), registra
+  `autorizada_en` y ya se les programa pago; `v_oc_pagos.autorizacion` y
+  `v_cxp_proveedores` respetan esa autorización (`20260930240000`). En el
+  backoffice siguen pendientes hasta que alguien las autorice allá. La OC
+  impresa trae RFC del proveedor y, en las api, importes de `v_oc_importes`
+  (antes sumaba 16 % encima: la 41074 salía en 2,764.75 en vez de 2,383.40).
 - Proyecto: el admin asigna responsable y supervisor/comprador desde el
   encabezado de la obra (`EncargadosObra` en `ProyectoDetalle.tsx`; solo el
   admin puede listar profiles).
