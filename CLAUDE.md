@@ -546,6 +546,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   La persona la cambia con el botón "Contraseña" del encabezado
   (`cambiarContrasena()` en `useAuth` → `NuevaContrasena`).
 
+## Comedor (30-sep-2026)
+- Mario: "una empresa aparte, vinculada a las aplicaciones de los
+  trabajadores para ordenar y llevar su descuento vía nómina".
+  `20260930150000_modulo_comedor.sql` (aplicada): módulo `comedor`
+  (`grupo_modulos`, abierto a LOMA; también asignable por persona para los
+  cocineros con rol básico), empresa **COM · Comedor** en LOMA
+  (`comedor_config`: empresa y hora límite), `comedor_platillos` (precio),
+  `comedor_menu` (platillos por fecha, cupo opcional), `comedor_pedidos` +
+  `comedor_pedido_lineas` (precio congelado; totales en `v_comedor_pedidos`).
+  Un pedido por persona por día, hasta la hora límite; el trabajador
+  necesita expediente activo en RH y el descuento va a su empresa
+  (`profiles.empresa_id`). **Solo lo entregado se descuenta.** Todo cambio
+  pasa por `fn_comedor_pedir / _cancelar / _entregar /
+  _aplicar_descuento`; guardas `auth_opera_comedor()` (cocina) y
+  `auth_ve_nomina_comedor()` (RH, dirección, corporativo, admin).
+- Frontend `/comedor` (`pages/comedor/Comedor.tsx`, pestañas según
+  permiso): **Pedir comida** (hoy/mañana, historial y "por descontar"),
+  **Cocina** (menú del día, copiar el de ayer, cupo, platillos y precios,
+  lista de pedidos con "Entregado", "por preparar" sumado) y **Descuento
+  vía nómina** (periodo, por empresa y trabajador, CSV para Excel, "Marcar
+  aplicado en nómina"). Reglas puras en `lib/comedor.ts` (con pruebas).
+  Acceso rápido en el inicio y entrada en el menú; permiso "Comedor
+  (cocina)" asignable desde RH → Accesos. Prueba `supabase/tests/comedor.sql`.
+
 ## Personas y roles (referencia rápida)
 Mario (admin, todas las empresas) · Laura Ortaza (direccion/finanzas, todas) ·
 Jorge Esperón (empresa, ERG: precios unitarios) · Eréndira / Fernando Gómez (rh) ·

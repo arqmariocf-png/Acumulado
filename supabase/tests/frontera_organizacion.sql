@@ -57,9 +57,9 @@ begin
   if n_proyectos < 1 then raise exception 'FALLA: la frontera le quitó sus proyectos a Loma'; end if;
   if n_insumos < 1 then raise exception 'FALLA: la frontera le quitó su catálogo de insumos a Loma'; end if;
   if n_factores < 1 then raise exception 'FALLA: la frontera le quitó sus factores a Loma'; end if;
-  if n_empresas <> 8 then raise exception 'FALLA: Loma ve % empresas, deberían ser sus 8', n_empresas; end if;
+  if n_empresas <> 9 then raise exception 'FALLA: Loma ve % empresas, deberían ser sus 9 (8 + Comedor)', n_empresas; end if;
 
-  raise notice 'OK: Loma sigue viendo sus 8 empresas, sus proyectos, insumos y factores';
+  raise notice 'OK: Loma sigue viendo sus 9 empresas (con Comedor), sus proyectos, insumos y factores';
 end $$;
 reset role;
 
