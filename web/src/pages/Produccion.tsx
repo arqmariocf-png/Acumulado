@@ -1766,13 +1766,17 @@ function PestanaCosteo({ empresa }: { empresa: Empresa }) {
   const { data: porOrden } = useQuery({
     queryKey: ["costeo-por-orden", empresa.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("v_costeo_orden_produccion")
-        .select("*, ordenes_produccion(productos_produccion(nombre))")
-        .eq("empresa_id", empresa.id)
-        .order("fecha_inicio", { ascending: false });
-      if (error) throw error;
-      return data as (CosteoOrdenProduccion & { ordenes_produccion: { productos_produccion: { nombre: string } } })[];
+      // Sin embed desde la vista: PostgREST no infiere la relación de
+      // v_costeo_orden_produccion hacia ordenes_produccion y respondía 400
+      // (30-sep-2026). El nombre del producto sale del catálogo aparte.
+      const [costeo, productos] = await Promise.all([
+        supabase.from("v_costeo_orden_produccion").select("*").eq("empresa_id", empresa.id).order("fecha_inicio", { ascending: false }),
+        supabase.from("productos_produccion").select("id, nombre").eq("empresa_id", empresa.id),
+      ]);
+      if (costeo.error) throw costeo.error;
+      if (productos.error) throw productos.error;
+      const nombre = new Map((productos.data ?? []).map((p) => [p.id as string, p.nombre as string]));
+      return (costeo.data as CosteoOrdenProduccion[]).map((o) => ({ ...o, ordenes_produccion: { productos_produccion: { nombre: nombre.get(o.producto_id) ?? "" } } }));
     },
   });
 
