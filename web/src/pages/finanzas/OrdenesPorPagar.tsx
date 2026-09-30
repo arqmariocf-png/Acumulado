@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, PASOS_OC, estadoPagoOc, etapaOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
+import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, estadoPagoOc, etapaOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
@@ -86,6 +86,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   // Selección con suma automática y programación en lote (Laura, 29-sep-2026:
   // "para que no las tenga que ir sumando manual").
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [orden, setOrden] = useState<OrdenOc>("folio_desc");
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -108,8 +109,9 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return (data ?? []).filter((o) => (!soloConLinea || o.linea_credito != null) && (!q || (o.proveedor ?? "").toLowerCase().includes(q) || o.id_orden.toLowerCase().includes(q) || (o.proyecto ?? "").toLowerCase().includes(q)));
-  }, [data, busqueda, soloConLinea]);
+    const filtradas = (data ?? []).filter((o) => (!soloConLinea || o.linea_credito != null) && (!q || (o.proveedor ?? "").toLowerCase().includes(q) || o.id_orden.toLowerCase().includes(q) || (o.proyecto ?? "").toLowerCase().includes(q)));
+    return ordenarOcs(filtradas, orden);
+  }, [data, busqueda, soloConLinea, orden]);
 
   const totalSaldo = visibles.reduce((s, o) => s + saldoOc(o), 0);
   const seleccionadas = visibles.filter((o) => seleccion.has(o.id));
@@ -158,6 +160,18 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
           ))}
         </div>
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Proveedor, folio o proyecto…" className="w-52 rounded border border-slate-300 px-2 py-1 text-xs" />
+        {pestana !== "autorizar" && (
+          <label className="flex items-center gap-1 text-xs text-slate-600">
+            Ordenar por
+            <select value={orden} onChange={(e) => setOrden(e.target.value as OrdenOc)} className="rounded border border-slate-300 px-1.5 py-1 text-xs">
+              {(Object.keys(ETIQUETA_ORDEN_OC) as OrdenOc[]).map((k) => (
+                <option key={k} value={k}>
+                  {ETIQUETA_ORDEN_OC[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex items-center gap-1 text-xs text-slate-600">
           <input type="checkbox" checked={soloConLinea} onChange={(e) => setSoloConLinea(e.target.checked)} /> solo proveedores con línea de crédito
         </label>
@@ -183,14 +197,13 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
       </div>
       {pestana === "autorizar" && (
         <div className="p-3">
-          <p className="mb-2 text-xs text-slate-500">Las órdenes del backoffice llegan ya autorizadas. Las RQ (almacén) y las de Excel esperan a dirección: mientras no se autoricen no se programa pago.</p>
+          <p className="mb-2 text-xs text-slate-500">Esperan a dirección: las del backoffice en "Pendiente de Autorización", las RQ (almacén) y las de Excel. Mientras no se autoricen no se programa pago.</p>
           <OcPorAutorizar />
-          <PendientesBackoffice filtroEmpresa={filtroEmpresa} nombreEmpresa={nombreEmpresa} />
         </div>
       )}
       {pestana !== "autorizar" && isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}
       {error && <p className="px-3 py-3 text-sm text-red-600">{(error as Error).message}</p>}
-      {aviso && <p className={`px-3 py-2 text-xs ${aviso.startsWith("Pago") || aviso.startsWith("Condición") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
+      {aviso && <p className={`px-3 py-2 text-xs ${aviso.startsWith("Pago") || aviso.startsWith("Condición") || aviso.startsWith("Orden") || aviso.startsWith("Programadas") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
       {pestana !== "autorizar" && !isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : pestana === "credito" ? "No hay órdenes a crédito con saldo." : "No hay órdenes con saldo pendiente."}</p>}
       {pestana !== "autorizar" && visibles.length > 0 && (
         <table className="w-full text-sm">
@@ -248,6 +261,20 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
   const [cuentaId, setCuentaId] = useState("");
   const [notas, setNotas] = useState("");
   const saldo = saldoOc(oc);
+  // Autorizar desde la lista (Laura, 30-sep-2026); rechazar sigue en "Por autorizar".
+  const autorizar = useMutation({
+    mutationFn: async () => {
+      const f = new Date();
+      f.setDate(f.getDate() + 7);
+      const { error: err } = await supabase.rpc("fn_oc_autorizar", { p_oc_id: oc.id, p_autorizar: true, p_motivo: null, p_fecha_pago: f.toISOString().slice(0, 10), p_cuenta_id: null });
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      onAviso(`Orden ${oc.id_orden} autorizada; ya se le puede programar pago.`);
+      for (const k of [["oc-pagos"], ["oc-por-autorizar"], ["pagos-programados"], ["cxp-proveedores"]]) queryClient.invalidateQueries({ queryKey: k });
+    },
+    onError: (e: Error) => onAviso(e.message),
+  });
   const [etiqueta, clase] = ESTADO_PAGO[estadoPagoOc(oc)];
   const etapa = etapaOc(oc);
   const pasoActual = PASOS_OC.indexOf(etapa);
@@ -371,7 +398,12 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
                 {abierta ? "Cerrar" : "Programar pago"}
               </button>
             )}
-            {saldo > 0 && !autorizada && <span className="px-1 text-xs text-slate-400" title="Autorízala en la pestaña Por autorizar">{oc.autorizacion === "rechazada" ? "no se paga" : "falta autorizar"}</span>}
+            {saldo > 0 && oc.autorizacion === "pendiente" && (
+              <button type="button" onClick={() => autorizar.mutate()} disabled={autorizar.isPending} className="rounded border border-emerald-700 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50 disabled:opacity-50" title="Autoriza la orden; después se le programa pago">
+                {autorizar.isPending ? "Autorizando…" : "Autorizar"}
+              </button>
+            )}
+            {saldo > 0 && oc.autorizacion === "rechazada" && <span className="px-1 text-xs text-slate-400">no se paga</span>}
             <BotonVerOc ocId={oc.id} />
           </span>
         </td>
@@ -423,47 +455,3 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
   );
 }
 
-/** OC que el backoffice tiene en "Pendiente de Autorización": se autorizan
- * allá, no aquí; se listan para que dirección vea el global. */
-function PendientesBackoffice({ filtroEmpresa, nombreEmpresa }: { filtroEmpresa: string; nombreEmpresa: Map<string, string> }) {
-  const { data } = useQuery({
-    queryKey: ["oc-pendientes-backoffice", filtroEmpresa],
-    queryFn: async () => {
-      let q = supabase.from("v_oc_pagos").select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, tipo_pago_backoffice").eq("fuente", "api").eq("estatus_backoffice", "Pendiente de Autorización").order("fecha_creacion", { ascending: false }).limit(200);
-      if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
-      const { data: filas, error } = await q;
-      if (error) throw error;
-      return (filas ?? []) as Pick<OcPago, "id" | "id_orden" | "empresa_id" | "proveedor" | "proyecto" | "total" | "fecha_creacion" | "tipo_pago_backoffice">[];
-    },
-  });
-  if (!data || data.length === 0) return <p className="text-xs text-slate-400">El backoffice no tiene órdenes pendientes de autorización.</p>;
-  return (
-    <div className="rounded border border-slate-200 bg-white p-3">
-      <p className="mb-1 text-sm font-semibold text-slate-700">
-        Pendientes de autorización en el backoffice <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs">{data.length}</span>
-      </p>
-      <p className="mb-2 text-xs text-slate-500">Se autorizan en el backoffice; aquí solo se ven. En cuanto cambien de estatus allá, la siguiente actualización las mueve a "Con saldo pendiente" ({moneda(data.reduce((s, o) => s + Number(o.total ?? 0), 0))} en total).</p>
-      <table className="w-full text-xs">
-        <tbody>
-          {data.map((o) => (
-            <tr key={o.id} className="border-t border-slate-100">
-              <td className="whitespace-nowrap py-1 pr-2 font-mono font-semibold text-slate-900">{o.id_orden}</td>
-              <td className="py-1 pr-2 text-slate-500">
-                {nombreEmpresa.get(o.empresa_id) ?? ""} · {o.fecha_creacion ?? ""}
-              </td>
-              <td className="py-1 pr-2">
-                {o.proveedor ?? "—"}
-                {o.proyecto && <span className="text-slate-400"> · {o.proyecto}</span>}
-              </td>
-              <td className="py-1 pr-2 text-slate-500">{o.tipo_pago_backoffice?.toLowerCase() ?? ""}</td>
-              <td className="py-1 text-right tabular-nums">{o.total != null ? moneda(Number(o.total)) : "—"}</td>
-              <td className="py-1 pl-2 text-right">
-                <BotonVerOc ocId={o.id} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}

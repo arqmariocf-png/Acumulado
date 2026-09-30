@@ -92,7 +92,8 @@ export function OcPorAutorizar() {
       q = verArchivadas ? q.not("rechazada_en", "is", null).limit(300) : q.is("rechazada_en", null);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as unknown as OcPendiente[];
+      // Por folio, del más nuevo al más viejo (Laura, 30-sep-2026).
+      return ((data ?? []) as unknown as OcPendiente[]).sort((a, b) => b.id_orden.localeCompare(a.id_orden, "es", { numeric: true }));
     },
   });
   const { data: nArchivadas } = useQuery({

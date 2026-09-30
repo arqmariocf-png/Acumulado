@@ -115,3 +115,46 @@ export function etapaOc(oc: OcEnCadena): EtapaOc {
   if (Number(oc.pagado ?? 0) > 0 || Number(oc.programado ?? 0) > 0) return "programada";
   return "por_programar";
 }
+
+/** Orden de la lista de OC (Laura, 30-sep-2026: "no salen acomodadas por
+ * id, están revueltas"). El folio es texto: se compara como número. */
+export type OrdenOc = "folio_desc" | "folio_asc" | "fecha_desc" | "proveedor" | "saldo_desc" | "vence";
+
+export const ETIQUETA_ORDEN_OC: Record<OrdenOc, string> = {
+  folio_desc: "Folio (más nuevo primero)",
+  folio_asc: "Folio (más viejo primero)",
+  fecha_desc: "Fecha de la OC",
+  proveedor: "Proveedor (A-Z)",
+  saldo_desc: "Saldo (mayor primero)",
+  vence: "Vencimiento (más próximo)",
+};
+
+interface OcOrdenable {
+  id_orden: string;
+  fecha_creacion: string | null;
+  proveedor: string | null;
+  total: number | null;
+  pagado: number;
+  vence?: string | null;
+}
+
+const porFolio = (a: OcOrdenable, b: OcOrdenable) => a.id_orden.localeCompare(b.id_orden, "es", { numeric: true });
+
+export function ordenarOcs<T extends OcOrdenable>(lista: T[], orden: OrdenOc): T[] {
+  const copia = [...lista];
+  const fecha = (o: OcOrdenable) => o.fecha_creacion ?? "";
+  switch (orden) {
+    case "folio_asc":
+      return copia.sort(porFolio);
+    case "fecha_desc":
+      return copia.sort((a, b) => fecha(b).localeCompare(fecha(a)) || porFolio(b, a));
+    case "proveedor":
+      return copia.sort((a, b) => (a.proveedor ?? "").localeCompare(b.proveedor ?? "", "es", { sensitivity: "base" }) || porFolio(b, a));
+    case "saldo_desc":
+      return copia.sort((a, b) => saldoOc(b) - saldoOc(a) || porFolio(b, a));
+    case "vence":
+      return copia.sort((a, b) => (a.vence ?? "9999").localeCompare(b.vence ?? "9999") || porFolio(a, b));
+    default:
+      return copia.sort((a, b) => porFolio(b, a));
+  }
+}
