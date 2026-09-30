@@ -40,6 +40,8 @@ export interface OcPago {
   tipo_pago_backoffice: string | null;
   pagada_backoffice: boolean;
   recepcion_estado: "recibida" | "parcial" | "sin_recibir" | "sin_partidas";
+  /** Quién autorizó: el backoffice o dirección aquí (interna). */
+  autorizacion_origen: "backoffice" | "interna" | null;
 }
 
 /** Condición inicial cuando dirección aún no la capturó: lo que dice el
@@ -148,11 +150,13 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   const totalSaldo = visibles.reduce((s, o) => s + saldoOc(o), 0);
   const seleccionadas = visibles.filter((o) => seleccion.has(o.id));
   const totalSeleccion = seleccionadas.reduce((s, o) => s + saldoOc(o), 0);
-  const programables = seleccionadas.filter((o) => o.autorizacion === "autorizada" && saldoOc(o) > 0 && !o.pagada_backoffice);
+  // Las pendientes también: programar su pago las autoriza internamente
+  // (Mario, 30-sep-2026: "que no pare el flujo").
+  const programables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && saldoOc(o) > 0 && !o.pagada_backoffice);
 
   const programarLote = useMutation({
     mutationFn: async () => {
-      if (programables.length === 0) throw new Error("Ninguna de las seleccionadas se puede programar (falta autorización o no tienen saldo).");
+      if (programables.length === 0) throw new Error("Ninguna de las seleccionadas se puede programar (rechazadas, sin saldo o ya pagadas en el backoffice).");
       if (!window.confirm(`¿Programar a pago ${programables.length} orden(es) por ${moneda(programables.reduce((s, o) => s + saldoOc(o), 0))}? Cada una con su condición (crédito si el proveedor tiene línea, efectivo si el backoffice lo dice, si no contado) y la fecha sugerida.`)) return null;
       const errores: string[] = [];
       let n = 0;
@@ -393,6 +397,11 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
               {oc.fuente === "api" && " (backoffice)"}
             </span>
           )}
+          {oc.autorizacion_origen === "interna" && (
+            <span className="mt-0.5 inline-block rounded-full bg-violet-100 px-2 py-0.5 text-[11px] text-violet-800" title={oc.fuente === "api" ? `Autorizada aquí por dirección; en el backoffice: ${oc.estatus_backoffice ?? "sin estatus"}` : "Autorizada aquí por dirección"}>
+              autorizada interna{oc.fuente === "api" && oc.estatus_backoffice === "Pendiente de Autorización" ? " · backoffice pendiente" : ""}
+            </span>
+          )}
           {oc.pagada_backoffice && (
             <span className="mt-0.5 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800" title={`Backoffice: ${oc.estatus_backoffice}`}>
               pagada en backoffice · {oc.estatus_backoffice?.toLowerCase()}
@@ -448,9 +457,9 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
         </td>
         <td className="whitespace-nowrap px-3 py-2 text-right">
           <span className="inline-flex gap-1">
-            {saldo > 0 && autorizada && (
-              <button type="button" onClick={onAbrir} className={`rounded px-2.5 py-1 text-xs font-medium ${abierta ? "bg-slate-900 text-white" : "bg-emerald-700 text-white"}`}>
-                {abierta ? "Cerrar" : "Programar pago"}
+            {saldo > 0 && oc.autorizacion !== "rechazada" && (
+              <button type="button" onClick={onAbrir} className={`rounded px-2.5 py-1 text-xs font-medium ${abierta ? "bg-slate-900 text-white" : "bg-emerald-700 text-white"}`} title={autorizada ? undefined : "Al programar el pago queda autorizada internamente"}>
+                {abierta ? "Cerrar" : autorizada ? "Programar pago" : "Autorizar y programar"}
               </button>
             )}
             {saldo > 0 && oc.autorizacion === "pendiente" && (

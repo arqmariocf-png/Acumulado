@@ -36,7 +36,7 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
         nota = (nec as { cotizacion_nota?: string | null } | null)?.cotizacion_nota ?? null;
       }
       // Forma de pago y datos bancarios del proveedor (Laura, 29-sep-2026).
-      const { data: pago } = await supabase.from("v_oc_pagos").select("condicion_pago, tipo_pago_backoffice, banco_proveedor, clabe, cuenta_proveedor, beneficiario_bancario, proveedor_clave, fuente, autorizacion").eq("id", ocId).maybeSingle();
+      const { data: pago } = await supabase.from("v_oc_pagos").select("condicion_pago, tipo_pago_backoffice, banco_proveedor, clabe, cuenta_proveedor, beneficiario_bancario, proveedor_clave, fuente, autorizacion, autorizacion_origen").eq("id", ocId).maybeSingle();
       // RFC del proveedor e importes (el total del backoffice ya trae IVA).
       const [{ data: bancarios }, { data: importes }] = await Promise.all([
         pago?.proveedor_clave ? supabase.from("proveedores_datos_bancarios").select("rfc").eq("clave", pago.proveedor_clave).maybeSingle() : Promise.resolve({ data: null }),
@@ -70,6 +70,7 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
           rfc_proveedor: (bancarios as { rfc?: string | null } | null)?.rfc ?? null,
           precios_con_iva: preciosConIva,
           autorizada_backoffice: preciosConIva && pago?.autorizacion === "autorizada",
+          autorizacion_interna: preciosConIva && pago?.autorizacion_origen === "interna",
           importes: preciosConIva && importes ? { subtotal: Number(importes.subtotal), iva: Number(importes.iva), total: Number(importes.total) } : null,
         },
         (lineas ?? []) as LineaOrdenCompra[],
