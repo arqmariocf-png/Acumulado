@@ -8,6 +8,7 @@ import { RemisionProduccionModal } from "./produccion/RemisionProduccionModal";
 import { MargenRemisiones } from "./produccion/MargenRemisiones";
 import { CotizadorPlanta } from "./produccion/CotizadorPlanta";
 import { CalendarioMaquinas } from "./produccion/CalendarioMaquinas";
+import { RemisionesPlanta } from "./produccion/RemisionesPlanta";
 import type {
   CosteoMensualPlanta,
   CosteoOrdenProduccion,
@@ -513,9 +514,21 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
     },
   });
 
+  // Entradas y salidas separadas, cada una con su existencia, su captura y
+  // la consulta de remisiones ya emitidas (Mario, 30-sep-2026).
+  const [vista, setVista] = useState<"entradas" | "salidas">("entradas");
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="inline-flex rounded border border-slate-200 bg-white p-0.5">
+        {(["entradas", "salidas"] as const).map((v) => (
+          <button key={v} onClick={() => setVista(v)} className={`rounded px-4 py-1.5 text-sm ${vista === v ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+            {v === "entradas" ? "Entradas (materia prima)" : "Salidas (producto terminado)"}
+          </button>
+        ))}
+      </div>
+
+      {vista === "entradas" && (
         <div>
           <h2 className="mb-2 text-sm font-semibold text-slate-700">Stock de materia prima</h2>
           <div className="overflow-x-auto rounded border border-slate-200 bg-white">
@@ -541,7 +554,9 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
             </table>
           </div>
         </div>
+      )}
 
+      {vista === "salidas" && (
         <div>
           <h2 className="mb-2 text-sm font-semibold text-slate-700">Stock de producto terminado</h2>
           <div className="overflow-x-auto rounded border border-slate-200 bg-white">
@@ -567,10 +582,20 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
             </table>
           </div>
         </div>
-      </div>
+      )}
 
-      <EntradaMateriaPrima empresaId={empresa.id} proyecto={planta.proyecto} materias={materias ?? []} />
-      <SalidaProductoTerminado empresaId={empresa.id} proyecto={planta.proyecto} productos={productos ?? []} />
+      {vista === "entradas" && (
+        <>
+          <EntradaMateriaPrima empresaId={empresa.id} proyecto={planta.proyecto} materias={materias ?? []} />
+          <RemisionesPlanta empresaId={empresa.id} tipo="entrada" />
+        </>
+      )}
+      {vista === "salidas" && (
+        <>
+          <SalidaProductoTerminado empresaId={empresa.id} proyecto={planta.proyecto} productos={productos ?? []} />
+          <RemisionesPlanta empresaId={empresa.id} tipo="salida" />
+        </>
+      )}
     </div>
   );
 }

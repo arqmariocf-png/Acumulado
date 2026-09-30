@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { cantidadTexto, fechaLargaCorta, urlRemisionProduccion } from "../../lib/remisionProduccion";
 import { cargarRemisionProduccion, imprimirRemisionProduccion, qrSvg } from "./remisionProduccionQr";
+import { FotosRemision } from "./FotosRemision";
 
 export function RemisionProduccionDetalle() {
   const { id = "" } = useParams();
@@ -101,9 +102,11 @@ export function RemisionProduccionDetalle() {
             Imprimir con QR
           </button>
         </div>
+        <FotosRemision remisionId={id} />
         {!entregada && (
           <form onSubmit={onConfirmar} className="mt-4 rounded border border-amber-200 bg-amber-50 p-3">
             <p className="mb-2 text-sm font-medium text-amber-900">Confirmar recepción</p>
+            <p className="mb-2 text-xs text-amber-800">Antes de confirmar, toma la foto de la entrega arriba.</p>
             <div className="flex flex-wrap gap-2">
               <input value={recibio} onChange={(e) => setRecibio(e.target.value)} placeholder="Nombre de quien recibe" required className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm" />
               <button type="submit" disabled={confirmando} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
