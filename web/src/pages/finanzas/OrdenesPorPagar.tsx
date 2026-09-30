@@ -74,7 +74,11 @@ const ESTADO_PAGO: Record<ReturnType<typeof estadoPagoOc>, [string, string]> = {
  * dirección asigna contado / crédito / anticipo y programa el pago con el
  * saldo calculado (total menos pagos hechos). */
 export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: { filtroEmpresa: string; hoy: string; nombreEmpresa: Map<string, string>; cuentas: Cuenta[] }) {
-  const [pestana, setPestana] = useState<"autorizar" | "hoy" | "saldo" | "credito">("hoy");
+  // Laura (30-sep-2026): su lista son las pendientes de autorizar; las
+  // "Pendiente de Pago" del backoffice solo como indicador.
+  const [pestana, setPestana] = useState<"autorizar" | "hoy" | "saldo" | "credito">("autorizar");
+  const [verPendientesPago, setVerPendientesPago] = useState(false);
+  const [verRechazar, setVerRechazar] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [soloConLinea, setSoloConLinea] = useState(false);
   // El backoffice ya registra pagadas las que están en Pendiente Factura /
@@ -90,20 +94,48 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["oc-pagos", pestana, filtroEmpresa, verPagadasBackoffice],
-    enabled: pestana !== "autorizar",
+    queryKey: ["oc-pagos", pestana, filtroEmpresa, verPagadasBackoffice, verPendientesPago],
     queryFn: async () => {
       let q = supabase.from("v_oc_pagos").select("*");
       if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
-      if (pestana === "hoy") q = q.eq("fecha_creacion", hoy).order("id_orden");
+      // Pendientes de autorizar (backoffice, RQ, Excel); las del backoffice
+      // autorizadas aquí siguen en la lista hasta que se les programa pago.
+      if (pestana === "autorizar") q = q.neq("autorizacion", "rechazada").gt("saldo", 0.01).eq("programado", 0).or('autorizacion.eq.pendiente,estatus_backoffice.eq."Pendiente de Autorización"').limit(400);
+      else if (pestana === "hoy") q = q.eq("fecha_creacion", hoy).order("id_orden");
       else if (pestana === "credito") q = q.eq("es_credito", true).gt("saldo", 0.01).neq("autorizacion", "rechazada").eq("pagada_backoffice", false).order("vence", { ascending: true, nullsFirst: false }).limit(400);
       else {
         q = q.gt("saldo", 0.01).neq("autorizacion", "rechazada").order("fecha_creacion", { ascending: false }).limit(400);
         if (!verPagadasBackoffice) q = q.eq("pagada_backoffice", false);
       }
+      // "Pendiente de Pago" del backoffice sin nada programado aquí: solo
+      // indicador, salvo que se pidan en la lista.
+      if ((pestana === "hoy" || pestana === "saldo") && !verPendientesPago) q = q.or('fuente.neq.api,estatus_backoffice.is.null,estatus_backoffice.neq."Pendiente de Pago",programado.gt.0,pagado.gt.0');
       const { data: filas, error: err } = await q;
       if (err) throw err;
       return (filas ?? []) as OcPago[];
+    },
+  });
+
+  // Indicadores: cuántas esperan autorización y cuántas están "Pendiente de
+  // Pago" en el backoffice (estas últimas no se listan por defecto).
+  const { data: indicadores } = useQuery({
+    queryKey: ["oc-indicadores", filtroEmpresa],
+    queryFn: async () => {
+      let q = supabase.from("v_oc_pagos").select("fuente, estatus_backoffice, autorizacion, saldo").gt("saldo", 0.01).neq("autorizacion", "rechazada").or('autorizacion.eq.pendiente,estatus_backoffice.eq."Pendiente de Pago"');
+      if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
+      const { data: filas, error: err } = await q.limit(3000);
+      if (err) throw err;
+      const r = { autorizar: 0, autorizarMonto: 0, pago: 0, pagoMonto: 0 };
+      for (const f of (filas ?? []) as { fuente: string; estatus_backoffice: string | null; autorizacion: string; saldo: number }[]) {
+        if (f.autorizacion === "pendiente") {
+          r.autorizar += 1;
+          r.autorizarMonto += Number(f.saldo);
+        } else if (f.fuente === "api" && f.estatus_backoffice === "Pendiente de Pago") {
+          r.pago += 1;
+          r.pagoMonto += Number(f.saldo);
+        }
+      }
+      return r;
     },
   });
 
@@ -136,7 +168,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
       if (!r) return;
       setAviso(`Programadas a pago ${r.n} orden(es).${r.errores.length ? ` No se pudieron: ${r.errores.join(" · ")}` : ""}`);
       setSeleccion(new Set());
-      for (const k of [["oc-pagos"], ["pagos-programados"], ["cxp-proveedores"], ["tesoreria"]]) queryClient.invalidateQueries({ queryKey: k });
+      for (const k of [["oc-pagos"], ["oc-indicadores"], ["pagos-programados"], ["cxp-proveedores"], ["tesoreria"]]) queryClient.invalidateQueries({ queryKey: k });
     },
     onError: (e: Error) => setAviso(e.message),
   });
@@ -160,7 +192,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
           ))}
         </div>
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Proveedor, folio o proyecto…" className="w-52 rounded border border-slate-300 px-2 py-1 text-xs" />
-        {pestana !== "autorizar" && (
+        {(
           <label className="flex items-center gap-1 text-xs text-slate-600">
             Ordenar por
             <select value={orden} onChange={(e) => setOrden(e.target.value as OrdenOc)} className="rounded border border-slate-300 px-1.5 py-1 text-xs">
@@ -175,6 +207,11 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
         <label className="flex items-center gap-1 text-xs text-slate-600">
           <input type="checkbox" checked={soloConLinea} onChange={(e) => setSoloConLinea(e.target.checked)} /> solo proveedores con línea de crédito
         </label>
+        {(pestana === "hoy" || pestana === "saldo") && (
+          <label className="flex items-center gap-1 text-xs text-slate-600" title="Las que el backoffice tiene en Pendiente de Pago y aquí no tienen pago programado">
+            <input type="checkbox" checked={verPendientesPago} onChange={(e) => setVerPendientesPago(e.target.checked)} /> incluir pendientes de pago del backoffice
+          </label>
+        )}
         {pestana === "saldo" && (
           <label className="flex items-center gap-1 text-xs text-slate-600" title="Pendiente Factura, Pendiente Comprobante o Completada en el backoffice">
             <input type="checkbox" checked={verPagadasBackoffice} onChange={(e) => setVerPagadasBackoffice(e.target.checked)} /> incluir pagadas en el backoffice
@@ -195,17 +232,34 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
           </span>
         )}
       </div>
+      {indicadores && (
+        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-3 py-2 text-xs">
+          <button type="button" onClick={() => setPestana("autorizar")} className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-900">
+            Por autorizar: <b>{indicadores.autorizar}</b> · <span className="tabular-nums">{moneda(indicadores.autorizarMonto)}</span>
+          </button>
+          <span className="rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700" title="Autorizadas en el backoffice y sin pagar allá. Solo indicador: no se listan salvo que marques 'incluir pendientes de pago del backoffice'.">
+            Pendientes de pago (backoffice): <b>{indicadores.pago}</b> · <span className="tabular-nums">{moneda(indicadores.pagoMonto)}</span>
+          </span>
+        </div>
+      )}
       {pestana === "autorizar" && (
+        <div className="flex flex-wrap items-center gap-2 px-3 pt-2 text-xs text-slate-500">
+          <span>Esperan a dirección: las del backoffice en "Pendiente de Autorización", las RQ (almacén) y las de Excel. "Autorizar" y luego "Programar pago" en el mismo renglón.</span>
+          <button type="button" onClick={() => setVerRechazar((v) => !v)} className="underline">
+            {verRechazar ? "ocultar rechazar / archivadas" : "rechazar o ver archivadas"}
+          </button>
+        </div>
+      )}
+      {pestana === "autorizar" && verRechazar && (
         <div className="p-3">
-          <p className="mb-2 text-xs text-slate-500">Esperan a dirección: las del backoffice en "Pendiente de Autorización", las RQ (almacén) y las de Excel. Mientras no se autoricen no se programa pago.</p>
           <OcPorAutorizar />
         </div>
       )}
-      {pestana !== "autorizar" && isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}
+      {isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}
       {error && <p className="px-3 py-3 text-sm text-red-600">{(error as Error).message}</p>}
       {aviso && <p className={`px-3 py-2 text-xs ${aviso.startsWith("Pago") || aviso.startsWith("Condición") || aviso.startsWith("Orden") || aviso.startsWith("Programadas") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
-      {pestana !== "autorizar" && !isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : pestana === "credito" ? "No hay órdenes a crédito con saldo." : "No hay órdenes con saldo pendiente."}</p>}
-      {pestana !== "autorizar" && visibles.length > 0 && (
+      {!isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "autorizar" ? "No hay órdenes por autorizar." : pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : pestana === "credito" ? "No hay órdenes a crédito con saldo." : "No hay órdenes con saldo pendiente."}</p>}
+      {visibles.length > 0 && (
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
@@ -271,7 +325,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
     },
     onSuccess: () => {
       onAviso(`Orden ${oc.id_orden} autorizada; ya se le puede programar pago.`);
-      for (const k of [["oc-pagos"], ["oc-por-autorizar"], ["pagos-programados"], ["cxp-proveedores"]]) queryClient.invalidateQueries({ queryKey: k });
+      for (const k of [["oc-pagos"], ["oc-indicadores"], ["oc-por-autorizar"], ["pagos-programados"], ["cxp-proveedores"]]) queryClient.invalidateQueries({ queryKey: k });
     },
     onError: (e: Error) => onAviso(e.message),
   });
@@ -284,6 +338,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
 
   const invalidar = () => {
     queryClient.invalidateQueries({ queryKey: ["oc-pagos"] });
+    queryClient.invalidateQueries({ queryKey: ["oc-indicadores"] });
     queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
     queryClient.invalidateQueries({ queryKey: ["cxp-proveedores"] });
   };
