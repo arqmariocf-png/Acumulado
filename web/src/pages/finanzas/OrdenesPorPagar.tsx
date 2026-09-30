@@ -264,46 +264,48 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
       {aviso && <p className={`px-3 py-2 text-xs ${aviso.startsWith("Pago") || aviso.startsWith("Condición") || aviso.startsWith("Orden") || aviso.startsWith("Programadas") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
       {!isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "autorizar" ? "No hay órdenes por autorizar." : pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : pestana === "credito" ? "No hay órdenes a crédito con saldo." : "No hay órdenes con saldo pendiente."}</p>}
       {visibles.length > 0 && (
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-2 py-2">
-                <input type="checkbox" aria-label="Seleccionar todas" checked={visibles.length > 0 && visibles.every((o) => seleccion.has(o.id))} onChange={(e) => setSeleccion(e.target.checked ? new Set(visibles.map((o) => o.id)) : new Set())} />
-              </th>
-              <th className="px-3 py-2">Orden</th>
-              <th className="px-3 py-2">Proveedor / beneficiario</th>
-              <th className="px-3 py-2">Línea de crédito</th>
-              <th className="px-3 py-2 text-right">Total</th>
-              <th className="px-3 py-2 text-right">Pagado</th>
-              <th className="px-3 py-2 text-right">Saldo</th>
-              <th className="px-3 py-2">Condición / vencimiento</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((o) => (
-              <FilaOc
-                key={o.id}
-                oc={o}
-                hoy={hoy}
-                empresa={nombreEmpresa.get(o.empresa_id) ?? ""}
-                cuentas={cuentas.filter((c) => c.empresa_id === o.empresa_id)}
-                abierta={abierta === o.id}
-                onAbrir={() => setAbierta(abierta === o.id ? null : o.id)}
-                onAviso={setAviso}
-                seleccionada={seleccion.has(o.id)}
-                onSeleccionar={(v) =>
-                  setSeleccion((prev) => {
-                    const n = new Set(prev);
-                    if (v) n.add(o.id);
-                    else n.delete(o.id);
-                    return n;
-                  })
-                }
-              />
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-2 py-2">
+                  <input type="checkbox" aria-label="Seleccionar todas" checked={visibles.length > 0 && visibles.every((o) => seleccion.has(o.id))} onChange={(e) => setSeleccion(e.target.checked ? new Set(visibles.map((o) => o.id)) : new Set())} />
+                </th>
+                <th className="px-3 py-2">Orden</th>
+                <th className="px-3 py-2">Proveedor / beneficiario</th>
+                <th className="px-3 py-2">Línea de crédito</th>
+                <th className="px-3 py-2 text-right">Total</th>
+                <th className="px-3 py-2 text-right">Pagado</th>
+                <th className="px-3 py-2 text-right">Saldo</th>
+                <th className="px-3 py-2">Condición / vencimiento</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {visibles.map((o) => (
+                <FilaOc
+                  key={o.id}
+                  oc={o}
+                  hoy={hoy}
+                  empresa={nombreEmpresa.get(o.empresa_id) ?? ""}
+                  cuentas={cuentas.filter((c) => c.empresa_id === o.empresa_id)}
+                  abierta={abierta === o.id}
+                  onAbrir={() => setAbierta(abierta === o.id ? null : o.id)}
+                  onAviso={setAviso}
+                  seleccionada={seleccion.has(o.id)}
+                  onSeleccionar={(v) =>
+                    setSeleccion((prev) => {
+                      const n = new Set(prev);
+                      if (v) n.add(o.id);
+                      else n.delete(o.id);
+                      return n;
+                    })
+                  }
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -455,21 +457,23 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
             </div>
           )}
         </td>
-        <td className="whitespace-nowrap px-3 py-2 text-right">
-          <span className="inline-flex gap-1">
+        {/* Botones uno debajo de otro para que no se salgan de la pantalla
+            en laptops (Mario, 30-sep-2026). */}
+        <td className="px-3 py-2 text-right align-top">
+          <div className="flex flex-col items-end gap-1">
             {saldo > 0 && oc.autorizacion !== "rechazada" && (
-              <button type="button" onClick={onAbrir} className={`rounded px-2.5 py-1 text-xs font-medium ${abierta ? "bg-slate-900 text-white" : "bg-emerald-700 text-white"}`} title={autorizada ? undefined : "Al programar el pago queda autorizada internamente"}>
+              <button type="button" onClick={onAbrir} className={`whitespace-nowrap rounded px-2.5 py-1 text-xs font-medium ${abierta ? "bg-slate-900 text-white" : "bg-emerald-700 text-white"}`} title={autorizada ? undefined : "Al programar el pago queda autorizada internamente"}>
                 {abierta ? "Cerrar" : autorizada ? "Programar pago" : "Autorizar y programar"}
               </button>
             )}
             {saldo > 0 && oc.autorizacion === "pendiente" && (
-              <button type="button" onClick={() => autorizar.mutate()} disabled={autorizar.isPending} className="rounded border border-emerald-700 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50 disabled:opacity-50" title="Autoriza la orden; después se le programa pago">
-                {autorizar.isPending ? "Autorizando…" : "Autorizar"}
+              <button type="button" onClick={() => autorizar.mutate()} disabled={autorizar.isPending} className="whitespace-nowrap text-xs text-emerald-800 underline disabled:opacity-50" title="Autoriza la orden sin programar el pago todavía">
+                {autorizar.isPending ? "Autorizando…" : "solo autorizar"}
               </button>
             )}
-            {saldo > 0 && oc.autorizacion === "rechazada" && <span className="px-1 text-xs text-slate-400">no se paga</span>}
+            {saldo > 0 && oc.autorizacion === "rechazada" && <span className="text-xs text-slate-400">no se paga</span>}
             <BotonVerOc ocId={oc.id} />
-          </span>
+          </div>
         </td>
       </tr>
       {abierta && (
