@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { esRolBasico } from "./modulos";
 import type { Profile } from "../types/database";
+import { avanceComprobantes } from "./comprobantesPago";
 
 /** Catálogo de indicadores / KPIs. Cada uno es una consulta ligera sobre
  * vistas que RLS ya acota a quien consulta. Los KPIs del organigrama
@@ -209,6 +210,20 @@ export const INDICADORES: Indicador[] = [
       if (error) throw error;
       const n = (data ?? []).reduce((s: number, f: Record<string, number>) => s + Number(f.ambiguos ?? 0) + Number(f.duplicados ?? 0) + Number(f.faltantes ?? 0), 0);
       return { valor: n, alerta: n > 0, detalle: "ambiguos, duplicados o sin factura" };
+    },
+  },
+  {
+    clave: "fin_pagos_sin_comprobante",
+    etiqueta: "Pagos sin comprobante (%)",
+    ruta: "/finanzas/tesoreria",
+    area: "finanzas",
+    descripcion: "Porcentaje de los pagos ya marcados como pagados que no tienen comprobante; sin él no se completa el acumulado en automático.",
+    visible: finanzas,
+    consulta: async () => {
+      const pagados = await contar(supabase.from("pagos_programados").select("*", { count: "exact", head: true }).eq("estatus", "pagado"));
+      const sin = await contar(supabase.from("pagos_programados").select("*", { count: "exact", head: true }).eq("estatus", "pagado").is("comprobante_path", null));
+      const a = avanceComprobantes(pagados, sin);
+      return { valor: a.porcentajeSin, alerta: a.sinComprobante > 0, detalle: pagados ? `${a.sinComprobante} de ${a.pagados} pagos sin comprobante` : "sin pagos registrados" };
     },
   },
   {

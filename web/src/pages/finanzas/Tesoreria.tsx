@@ -8,6 +8,7 @@ import { useSaldosDia } from "./SaldosEmpresas";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 import { desgloseIvaPago } from "../../lib/ivaPago";
 import { ImportarBancariosProveedores } from "../../components/ImportarBancariosProveedores";
+import { PagosSinComprobante } from "../../components/PagosSinComprobante";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
 
@@ -150,6 +151,7 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
 
   return (
     <div>
+      <PagosSinComprobante compacto={compacto} empresaId={filtroEmpresa} />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className={`${compacto ? "text-base" : "text-xl"} font-semibold text-slate-900`}>Tesorería · pagos de hoy</h1>
