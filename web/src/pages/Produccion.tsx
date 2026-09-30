@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { DespieceBalken } from "./produccion/DespieceBalken";
 import { RemisionProduccionModal } from "./produccion/RemisionProduccionModal";
 import { MargenRemisiones } from "./produccion/MargenRemisiones";
+import { CotizadorPlanta } from "./produccion/CotizadorPlanta";
 import { CalendarioMaquinas } from "./produccion/CalendarioMaquinas";
 import type {
   CosteoMensualPlanta,
@@ -80,7 +81,7 @@ interface Empresa {
   nombre: string;
 }
 
-type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo" | "despiece" | "calendario";
+type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo" | "despiece" | "calendario" | "cotizador";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "catalogo", etiqueta: "Catálogo" },
@@ -93,6 +94,8 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
 // Solo Balken: despiece de losa de vigueta y bovedilla para cotizar rápido
 // (pedido de Mario, 22-sep-2026).
 const PESTANA_DESPIECE: { valor: Pestana; etiqueta: string } = { valor: "despiece", etiqueta: "Despiece y cotización" };
+// Clavicón: cotizador de producto terminado, última pestaña (Mario, 30-sep-2026).
+const PESTANA_COTIZADOR: { valor: Pestana; etiqueta: string } = { valor: "cotizador", etiqueta: "Cotizador" };
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -148,7 +151,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       <p className="mb-4 text-sm text-slate-500">{empresa.nombre}</p>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {[...PESTANAS, ...(planta.codigo === "VBB" ? [PESTANA_DESPIECE] : [])].map((p) => (
+        {[...PESTANAS, ...(planta.codigo === "VBB" ? [PESTANA_DESPIECE] : []), ...(planta.codigo === "MCC" ? [PESTANA_COTIZADOR] : [])].map((p) => (
           <button
             key={p.valor}
             onClick={() => setPestana(p.valor)}
@@ -164,6 +167,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       {pestana === "ordenes" && <PestanaOrdenes empresa={empresa} />}
       {pestana === "costeo" && <PestanaCosteo empresa={empresa} />}
       {pestana === "despiece" && planta.codigo === "VBB" && <DespieceBalken empresaNombre={empresa.nombre} />}
+      {pestana === "cotizador" && planta.codigo === "MCC" && <CotizadorPlanta empresa={empresa} />}
       {pestana === "calendario" && <CalendarioMaquinas empresaId={empresa.id} />}
     </div>
   );
