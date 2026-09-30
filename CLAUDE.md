@@ -596,6 +596,41 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Acceso rápido en el inicio y entrada en el menú; permiso "Comedor
   (cocina)" asignable desde RH → Accesos. Prueba `supabase/tests/comedor.sql`.
 
+## Director general (30-sep-2026)
+- Mario: "genera un rol de director general; debo poder editar absolutamente
+  todo". No es un valor nuevo de `app_rol`: es el **admin de la organización
+  maestra** (`auth_admin_global`). `20260930190000_director_general_edita_todo.sql`
+  crea `fn_director_general_policies()` (revocada de authenticated) que pone
+  la policy permisiva `director_general` (for all, `auth_admin_global_definer()`)
+  en TODAS las tablas de public con RLS, menos `config_sistema` (secretos),
+  `audit_log`, `eventos_pasarela` y `push_subscripciones`. **Tabla nueva →
+  volver a correr `select public.fn_director_general_policies();`** en su
+  migración. Los triggers de integridad siguen aplicando. En la interfaz el
+  admin maestro se muestra como "director general".
+- Remisión de producción (salida): `remisiones_produccion.condicion_pago`
+  (contado / credito, obligatoria desde el formulario) y `dias_credito`;
+  salen en la remisión impresa (`20260930200000`).
+- Lote 001 de Clavicón (30-sep): se registró la entrada de 5,695 kg de
+  alambrón 5.5 ligada a la OC 40995 (Aceros y Envasados, $91,507.26 sin IVA =
+  $16.068/kg) y se corrigió el consumo del lote de $15.60 al costo real; el
+  producto terminado quedó valuado en $1,683.07 por pieza (antes $1,647.05).
+  El costo real de materia prima es **sin IVA** (el IVA se acredita).
+- Clavicón (30-sep): precio de venta por renglón de remisión y costo
+  congelado (`20260930210000`, `v_margen_remisiones_produccion`,
+  `produccion/MargenRemisiones.tsx`; se captura con IVA incluido y se guarda
+  sin IVA); RM-000001 a $1,740 c/IVA = $1,500 vs costo $1,683.07 (−12.2 %).
+  Cotizador (`20260930220000`, `lib/cotizacionPlanta.ts`, última pestaña de
+  MCC). Inventario de planta en **Entradas / Salidas** con lista de
+  remisiones (`produccion/RemisionesPlanta.tsx`) y **fotos de la entrega**
+  (`remisiones_produccion_fotos`, edge `remisiones-produccion-foto`,
+  `produccion/FotosRemision.tsx`; `20260930230000`). El admin **reabre** un
+  lote terminado; al cerrarlo se actualiza su entrada de producto
+  terminado en vez de duplicarla. Ojo: `v_remisiones_produccion` no es
+  security_invoker (corre como dueño).
+- Proyecto: el admin asigna responsable y supervisor/comprador desde el
+  encabezado de la obra (`EncargadosObra` en `ProyectoDetalle.tsx`; solo el
+  admin puede listar profiles).
+
 ## Personas y roles (referencia rápida)
 Mario (admin, todas las empresas) · Laura Ortaza (direccion/finanzas, todas) ·
 Jorge Esperón (empresa, ERG: precios unitarios) · Eréndira / Fernando Gómez (rh) ·
