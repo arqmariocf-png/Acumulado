@@ -9,6 +9,8 @@ export const ETIQUETA_CONDICION: Record<CondicionPago, string> = { contado: "Con
 export interface OcConSaldo {
   total: number | null;
   pagado: number;
+  /** Pagos ya programados y aún no pagados. */
+  programado?: number | null;
   fecha_creacion: string | null;
   dias_credito: number | null;
 }
@@ -35,8 +37,14 @@ export function fechaPagoSugerida(condicion: CondicionPago, oc: OcConSaldo, hoy:
 }
 
 /** Monto propuesto: el saldo completo, salvo anticipo (la mitad, redondeada). */
+/** Lo que falta por programar: saldo menos lo ya programado (Mario,
+ * 30-sep-2026: "le picamos 3 veces y se cargó tres veces"). */
+export function porProgramarOc(oc: Pick<OcConSaldo, "total" | "pagado" | "programado">): number {
+  return Math.max(0, Math.round((saldoOc(oc) - Number(oc.programado ?? 0)) * 100) / 100);
+}
+
 export function montoPagoSugerido(condicion: CondicionPago, oc: OcConSaldo): number {
-  const saldo = saldoOc(oc);
+  const saldo = porProgramarOc(oc);
   if (condicion === "anticipo") return Math.round((saldo / 2) * 100) / 100;
   return saldo;
 }

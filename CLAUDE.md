@@ -646,6 +646,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   "AUTORIZADA INTERNA" en la OC impresa); botón "Autorizar y programar" y
   el lote también las toma (`20260930250000`). Solo las rechazadas y las
   canceladas del backoffice no se programan.
+- **No programar dos veces (30-sep-2026, Mario: "le picamos 3 veces y se
+  cargó tres veces")**: la 41074 quedó con 3 pagos de $2,383.40 porque tras
+  programar la fila seguía mostrando saldo completo y "Programar pago" (el
+  saldo es total − pagado; lo programado no lo baja). Ahora
+  `fn_oc_programar_pago` bloquea la OC (`for update`) y descuenta lo ya
+  programado (pendiente); la lista usa `porProgramarOc` (`lib/pagosOc.ts`)
+  y muestra "ya programada · $X" en vez del botón (`20260930260000`). Se
+  borraron los 2 pagos repetidos (pendientes, sin comprobante).
 - **Hoja de pagos del día (30-sep-2026, Excel "PAGOS 30.09.26" de Laura)**:
   `lib/hojaPagos.ts` (con pruebas, reproduce su AEP: 210,275.45 − 137,383.72
   = 72,891.73) y `finanzas/HojaPagosDia.tsx` arriba de las OC en
