@@ -36,6 +36,7 @@ export function MargenRemisiones({ empresaId }: { empresaId: string }) {
   const { perfil } = useAuth();
   const ve = !!perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol);
   const [abierta, setAbierta] = useState<string | null>(null);
+  const [conIva, setConIva] = useState(true);
   const { data = [], isLoading } = useQuery({
     queryKey: ["margen-remisiones", empresaId],
     enabled: ve,
@@ -58,6 +59,10 @@ export function MargenRemisiones({ empresaId }: { empresaId: string }) {
         Precio de venta sin IVA contra el costo real del producto al emitir. Con precio: venta {$(venta)} · margen {$(margen)}
         {venta ? ` (${((margen / venta) * 100).toFixed(1)} %)` : ""}. {data.filter((r) => r.sin_precio > 0).length} remisiones con partidas sin precio.
       </p>
+      <label className="mb-2 flex items-center gap-1 text-xs text-slate-600">
+        <input type="checkbox" checked={conIva} onChange={(e) => setConIva(e.target.checked)} />
+        capturo el precio con IVA incluido (se guarda sin IVA)
+      </label>
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -73,7 +78,7 @@ export function MargenRemisiones({ empresaId }: { empresaId: string }) {
           </thead>
           <tbody>
             {data.map((r) => (
-              <FilaRemision key={r.remision_id} r={r} abierta={abierta === r.remision_id} onAbrir={() => setAbierta(abierta === r.remision_id ? null : r.remision_id)} empresaId={empresaId} />
+              <FilaRemision key={r.remision_id} r={r} abierta={abierta === r.remision_id} onAbrir={() => setAbierta(abierta === r.remision_id ? null : r.remision_id)} empresaId={empresaId} conIva={conIva} />
             ))}
             {!isLoading && data.length === 0 && (
               <tr>
@@ -89,7 +94,8 @@ export function MargenRemisiones({ empresaId }: { empresaId: string }) {
   );
 }
 
-function FilaRemision({ r, abierta, onAbrir, empresaId }: { r: MargenRemision; abierta: boolean; onAbrir: () => void; empresaId: string }) {
+function FilaRemision({ r, abierta, onAbrir, empresaId, conIva }: { r: MargenRemision; abierta: boolean; onAbrir: () => void; empresaId: string; conIva: boolean }) {
+  const factor = conIva ? 1.16 : 1;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const { data: partidas = [] } = useQuery({
@@ -143,7 +149,7 @@ function FilaRemision({ r, abierta, onAbrir, empresaId }: { r: MargenRemision; a
                   <th className="py-1">Partida</th>
                   <th className="py-1 text-right">Cantidad</th>
                   <th className="py-1 text-right">Costo real</th>
-                  <th className="py-1 text-right">Precio s/IVA</th>
+                  <th className="py-1 text-right">{conIva ? "Precio c/IVA" : "Precio s/IVA"}</th>
                   <th className="py-1 text-right">Margen</th>
                 </tr>
               </thead>
@@ -162,10 +168,12 @@ function FilaRemision({ r, abierta, onAbrir, empresaId }: { r: MargenRemision; a
                           type="number"
                           step="0.01"
                           min="0"
-                          defaultValue={p.precio_unitario ?? ""}
+                          key={`${p.id}-${conIva}`}
+                          defaultValue={p.precio_unitario == null ? "" : Math.round(Number(p.precio_unitario) * factor * 100) / 100}
                           onBlur={(e) => {
-                            const v = e.target.value === "" ? null : Number(e.target.value);
-                            if (v !== (p.precio_unitario == null ? null : Number(p.precio_unitario))) guardar.mutate({ id: p.id, precio: v });
+                            const v = e.target.value === "" ? null : Math.round((Number(e.target.value) / factor) * 10000) / 10000;
+                            const actual = p.precio_unitario == null ? null : Number(p.precio_unitario);
+                            if (v === null ? actual !== null : actual === null || Math.abs(v - actual) > 0.00005) guardar.mutate({ id: p.id, precio: v });
                           }}
                           className="w-28 rounded border border-slate-300 px-2 py-0.5 text-right"
                           aria-label="Precio de venta"

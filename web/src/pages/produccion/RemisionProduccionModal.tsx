@@ -59,6 +59,8 @@ export function RemisionProduccionModal({
   // Contado o crédito: se clasifica al emitir la entrega (Mario, 30-sep-2026).
   const [condicion, setCondicion] = useState<"" | "contado" | "credito">("");
   const [diasCredito, setDiasCredito] = useState("");
+  // Los precios de Clavicón se cierran con IVA incluido; se guarda sin IVA.
+  const [preciosConIva, setPreciosConIva] = useState(true);
   const [lineas, setLineas] = useState<LineaForm[]>([{ itemId: "", descripcion: "", cantidad: 1, unidad: "pza" }]);
   const [error, setError] = useState<string | null>(null);
   const [creada, setCreada] = useState<{ id: string; folio: string } | null>(null);
@@ -149,7 +151,7 @@ export function RemisionProduccionModal({
           remision_id: rem.id,
           descripcion: l.descripcion.trim(),
           cantidad: l.cantidad,
-          precio_unitario: tipo === "salida" && l.precio && Number(l.precio) >= 0 ? Number(l.precio) : null,
+          precio_unitario: tipo === "salida" && l.precio && Number(l.precio) >= 0 ? Math.round((Number(l.precio) / (preciosConIva ? 1.16 : 1)) * 10000) / 10000 : null,
           unidad: l.unidad || "pza",
           producto_id: tipo === "salida" && l.itemId ? l.itemId : null,
           materia_prima_id: tipo === "entrada" && l.itemId ? l.itemId : null,
@@ -304,7 +306,15 @@ export function RemisionProduccionModal({
 
             <div>
               <div className="mb-1 flex items-center justify-between">
-                <label className={etiqueta}>Partidas</label>
+                <label className={etiqueta}>
+                  Partidas
+                  {tipo === "salida" && (
+                    <span className="ml-3 font-normal normal-case">
+                      <input type="checkbox" checked={preciosConIva} onChange={(e) => setPreciosConIva(e.target.checked)} className="mr-1 align-middle" />
+                      precios con IVA incluido
+                    </span>
+                  )}
+                </label>
                 <button type="button" onClick={() => setLineas((p) => [...p, { itemId: "", descripcion: "", cantidad: 1, unidad: "pza" }])} className="text-xs text-slate-700 underline">
                   + Agregar partida
                 </button>
@@ -324,7 +334,7 @@ export function RemisionProduccionModal({
                     <input type="number" step="0.0001" min="0.0001" value={l.cantidad || ""} onChange={(e) => setLinea(i, { cantidad: Number(e.target.value) })} className={`${campo} col-span-2`} />
                     <input value={l.unidad} onChange={(e) => setLinea(i, { unidad: e.target.value })} className={`${campo} col-span-1`} />
                     {tipo === "salida" && (
-                      <input type="number" step="0.01" min="0" value={l.precio ?? ""} onChange={(e) => setLinea(i, { precio: e.target.value })} placeholder="Precio s/IVA" title="Precio de venta unitario sin IVA (opcional; finanzas puede capturarlo después)" className={`${campo} col-span-2`} />
+                      <input type="number" step="0.01" min="0" value={l.precio ?? ""} onChange={(e) => setLinea(i, { precio: e.target.value })} placeholder={preciosConIva ? "Precio c/IVA" : "Precio s/IVA"} title="Precio de venta unitario (opcional; finanzas puede capturarlo después)" className={`${campo} col-span-2`} />
                     )}
                     <button type="button" onClick={() => setLineas((p) => p.filter((_, j) => j !== i))} className="col-span-1 text-xs text-red-600">
                       Quitar
