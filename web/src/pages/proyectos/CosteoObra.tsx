@@ -55,16 +55,21 @@ function useCosteo(proyecto: Proy) {
         supabase.from("proyecto_planos").select("id, nombre_original").eq("proyecto_id", proyecto.id).order("created_at"),
         supabase
           .from("v_oc_pagos")
-          .select("id, id_orden, fecha_creacion, proveedor, subtotal, total, estatus_backoffice, pagado, pagada_backoffice, empresa_id, autorizacion")
+          .select("id, id_orden, fecha_creacion, proveedor, total, estatus_backoffice, pagado, pagada_backoffice, empresa_id, autorizacion")
           .ilike("proyecto", proyecto.nombre)
           .order("fecha_creacion"),
       ]);
       for (const r of [c, pres, dir, imss, tab, planos, ocs]) if (r.error) throw r.error;
       const ocIds = (ocs.data ?? []).map((o) => o.id);
-      const [lineas, empresas] = await Promise.all([
+      // El subtotal sale de v_oc_importes (SUBTOTAL del backoffice, o el
+      // total menos el IVA de las partidas): v_oc_pagos no lo trae.
+      const [lineas, empresas, importes] = await Promise.all([
         ocIds.length ? supabase.from("ordenes_compra_lineas").select("orden_compra_id, item").in("orden_compra_id", ocIds) : Promise.resolve({ data: [], error: null }),
         supabase.from("empresas").select("id, codigo"),
+        ocIds.length ? supabase.from("v_oc_importes").select("orden_compra_id, subtotal").in("orden_compra_id", ocIds) : Promise.resolve({ data: [], error: null }),
       ]);
+      if (importes.error) throw importes.error;
+      const subtotalOc = new Map(((importes.data ?? []) as { orden_compra_id: string; subtotal: number }[]).map((i) => [i.orden_compra_id, Number(i.subtotal ?? 0)]));
       const conceptos = new Map<string, string[]>();
       for (const l of (lineas.data ?? []) as { orden_compra_id: string; item: string }[]) conceptos.set(l.orden_compra_id, [...(conceptos.get(l.orden_compra_id) ?? []), l.item]);
       const codigo = new Map((empresas.data ?? []).map((e) => [e.id, e.codigo as string]));
@@ -81,7 +86,7 @@ function useCosteo(proyecto: Proy) {
       }));
       const real: RealObra = {
         n_oc: vigentes.length,
-        subtotal: vigentes.reduce((s, o) => s + Number(o.subtotal ?? 0), 0),
+        subtotal: vigentes.reduce((s, o) => s + (subtotalOc.get(o.id) ?? 0), 0),
         total: vigentes.reduce((s, o) => s + Number(o.total ?? 0), 0),
         pagado: listaOc.reduce((s, o) => s + o.pagado, 0),
       };

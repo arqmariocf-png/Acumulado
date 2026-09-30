@@ -164,6 +164,7 @@ export function RemisionProduccionModal({
     onSuccess: (rem) => {
       setCreada(rem);
       queryClient.invalidateQueries({ queryKey: ["remisiones-produccion", empresaId] });
+      queryClient.invalidateQueries({ queryKey: ["remisiones-planta", empresaId] });
       imprimirRemisionProduccion(rem.id).catch(() => undefined);
     },
     onError: (err) => setError((err as Error).message),
