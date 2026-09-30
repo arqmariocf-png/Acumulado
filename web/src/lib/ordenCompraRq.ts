@@ -22,6 +22,14 @@ export interface OrdenCompraDoc {
   clabe?: string | null;
   cuenta?: string | null;
   beneficiario?: string | null;
+  /** RFC del proveedor (proveedores_datos_bancarios; Laura, 30-sep-2026). */
+  rfc_proveedor?: string | null;
+  /** OC del backoffice: el costo de cada partida YA trae IVA y los importes
+   * salen de v_oc_importes; no se suma 16 % encima. */
+  precios_con_iva?: boolean;
+  importes?: { subtotal: number; iva: number; total: number } | null;
+  /** Autorizada en el backoffice (sin fecha aquí). */
+  autorizada_backoffice?: boolean;
 }
 
 export interface LineaOrdenCompra {
@@ -61,8 +69,22 @@ export function totalesOrdenCompra(lineas: LineaOrdenCompra[]): { subtotal: numb
   return { subtotal: Math.round(subtotal * 100) / 100, iva: Math.round(iva * 100) / 100, total: Math.round((subtotal + iva) * 100) / 100 };
 }
 
+/** Partidas cuyo costo ya incluye IVA (backoffice): el total es la suma de
+ * importes y el IVA se desglosa hacia adentro (× 0.16 / 1.16). */
+export function totalesConIvaIncluido(lineas: LineaOrdenCompra[]): { subtotal: number; iva: number; total: number } {
+  let total = 0;
+  let iva = 0;
+  for (const l of lineas) {
+    const importe = Number(l.cantidad ?? 0) * Number(l.costo ?? 0);
+    total += importe;
+    if (l.iva) iva += (importe * 0.16) / 1.16;
+  }
+  const r = (n: number) => Math.round(n * 100) / 100;
+  return { subtotal: r(total - iva), iva: r(iva), total: r(total) };
+}
+
 export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], logoUrl: string | null): string {
-  const t = totalesOrdenCompra(lineas);
+  const t = oc.importes ?? (oc.precios_con_iva ? totalesConIvaIncluido(lineas) : totalesOrdenCompra(lineas));
   const filas = lineas
     .map((l, i) => {
       const importe = Number(l.cantidad ?? 0) * Number(l.costo ?? 0);
@@ -76,7 +98,7 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
       </tr>`;
     })
     .join("");
-  const autorizada = !!oc.autorizada_en;
+  const autorizada = !!oc.autorizada_en || !!oc.autorizada_backoffice;
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>Orden de compra ${esc(oc.id_orden)}</title>
 <style>
@@ -115,7 +137,7 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
       <h1>ORDEN DE COMPRA</h1>
       <div class="emp">${esc(oc.empresa_nombre)}</div>
       <div class="sub">${oc.empresa_rfc ? `RFC ${esc(oc.empresa_rfc)}` : ""}</div>
-      <div style="margin-top:6px">${autorizada ? `<span class="sello">AUTORIZADA ${esc(fechaLarga(oc.autorizada_en))}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
+      <div style="margin-top:6px">${autorizada ? `<span class="sello">AUTORIZADA ${oc.autorizada_en ? esc(fechaLarga(oc.autorizada_en)) : "EN BACKOFFICE"}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
     </div>
     <div class="folio">
       <div class="num">${esc(oc.id_orden)}</div>
@@ -123,7 +145,7 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
     </div>
   </div>
   <div class="datos">
-    <div><span>Proveedor</span>${esc(oc.proveedor) || "—"}</div>
+    <div><span>Proveedor</span>${esc(oc.proveedor) || "—"}${oc.rfc_proveedor ? ` · RFC ${esc(oc.rfc_proveedor)}` : ""}</div>
     <div><span>Proyecto / obra</span>${esc(oc.proyecto) || "—"}</div>
     <div><span>Requisición</span>${oc.requisicion_folio != null ? `#${esc(oc.requisicion_folio)}` : "—"}${oc.solicitante ? ` · solicitó ${esc(oc.solicitante)}` : ""}</div>
     <div><span>Elaboró</span>${esc(oc.creada_por) || "—"}</div>
@@ -131,7 +153,7 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
     <div><span>Pagar a</span>${esc(oc.beneficiario) || esc(oc.proveedor) || "—"}${oc.banco ? ` · ${esc(oc.banco)}` : ""}${oc.clabe ? ` · CLABE ${esc(oc.clabe)}` : ""}${oc.cuenta ? ` · cuenta ${esc(oc.cuenta)}` : ""}${!oc.banco && !oc.clabe && !oc.cuenta ? " · sin datos bancarios capturados" : ""}</div>
   </div>
   <table>
-    <thead><tr><th class="c" style="width:32px">#</th><th>Concepto</th><th class="c" style="width:60px">Unidad</th><th class="r" style="width:80px">Cantidad</th><th class="r" style="width:95px">P. unitario</th><th class="r" style="width:105px">Importe</th></tr></thead>
+    <thead><tr><th class="c" style="width:32px">#</th><th>Concepto</th><th class="c" style="width:60px">Unidad</th><th class="r" style="width:80px">Cantidad</th><th class="r" style="width:95px">P. unitario${oc.precios_con_iva ? " (IVA incl.)" : ""}</th><th class="r" style="width:105px">Importe</th></tr></thead>
     <tbody>${filas}</tbody>
     <tfoot>
       <tr><td colspan="5" class="r">Subtotal</td><td class="r">$ ${esc(num(t.subtotal))}</td></tr>

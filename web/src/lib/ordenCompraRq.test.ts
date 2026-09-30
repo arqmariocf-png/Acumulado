@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { htmlOrdenCompra, totalesOrdenCompra } from "./ordenCompraRq.ts";
+import { htmlOrdenCompra, totalesConIvaIncluido, totalesOrdenCompra } from "./ordenCompraRq.ts";
 
 test("totalesOrdenCompra calcula IVA por partida", () => {
   const t = totalesOrdenCompra([
@@ -61,4 +61,18 @@ test("htmlOrdenCompra imprime forma de pago, banco y CLABE cuando existen", () =
   );
   assert.match(html, /Crédito · transferencia/);
   assert.match(html, /BODEGA CRUZ AZUL DEL CENTRO SA DE CV · BBVA · CLABE 012180001234567897/);
+});
+
+test("OC del backoffice: el costo ya trae IVA, no se suma 16 % encima (41054)", () => {
+  const t = totalesConIvaIncluido([{ item: "Material", unidad: "pza", cantidad: 1, costo: 612.79, iva: true }]);
+  assert.deepEqual(t, { subtotal: 528.27, iva: 84.52, total: 612.79 });
+  const html = htmlOrdenCompra(
+    { id_orden: "41054", fecha: "2026-09-29", empresa_nombre: "CSC", empresa_rfc: null, empresa_codigo: "CSC", proveedor: "Ferretería", proyecto: null, requisicion_folio: null, solicitante: null, creada_por: null, autorizada_en: null, autorizada_por: null, nota: null, rfc_proveedor: "FER010101AB1", precios_con_iva: true, autorizada_backoffice: true, importes: { subtotal: 528.27, iva: 84.52, total: 612.79 } },
+    [{ item: "Material", unidad: "pza", cantidad: 1, costo: 612.79, iva: true }],
+    null,
+  );
+  assert.match(html, /Ferretería · RFC FER010101AB1/);
+  assert.match(html, /AUTORIZADA EN BACKOFFICE/);
+  assert.match(html, /\$ 612\.79<\/td><\/tr>\s*<\/tfoot>/);
+  assert.doesNotMatch(html, /710\.84/);
 });
