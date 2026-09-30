@@ -6,6 +6,7 @@ import { moneda } from "../../lib/saldosEmpresas";
 import { armarTesoreria, semaforoTesoreria, type ColorTesoreria } from "../../lib/tesoreria";
 import { useSaldosDia } from "./SaldosEmpresas";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
+import { desgloseIvaPago } from "../../lib/ivaPago";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
 
@@ -36,6 +37,9 @@ interface PagoVista {
   comprobante_nombre: string | null;
   /** Cómo se paga según la OC del backoffice (Tipo_pago). */
   tipo_pago_backoffice: string | null;
+  oc_subtotal: number | null;
+  oc_iva: number | null;
+  oc_total: number | null;
 }
 
 /** "Transferencia electrónica de fondos" → etiqueta corta; la tarjeta no
@@ -250,6 +254,7 @@ function Seccion({ titulo, grupos, vacio, render }: { titulo: string; grupos: [s
 function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta: string | null; hoy: string; onMarcar: (pagado: boolean) => void; ocupado: boolean }) {
   const vencido = p.estatus === "pendiente" && p.fecha_programada < hoy;
   const forma = formaDePago(p.tipo_pago_backoffice);
+  const desglose = desgloseIvaPago(Number(p.monto), p.oc_total, p.oc_iva);
   return (
     <tr key={p.id} className={`border-t border-slate-100 ${p.estatus === "pagado" ? "text-slate-500" : ""}`}>
       <td className="px-3 py-2 align-top">
@@ -285,7 +290,21 @@ function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta:
         <div className={vencido ? "text-red-700" : ""}>{vencido ? `vencido ${p.fecha_programada}` : p.fecha_programada}</div>
         {p.estatus === "pagado" && p.referencia && <div>ref. {p.referencia}</div>}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right align-top font-medium tabular-nums">{moneda(Number(p.monto))}</td>
+      <td className="whitespace-nowrap px-3 py-2 text-right align-top tabular-nums">
+        <div className="font-medium">{moneda(Number(p.monto))}</div>
+        {desglose && (
+          <div className="text-[11px] font-normal text-slate-500">
+            {desglose.iva > 0 ? (
+              <>
+                <div>Subtotal {moneda(desglose.subtotal)}</div>
+                <div>IVA {moneda(desglose.iva)}</div>
+              </>
+            ) : (
+              <div>sin IVA</div>
+            )}
+          </div>
+        )}
+      </td>
       <td className="whitespace-nowrap px-3 py-2 text-right align-top text-xs">
         {p.estatus === "pendiente" ? (
           <button type="button" onClick={() => onMarcar(true)} disabled={ocupado} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">

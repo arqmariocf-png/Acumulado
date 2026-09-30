@@ -262,6 +262,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   automática** y "Programar a pago N" en lote (condición inicial de cada
   una y fecha sugerida); la OC impresa trae forma de pago, beneficiario,
   banco y CLABE (`20260929190000`).
+  **IVA de las OC (30-sep-2026)**: el `TOTAL` de `api_ocs_aut` **ya
+  incluye IVA** y el `Costo` de cada partida también (pantalla "Pago a
+  Proveedores" del backoffice, OC 41054: subtotal 528.27 + IVA 84.52 =
+  612.79). IVA api = Σ partidas con IVA × cant × costo × 0.16/1.16; en OC
+  RQ el costo es sin IVA (× 0.16). Vista `v_oc_importes` (subtotal, iva,
+  total = el mismo total) y `v_pagos_programados.oc_subtotal/oc_iva/
+  oc_total`; Tesorería desglosa bajo cada monto (`lib/ivaPago.ts`, pago
+  parcial en proporción). **No sumar 16 % encima del TOTAL** (se estuvo a
+  punto; Mario lo detuvo). Forma de pago en Tesorería = `tipo_pago_backoffice`.
+  **Datos bancarios**: el backoffice SÍ los tiene (catálogo de proveedores:
+  RFC, banco, cuenta, CLABE; "Método de pago" y "Forma de pago") en la
+  pantalla Pago a Proveedores, pero la API no los manda. Mientras Gonzalo
+  no los agregue, se capturan en `proveedores_datos_bancarios` (origen
+  'captura') o se aprenden de los SPEI ya enviados (`fn_bancarios_desde_spei`,
+  cron diario 13:07 UTC, origen 'spei', solo CLABE con dígito verificador;
+  nunca pisa 'captura'). Pendiente: la fila "CONST SUPER Y CONSUL LOMA SA"
+  (empresa propia) quedó aprendida; excluir por la palabra LOMA/RFC propio.
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
   sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).
