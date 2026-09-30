@@ -30,6 +30,8 @@ export interface OrdenCompraDoc {
   importes?: { subtotal: number; iva: number; total: number } | null;
   /** Autorizada en el backoffice (sin fecha aquí). */
   autorizada_backoffice?: boolean;
+  /** Autorizada aquí por dirección (no en el backoffice). */
+  autorizacion_interna?: boolean;
 }
 
 export interface LineaOrdenCompra {
@@ -137,7 +139,7 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
       <h1>ORDEN DE COMPRA</h1>
       <div class="emp">${esc(oc.empresa_nombre)}</div>
       <div class="sub">${oc.empresa_rfc ? `RFC ${esc(oc.empresa_rfc)}` : ""}</div>
-      <div style="margin-top:6px">${autorizada ? `<span class="sello">AUTORIZADA ${oc.autorizada_en ? esc(fechaLarga(oc.autorizada_en)) : "EN BACKOFFICE"}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
+      <div style="margin-top:6px">${autorizada ? `<span class="sello">AUTORIZADA ${oc.autorizada_en ? `${oc.autorizacion_interna ? "INTERNA " : ""}${esc(fechaLarga(oc.autorizada_en))}` : "EN BACKOFFICE"}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
     </div>
     <div class="folio">
       <div class="num">${esc(oc.id_orden)}</div>

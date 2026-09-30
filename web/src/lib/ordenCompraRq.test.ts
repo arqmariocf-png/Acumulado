@@ -76,3 +76,12 @@ test("OC del backoffice: el costo ya trae IVA, no se suma 16 % encima (41054)", 
   assert.match(html, /\$ 612\.79<\/td><\/tr>\s*<\/tfoot>/);
   assert.doesNotMatch(html, /710\.84/);
 });
+
+test("OC del backoffice autorizada aquí lleva el sello de autorización interna", () => {
+  const html = htmlOrdenCompra(
+    { id_orden: "41073", fecha: "2026-09-29", empresa_nombre: "ERG", empresa_rfc: null, empresa_codigo: "ERG", proveedor: "Home Depot", proyecto: null, requisicion_folio: null, solicitante: null, creada_por: null, autorizada_en: "2026-09-30T18:00:00Z", autorizada_por: "Laura", nota: null, precios_con_iva: true, autorizacion_interna: true },
+    [],
+    null,
+  );
+  assert.match(html, /AUTORIZADA INTERNA 30 de septiembre de 2026/);
+});

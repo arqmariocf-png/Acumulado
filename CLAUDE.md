@@ -636,6 +636,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   backoffice siguen pendientes hasta que alguien las autorice allá. La OC
   impresa trae RFC del proveedor y, en las api, importes de `v_oc_importes`
   (antes sumaba 16 % encima: la 41074 salía en 2,764.75 en vez de 2,383.40).
+- **Autorización interna (30-sep-2026, Mario: "no depender de backoffice,
+  que no pare el flujo")**: `fn_oc_programar_pago` ya no bloquea las
+  pendientes (backoffice "Pendiente de Autorización", RQ, Excel): al
+  programar el pago las autoriza internamente (`autorizada_en/_por`; la
+  requisición ligada pasa a 'autorizada'). Diferenciador
+  `v_oc_pagos.autorizacion_origen` = 'backoffice' | 'interna' (etiqueta
+  violeta "autorizada interna · backoffice pendiente" en la lista, sello
+  "AUTORIZADA INTERNA" en la OC impresa); botón "Autorizar y programar" y
+  el lote también las toma (`20260930250000`). Solo las rechazadas y las
+  canceladas del backoffice no se programan.
 - **Hoja de pagos del día (30-sep-2026, Excel "PAGOS 30.09.26" de Laura)**:
   `lib/hojaPagos.ts` (con pruebas, reproduce su AEP: 210,275.45 − 137,383.72
   = 72,891.73) y `finanzas/HojaPagosDia.tsx` arriba de las OC en
