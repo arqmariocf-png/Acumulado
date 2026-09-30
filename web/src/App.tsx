@@ -29,6 +29,7 @@ import { Organigrama, Area, ConfigurarKpis } from "./pages/Organigrama";
 import { InicioSegunRol } from "./pages/InicioSegunRol";
 import { Socio, RutaSocio } from "./pages/Socio";
 const Gastos = lazy(() => import("./pages/Gastos").then((m) => ({ default: m.Gastos })));
+const Comedor = lazy(() => import("./pages/comedor/Comedor").then((m) => ({ default: m.Comedor })));
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
@@ -119,6 +120,8 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["supervisor", "responsable", "directivo", "administrativo", "corporativo", "direccion", "empresa"]} />}>
             <Route path="/gastos" element={<Gastos />} />
           </Route>
+          {/* Comedor: cualquiera con cuenta pide; cocina y nómina se deciden en la base. */}
+          <Route path="/comedor" element={<Comedor />} />
           {/* Finanzas/bancos: cerrado para los roles básicos de personal
               (operativo, administrativo, supervisor, directivo) -- "finanzas"
               no es un módulo asignable. */}

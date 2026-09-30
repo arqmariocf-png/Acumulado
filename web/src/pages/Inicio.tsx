@@ -306,6 +306,12 @@ export function Inicio() {
       descripcion: "control de folios, estatus por paso y conciliación",
       icono: ICONOS.panel,
     },
+    !!alcanceOrganizacion?.modulos.includes("comedor") && {
+      a: "/comedor",
+      etiqueta: "Comedor",
+      descripcion: "pide tu comida; se descuenta de tu nómina",
+      icono: ICONOS.pendientes,
+    },
     rolBasico && {
       a: "/checador",
       etiqueta: "Checador",
