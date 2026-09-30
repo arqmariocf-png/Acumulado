@@ -54,6 +54,9 @@ export function RemisionProduccionModal({
   const [referenciaId, setReferenciaId] = useState("");
   const [proyectoId, setProyectoId] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  // Contado o crédito: se clasifica al emitir la entrega (Mario, 30-sep-2026).
+  const [condicion, setCondicion] = useState<"" | "contado" | "credito">("");
+  const [diasCredito, setDiasCredito] = useState("");
   const [lineas, setLineas] = useState<LineaForm[]>([{ itemId: "", descripcion: "", cantidad: 1, unidad: "pza" }]);
   const [error, setError] = useState<string | null>(null);
   const [creada, setCreada] = useState<{ id: string; folio: string } | null>(null);
@@ -98,6 +101,7 @@ export function RemisionProduccionModal({
   const crear = useMutation({
     mutationFn: async () => {
       if (!contraparte.trim()) throw new Error(tipo === "salida" ? "Indica el cliente." : "Indica el proveedor o de quién se recibe.");
+      if (tipo === "salida" && !condicion) throw new Error("Indica si la entrega es de contado o a crédito.");
       const validas = lineas.filter((l) => l.descripcion.trim() && l.cantidad > 0);
       if (validas.length === 0) throw new Error("Agrega al menos una partida con cantidad.");
       const { data: sesion } = await supabase.auth.getSession();
@@ -131,6 +135,8 @@ export function RemisionProduccionModal({
           orden_venta_id: tipo === "salida" && referenciaId ? referenciaId : null,
           orden_compra_id: tipo === "entrada" && referenciaId ? referenciaId : null,
           observaciones: observaciones.trim() || null,
+          condicion_pago: tipo === "salida" ? condicion : null,
+          dias_credito: tipo === "salida" && condicion === "credito" && Number(diasCredito) > 0 ? Math.round(Number(diasCredito)) : null,
           emitida_por: userId,
         })
         .select("id, folio")
@@ -271,6 +277,22 @@ export function RemisionProduccionModal({
                   ))}
                 </select>
               </div>
+              {tipo === "salida" && (
+                <div>
+                  <label className={etiqueta}>Pago de la entrega</label>
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    {(["contado", "credito"] as const).map((c) => (
+                      <label key={c} className="flex items-center gap-1">
+                        <input type="radio" name="condicion_pago" checked={condicion === c} onChange={() => setCondicion(c)} />
+                        {c === "contado" ? "Contado" : "Crédito"}
+                      </label>
+                    ))}
+                    {condicion === "credito" && (
+                      <input type="number" min="1" value={diasCredito} onChange={(e) => setDiasCredito(e.target.value)} placeholder="días" className="w-20 rounded border border-slate-300 px-2 py-1 text-sm" aria-label="Días de crédito" />
+                    )}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className={etiqueta}>Observaciones</label>
                 <input value={observaciones} onChange={(e) => setObservaciones(e.target.value)} className={campo} />

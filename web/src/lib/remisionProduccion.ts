@@ -16,6 +16,9 @@ export interface RemisionProduccionDoc {
   proyecto_nombre: string | null;
   referencia: string | null;
   observaciones: string | null;
+  /** Contado o crédito (salidas, desde 30-sep-2026). */
+  condicion_pago?: "contado" | "credito" | null;
+  dias_credito?: number | null;
   estatus: "emitida" | "entregada";
   emitida_por_nombre: string | null;
   recibio_nombre: string | null;
@@ -109,6 +112,7 @@ export function htmlRemisionProduccion(r: RemisionProduccionDoc, lineas: LineaRe
       <div><span>${etiquetaContraparte}</span>${esc(r.contraparte)}${r.cliente_rfc ? `<div class="rfc">RFC ${esc(r.cliente_rfc)}</div>` : ""}${r.cliente_domicilio ? `<div class="rfc">${esc(r.cliente_domicilio)}</div>` : ""}</div>
       <div><span>Proyecto / obra</span>${esc(r.proyecto_nombre) || "—"}</div>
       <div><span>Referencia (OV / OC)</span>${esc(r.referencia) || "—"}</div>
+      ${r.tipo === "salida" && r.condicion_pago ? `<div><span>Pago</span>${r.condicion_pago === "contado" ? "Contado" : `Crédito${r.dias_credito ? ` a ${esc(r.dias_credito)} días` : ""}`}</div>` : ""}
       <div><span>Emitida por</span>${esc(r.emitida_por_nombre) || "—"}</div>
       <div><span>Recibió</span>${entregada ? `${esc(r.recibio_nombre)} · ${esc(r.entregada_en ? new Date(r.entregada_en).toLocaleString("es-MX") : "")}` : `<em style="color:#666">Pendiente de confirmar (escanea el QR)</em>`}</div>
     </div>

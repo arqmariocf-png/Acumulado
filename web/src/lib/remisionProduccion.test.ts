@@ -40,3 +40,14 @@ test("htmlRemisionProduccion: membrete por empresa, cliente y sello de entrega",
   assert.match(entregada, /ENTREGADA/);
   assert.match(entregada, /Luis/);
 });
+
+test("la remisión de salida muestra contado o crédito", async () => {
+  const { htmlRemisionProduccion } = await import("./remisionProduccion.ts");
+  const base = {
+    folio: "MCC-R-0001", tipo: "salida" as const, fecha: "2026-09-30", empresa_nombre: "Clavicón", empresa_rfc: null, empresa_codigo: "MCC",
+    contraparte: "Cliente", proyecto_nombre: null, referencia: null, observaciones: null, estatus: "emitida" as const,
+    emitida_por_nombre: null, recibio_nombre: null, entregada_en: null,
+  };
+  assert.match(htmlRemisionProduccion({ ...base, condicion_pago: "credito", dias_credito: 30 }, [], "<svg/>", "https://x", null), /Crédito a 30 días/);
+  assert.match(htmlRemisionProduccion({ ...base, condicion_pago: "contado" }, [], "<svg/>", "https://x", null), /Contado/);
+});
