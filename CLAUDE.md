@@ -546,6 +546,32 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   La persona la cambia con el botón "Contraseña" del encabezado
   (`cambiarContrasena()` en `useAuth` → `NuevaContrasena`).
 
+## Costeo de obra del director general (30-sep-2026)
+- Mario: reporte "único mío como director general", modelo para las obras
+  de **Abarrotes Neto** (empieza con **Abarrotes Neto Rio Frio**, proyecto de
+  CSC dado de alta el 30-sep: responsable y supervisor Miguel Angel Tepal;
+  Timoteo Colapala pasó a `administrativo` con empresa principal CSC y
+  módulos proyectos + requisiciones para planos y lo administrativo).
+- `20260930170000_costeo_obra_director.sql` (aplicada): `proyecto_costeo`
+  (folio, inicio/fin, subtotal, IVA, m², ubicación, lat/long, km, plano,
+  % indirectos propio), `proyecto_presupuesto_cliente` (partidas; se pegan
+  desde Excel), `proyecto_costeo_directos` (contratista / personal /
+  material / otro, cantidad × costo), `proyecto_costeo_imss` (lo captura
+  contabilidad, rol corporativo: Belén) e `indirectos_tabulador` (% por km,
+  por organización). **Solo rol admin** lee y escribe; corporativo solo
+  el IMSS y el personal/contratistas (`v_costeo_imss_pendiente`,
+  `/finanzas/seguro-social-obras`).
+- Cálculo en `lib/costeoObra.ts` (con pruebas): indirectos = % × (directos
+  + IMSS); % = propio o el del tabulador por km; utilidad pronóstico =
+  subtotal del contrato − (directos + IMSS + indirectos); venta y costo por
+  m². Reporte imprimible `lib/reporteObra.ts` (contrato → presupuesto del
+  cliente → costeo y utilidad → real a la fecha por OC con el mismo nombre de
+  obra → alertas). Pestaña "Costeo (director general)" en el proyecto
+  (`proyectos/CosteoObra.tsx`), solo admin.
+- El ingreso de Abarrotes Neto no está en el sistema (ni CFDI emitidos ni
+  depósitos con su nombre); las OV de "Abarrotes Neto" son internas (AEP →
+  CSC). El tabulador de indirectos arranca vacío: lo captura Mario.
+
 ## Comedor (30-sep-2026)
 - Mario: "una empresa aparte, vinculada a las aplicaciones de los
   trabajadores para ordenar y llevar su descuento vía nómina".

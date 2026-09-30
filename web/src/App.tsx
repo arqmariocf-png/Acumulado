@@ -17,6 +17,7 @@ const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then(
 const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ default: m.SaldosDiarios })));
 const SaldosEmpresas = lazy(() => import("./pages/finanzas/SaldosEmpresas").then((m) => ({ default: m.SaldosEmpresas })));
 const Tesoreria = lazy(() => import("./pages/finanzas/Tesoreria").then((m) => ({ default: m.Tesoreria })));
+const SeguroSocialObras = lazy(() => import("./pages/finanzas/SeguroSocialObras").then((m) => ({ default: m.SeguroSocialObras })));
 const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
 const CuentasPorPagar = lazy(() => import("./pages/finanzas/CuentasPorPagar").then((m) => ({ default: m.CuentasPorPagar })));
 const LineasCredito = lazy(() => import("./pages/finanzas/LineasCredito").then((m) => ({ default: m.LineasCredito })));
@@ -158,6 +159,10 @@ function Enrutador() {
             <Route path="/finanzas/pagos" element={<ProgramacionPagos />} />
             <Route path="/finanzas/tesoreria" element={<Tesoreria />} />
             <Route path="/finanzas/proveedores" element={<CuentasPorPagar />} />
+          </Route>
+          {/* Contabilidad (Belén, corporativo) captura el seguro social del costeo de obras. */}
+          <Route element={<ProtectedRoute roles={["corporativo"]} />}>
+            <Route path="/finanzas/seguro-social-obras" element={<SeguroSocialObras />} />
           </Route>
           {/* Menú exclusivo de dirección (Laura): líneas de crédito con
               vencimiento. Admin siempre pasa. */}
