@@ -11,11 +11,12 @@ import { ResumenObra } from "./ResumenObra";
 import { SupervisionIA } from "./SupervisionIA";
 import type { Proyecto, ProyectoPlano, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
+import { CosteoObra } from "./CosteoObra";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
 
-type Tab = "resumen" | "planos" | "catalogo" | "precios" | "avance" | "control" | "supervision";
+type Tab = "resumen" | "costeo" | "planos" | "catalogo" | "precios" | "avance" | "control" | "supervision";
 
 function useProyecto(id: string) {
   return useQuery({
@@ -58,6 +59,8 @@ export function ProyectoDetalle() {
 
   const TABS: { clave: Tab; etiqueta: string }[] = [
     ...(veResumen ? [{ clave: "resumen" as Tab, etiqueta: "Resumen físico-financiero" }] : []),
+    // Costeo y pronóstico: solo el director general (Mario, 30-sep-2026).
+    ...(perfil?.rol === "admin" ? [{ clave: "costeo" as Tab, etiqueta: "Costeo (director general)" }] : []),
     { clave: "planos", etiqueta: "Planos" },
     { clave: "catalogo", etiqueta: "Catálogo" },
     { clave: "precios", etiqueta: "Precios unitarios" },
@@ -109,6 +112,7 @@ export function ProyectoDetalle() {
       </div>
 
       {tabActual === "resumen" && veResumen && <ResumenObra proyecto={proyecto} />}
+      {tabActual === "costeo" && perfil?.rol === "admin" && <CosteoObra proyecto={proyecto} />}
       {tabActual === "planos" && (
         <PestanaPlanos
           proyectoId={proyecto.id}
