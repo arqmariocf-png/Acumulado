@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, estadoPagoOc, etapaOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
+import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, estadoPagoOc, etapaOc, porProgramarOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
@@ -152,17 +152,17 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   const totalSeleccion = seleccionadas.reduce((s, o) => s + saldoOc(o), 0);
   // Las pendientes también: programar su pago las autoriza internamente
   // (Mario, 30-sep-2026: "que no pare el flujo").
-  const programables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && saldoOc(o) > 0 && !o.pagada_backoffice);
+  const programables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && porProgramarOc(o) > 0 && !o.pagada_backoffice);
 
   const programarLote = useMutation({
     mutationFn: async () => {
-      if (programables.length === 0) throw new Error("Ninguna de las seleccionadas se puede programar (rechazadas, sin saldo o ya pagadas en el backoffice).");
-      if (!window.confirm(`¿Programar a pago ${programables.length} orden(es) por ${moneda(programables.reduce((s, o) => s + saldoOc(o), 0))}? Cada una con su condición (crédito si el proveedor tiene línea, efectivo si el backoffice lo dice, si no contado) y la fecha sugerida.`)) return null;
+      if (programables.length === 0) throw new Error("Ninguna de las seleccionadas se puede programar (ya programadas, rechazadas, sin saldo o pagadas en el backoffice).");
+      if (!window.confirm(`¿Programar a pago ${programables.length} orden(es) por ${moneda(programables.reduce((s, o) => s + porProgramarOc(o), 0))}? Cada una con su condición (crédito si el proveedor tiene línea, efectivo si el backoffice lo dice, si no contado) y la fecha sugerida.`)) return null;
       const errores: string[] = [];
       let n = 0;
       for (const o of programables) {
         const c = condicionInicialDe(o);
-        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: saldoOc(o), p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: null, p_notas: null });
+        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: porProgramarOc(o), p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: null, p_notas: null });
         if (err) errores.push(`${o.id_orden}: ${err.message}`);
         else n += 1;
       }
@@ -461,7 +461,12 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
             en laptops (Mario, 30-sep-2026). */}
         <td className="px-3 py-2 text-right align-top">
           <div className="flex flex-col items-end gap-1">
-            {saldo > 0 && oc.autorizacion !== "rechazada" && (
+            {saldo > 0 && oc.autorizacion !== "rechazada" && porProgramarOc(oc) <= 0 && !abierta && (
+              <span className="whitespace-nowrap text-xs text-blue-800" title="Ya tiene programado todo su saldo; se paga desde Tesorería">
+                ya programada · {moneda(Number(oc.programado))}
+              </span>
+            )}
+            {saldo > 0 && oc.autorizacion !== "rechazada" && (porProgramarOc(oc) > 0 || abierta) && (
               <button type="button" onClick={onAbrir} className={`whitespace-nowrap rounded px-2.5 py-1 text-xs font-medium ${abierta ? "bg-slate-900 text-white" : "bg-emerald-700 text-white"}`} title={autorizada ? undefined : "Al programar el pago queda autorizada internamente"}>
                 {abierta ? "Cerrar" : autorizada ? "Programar pago" : "Autorizar y programar"}
               </button>

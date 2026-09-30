@@ -80,3 +80,12 @@ test("ordenarOcs acomoda por folio numérico y por los demás criterios", async 
   assert.deepEqual(ordenarOcs(l, "saldo_desc").map((o) => o.id_orden), ["9998", "41064", "41073", "41068"]);
   assert.deepEqual(ordenarOcs(l, "vence").map((o) => o.id_orden), ["9998", "41073", "41064", "41068"]);
 });
+
+test("porProgramarOc descuenta lo ya programado: no se programa dos veces", async () => {
+  const { porProgramarOc, montoPagoSugerido } = await import("./pagosOc.ts");
+  const oc41074 = { total: 2383.4, pagado: 0, programado: 2383.4, fecha_creacion: "2026-09-29", dias_credito: null };
+  assert.equal(porProgramarOc(oc41074), 0);
+  assert.equal(montoPagoSugerido("contado", oc41074), 0);
+  assert.equal(porProgramarOc({ ...oc41074, programado: 1000 }), 1383.4);
+  assert.equal(porProgramarOc({ ...oc41074, programado: null }), 2383.4);
+});
