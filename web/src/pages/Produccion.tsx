@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { DespieceBalken } from "./produccion/DespieceBalken";
 import { RemisionProduccionModal } from "./produccion/RemisionProduccionModal";
+import { MargenRemisiones } from "./produccion/MargenRemisiones";
 import { CalendarioMaquinas } from "./produccion/CalendarioMaquinas";
 import type {
   CosteoMensualPlanta,
@@ -1823,6 +1824,8 @@ function PestanaCosteo({ empresa }: { empresa: Empresa }) {
           </table>
         </div>
       </div>
+
+      <MargenRemisiones empresaId={empresa.id} />
 
       <div>
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Costo por lote</h2>

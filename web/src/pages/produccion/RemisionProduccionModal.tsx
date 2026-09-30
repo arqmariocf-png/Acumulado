@@ -15,6 +15,8 @@ interface LineaForm {
   descripcion: string;
   cantidad: number;
   unidad: string;
+  /** Precio de venta sin IVA (salidas); opcional, finanzas lo completa después. */
+  precio?: string;
 }
 
 interface ClienteCatalogo {
@@ -147,6 +149,7 @@ export function RemisionProduccionModal({
           remision_id: rem.id,
           descripcion: l.descripcion.trim(),
           cantidad: l.cantidad,
+          precio_unitario: tipo === "salida" && l.precio && Number(l.precio) >= 0 ? Number(l.precio) : null,
           unidad: l.unidad || "pza",
           producto_id: tipo === "salida" && l.itemId ? l.itemId : null,
           materia_prima_id: tipo === "entrada" && l.itemId ? l.itemId : null,
@@ -309,7 +312,7 @@ export function RemisionProduccionModal({
               <div className="space-y-2">
                 {lineas.map((l, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2">
-                    <select value={l.itemId} onChange={(e) => elegirItem(i, e.target.value)} className={`${campo} col-span-4`}>
+                    <select value={l.itemId} onChange={(e) => elegirItem(i, e.target.value)} className={`${campo} ${tipo === "salida" ? "col-span-3" : "col-span-4"}`}>
                       <option value="">{tipo === "salida" ? "Producto…" : "Materia prima…"}</option>
                       {items.map((it) => (
                         <option key={it.id} value={it.id}>
@@ -317,9 +320,12 @@ export function RemisionProduccionModal({
                         </option>
                       ))}
                     </select>
-                    <input value={l.descripcion} onChange={(e) => setLinea(i, { descripcion: e.target.value })} placeholder="Descripción" className={`${campo} col-span-4`} />
+                    <input value={l.descripcion} onChange={(e) => setLinea(i, { descripcion: e.target.value })} placeholder="Descripción" className={`${campo} ${tipo === "salida" ? "col-span-3" : "col-span-4"}`} />
                     <input type="number" step="0.0001" min="0.0001" value={l.cantidad || ""} onChange={(e) => setLinea(i, { cantidad: Number(e.target.value) })} className={`${campo} col-span-2`} />
                     <input value={l.unidad} onChange={(e) => setLinea(i, { unidad: e.target.value })} className={`${campo} col-span-1`} />
+                    {tipo === "salida" && (
+                      <input type="number" step="0.01" min="0" value={l.precio ?? ""} onChange={(e) => setLinea(i, { precio: e.target.value })} placeholder="Precio s/IVA" title="Precio de venta unitario sin IVA (opcional; finanzas puede capturarlo después)" className={`${campo} col-span-2`} />
+                    )}
                     <button type="button" onClick={() => setLineas((p) => p.filter((_, j) => j !== i))} className="col-span-1 text-xs text-red-600">
                       Quitar
                     </button>
