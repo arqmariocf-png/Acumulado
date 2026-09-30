@@ -64,3 +64,19 @@ test("etapaOc: la cadena por autorizar → por programar → programado a pago �
   assert.equal(etapaOc({ ...base, pagado: 1000, recepcion_estado: "parcial" }), "pagada");
   assert.equal(etapaOc({ ...base, pagado: 1000, recepcion_estado: "recibida" }), "recibida");
 });
+
+test("ordenarOcs acomoda por folio numérico y por los demás criterios", async () => {
+  const { ordenarOcs } = await import("./pagosOc.ts");
+  const l = [
+    { id_orden: "41064", fecha_creacion: "2026-09-28", proveedor: "Maracaibo", total: 4664.68, pagado: 0, vence: null },
+    { id_orden: "41073", fecha_creacion: "2026-09-29", proveedor: "Home Depot", total: 1233.5, pagado: 0, vence: "2026-10-05" },
+    { id_orden: "9998", fecha_creacion: "2026-07-01", proveedor: "acero", total: 14702.94, pagado: 0, vence: "2026-10-01" },
+    { id_orden: "41068", fecha_creacion: "2026-09-29", proveedor: "Sistemas", total: 53.01, pagado: 0, vence: null },
+  ];
+  assert.deepEqual(ordenarOcs(l, "folio_desc").map((o) => o.id_orden), ["41073", "41068", "41064", "9998"]);
+  assert.deepEqual(ordenarOcs(l, "folio_asc").map((o) => o.id_orden), ["9998", "41064", "41068", "41073"]);
+  assert.deepEqual(ordenarOcs(l, "fecha_desc").map((o) => o.id_orden), ["41073", "41068", "41064", "9998"]);
+  assert.deepEqual(ordenarOcs(l, "proveedor").map((o) => o.id_orden), ["9998", "41073", "41064", "41068"]);
+  assert.deepEqual(ordenarOcs(l, "saldo_desc").map((o) => o.id_orden), ["9998", "41064", "41073", "41068"]);
+  assert.deepEqual(ordenarOcs(l, "vence").map((o) => o.id_orden), ["9998", "41073", "41064", "41068"]);
+});
