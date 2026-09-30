@@ -537,7 +537,7 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
                 <tr>
                   <th className="px-3 py-2">Materia prima</th>
                   <th className="px-3 py-2 text-right">Stock</th>
-                  <th className="px-3 py-2 text-right">Costo prom.</th>
+                  <th className="px-3 py-2 text-right">Costo prom. s/IVA</th>
                 </tr>
               </thead>
               <tbody>
@@ -565,7 +565,7 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
                 <tr>
                   <th className="px-3 py-2">Producto</th>
                   <th className="px-3 py-2 text-right">Stock</th>
-                  <th className="px-3 py-2 text-right">Costo prom.</th>
+                  <th className="px-3 py-2 text-right">Costo prom. s/IVA</th>
                 </tr>
               </thead>
               <tbody>
@@ -611,6 +611,8 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
   // lista de "pendientes de vincular" de abajo.
   const [ocId, setOcId] = useState<string>("__pendiente__");
   const [remisionAbierta, setRemisionAbierta] = useState(false);
+  const [conIva, setConIva] = useState(true);
+  const [costoTexto, setCostoTexto] = useState("");
   const materiaIds = materias.map((m) => m.id);
 
   const { data: pendientesOc } = useQuery({
@@ -651,6 +653,11 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
 
   const registrar = useMutation({
     mutationFn: async (fd: FormData) => {
+      // El costo de la remisión de ingreso viene con IVA; el costeo y la
+      // venta van sin IVA (el IVA de la compra se acredita). Mario, 30-sep-2026.
+      const capturado = Number(fd.get("costo_unitario"));
+      const costoSinIva = conIva ? Math.round((capturado / 1.16) * 10000) / 10000 : capturado;
+      const cantidad = Number(fd.get("cantidad"));
       let orden_compra_id: string | null = ocId === "__pendiente__" ? null : ocId;
       if (ocId === "__nueva__") {
         const { data, error } = await supabase
@@ -661,7 +668,8 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
             empresa_id: empresaId,
             proyecto: proyecto ?? null,
             proveedor: oVacio(fd, "nueva_oc_proveedor"),
-            total: fd.get("cantidad") && fd.get("costo_unitario") ? Number(fd.get("cantidad")) * Number(fd.get("costo_unitario")) : null,
+            // Total de OC con IVA, como las del backoffice.
+            total: cantidad && capturado ? Math.round(cantidad * costoSinIva * 1.16 * 100) / 100 : null,
             fecha_creacion: fd.get("fecha"),
             fuente: "excel",
           })
@@ -674,7 +682,7 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
         materia_prima_id: fd.get("materia_prima_id"),
         tipo: "entrada",
         cantidad: fd.get("cantidad"),
-        costo_unitario: fd.get("costo_unitario"),
+        costo_unitario: costoSinIva,
         fecha: fd.get("fecha"),
         orden_compra_id,
       });
@@ -694,6 +702,7 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
     setError(null);
     registrar.mutate(new FormData(e.currentTarget));
     e.currentTarget.reset();
+    setCostoTexto("");
   }
 
   return (
@@ -719,8 +728,13 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
             <input type="number" step="0.0001" min="0.0001" name="cantidad" required className={campoTexto} />
           </div>
           <div>
-            <label className={etiquetaCampo}>Costo unitario *</label>
-            <input type="number" step="0.0001" min="0" name="costo_unitario" required className={campoTexto} />
+            <label className={etiquetaCampo}>Costo unitario * {conIva ? "(con IVA, como la remisión)" : "(sin IVA)"}</label>
+            <input type="number" step="0.0001" min="0" name="costo_unitario" required value={costoTexto} onChange={(e) => setCostoTexto(e.target.value)} className={campoTexto} />
+            <label className="mt-1 flex items-center gap-1 text-xs text-slate-600">
+              <input type="checkbox" checked={conIva} onChange={(e) => setConIva(e.target.checked)} />
+              trae IVA incluido
+            </label>
+            {conIva && Number(costoTexto) > 0 && <p className="text-xs text-slate-500">Se guarda sin IVA: {formatoMoneda(Number(costoTexto) / 1.16)}</p>}
           </div>
           <div>
             <label className={etiquetaCampo}>Fecha *</label>
@@ -734,7 +748,7 @@ function EntradaMateriaPrima({ empresaId, proyecto, materias }: { empresaId: str
             <option value="__nueva__">+ Dar de alta una OC nueva (manual)</option>
             {ordenesCompra?.map((oc) => (
               <option key={oc.id} value={oc.id}>
-                OC {oc.id_orden} — {oc.proveedor ?? "sin proveedor"} {oc.total ? `(${formatoMoneda(oc.total)})` : ""}
+                OC {oc.id_orden} — {oc.proveedor ?? "sin proveedor"} {oc.total ? `(${formatoMoneda(oc.total)} con IVA)` : ""}
               </option>
             ))}
           </select>
@@ -1565,8 +1579,8 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
           <MiniTarjeta titulo="Materia prima" valor={formatoMoneda(costeo.costo_materia_prima)} />
           <MiniTarjeta titulo="Mano de obra" valor={formatoMoneda(costeo.costo_mano_obra)} />
           <MiniTarjeta titulo="Indirectos" valor={formatoMoneda(costeo.costo_indirectos)} />
-          <MiniTarjeta titulo="Costo total del lote" valor={formatoMoneda(costeo.costo_total)} destacado />
-          <MiniTarjeta titulo="Costo unitario" valor={formatoMoneda(costeo.costo_unitario)} destacado />
+          <MiniTarjeta titulo="Costo total del lote (s/IVA)" valor={formatoMoneda(costeo.costo_total)} destacado />
+          <MiniTarjeta titulo="Costo unitario (s/IVA)" valor={formatoMoneda(costeo.costo_unitario)} destacado />
         </div>
       )}
 

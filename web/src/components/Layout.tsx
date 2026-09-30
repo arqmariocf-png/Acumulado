@@ -54,6 +54,13 @@ export function Layout() {
                   Socio
                 </NavLink>
               )}
+              {/* Comedor a la vista (Mario, 30-sep-2026): dentro de Recursos
+                  humanos quedaba al fondo y no se encontraba. */}
+              {secciones.some((s) => s.entradas.some((e) => e.ruta === "/comedor")) && (
+                <NavLink to="/comedor" className={({ isActive }) => `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                  Comedor
+                </NavLink>
+              )}
               {/* Escritorio: un submenú por área. Celular: un solo "Módulos"
                   agrupado, porque no caben siete botones. */}
               <div className="hidden items-center gap-1 lg:flex">
