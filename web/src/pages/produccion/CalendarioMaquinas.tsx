@@ -461,6 +461,12 @@ function SeccionProgramacion({
           </button>
         </div>
       </div>
+      {lotes.length === 0 && (
+        <p className="mt-2 text-xs text-amber-700">
+          No hay lotes abiertos para programar: aquí solo aparecen los lotes en estado planeada o en proceso. Crea el lote en la pestaña "Órdenes de producción" (+ Nuevo lote) y
+          regresa a programarlo.
+        </p>
+      )}
       {lote && !tieneRuta && <p className="mt-2 text-xs text-amber-700">Este producto no tiene ruta de pasos todavía: captúrala en "Rutas por producto".</p>}
       <p className="mt-1 text-[11px] text-slate-400">Los pasos se encadenan en orden y cada máquina se ocupa después de su última operación programada. Reprogramar reemplaza solo los pasos aún "programados".</p>
 
