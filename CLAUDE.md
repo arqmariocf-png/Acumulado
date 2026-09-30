@@ -286,6 +286,24 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   'captura'). No existe endpoint de proveedores en el backoffice
   (api_proveedores_aut y similares: 404). Pendiente: la fila "CONST SUPER Y CONSUL LOMA SA"
   (empresa propia) quedó aprendida; excluir por la palabra LOMA/RFC propio.
+  **API ampliada por Gonzalo (30-sep-2026)**: `api_ocs_aut` trae además
+  `SUBTOTAL`, `IVA`, `RFC_Proveedor`, `Banco_Proveedor`, `Cuenta_Proveedor`
+  ("CUENTA: …, CLABE: …"), `Metodo_Pago` y `Forma_pago` (el encabezado ya
+  NO trae `Tipo_pago`; las partidas sí). La sincronización guarda
+  `ordenes_compra.subtotal_backoffice/iva_backoffice/metodo_pago_backoffice`,
+  `tipo_pago_backoffice = coalesce(Forma_pago, Tipo_pago)`, y llena
+  `proveedores_datos_bancarios` (origen 'backoffice', OC más reciente por
+  proveedor, CLABE con dígito verificador, cuenta 6-14 dígitos, nunca pisa
+  'captura'); `v_oc_importes` prefiere SUBTOTAL/IVA del backoffice
+  (`20260930140000`). Con esos campos la API tarda ~95 s (encabezado) + 60 s
+  (partidas): el `statement_timeout` general de 120 s cortaba la
+  sincronización desde el 29-sep 21:15 UTC; los trabajos de pg_cron fijan
+  `set statement_timeout = '10min'` antes de llamar (`20260930130000`; un
+  SET dentro de la función no sirve).
+  **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
+  inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
+  (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
+  `fin_pagos_sin_comprobante` (ámbar ≥1 %, rojo ≥20 %).
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
   sincronización (`solicitar_sincronizacion_oc_ov`, `20260929130000`).
