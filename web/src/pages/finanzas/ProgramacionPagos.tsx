@@ -6,6 +6,7 @@ import { abrirParaImprimir } from "../../lib/imprimir";
 import { moneda } from "../../lib/saldosEmpresas";
 import { useSaldosDia } from "./SaldosEmpresas";
 import { OrdenesPorPagar } from "./OrdenesPorPagar";
+import { HojaPagosDia } from "./HojaPagosDia";
 import { BotonSincronizarOcOv } from "../../components/BotonSincronizarOcOv";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
@@ -309,6 +310,7 @@ export function ProgramacionPagos() {
         </div>
       )}
 
+      <HojaPagosDia filtroEmpresa={filtroEmpresa} hoy={hoy} />
       <OrdenesPorPagar filtroEmpresa={filtroEmpresa} hoy={hoy} nombreEmpresa={nombreEmpresa} cuentas={cuentas ?? []} />
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}

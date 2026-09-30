@@ -636,6 +636,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   backoffice siguen pendientes hasta que alguien las autorice allá. La OC
   impresa trae RFC del proveedor y, en las api, importes de `v_oc_importes`
   (antes sumaba 16 % encima: la 41074 salía en 2,764.75 en vez de 2,383.40).
+- **Hoja de pagos del día (30-sep-2026, Excel "PAGOS 30.09.26" de Laura)**:
+  `lib/hojaPagos.ts` (con pruebas, reproduce su AEP: 210,275.45 − 137,383.72
+  = 72,891.73) y `finanzas/HojaPagosDia.tsx` arriba de las OC en
+  Programación de pagos: por empresa, saldo inicial de cada cuenta
+  (`fn_saldos_diario_cuenta`) como abono, pagos del día + pendientes
+  vencidos como cargo (OC, proveedor, forma de pago = `tipo_pago_backoffice`,
+  proyecto, comentarios), saldo corrido y totales; efectivo aparte.
+  Imprimir y Excel (CSV). Lista de OC: abre en "Por autorizar" (tabla con
+  Autorizar/Programar pago); "Pendiente de Pago" del backoffice solo como
+  indicador; selector "Ordenar por" (`ordenarOcs`, folio como número).
 - Proyecto: el admin asigna responsable y supervisor/comprador desde el
   encabezado de la obra (`EncargadosObra` en `ProyectoDetalle.tsx`; solo el
   admin puede listar profiles).
