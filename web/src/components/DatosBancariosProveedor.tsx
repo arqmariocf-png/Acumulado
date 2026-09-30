@@ -52,6 +52,19 @@ export function DatosBancariosProveedor({ datos, compacto = false }: { datos: Da
     onError: (e: Error) => setError(e.message),
   });
 
+  // Al abrir se llena con lo guardado en ese momento (antes se quedaba con lo
+  // que había al montar la fila y salía vacío si los datos llegaban después).
+  const abrirEdicion = () => {
+    setBeneficiario(datos.beneficiario_bancario ?? datos.nombre ?? "");
+    setBanco(datos.banco_proveedor ?? "");
+    setClabe(datos.clabe ?? "");
+    setCuenta(datos.cuenta_proveedor ?? "");
+    setRfc(datos.rfc_proveedor ?? "");
+    setCorreo(datos.correo_proveedor ?? "");
+    setError(null);
+    setEditando(true);
+  };
+
   const tiene = !!(datos.clabe || datos.cuenta_proveedor || datos.banco_proveedor);
 
   if (!editando) {
@@ -68,7 +81,7 @@ export function DatosBancariosProveedor({ datos, compacto = false }: { datos: Da
           <span className="text-slate-400">sin datos bancarios</span>
         )}
         {puedeEditar && datos.clave && (
-          <button type="button" onClick={() => setEditando(true)} className="text-slate-500 underline">
+          <button type="button" onClick={abrirEdicion} className="text-slate-500 underline">
             {tiene ? "editar" : "capturar"}
           </button>
         )}

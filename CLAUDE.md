@@ -277,7 +277,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   no los agregue, se capturan en `proveedores_datos_bancarios` (origen
   'captura') o se aprenden de los SPEI ya enviados (`fn_bancarios_desde_spei`,
   cron diario 13:07 UTC, origen 'spei', solo CLABE con dígito verificador;
-  nunca pisa 'captura'). Pendiente: la fila "CONST SUPER Y CONSUL LOMA SA"
+  nunca pisa 'captura'). **Importar el catálogo del backoffice** (30-sep):
+  Tesorería → "Importar datos bancarios de proveedores" sube Excel/CSV
+  (`components/ImportarBancariosProveedores.tsx`, `lib/importarBancarios.ts`
+  con pruebas: encabezados Proveedor/RFC/Banco/Cuenta/CLABE, columna
+  combinada "CUENTA: …, CLABE: …", dígito verificador, fuera tarjetas) →
+  `fn_proveedores_bancarios_importar(jsonb)` (origen 'backoffice'; no pisa
+  'captura'). No existe endpoint de proveedores en el backoffice
+  (api_proveedores_aut y similares: 404). Pendiente: la fila "CONST SUPER Y CONSUL LOMA SA"
   (empresa propia) quedó aprendida; excluir por la palabra LOMA/RFC propio.
   Botón **"Actualizar OC/OV"** en Programación de pagos
   (`components/BotonSincronizarOcOv.tsx`): dirección también puede pedir la
