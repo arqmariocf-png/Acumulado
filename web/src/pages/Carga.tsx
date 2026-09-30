@@ -59,8 +59,8 @@ function useDatosRecientes(pestana: Pestana, empresaId: string) {
         return data;
       }
       const [{ data: oc, error: errOc }, { data: ov, error: errOv }] = await Promise.all([
-        supabase.from("ordenes_compra").select("id, id_orden, tipo, proveedor, total, fecha_creacion").eq("empresa_id", empresaId).order("id_orden", { ascending: false }).limit(5),
-        supabase.from("ordenes_venta").select("id, id_ov, cliente, total, fecha_ov").eq("empresa_id", empresaId).order("id_ov", { ascending: false }).limit(5),
+        supabase.from("ordenes_compra").select("id, id_orden, tipo, proveedor, total, fecha_creacion").eq("empresa_id", empresaId).order("fecha_creacion", { ascending: false, nullsFirst: false }).order("id_orden", { ascending: false }).limit(5),
+        supabase.from("ordenes_venta").select("id, id_ov, cliente, total, fecha_ov").eq("empresa_id", empresaId).order("fecha_ov", { ascending: false, nullsFirst: false }).order("id_ov", { ascending: false }).limit(5),
       ]);
       if (errOc) throw errOc;
       if (errOv) throw errOv;

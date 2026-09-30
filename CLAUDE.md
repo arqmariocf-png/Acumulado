@@ -660,6 +660,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   encabezado de la obra (`EncargadosObra` en `ProyectoDetalle.tsx`; solo el
   admin puede listar profiles).
 
+- **Regla de orden (Mario, 30-sep-2026)**: toda lista de OC/OV va de la
+  más reciente a la más vieja: fecha descendente y luego folio descendente
+  (el folio es texto: compararlo como número, `localeCompare(…, { numeric:
+  true })`; en SQL no ordenar solo por `id_orden`). Aplica a pantallas
+  nuevas, selectores, reportes y la hoja de pagos del día.
+
 ## Personas y roles (referencia rápida)
 Mario (admin, todas las empresas) · Laura Ortaza (direccion/finanzas, todas) ·
 Jorge Esperón (empresa, ERG: precios unitarios) · Eréndira / Fernando Gómez (rh) ·
