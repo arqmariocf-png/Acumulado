@@ -1407,20 +1407,50 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
         .single();
       if (errCosteo) throw errCosteo;
 
-      const { error: errEntrada } = await supabase.from("movimientos_producto_terminado").insert({
+      // Un lote reabierto ya tiene su entrada: se corrige (cantidad y costo
+      // real) en vez de duplicar el producto terminado.
+      const { data: entradaPrevia, error: errPrevia } = await supabase
+        .from("movimientos_producto_terminado")
+        .select("id")
+        .eq("orden_produccion_id", orden.id)
+        .eq("tipo", "entrada")
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      if (errPrevia) throw errPrevia;
+      const entrada = {
         producto_id: orden.producto_id,
         tipo: "entrada",
         cantidad: cantidad_producida,
         costo_unitario: costeoFinal.costo_unitario ?? 0,
         orden_produccion_id: orden.id,
         fecha: hoyIso(),
-      });
+      };
+      const { error: errEntrada } = entradaPrevia
+        ? await supabase.from("movimientos_producto_terminado").update(entrada).eq("id", entradaPrevia.id)
+        : await supabase.from("movimientos_producto_terminado").insert(entrada);
       if (errEntrada) throw errEntrada;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ordenes-produccion", empresa.id] });
       queryClient.invalidateQueries({ queryKey: ["stock-producto-terminado", empresa.id] });
       invalidarCosteo();
+      onClose();
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  /** Reabre un lote cerrado (solo admin) para corregir un lote de prueba o
+   * mal capturado: vuelve a "en proceso" y se pueden cambiar consumos, mano
+   * de obra, indirectos y datos. Al cerrarlo de nuevo se corrige su entrada
+   * de producto terminado (Mario, 30-sep-2026). */
+  const reabrirLote = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("ordenes_produccion").update({ estado: "en_proceso", fecha_fin: null }).eq("id", orden.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ordenes-produccion", empresa.id] });
       onClose();
     },
     onError: (err) => setError((err as Error).message),
@@ -1450,6 +1480,17 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {esAdmin && cerrada && (
+            <button
+              onClick={() => {
+                if (window.confirm(`¿Reabrir el lote ${orden.folio}? Queda "en proceso" para corregir consumos, mano de obra, indirectos y datos; al cerrarlo otra vez se corrige su entrada de producto terminado.`)) reabrirLote.mutate();
+              }}
+              disabled={reabrirLote.isPending}
+              className="text-xs text-amber-700 underline disabled:opacity-50"
+            >
+              Reabrir lote
+            </button>
+          )}
           {esAdmin && (
             <button onClick={() => setEditando((v) => !v)} className="text-xs text-slate-700 underline">
               {editando ? "Cancelar edición" : "Editar lote"}
@@ -1566,11 +1607,11 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
         >
           <div>
             <label className={etiquetaCampo}>Cantidad producida *</label>
-            <input type="number" step="0.0001" min="0.0001" name="cantidad_producida" required defaultValue={orden.cantidad_planeada} className={campoTexto} />
+            <input type="number" step="0.0001" min="0.0001" name="cantidad_producida" required defaultValue={Number(orden.cantidad_producida) > 0 ? orden.cantidad_producida : orden.cantidad_planeada} className={campoTexto} />
           </div>
           <div>
             <label className={etiquetaCampo}>Merma</label>
-            <input type="number" step="0.0001" min="0" name="cantidad_merma" defaultValue={0} className={campoTexto} />
+            <input type="number" step="0.0001" min="0" name="cantidad_merma" defaultValue={orden.cantidad_merma ?? 0} className={campoTexto} />
           </div>
           <button disabled={cerrarLote.isPending} className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
             {cerrarLote.isPending ? "Cerrando…" : "Marcar terminada y valuar inventario"}
