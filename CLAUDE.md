@@ -692,6 +692,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   true })`; en SQL no ordenar solo por `id_orden`). Aplica a pantallas
   nuevas, selectores, reportes y la hoja de pagos del día.
 
+## Dropbox de trabajo (1-oct-2026)
+- Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
+  `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,
+  logos), `02 Consultas` (lo que Claude prepara a pedido, nombre
+  `AAAA-MM-DD tema`), `03 Del sistema` (exportaciones de la app) y
+  `LEEME.md`. Antes de pedirle a Mario un archivo, revisar ahí. Nunca
+  secretos ni datos de tarjeta en esa carpeta.
+
 ## Personas y roles (referencia rápida)
 Mario (admin, todas las empresas) · Laura Ortaza (direccion/finanzas, todas) ·
 Jorge Esperón (empresa, ERG: precios unitarios) · Eréndira / Fernando Gómez (rh) ·
