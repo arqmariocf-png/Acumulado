@@ -681,6 +681,11 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `operativo`, CSC, `bbva_mantenimiento`, sin expediente en RH todavía.
   Carlos Sánchez Xilot ya tenía cuenta (Gmail, supervisor_bbva); su registro
   carlos.xilot@grupoloma.mx se quedó en `pendiente`.
+- **Dirección captura control de obra (1-oct-2026, Laura: "no me deja subir
+  presupuestos a las obras")**: `auth_administra_proyecto` (solo la usan
+  proyecto_controles / _compras / _nomina) acepta 'direccion' en proyectos
+  de su alcance; `ControlObra.tsx` le muestra los botones
+  (`20261001100000`). Planos, tableros y lo demás siguen igual.
 - **Regla de orden (Mario, 30-sep-2026)**: toda lista de OC/OV va de la
   más reciente a la más vieja: fecha descendente y luego folio descendente
   (el folio es texto: compararlo como número, `localeCompare(…, { numeric:

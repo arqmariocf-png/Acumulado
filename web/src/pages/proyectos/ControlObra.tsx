@@ -39,7 +39,8 @@ function oVacio(fd: FormData, campo: string) {
 export function PestanaControlObra({ proyecto }: { proyecto: Proyecto }) {
   const { perfil } = useAuth();
   // La base aplica la misma regla (auth_administra_proyecto).
-  const puedeEditar = administraProyectosDe(perfil, proyecto.empresa_id);
+  // Dirección también captura presupuesto, compras y nómina (Laura, 1-oct-2026).
+  const puedeEditar = administraProyectosDe(perfil, proyecto.empresa_id) || perfil?.rol === "direccion";
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState(false);
