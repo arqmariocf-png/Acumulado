@@ -668,6 +668,19 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   encabezado de la obra (`EncargadosObra` en `ProyectoDetalle.tsx`; solo el
   admin puede listar profiles).
 
+- **Proyectos al día con el backoffice (1-oct-2026, Mario: "no me sale
+  PASEO 6 AMPLIACION")**: el catálogo se sembró una vez (27-ago) y nada lo
+  alimentaba. `fn_proyectos_desde_backoffice()` (definer, revocada de
+  authenticated) da de alta los nombres de proyecto de OC/OV api que no
+  existan (sin mayúsculas/espacios; empresa = la de más documentos; cliente
+  = el de su OV más reciente; nunca "PROYECTO X"; no toca existentes) y
+  corre al final de `sync-catalogo-oc-ov-horario` (`20261001090000`). Al
+  aplicarla entraron 10 (Paseo 6 Ampliación en MCF, Obra Felipe, Pisos
+  Falla geológica N21, Colima…). Encargados: se asignan en el encabezado.
+- Gustavo Camacho y Jonathan Sánchez (1-oct-2026, a petición de Christian):
+  `operativo`, CSC, `bbva_mantenimiento`, sin expediente en RH todavía.
+  Carlos Sánchez Xilot ya tenía cuenta (Gmail, supervisor_bbva); su registro
+  carlos.xilot@grupoloma.mx se quedó en `pendiente`.
 - **Regla de orden (Mario, 30-sep-2026)**: toda lista de OC/OV va de la
   más reciente a la más vieja: fecha descendente y luego folio descendente
   (el folio es texto: compararlo como número, `localeCompare(…, { numeric:
