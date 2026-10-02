@@ -42,7 +42,10 @@ const PESTANAS: { valor: Pestana; etiqueta: string; directivo?: boolean }[] = [
   { valor: "asignaciones", etiqueta: "5. Asignaciones diarias" },
   { valor: "vacantes", etiqueta: "Vacantes", directivo: true },
   { valor: "actividades", etiqueta: "Actividades" },
-  { valor: "accesos", etiqueta: "Accesos al sistema", directivo: true },
+  // Accesos: RH administrativo (Raúl) también entra para mandar links y
+  // contraseñas temporales (Mario, 2-oct-2026); crear cuentas, rol y módulos
+  // siguen siendo de RH directivo.
+  { valor: "accesos", etiqueta: "Accesos al sistema" },
 ];
 
 type Seccion = "indicadores" | "personal" | "operacion" | "gestion" | "accesos";
@@ -121,7 +124,7 @@ export function RH() {
     <div>
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
       {perfil?.rol === "rh" && (
-        <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: indicadores, todo el módulo, accesos y roles." : "RH administrativo: contratos, expedientes, personal, checador, asignaciones y actividades."}</p>
+        <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: indicadores, todo el módulo, accesos y roles." : "RH administrativo: contratos, expedientes, personal, checador, asignaciones, actividades y links de acceso."}</p>
       )}
 
       <div className="flex flex-col gap-4 md:flex-row">
@@ -173,7 +176,7 @@ export function RH() {
           {pestana === "kpi_actividades" && <KpiActividades />}
           {pestana === "vacantes" && <Vacantes />}
           {pestana === "actividades" && <Actividades />}
-          {pestana === "accesos" && <Accesos />}
+          {pestana === "accesos" && <Accesos directivo={directivo} />}
         </div>
       </div>
     </div>

@@ -149,7 +149,7 @@ export const SECCIONES: SeccionMenu[] = [
               { etiqueta: "Actividades", ruta: "/rh?tab=actividades" },
             ],
           },
-          { etiqueta: "Accesos al sistema", ruta: "/rh?tab=accesos", visible: (p) => esRhDirectivo(p) },
+          { etiqueta: "Accesos al sistema", ruta: "/rh?tab=accesos" },
         ],
       },
       { ruta: "/rh/mano-de-obra", etiqueta: "Mano de obra", descripcion: "nómina externa de las APIs de Grupo Loma", uso: "Costo de mano de obra por periodo y por obra.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
