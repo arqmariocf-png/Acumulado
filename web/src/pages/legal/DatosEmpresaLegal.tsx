@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { FilaPerfilLegal } from "../../lib/contratoCredito";
+import { ExpedienteEmpresa } from "./ExpedienteEmpresa";
 
 type Campos = { [K in keyof FilaPerfilLegal]: string };
 
@@ -115,6 +116,7 @@ export function DatosEmpresaLegal() {
           )}
         </form>
       )}
+      {empresa && <ExpedienteEmpresa empresaId={empresa} />}
     </div>
   );
 }
