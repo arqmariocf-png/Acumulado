@@ -6,13 +6,13 @@ import { fechaCorta, llamarDocumentos, type DocumentoLegal } from "./comun";
 
 /** Archivos de un asunto o de un contrato (demanda, acuerdos, convenio,
  * contrato firmado escaneado). Bucket privado; se ven con liga de 1 h. */
-export function DocumentosLegal({ destino }: { destino: { asunto?: string; contrato?: string } }) {
+export function DocumentosLegal({ destino }: { destino: { asunto?: string; contrato?: string; arrendamiento?: string } }) {
   const { suscripcionPermiteEscribir, perfil } = useAuth();
   const queryClient = useQueryClient();
   const [descripcion, setDescripcion] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const clave = ["legal-documentos", destino.asunto ?? destino.contrato];
+  const clave = ["legal-documentos", destino.asunto ?? destino.contrato ?? destino.arrendamiento];
 
   const { data: docs, isLoading } = useQuery({
     queryKey: clave,

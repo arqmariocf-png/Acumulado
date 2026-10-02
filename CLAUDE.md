@@ -757,6 +757,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `empresaDocumentoId`, ruta `cargas/legal/<empresa>/expediente/…`).
   Semáforo y vencimiento sugerido por tipo en `lib/expedienteLegal.ts`
   (con pruebas). `20261002110000`.
+- **Contrato de arrendamiento (2-oct-2026, Mario)**: machote del contrato
+  CSC → Ergodinova del 1-sep-2023 en `lib/contratoArrendamiento.ts` (con
+  pruebas; 21 cláusulas con fiador, 20 sin él; penas 10/20/20 por defecto;
+  IVA incluido o más IVA; plazo en letra "un año forzoso"). Pestaña
+  **Arrendamientos** en `/legal` (`legal/Arrendamientos.tsx`): nuestra
+  empresa como arrendador o arrendatario (se llena de "Datos legales de la
+  empresa"; la otra parte se elige del grupo o se captura), fiador
+  opcional, generar e imprimir / Word, semáforo de vencimiento (60 días),
+  "Renovar" (mismo plazo desde el día siguiente) y escaneado firmado.
+  Tabla `legal_arrendamientos` (folio ARR-<emp>-0001, solo permiso legal y
+  admin; firmado no se borra) y `legal_documentos.arrendamiento_id` (edge
+  `legal-documentos` v3). `20261002120000`.
 
 ## Dropbox de trabajo (1-oct-2026)
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
