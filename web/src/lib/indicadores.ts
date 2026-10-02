@@ -41,6 +41,8 @@ const produccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || (esRo
 const inventario = (p: Profile) =>
   ["almacen", "direccion", "corporativo", "empresa", "admin"].includes(p.rol) || (esRolBasico(p.rol) && (p.modulos ?? []).includes("inventario"));
 const bbva = (p: Profile) => ["supervisor_bbva", "corporativo", "direccion", "admin"].includes(p.rol) || !!p.bbva_mantenimiento;
+const legal = (p: Profile) => esAdmin(p) || (p.modulos ?? []).includes("legal");
+const creditoClientes = (p: Profile) => legal(p) || p.rol === "direccion";
 const operacion = (p: Profile) => ["direccion", "admin", "corporativo", "empresa", "responsable"].includes(p.rol);
 
 function inicioDeHoy(): string {
@@ -236,6 +238,32 @@ export const INDICADORES: Indicador[] = [
     consulta: async () => {
       const n = await contar(supabase.from("comprobaciones_gasto").select("*", { count: "exact", head: true }).eq("estatus", "enviada"));
       return { valor: n, alerta: n > 0, detalle: "esperan aprobación" };
+    },
+  },
+  {
+    clave: "legal_fechas_vencidas",
+    etiqueta: "Asuntos legales con fecha vencida",
+    ruta: "/legal?tab=asuntos",
+    area: "legal",
+    descripcion: "Asuntos y juicios abiertos cuya próxima actuación ya pasó sin registrar seguimiento.",
+    visible: legal,
+    consulta: async () => {
+      const abiertos = ["abierto", "en_tramite", "suspendido", "convenio"];
+      const n = await contar(supabase.from("legal_asuntos").select("*", { count: "exact", head: true }).in("estatus", abiertos).lt("proxima_fecha", hoyIso()));
+      const semana = await contar(supabase.from("legal_asuntos").select("*", { count: "exact", head: true }).in("estatus", abiertos).gte("proxima_fecha", hoyIso()).lte("proxima_fecha", enDias(7)));
+      return { valor: n, alerta: n > 0, detalle: `${semana} con actuación esta semana` };
+    },
+  },
+  {
+    clave: "legal_creditos_por_autorizar",
+    etiqueta: "Créditos a clientes por autorizar",
+    ruta: "/legal?tab=credito",
+    area: "legal",
+    descripcion: "Clientes con línea de crédito capturada que dirección todavía no autoriza (sin autorización no sale el contrato).",
+    visible: creditoClientes,
+    consulta: async () => {
+      const n = await contar(supabase.from("clientes_credito").select("*", { count: "exact", head: true }).eq("autorizado", false));
+      return { valor: n, alerta: n > 0, detalle: "esperan a dirección" };
     },
   },
   {
