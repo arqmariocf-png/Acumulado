@@ -1,6 +1,6 @@
 import { SECCIONES, type SeccionMenu } from "./menu";
 
-/** Organigrama de dirección general (Mario, 25-sep-2026): las mismas ocho
+/** Organigrama de dirección general (Mario, 25-sep-2026): las mismas
  * áreas que clasifican los módulos (lib/menu.ts), con responsable y color. */
 export interface AreaOrganigrama extends SeccionMenu {
   responsable: string | null;
@@ -10,6 +10,7 @@ export interface AreaOrganigrama extends SeccionMenu {
 const DETALLE: Record<string, { responsable: string | null; color: string }> = {
   finanzas: { responsable: "Laura Ortaza", color: "bg-emerald-600" },
   contabilidad: { responsable: "Delia Farfán", color: "bg-teal-600" },
+  legal: { responsable: "Belén Vergara / Eréndira Solís", color: "bg-rose-700" },
   rh: { responsable: "Fernando Gómez / Eréndira Solís", color: "bg-violet-600" },
   almacen: { responsable: null, color: "bg-amber-600" },
   logistica: { responsable: null, color: "bg-orange-600" },

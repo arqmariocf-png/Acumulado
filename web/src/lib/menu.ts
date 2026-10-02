@@ -58,7 +58,7 @@ const veOperacion = (p: Profile) => (veFinanzasCompleto(p) || p.rol === "respons
 const veInventario = (p: Profile) => veOperacion(p) || modulo("inventario")(p);
 const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || modulo("produccion")(p);
 
-/** Las ocho áreas del organigrama de dirección general (25-sep-2026). El
+/** Las áreas (departamentos) del organigrama de dirección general (25-sep-2026). El
  * menú, el inicio, la guía y el organigrama usan esta misma clasificación. */
 export const SECCIONES: SeccionMenu[] = [
   {
@@ -87,8 +87,27 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/carga", etiqueta: "Carga de archivos", descripcion: "estados de cuenta, CFDI y catálogo OC/OV", uso: "Cada corte: sube el PDF del banco y el zip de CFDI; el catálogo OC/OV se trae del backoffice.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/pendientes", etiqueta: "Pendientes", descripcion: "concentrado por proveedor", uso: "Qué falta pagar o facturar, agrupado por proveedor.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/perfil-fiscal", etiqueta: "Perfil fiscal", descripcion: "datos fiscales y legales de cada empresa", uso: "Razón social, RFC, representante legal y domicilio que salen en contratos y documentos.", visible: veFinanzasCompleto , modulo: "conciliacion" },
-      { ruta: "/legal", etiqueta: "Legal", descripcion: "asuntos y juicios, crédito y contratos con clientes", uso: "Bitácora de cada asunto con su próxima actuación y documentos; el contrato de crédito de los abogados se llena solo cuando dirección autoriza el crédito del cliente.", visible: (p) => esAdmin(p) || p.rol === "direccion" || (p.modulos ?? []).includes("legal"), modulo: "legal" },
       { ruta: "/reportes", etiqueta: "Reportes especiales", descripcion: "reportes a la medida", uso: "Consultas puntuales que no caben en las pantallas normales.", visible: veFinanzasCompleto , modulo: "conciliacion" },
+    ],
+  },
+  {
+    clave: "legal",
+    titulo: "Legal",
+    proposito: "Asuntos y juicios de cada empresa, crédito a clientes y contratos.",
+    entradas: [
+      {
+        ruta: "/legal",
+        etiqueta: "Legal",
+        descripcion: "asuntos y juicios, crédito a clientes y contratos",
+        uso: "Bitácora de cada asunto con su próxima actuación y documentos; el contrato de crédito de los abogados se llena solo cuando dirección autoriza el crédito del cliente.",
+        visible: (p) => esAdmin(p) || p.rol === "direccion" || (p.modulos ?? []).includes("legal"),
+        modulo: "legal",
+        niveles: [
+          { etiqueta: "Asuntos y juicios", ruta: "/legal?tab=asuntos", visible: (p) => esAdmin(p) || (p.modulos ?? []).includes("legal") },
+          { etiqueta: "Crédito y contratos", ruta: "/legal?tab=credito" },
+          { etiqueta: "Datos legales de las empresas", ruta: "/legal?tab=empresa", visible: (p) => esAdmin(p) || (p.modulos ?? []).includes("legal") },
+        ],
+      },
     ],
   },
   {
