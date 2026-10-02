@@ -24,6 +24,21 @@ interface PersonaAcceso {
 }
 
 const DOCS_REQUERIDOS = 3;
+
+// Roles que no son de la familia básica: RH los ve pero no los cambia (los
+// de BBVA mueven ese módulo: folios de cuadrilla y equipo de mantenimiento).
+const ETIQUETA_ROL_FIJO: Record<string, string> = {
+  supervisor_bbva: "Supervisor de cuadrilla BBVA (folios)",
+  responsable: "Responsable / encargado",
+  almacen: "Almacén",
+  produccion: "Producción",
+  rh_documentos: "RH documentos",
+  rh: "RH",
+  empresa: "Empresa",
+  corporativo: "Corporativo",
+  direccion: "Dirección",
+  admin: "Administrador",
+};
 // Mismos roles que rh_puede_mandar_acceso(): RH les manda link y contraseña
 // temporal (rol, módulos y supervisor solo en la familia básica).
 const ROLES_LINK: string[] = ["pendiente", "operativo", "administrativo", "supervisor", "directivo", "supervisor_bbva", "responsable", "almacen", "produccion", "rh_documentos"];
@@ -153,7 +168,12 @@ export function Accesos({ directivo = true }: { directivo?: boolean }) {
     onError: (e) => setError((e as Error).message),
   });
 
-  const supervisores = (personas ?? []).filter((p) => p.profile_id && (p.rol === "supervisor" || p.rol === "directivo" || p.rol === "rh"));
+  // Jefe directo (2-oct-2026, equipo BBVA): cualquiera con cuenta que no sea
+  // operativo puede ser supervisor de alguien; quien queda como su supervisor
+  // ve su checador sin importar su rol (auth_ve_checador_de).
+  const supervisores = (personas ?? [])
+    .filter((p) => p.profile_id && !!p.rol && p.rol !== "operativo" && p.rol !== "pendiente")
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
   const q = busqueda.trim().toLowerCase();
   const filtradas = (personas ?? []).filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.puesto ?? "").toLowerCase().includes(q));
 
@@ -311,7 +331,9 @@ export function Accesos({ directivo = true }: { directivo?: boolean }) {
                         ))}
                       </select>
                     ) : (
-                      <span className="text-slate-500">{p.rol ?? "—"}</span>
+                      <span className="text-slate-500" title="Este rol lo cambia el administrador desde Admin → Usuarios">
+                        {ETIQUETA_ROL_FIJO[p.rol ?? ""] ?? p.rol ?? "—"}
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">
