@@ -255,6 +255,27 @@ function PestanaPersonal() {
     onError: (err) => setError((err as Error).message),
   });
 
+  // Editar los datos de una persona (Raúl, 2-oct-2026): mismo formulario que
+  // el alta, prellenado. RLS de personal ya deja actualizar a cualquier RH.
+  const [editando, setEditando] = useState<Personal | null>(null);
+  const dv = (campo: keyof Personal) => {
+    const v = editando?.[campo];
+    return v == null || typeof v === "boolean" ? "" : String(v);
+  };
+  const actualizar = useMutation({
+    mutationFn: async ({ id, cambios }: { id: string; cambios: Record<string, unknown> }) => {
+      const { data, error } = await supabase.from("personal").update(cambios).eq("id", id).select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No se pudo actualizar (sin permiso o el registro ya no existe)");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rh-personal"] });
+      queryClient.invalidateQueries({ queryKey: ["rh-personal-accesos"] });
+      setEditando(null);
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
   // Baja / reactivación: el registro se conserva (expediente, asignaciones y
   // contrataciones históricas siguen ligadas); solo cambia activo + motivo.
   const [bajaDe, setBajaDe] = useState<Personal | null>(null);
@@ -348,7 +369,7 @@ function PestanaPersonal() {
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
-    crear.mutate({
+    const datos = {
       nombre: fd.get("nombre"),
       puesto: oVacio(fd, "puesto"),
       fecha_nacimiento: oVacio(fd, "fecha_nacimiento"),
@@ -371,7 +392,9 @@ function PestanaPersonal() {
       beneficiario_nombre: oVacio(fd, "beneficiario_nombre"),
       beneficiario_parentesco: oVacio(fd, "beneficiario_parentesco"),
       fecha_ingreso: fd.get("fecha_ingreso"),
-    });
+    };
+    if (editando) actualizar.mutate({ id: editando.id, cambios: datos });
+    else crear.mutate(datos);
   }
 
   return (
@@ -379,7 +402,10 @@ function PestanaPersonal() {
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-slate-500">{personal?.length ?? 0} persona(s) registrada(s).</p>
         <button
-          onClick={() => setMostrarForm((v) => !v)}
+          onClick={() => {
+            setEditando(null);
+            setMostrarForm((v) => !v);
+          }}
           className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
         >
           {mostrarForm ? "Cancelar" : "+ Dar de alta"}
@@ -390,29 +416,30 @@ function PestanaPersonal() {
 
       <SolicitudesNda personal={personal ?? []} />
 
-      {mostrarForm && (
-        <form onSubmit={onSubmit} className="mb-6 max-w-3xl space-y-4 rounded border border-slate-200 bg-white p-4">
+      {(mostrarForm || editando) && (
+        <form key={editando?.id ?? "nuevo"} onSubmit={onSubmit} className="mb-6 max-w-3xl space-y-4 rounded border border-slate-200 bg-white p-4">
+          {editando && <p className="text-sm font-semibold text-slate-800">Editar datos de {editando.nombre}</p>}
           <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <legend className="mb-2 text-sm font-semibold text-slate-700">Datos generales</legend>
             <div>
               <label className={etiquetaCampo}>Nombre completo *</label>
-              <input name="nombre" required className={campoTexto} />
+              <input name="nombre" defaultValue={dv("nombre")} required className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Puesto</label>
-              <input name="puesto" className={campoTexto} />
+              <input name="puesto" defaultValue={dv("puesto")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Fecha de ingreso (primera contratación) *</label>
-              <input type="date" name="fecha_ingreso" required className={campoTexto} />
+              <input type="date" name="fecha_ingreso" defaultValue={dv("fecha_ingreso")} required className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Fecha de nacimiento</label>
-              <input type="date" name="fecha_nacimiento" className={campoTexto} />
+              <input type="date" name="fecha_nacimiento" defaultValue={dv("fecha_nacimiento")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Sexo</label>
-              <select name="sexo" className={campoTexto} defaultValue="">
+              <select name="sexo" className={campoTexto} defaultValue={dv("sexo")}>
                 <option value="">—</option>
                 <option value="M">Masculino</option>
                 <option value="F">Femenino</option>
@@ -420,15 +447,15 @@ function PestanaPersonal() {
             </div>
             <div>
               <label className={etiquetaCampo}>Estado civil</label>
-              <input name="estado_civil" className={campoTexto} />
+              <input name="estado_civil" defaultValue={dv("estado_civil")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Teléfono</label>
-              <input name="telefono" className={campoTexto} />
+              <input name="telefono" defaultValue={dv("telefono")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Correo</label>
-              <input type="email" name="correo" className={campoTexto} />
+              <input type="email" name="correo" defaultValue={dv("correo")} className={campoTexto} />
             </div>
           </fieldset>
 
@@ -436,45 +463,45 @@ function PestanaPersonal() {
             <legend className="mb-2 text-sm font-semibold text-slate-700">Identidad y domicilios</legend>
             <div>
               <label className={etiquetaCampo}>CURP</label>
-              <input name="curp" className={campoTexto} />
+              <input name="curp" defaultValue={dv("curp")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>RFC</label>
-              <input name="rfc" className={campoTexto} />
+              <input name="rfc" defaultValue={dv("rfc")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>NSS (Número de Seguridad Social)</label>
-              <input name="nss" inputMode="numeric" maxLength={11} placeholder="11 dígitos" className={campoTexto} />
+              <input name="nss" defaultValue={dv("nss")} inputMode="numeric" maxLength={11} placeholder="11 dígitos" className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Domicilio particular</label>
-              <input name="domicilio_particular" className={campoTexto} />
+              <input name="domicilio_particular" defaultValue={dv("domicilio_particular")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Domicilio de notificaciones (si es distinto)</label>
-              <input name="domicilio_notificaciones" className={campoTexto} />
+              <input name="domicilio_notificaciones" defaultValue={dv("domicilio_notificaciones")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>INE — No. de identificación</label>
-              <input name="ine_numero_identificacion" className={campoTexto} />
+              <input name="ine_numero_identificacion" defaultValue={dv("ine_numero_identificacion")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>INE — Clave de elector</label>
-              <input name="ine_clave_elector" className={campoTexto} />
+              <input name="ine_clave_elector" defaultValue={dv("ine_clave_elector")} className={campoTexto} />
             </div>
           </fieldset>
 
           <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <legend className="mb-2 text-sm font-semibold text-slate-700">INFONAVIT</legend>
             <div className="flex items-center gap-2 pt-5">
-              <input type="checkbox" name="infonavit_tiene_credito" id="infonavit_tiene_credito" />
+              <input type="checkbox" name="infonavit_tiene_credito" id="infonavit_tiene_credito" defaultChecked={!!editando?.infonavit_tiene_credito} />
               <label htmlFor="infonavit_tiene_credito" className="text-sm text-slate-700">
                 Tiene crédito INFONAVIT
               </label>
             </div>
             <div>
               <label className={etiquetaCampo}>No. de crédito</label>
-              <input name="infonavit_numero_credito" className={campoTexto} />
+              <input name="infonavit_numero_credito" defaultValue={dv("infonavit_numero_credito")} className={campoTexto} />
             </div>
           </fieldset>
 
@@ -482,15 +509,15 @@ function PestanaPersonal() {
             <legend className="mb-2 text-sm font-semibold text-slate-700">Contacto de emergencia (obligatorio)</legend>
             <div>
               <label className={etiquetaCampo}>Nombre *</label>
-              <input name="contacto_emergencia_nombre" required className={campoTexto} />
+              <input name="contacto_emergencia_nombre" defaultValue={dv("contacto_emergencia_nombre")} required className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Teléfono *</label>
-              <input name="contacto_emergencia_telefono" required pattern="[0-9 +()-]{7,}" title="Teléfono de al menos 7 dígitos" className={campoTexto} />
+              <input name="contacto_emergencia_telefono" defaultValue={dv("contacto_emergencia_telefono")} required pattern="[0-9 +()-]{7,}" title="Teléfono de al menos 7 dígitos" className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Parentesco *</label>
-              <input name="contacto_emergencia_parentesco" required className={campoTexto} />
+              <input name="contacto_emergencia_parentesco" defaultValue={dv("contacto_emergencia_parentesco")} required className={campoTexto} />
             </div>
           </fieldset>
 
@@ -498,19 +525,26 @@ function PestanaPersonal() {
             <legend className="mb-2 text-sm font-semibold text-slate-700">Beneficiario (Art. 25/501 LFT)</legend>
             <div>
               <label className={etiquetaCampo}>Nombre</label>
-              <input name="beneficiario_nombre" className={campoTexto} />
+              <input name="beneficiario_nombre" defaultValue={dv("beneficiario_nombre")} className={campoTexto} />
             </div>
             <div>
               <label className={etiquetaCampo}>Parentesco</label>
-              <input name="beneficiario_parentesco" className={campoTexto} />
+              <input name="beneficiario_parentesco" defaultValue={dv("beneficiario_parentesco")} className={campoTexto} />
             </div>
           </fieldset>
 
           {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-          <button disabled={crear.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
-            {crear.isPending ? "Guardando…" : "Guardar"}
-          </button>
+          <div className="flex gap-2">
+            <button disabled={crear.isPending || actualizar.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              {crear.isPending || actualizar.isPending ? "Guardando…" : editando ? "Guardar cambios" : "Guardar"}
+            </button>
+            {editando && (
+              <button type="button" onClick={() => setEditando(null)} className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700">
+                Cancelar
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -556,7 +590,7 @@ function PestanaPersonal() {
         </form>
       )}
 
-      {!mostrarForm && !bajaDe && error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {!mostrarForm && !editando && !bajaDe && error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {finiquitosPendientes.length > 0 && (
         <div className="rounded border border-amber-300 bg-amber-50 p-4">
@@ -651,17 +685,33 @@ function PestanaPersonal() {
                 </td>
                 <td className="px-3 py-2 text-right">
                   {p.activo ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError(null);
-                        setMostrarForm(false);
-                        setBajaDe(p);
-                      }}
-                      className="text-xs text-amber-700 hover:underline"
-                    >
-                      Dar de baja
-                    </button>
+                    <span className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null);
+                          setMostrarForm(false);
+                          setBajaDe(null);
+                          setEditando(p);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className="text-xs text-slate-700 hover:underline"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null);
+                          setMostrarForm(false);
+                          setEditando(null);
+                          setBajaDe(p);
+                        }}
+                        className="text-xs text-amber-700 hover:underline"
+                      >
+                        Dar de baja
+                      </button>
+                    </span>
                   ) : (
                     <span className="flex justify-end gap-3">
                       <button type="button" onClick={() => generarFiniquito(p)} className="text-xs text-amber-800 hover:underline">

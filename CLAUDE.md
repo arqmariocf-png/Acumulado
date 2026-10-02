@@ -552,6 +552,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `auth_rh_directivo` y valida que la persona sea de la organización de RH.
   Cambiar rol, módulos y supervisor después sigue siendo de RH directivo
   (Eréndira, Fernando): `Accesos({ directivo })`, `rh_asignar_rol_basico`.
+- **Link a cuentas operativas (2-oct-2026, Fernando con Carlos Sánchez
+  Xilot, supervisor_bbva)**: `generar-link-acceso` v5 usa
+  `rh_puede_mandar_acceso()` (personal contratado con rol básico,
+  pendiente, supervisor_bbva, responsable, almacen, produccion o
+  rh_documentos; nunca admin/direccion/corporativo/rh/empresa;
+  `20261002090000`). `rh_administra_perfil()` no cambió.
+- **Editar datos del personal (2-oct-2026, Raúl)**: botón "Editar" en RH →
+  Personal; reutiliza el formulario de alta prellenado (RLS de `personal`
+  ya dejaba actualizar a cualquier rh).
 
 ## Costeo de obra del director general (30-sep-2026)
 - Mario: reporte "único mío como director general", modelo para las obras

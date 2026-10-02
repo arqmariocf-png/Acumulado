@@ -24,6 +24,9 @@ interface PersonaAcceso {
 }
 
 const DOCS_REQUERIDOS = 3;
+// Mismos roles que rh_puede_mandar_acceso(): RH les manda link y contraseña
+// temporal (rol, módulos y supervisor solo en la familia básica).
+const ROLES_LINK: string[] = ["pendiente", "operativo", "administrativo", "supervisor", "directivo", "supervisor_bbva", "responsable", "almacen", "produccion", "rh_documentos"];
 
 function usePersonalAccesos() {
   return useQuery({
@@ -227,6 +230,7 @@ export function Accesos({ directivo = true }: { directivo?: boolean }) {
               const rolBasico = !!p.rol && (ROLES_BASICOS as string[]).includes(p.rol);
               const basicoOPendiente = !!p.profile_id && (rolBasico || p.rol === "pendiente");
               const editable = directivo && basicoOPendiente;
+              const mandaLink = !!p.profile_id && !!p.rol && ROLES_LINK.includes(p.rol);
               return (
                 <tr key={p.personal_id} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-2">
@@ -247,10 +251,12 @@ export function Accesos({ directivo = true }: { directivo?: boolean }) {
                     {p.profile_id ? (
                       <div>
                         <div className="text-emerald-700">Cuenta creada{p.correo ? ` · ${p.correo}` : ""}</div>
-                        <button onClick={() => reenviar.mutate(p)} disabled={reenviar.isPending} className="mt-1 text-slate-600 underline">
-                          Reenviar link al celular
-                        </button>
-                        {basicoOPendiente && (
+                        {mandaLink && (
+                          <button onClick={() => reenviar.mutate(p)} disabled={reenviar.isPending} className="mt-1 text-slate-600 underline">
+                            Reenviar link al celular
+                          </button>
+                        )}
+                        {mandaLink && (
                           <button
                             onClick={() => {
                               if (window.confirm(`¿Poner una contraseña temporal a ${p.nombre}? La que tenga dejará de servir.`)) contrasenaTemporal.mutate(p);
