@@ -61,11 +61,12 @@ Deno.serve(async (req) => {
     const { userId, tipo } = await req.json();
     if (!userId) return jsonResponse({ error: "userId es requerido" }, 400);
 
-    // RH solo reenvía el acceso a personal contratado con rol básico (nunca a
-    // cuentas financieras/admin).
+    // RH solo reenvía el acceso a personal contratado con rol operativo
+    // (básicos, supervisor_bbva, responsable, almacén, producción; 2-oct-2026,
+    // caso Carlos Sánchez Xilot): nunca a cuentas financieras ni de admin/RH.
     if (perfil.rol === "rh") {
-      const { data: ok } = await clienteServicio().rpc("rh_administra_perfil", { p_profile_id: userId });
-      if (!ok) return jsonResponse({ error: "RH solo puede dar acceso a personal contratado con rol básico." }, 403);
+      const { data: ok } = await clienteServicio().rpc("rh_puede_mandar_acceso", { p_profile_id: userId });
+      if (!ok) return jsonResponse({ error: "RH solo puede mandar acceso a personal contratado con rol operativo (no a cuentas de dirección, finanzas, RH o administración)." }, 403);
     }
     if (tipo && tipo !== "magiclink" && tipo !== "recovery" && tipo !== "contrasena") {
       return jsonResponse({ error: "tipo debe ser 'magiclink', 'recovery' o 'contrasena'" }, 400);
