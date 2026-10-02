@@ -26,7 +26,7 @@
 // administrativo, supervisor o directivo.
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
-import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
+import { clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
 import { sincronizarUsuariosFacturables } from "../_shared/usuarios-facturables.ts";
 
 const ROLES_ASIGNABLES = ["pendiente", "responsable", "empresa", "almacen", "direccion", "corporativo", "rh", "rh_documentos", "produccion", "supervisor_bbva", "operativo", "administrativo", "supervisor", "directivo"];
@@ -74,11 +74,9 @@ Deno.serve(async (req) => {
 
     const cuerpo = await req.json();
     const esRh = perfilLlamador?.rol === "rh";
-    // Dos niveles de RH (26-sep-2026): solo RH directivo crea accesos.
-    if (esRh) {
-      const { data: directivo } = await clienteComoUsuario(req).rpc("auth_rh_directivo");
-      if (directivo !== true) return jsonResponse({ error: "Solo RH directivo puede crear accesos al sistema" }, 403);
-    }
+    // RH directivo y administrativo crean accesos de personal contratado
+    // (Mario, 2-oct-2026: "Raúl también crea cuentas"); el rol se elige al
+    // crear y después solo lo cambia RH directivo (rh_asignar_rol_basico).
 
     // ---- Alta de personal contratado (RH o admin con personalId) ----
     if (cuerpo.personalId) {
@@ -92,6 +90,8 @@ Deno.serve(async (req) => {
       if (errPersona) return jsonResponse({ error: errPersona.message }, 500);
       if (!persona) return jsonResponse({ error: "No existe esa persona en RH" }, 404);
       if (persona.profile_id) return jsonResponse({ error: "Esa persona ya tiene cuenta ligada" }, 409);
+      // RH solo da de alta a personal de su propia organización.
+      if (esRh && persona.grupo_id && persona.grupo_id !== perfilLlamador?.grupoId) return jsonResponse({ error: "Esa persona no es de tu organización" }, 403);
 
       const { data: tipos } = await dbServicio.from("tipos_documento_personal").select("id, nombre").in("nombre", DOCS_INDISPENSABLES);
       const idsTipos = (tipos ?? []).map((t) => t.id);

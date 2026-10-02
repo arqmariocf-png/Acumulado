@@ -60,8 +60,9 @@ function mandarPorWhatsapp(telefono: string | null, mensaje: string, link: strin
 /** Pestaña "Accesos" de RH (Fernando): crear la cuenta de una persona
  * contratada cuando su expediente tiene INE, CURP y comprobante de
  * domicilio, mandarle el link al celular, y asignarle rol básico, módulos
- * y supervisor. RH administrativo (Raúl, 2-oct-2026) solo manda links y
- * contraseñas temporales; crear, rol, módulos y supervisor son de directivo. */
+ * y supervisor. RH administrativo (Raúl, 2-oct-2026) también crea la cuenta
+ * y manda links y contraseñas temporales; cambiar rol, módulos y supervisor
+ * después es de RH directivo. */
 export function Accesos({ directivo = true }: { directivo?: boolean }) {
   const queryClient = useQueryClient();
   const { data: personas, isLoading } = usePersonalAccesos();
@@ -261,8 +262,6 @@ export function Accesos({ directivo = true }: { directivo?: boolean }) {
                           </button>
                         )}
                       </div>
-                    ) : docsOk && !directivo ? (
-                      <span className="text-sky-700">Expediente completo: la cuenta la crea RH directivo</span>
                     ) : docsOk ? (
                       <div className="grid gap-1">
                         <select
