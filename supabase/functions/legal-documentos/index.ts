@@ -11,6 +11,9 @@
 // sube el archivo del documento (acta, poder, opinión de cumplimiento…) a
 // legal/<empresa>/expediente/<id>/… y lo deja en legal_empresa_documentos;
 // GET ?empresaDocumento=<id> regresa su URL firmada.
+//
+// Arrendamientos (2-oct-2026): arrendamientoId / ?arrendamiento=<id> igual
+// que un contrato (escaneado firmado).
 
 import { respuestaCors, jsonResponse } from "../_shared/cors.ts";
 import { clienteComoUsuario, clienteServicio, obtenerPerfilAutenticado, respuestaSoloConsulta } from "../_shared/supabase-clients.ts";
@@ -50,9 +53,10 @@ Deno.serve(async (req) => {
       }
       const asunto = url.searchParams.get("asunto");
       const contrato = url.searchParams.get("contrato");
-      if (!asunto && !contrato) return jsonResponse({ error: "asunto o contrato requerido" }, 400);
+      const arrendamiento = url.searchParams.get("arrendamiento");
+      if (!asunto && !contrato && !arrendamiento) return jsonResponse({ error: "asunto, contrato o arrendamiento requerido" }, 400);
       let consulta = usuario.from("legal_documentos").select("id, storage_path, nombre, descripcion, subido_por_nombre, created_at").order("created_at", { ascending: false });
-      consulta = asunto ? consulta.eq("asunto_id", asunto) : consulta.eq("contrato_id", contrato!);
+      consulta = asunto ? consulta.eq("asunto_id", asunto) : contrato ? consulta.eq("contrato_id", contrato) : consulta.eq("arrendamiento_id", arrendamiento!);
       const { data: docs, error } = await consulta;
       if (error) return jsonResponse({ error: error.message }, 500);
       const salida = [];
@@ -86,21 +90,22 @@ Deno.serve(async (req) => {
     }
     const asuntoId = String(form.get("asuntoId") ?? "").trim() || null;
     const contratoId = String(form.get("contratoId") ?? "").trim() || null;
+    const arrendamientoId = String(form.get("arrendamientoId") ?? "").trim() || null;
     const descripcion = String(form.get("descripcion") ?? "").trim() || null;
     const archivo = form.get("file") as File | null;
-    if (!asuntoId && !contratoId) return jsonResponse({ error: "asuntoId o contratoId es requerido" }, 400);
+    if (!asuntoId && !contratoId && !arrendamientoId) return jsonResponse({ error: "asuntoId, contratoId o arrendamientoId es requerido" }, 400);
     if (!archivo || archivo.size === 0) return jsonResponse({ error: "Adjunta el archivo" }, 400);
     if (archivo.size > TAMANO_MAXIMO_BYTES) return jsonResponse({ error: "El archivo excede 25 MB" }, 400);
     if (archivo.type && !TIPOS_PERMITIDOS.includes(archivo.type)) return jsonResponse({ error: "Formato no soportado: usa PDF, imagen, Word o Excel" }, 400);
 
     // Que la persona vea el asunto/contrato con su propio permiso (RLS) y,
     // para un asunto, que opere legal.
-    const tabla = asuntoId ? "legal_asuntos" : "legal_contratos";
-    const { data: padre, error: errPadre } = await usuario.from(tabla).select("id, empresa_id").eq("id", asuntoId ?? contratoId!).maybeSingle();
+    const tabla = asuntoId ? "legal_asuntos" : contratoId ? "legal_contratos" : "legal_arrendamientos";
+    const { data: padre, error: errPadre } = await usuario.from(tabla).select("id, empresa_id").eq("id", asuntoId ?? contratoId ?? arrendamientoId!).maybeSingle();
     if (errPadre) return jsonResponse({ error: errPadre.message }, 500);
     if (!padre) return jsonResponse({ error: "No encontrado o sin permiso" }, 404);
 
-    const nombreSeguro = (archivo.name || "documento.pdf").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]/g, "_").slice(-80);
+    const nombreSeguro = (archivo.name || "documento.pdf").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9._-]/g, "_").slice(-80);
     const ruta = `legal/${padre.empresa_id}/${padre.id}/${Date.now()}-${nombreSeguro}`;
     const bytes = new Uint8Array(await archivo.arrayBuffer());
     const { error: errUpload } = await dbServicio.storage.from("cargas").upload(ruta, bytes, { contentType: archivo.type || "application/octet-stream" });
@@ -110,6 +115,7 @@ Deno.serve(async (req) => {
       empresa_id: padre.empresa_id,
       asunto_id: asuntoId,
       contrato_id: contratoId,
+      arrendamiento_id: arrendamientoId,
       storage_path: ruta,
       nombre: archivo.name || null,
       descripcion,

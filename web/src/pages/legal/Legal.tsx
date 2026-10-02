@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
+import { Arrendamientos } from "./Arrendamientos";
 import { Asuntos } from "./Asuntos";
 import { CreditoContratos } from "./CreditoContratos";
 import { DatosEmpresaLegal } from "./DatosEmpresaLegal";
@@ -16,6 +17,7 @@ export function Legal() {
   const pestanas = [
     { clave: "asuntos", titulo: "Asuntos y juicios", ve: legal },
     { clave: "credito", titulo: "Crédito y contratos", ve: legal || perfil?.rol === "direccion" },
+    { clave: "arrendamientos", titulo: "Arrendamientos", ve: legal },
     { clave: "empresa", titulo: "Datos legales de la empresa", ve: legal },
   ].filter((p) => p.ve);
   const actual = pestanas.find((p) => p.clave === params.get("tab"))?.clave ?? pestanas[0]?.clave;
@@ -23,7 +25,7 @@ export function Legal() {
   return (
     <div className="mx-auto max-w-6xl">
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Legal</h1>
-      <p className="mb-3 text-sm text-slate-500">Seguimiento de asuntos y juicios, y contratos de crédito a clientes.</p>
+      <p className="mb-3 text-sm text-slate-500">Seguimiento de asuntos y juicios, contratos de crédito a clientes y de arrendamiento.</p>
       {pestanas.length > 1 && (
         <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
           {pestanas.map((p) => (
@@ -40,6 +42,7 @@ export function Legal() {
       )}
       {actual === "asuntos" && <Asuntos />}
       {actual === "credito" && <CreditoContratos />}
+      {actual === "arrendamientos" && <Arrendamientos />}
       {actual === "empresa" && <DatosEmpresaLegal />}
     </div>
   );

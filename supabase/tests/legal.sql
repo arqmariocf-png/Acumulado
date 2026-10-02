@@ -126,4 +126,33 @@ begin
   raise notice 'OK: el expediente legal solo lo ve legal';
 end $$;
 
+
+\echo '── 7. Arrendamiento: folio ARR, RH sin permiso no lo ve, firmado no se borra'
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-0000-0000-000000000001', false);
+insert into public.legal_arrendamientos (empresa_id, papel, contraparte, inmueble, renta, inicio, fin, datos)
+values ((select id from public.empresas where codigo = 'AEP'), 'arrendador', 'ARRENDATARIO PRUEBA', 'Bodega de prueba', 15000,
+        '2026-10-01', '2027-09-30', '{"renta": 15000}');
+update public.legal_arrendamientos set estatus = 'firmado';
+delete from public.legal_arrendamientos;
+do $$
+declare v record;
+begin
+  select folio, firmado_en into v from public.legal_arrendamientos;
+  if v.folio not like 'ARR-AEP-%' then raise exception 'FALLA: folio de arrendamiento %', v.folio; end if;
+  if v.firmado_en is distinct from current_date then raise exception 'FALLA: sin fecha de firma'; end if;
+  raise notice 'OK: arrendamiento % firmado y no se borró', v.folio;
+end $$;
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-0000-0000-000000000002', false);
+do $$
+begin
+  if exists (select 1 from public.legal_arrendamientos) then raise exception 'FALLA: RH sin permiso legal ve arrendamientos'; end if;
+  raise notice 'OK: los arrendamientos solo los ve legal';
+end $$;
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-0000-0000-000000000004', false);
+do $$
+begin
+  if exists (select 1 from public.legal_arrendamientos) then raise exception 'FALLA: ARSSA ve arrendamientos de Loma'; end if;
+  raise notice 'OK: frontera en arrendamientos';
+end $$;
+
 reset role;

@@ -105,6 +105,7 @@ export const SECCIONES: SeccionMenu[] = [
         niveles: [
           { etiqueta: "Asuntos y juicios", ruta: "/legal?tab=asuntos", visible: (p) => esAdmin(p) || (p.modulos ?? []).includes("legal") },
           { etiqueta: "Crédito y contratos", ruta: "/legal?tab=credito" },
+          { etiqueta: "Arrendamientos", ruta: "/legal?tab=arrendamientos", visible: (p) => esAdmin(p) || (p.modulos ?? []).includes("legal") },
           { etiqueta: "Datos legales de las empresas", ruta: "/legal?tab=empresa", visible: (p) => esAdmin(p) || (p.modulos ?? []).includes("legal") },
         ],
       },

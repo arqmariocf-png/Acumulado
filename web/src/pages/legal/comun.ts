@@ -69,7 +69,7 @@ export interface DocumentoLegal {
   url: string | null;
 }
 
-export async function llamarDocumentos(metodo: "GET" | "POST", destino: { asunto?: string; contrato?: string }, archivo?: File, descripcion?: string) {
+export async function llamarDocumentos(metodo: "GET" | "POST", destino: { asunto?: string; contrato?: string; arrendamiento?: string }, archivo?: File, descripcion?: string) {
   const { data: sesion } = await supabase.auth.getSession();
   const token = sesion.session?.access_token;
   const base = urlFuncion("legal-documentos");
@@ -78,10 +78,15 @@ export async function llamarDocumentos(metodo: "GET" | "POST", destino: { asunto
     cuerpo = new FormData();
     if (destino.asunto) cuerpo.append("asuntoId", destino.asunto);
     if (destino.contrato) cuerpo.append("contratoId", destino.contrato);
+    if (destino.arrendamiento) cuerpo.append("arrendamientoId", destino.arrendamiento);
     if (descripcion) cuerpo.append("descripcion", descripcion);
     cuerpo.append("file", archivo);
   }
-  const qs = destino.asunto ? `asunto=${encodeURIComponent(destino.asunto)}` : `contrato=${encodeURIComponent(destino.contrato ?? "")}`;
+  const qs = destino.asunto
+    ? `asunto=${encodeURIComponent(destino.asunto)}`
+    : destino.arrendamiento
+      ? `arrendamiento=${encodeURIComponent(destino.arrendamiento)}`
+      : `contrato=${encodeURIComponent(destino.contrato ?? "")}`;
   const resp = await fetch(metodo === "GET" ? `${base}?${qs}` : base, {
     method: metodo,
     headers: { Authorization: `Bearer ${token}` },
