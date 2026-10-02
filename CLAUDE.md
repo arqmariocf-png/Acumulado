@@ -545,13 +545,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   antes un admin de otro cliente podía generar links para gente de LOMA.
   La persona la cambia con el botón "Contraseña" del encabezado
   (`cambiarContrasena()` en `useAuth` → `NuevaContrasena`).
-- **RH administrativo manda links (2-oct-2026, Mario)**: Raúl Molina (rh,
-  `rh_nivel` administrativo) ya ve RH → "Accesos al sistema" para reenviar
-  el link y poner contraseña temporal (la edge `generar-link-acceso` ya
-  aceptaba cualquier rh, acotado por `rh_administra_perfil`). Crear la
-  cuenta (`admin-crear-usuario` exige `auth_rh_directivo`), cambiar rol,
-  módulos y supervisor siguen siendo de RH directivo (Eréndira):
-  `Accesos({ directivo })`.
+- **RH administrativo da de alta y manda links (2-oct-2026, Mario: "Raúl
+  también crea cuentas")**: Raúl Molina (rh, `rh_nivel` administrativo) ve
+  RH → "Accesos al sistema": crea la cuenta (con rol básico), reenvía el
+  link y pone contraseña temporal. `admin-crear-usuario` v6 ya no exige
+  `auth_rh_directivo` y valida que la persona sea de la organización de RH.
+  Cambiar rol, módulos y supervisor después sigue siendo de RH directivo
+  (Eréndira, Fernando): `Accesos({ directivo })`, `rh_asignar_rol_basico`.
 
 ## Costeo de obra del director general (30-sep-2026)
 - Mario: reporte "único mío como director general", modelo para las obras
