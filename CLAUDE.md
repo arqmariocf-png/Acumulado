@@ -558,6 +558,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pendiente, supervisor_bbva, responsable, almacen, produccion o
   rh_documentos; nunca admin/direccion/corporativo/rh/empresa;
   `20261002090000`). `rh_administra_perfil()` no cambió.
+- **Jefe directo sin importar el rol (2-oct-2026, Fernando con el equipo
+  BBVA)**: `auth_ve_checador_de` ya no pide rol 'supervisor': quien está en
+  `personal.supervisor_profile_id` ve el checador de esa persona
+  (`20261002100000`). En Accesos la columna Supervisor ofrece a cualquiera
+  con cuenta que no sea operativo (Christian, responsable+BBVA). Los roles
+  de BBVA (supervisor_bbva = cuadrillas de folios, responsable con
+  bbva_mantenimiento) no se cambian a básicos: mueven el módulo BBVA.
 - **Editar datos del personal (2-oct-2026, Raúl)**: botón "Editar" en RH →
   Personal; reutiliza el formulario de alta prellenado (RLS de `personal`
   ya dejaba actualizar a cualquier rh).
