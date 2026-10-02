@@ -60,8 +60,9 @@ function mandarPorWhatsapp(telefono: string | null, mensaje: string, link: strin
 /** Pestaña "Accesos" de RH (Fernando): crear la cuenta de una persona
  * contratada cuando su expediente tiene INE, CURP y comprobante de
  * domicilio, mandarle el link al celular, y asignarle rol básico, módulos
- * y supervisor. */
-export function Accesos() {
+ * y supervisor. RH administrativo (Raúl, 2-oct-2026) solo manda links y
+ * contraseñas temporales; crear, rol, módulos y supervisor son de directivo. */
+export function Accesos({ directivo = true }: { directivo?: boolean }) {
   const queryClient = useQueryClient();
   const { data: personas, isLoading } = usePersonalAccesos();
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +224,8 @@ export function Accesos() {
             {filtradas.map((p) => {
               const docsOk = Number(p.docs_indispensables) >= DOCS_REQUERIDOS;
               const rolBasico = !!p.rol && (ROLES_BASICOS as string[]).includes(p.rol);
-              const editable = !!p.profile_id && (rolBasico || p.rol === "pendiente");
+              const basicoOPendiente = !!p.profile_id && (rolBasico || p.rol === "pendiente");
+              const editable = directivo && basicoOPendiente;
               return (
                 <tr key={p.personal_id} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-2">
@@ -247,7 +249,7 @@ export function Accesos() {
                         <button onClick={() => reenviar.mutate(p)} disabled={reenviar.isPending} className="mt-1 text-slate-600 underline">
                           Reenviar link al celular
                         </button>
-                        {editable && (
+                        {basicoOPendiente && (
                           <button
                             onClick={() => {
                               if (window.confirm(`¿Poner una contraseña temporal a ${p.nombre}? La que tenga dejará de servir.`)) contrasenaTemporal.mutate(p);
@@ -259,6 +261,8 @@ export function Accesos() {
                           </button>
                         )}
                       </div>
+                    ) : docsOk && !directivo ? (
+                      <span className="text-sky-700">Expediente completo: la cuenta la crea RH directivo</span>
                     ) : docsOk ? (
                       <div className="grid gap-1">
                         <select
@@ -323,12 +327,13 @@ export function Accesos() {
                         <span className="text-slate-400">Checador, Mis documentos y Tareas siempre.</span>
                       </div>
                     ) : (
-                      <span className="text-slate-400">{p.profile_id ? "Rol fijo, lo administra un administrador" : "—"}</span>
+                      <span className="text-slate-400">{p.profile_id ? (directivo ? "Rol fijo, lo administra un administrador" : p.modulos.join(", ") || "—") : "—"}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">
                     <select
                       value={p.supervisor_profile_id ?? ""}
+                      disabled={!directivo}
                       onChange={(e) => cambiarSupervisor.mutate({ personalId: p.personal_id, supervisorProfileId: e.target.value || null })}
                       className="rounded border border-slate-300 px-1.5 py-1 text-xs"
                     >
