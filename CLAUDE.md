@@ -692,6 +692,38 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   true })`; en SQL no ordenar solo por `id_orden`). Aplica a pantallas
   nuevas, selectores, reportes y la hoja de pagos del día.
 
+## Legal (1-oct-2026)
+- Mario: "módulo legal; que esté Belén con el rol para dar seguimiento, al
+  igual que Eréndira" + el contrato de crédito de los abogados como machote
+  que se llene solo cuando el cliente esté autorizado.
+  `20261001110000_modulo_legal.sql` (aplicada en producción por partes: el
+  MCP se atoraba con bloques grandes y con `fn_director_general_policies()`
+  completa; la migración pone `director_general` solo en sus 5 tablas).
+- Módulo `legal` (LOMA). **Permiso por persona**, no rol: `permisos_modulo`
+  'legal' a Belén Vergara (corporativo, la de @grupoloma.mx) y Eréndira
+  Solís (rh). `auth_opera_legal()` = admin o permiso; `auth_credito_clientes()`
+  = eso o dirección; `auth_autoriza_credito()` = admin o dirección.
+- `legal_asuntos` (folio LEG-<emp>-0001, tipo, contraparte, autoridad,
+  expediente, abogado, monto en riesgo, estatus, próxima fecha/actuación),
+  bitácora `legal_seguimiento` (la próxima fecha pasa al asunto por trigger)
+  y `legal_documentos` (edge `legal-documentos`, bucket `cargas/legal/…`).
+- Crédito a clientes: `clientes_credito` (línea, días, interés moratorio,
+  representante, obligado solidario, `legales` jsonb con escritura y poder o
+  el párrafo tal cual). Capturan legal y dirección; **autorizan solo admin y
+  dirección** (trigger). `legal_contratos` (folio CTO-<emp>-0001, `datos` =
+  foto de lo que se imprimió) solo con crédito autorizado.
+- Machote: `lib/contratoCreditoTexto.ts` (texto de los abogados, 34
+  cláusulas, marcadores {{MONTO}} {{INTERES}} {{OBLIGADO}}
+  {{NOTIFICACIONES}} {{FIRMA}}; no se edita sin los abogados) y
+  `lib/contratoCredito.ts` (con pruebas: números y fechas en letra,
+  declaraciones de proveedor y cliente moral/físico, firmas; HTML para
+  imprimir y .doc para Word). Datos del proveedor = `empresas_perfil_legal`
+  (se agregaron rfc, objeto social, volúmenes, notaría del poder, correo,
+  teléfono; AEP sembrada del contrato). RAMSICON quedó como cliente de AEP
+  con línea de 150,000 autorizada.
+- Pantalla `/legal` (`pages/legal/`): Asuntos y juicios · Crédito y
+  contratos · Datos legales de la empresa. Menú en Contabilidad.
+
 ## Dropbox de trabajo (1-oct-2026)
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
   `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,
