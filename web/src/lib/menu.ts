@@ -87,6 +87,7 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/carga", etiqueta: "Carga de archivos", descripcion: "estados de cuenta, CFDI y catálogo OC/OV", uso: "Cada corte: sube el PDF del banco y el zip de CFDI; el catálogo OC/OV se trae del backoffice.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/pendientes", etiqueta: "Pendientes", descripcion: "concentrado por proveedor", uso: "Qué falta pagar o facturar, agrupado por proveedor.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/perfil-fiscal", etiqueta: "Perfil fiscal", descripcion: "datos fiscales y legales de cada empresa", uso: "Razón social, RFC, representante legal y domicilio que salen en contratos y documentos.", visible: veFinanzasCompleto , modulo: "conciliacion" },
+      { ruta: "/legal", etiqueta: "Legal", descripcion: "asuntos y juicios, crédito y contratos con clientes", uso: "Bitácora de cada asunto con su próxima actuación y documentos; el contrato de crédito de los abogados se llena solo cuando dirección autoriza el crédito del cliente.", visible: (p) => esAdmin(p) || p.rol === "direccion" || (p.modulos ?? []).includes("legal"), modulo: "legal" },
       { ruta: "/reportes", etiqueta: "Reportes especiales", descripcion: "reportes a la medida", uso: "Consultas puntuales que no caben en las pantallas normales.", visible: veFinanzasCompleto , modulo: "conciliacion" },
     ],
   },

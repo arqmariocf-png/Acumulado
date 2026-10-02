@@ -403,7 +403,7 @@ function firmas(d: DatosContrato): string {
       ? bloque("“EL COMPRADOR”", razonLimpia(c.razon_social).toUpperCase(), hueco(c.representante_nombre).toUpperCase(), hueco(c.representante_cargo).toUpperCase())
       : bloque("“EL COMPRADOR”", "", c.razon_social.toUpperCase(), "POR SU PROPIO DERECHO");
   const obligado = c.obligado_solidario_nombre?.trim()
-    ? `<table class="firmas"><tr><td class="firma solo"><div class="rol">“OBLIGADO SOLIDARIO”</div><div class="linea"></div><div class="nombre">C. ${esc(c.obligado_solidario_nombre.trim().toUpperCase())}</div></td></tr></table>`
+    ? `<table class="firmas obligado"><tr><td class="firma solo"><div class="rol">“OBLIGADO SOLIDARIO”</div><div class="linea"></div><div class="nombre">C. ${esc(c.obligado_solidario_nombre.trim().toUpperCase())}</div></td></tr></table>`
     : "";
   return `<table class="firmas"><tr>${bloque("“EL PROVEEDOR”", razonLimpia(p.razon_social).toUpperCase(), nombreProv, p.representante_puesto.toUpperCase())}${comprador}</tr></table>${obligado}`;
 }
@@ -420,6 +420,7 @@ const ESTILO = `
   .folio { text-align: right; font-size: 9pt; color: #444; margin-bottom: 6pt; }
   table.firmas { width: 100%; margin-top: 36pt; border-collapse: collapse; page-break-inside: avoid; }
   td.firma { width: 50%; text-align: center; vertical-align: top; padding: 0 12pt; font-size: 10pt; }
+  table.firmas.obligado { width: 50%; margin: 24pt auto 0; }
   td.firma.solo { width: auto; }
   .rol { font-weight: bold; margin-bottom: 48pt; }
   .linea { border-top: 1px solid #000; width: 75%; margin: 0 auto 4pt; }

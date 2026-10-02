@@ -36,7 +36,7 @@ export interface Empresa {
 // es un `grupo` con sus entidades, usuarios y datos aislados, y con los
 // módulos que se le van abriendo. Ver supabase/migrations/20260923090001.
 
-export type ModuloClave = "conciliacion" | "inventario" | "rh" | "proyectos" | "comedor";
+export type ModuloClave = "conciliacion" | "inventario" | "rh" | "proyectos" | "comedor" | "legal";
 
 export interface Grupo {
   id: string;

@@ -31,6 +31,7 @@ import { InicioSegunRol } from "./pages/InicioSegunRol";
 import { Socio, RutaSocio } from "./pages/Socio";
 const Gastos = lazy(() => import("./pages/Gastos").then((m) => ({ default: m.Gastos })));
 const Comedor = lazy(() => import("./pages/comedor/Comedor").then((m) => ({ default: m.Comedor })));
+const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
@@ -123,6 +124,10 @@ function Enrutador() {
           </Route>
           {/* Comedor: cualquiera con cuenta pide; cocina y nómina se deciden en la base. */}
           <Route path="/comedor" element={<Comedor />} />
+          {/* Legal: permiso por persona ('legal') sin cambiar el rol; dirección entra a crédito y contratos. */}
+          <Route element={<ProtectedRoute roles={["direccion"]} oPermiso={(p) => (p.modulos ?? []).includes("legal")} />}>
+            <Route path="/legal" element={<Legal />} />
+          </Route>
           {/* Finanzas/bancos: cerrado para los roles básicos de personal
               (operativo, administrativo, supervisor, directivo) -- "finanzas"
               no es un módulo asignable. */}
