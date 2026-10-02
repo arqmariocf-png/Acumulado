@@ -104,4 +104,26 @@ begin
   raise notice 'OK: autorizado por % y contrato %', v.autorizado_por_nombre, v.folio;
 end $$;
 
+\echo '── 6. Expediente de la empresa: legal captura, RH sin permiso no ve'
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-0000-0000-000000000001', false);
+insert into public.legal_empresa_documentos (empresa_id, tipo, nombre, vence)
+values ((select id from public.empresas where codigo = 'AEP'), 'opinion_sat', 'Opinión de cumplimiento SAT', current_date + 20);
+insert into public.legal_empresa_observaciones (empresa_id, tipo, titulo, motivo)
+values ((select id from public.empresas where codigo = 'AEP'), 'protocolizacion', 'Acta de asamblea 2026', 'Cambio de administrador único');
+update public.legal_empresa_observaciones set estatus = 'protocolizada';
+do $$
+begin
+  if (select subido_por_nombre from public.legal_empresa_documentos) is distinct from 'Legal Loma' then raise exception 'FALLA: sin quién subió'; end if;
+  if (select resuelto_en from public.legal_empresa_observaciones) is distinct from current_date then raise exception 'FALLA: no quedó la fecha de protocolización'; end if;
+  raise notice 'OK: documento con vencimiento y acta protocolizada';
+end $$;
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-0000-0000-000000000002', false);
+do $$
+begin
+  if exists (select 1 from public.legal_empresa_documentos) or exists (select 1 from public.legal_empresa_observaciones) then
+    raise exception 'FALLA: RH sin permiso legal ve el expediente legal';
+  end if;
+  raise notice 'OK: el expediente legal solo lo ve legal';
+end $$;
+
 reset role;

@@ -745,7 +745,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   teléfono; AEP sembrada del contrato). RAMSICON quedó como cliente de AEP
   con línea de 150,000 autorizada.
 - Pantalla `/legal` (`pages/legal/`): Asuntos y juicios · Crédito y
-  contratos · Datos legales de la empresa. Menú en Contabilidad.
+  contratos · Datos legales de la empresa. **Departamento propio** (2-oct):
+  sección "Legal" del menú y área del organigrama (Belén / Eréndira), KPIs
+  `legal_fechas_vencidas`, `legal_documentos_vencidos`,
+  `legal_creditos_por_autorizar`.
+- **Expediente legal por empresa (2-oct-2026, Eréndira)**: en Datos legales
+  de la empresa (`legal/ExpedienteEmpresa.tsx`): observaciones y actas por
+  protocolizar con motivo sugerido (`legal_empresa_observaciones`, estatus
+  pendiente → en notaría → protocolizada) y documentos con vencimiento y
+  archivo (`legal_empresa_documentos`; edge `legal-documentos` v2 con
+  `empresaDocumentoId`, ruta `cargas/legal/<empresa>/expediente/…`).
+  Semáforo y vencimiento sugerido por tipo en `lib/expedienteLegal.ts`
+  (con pruebas). `20261002110000`.
 
 ## Dropbox de trabajo (1-oct-2026)
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):

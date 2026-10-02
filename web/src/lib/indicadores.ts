@@ -255,6 +255,19 @@ export const INDICADORES: Indicador[] = [
     },
   },
   {
+    clave: "legal_documentos_vencidos",
+    etiqueta: "Documentos legales vencidos o por vencer",
+    ruta: "/legal?tab=empresa",
+    area: "legal",
+    descripcion: "Documentos del expediente legal de las empresas (opiniones de cumplimiento, licencias, poderes…) vencidos o que vencen en 30 días.",
+    visible: legal,
+    consulta: async () => {
+      const vencidos = await contar(supabase.from("legal_empresa_documentos").select("*", { count: "exact", head: true }).lt("vence", hoyIso()));
+      const porVencer = await contar(supabase.from("legal_empresa_documentos").select("*", { count: "exact", head: true }).gte("vence", hoyIso()).lte("vence", enDias(30)));
+      return { valor: vencidos, alerta: vencidos > 0, detalle: `${porVencer} vencen en 30 días` };
+    },
+  },
+  {
     clave: "legal_creditos_por_autorizar",
     etiqueta: "Créditos a clientes por autorizar",
     ruta: "/legal?tab=credito",
