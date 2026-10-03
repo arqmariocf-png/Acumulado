@@ -1140,7 +1140,7 @@ export function Movimientos() {
             <div className="mt-2 grid grid-cols-2 gap-2 rounded border border-dashed border-slate-300 p-2">
               <input value={nuevaOcFolio} onChange={(e) => setNuevaOcFolio(e.target.value)} placeholder="Folio de la OC (ej. 40921)" className="rounded border border-slate-300 px-2 py-1 text-sm" />
               <input value={nuevaOcProveedor} onChange={(e) => setNuevaOcProveedor(e.target.value)} placeholder="Proveedor" className="rounded border border-slate-300 px-2 py-1 text-sm" />
-              <p className="col-span-2 text-xs text-slate-500">Las OC llegan del backoffice cada hora, pero solo las ya autorizadas. Con el folio la ligas desde ahora y se completa sola cuando la autoricen.</p>
+              <p className="col-span-2 text-xs text-slate-500">Las OC llegan del backoffice cada hora (autorizadas y pendientes de autorizar). Si todavía no aparece, con el folio la ligas desde ahora y se completa sola cuando llegue.</p>
             </div>
           )}
           {lineas && lineas.length > 0 && ordenId !== "__nueva__" && (

@@ -42,8 +42,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
 - Backoffice (`reports.grupoloma.mx/dash/api_*_aut` y `_det_aut`): Laravel lento
   (30–60 s por endpoint, sin filtros ni caché). Se sincroniza cada hora (pg_cron
   `sync-catalogo-oc-ov-horario`, minuto 15) y bajo demanda en segundo plano
-  (`solicitar_sincronizacion_oc_ov` + `sincronizaciones_oc_ov`). Solo llegan
-  OC ya autorizadas; las pendientes se dan de alta a mano con folio (fuente 'excel').
+  (`solicitar_sincronizacion_oc_ov` + `sincronizaciones_oc_ov`). Llegan
+  TODAS las OC con su estatus, también las "Pendiente de Autorización", y
+  dirección las autoriza aquí en "Por autorizar" (Mario, 2-oct-2026:
+  "autorizaremos desde Acumulado"). Otros endpoints (api_ocs, _pend,
+  _noaut, _todas) no existen: 404. Lo que aún no está en `api_ocs_aut` se
+  da de alta a mano con folio (fuente 'excel').
 - Partidas de OC/OV en `ordenes_compra_lineas` / `ordenes_venta_lineas` con
   vistas `v_oc_lineas_avance` / `v_ov_lineas_avance` (recibido, pendiente,
   diferencia, estado incl. 'excedido'); `movimientos_inventario` apunta a la partida.
