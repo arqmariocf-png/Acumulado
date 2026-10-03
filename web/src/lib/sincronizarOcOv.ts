@@ -22,7 +22,7 @@ export interface ResultadoSincronizacionOcOv {
  * cambiaron. */
 export function textoResultadoSincronizacion(res: ResultadoSincronizacionOcOv): string {
   const cambios = (res.oc_guardadas ?? 0) + (res.ov_guardadas ?? 0);
-  return `Catálogo al día: ${res.oc_procesadas ?? 0} OC/OS y ${res.ov_procesadas ?? 0} OV revisadas del backoffice (solo las ya autorizadas); ${cambios === 0 ? "sin cambios" : `${cambios} con cambios`}.`;
+  return `Catálogo al día: ${res.oc_procesadas ?? 0} OC/OS y ${res.ov_procesadas ?? 0} OV revisadas del backoffice (autorizadas y también las pendientes de autorizar, que se autorizan aquí en “Por autorizar”); ${cambios === 0 ? "sin cambios" : `${cambios} con cambios`}.`;
 }
 
 export async function sincronizarCatalogoOcOv(maxEsperaMs = 4 * 60 * 1000): Promise<ResultadoSincronizacionOcOv> {
