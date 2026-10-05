@@ -7,13 +7,15 @@ import { CompraEnUnPaso } from "./CompraEnUnPaso";
 import { BotonVerOc } from "./VerOrdenCompra";
 import { RecepcionOc } from "./RecepcionOc";
 import { ETIQUETA_CONDICION, type CondicionPago } from "../../lib/pagosOc";
-import { ETIQUETA_SEGUIMIENTO, seguimientoLinea, type EstadoSeguimiento, type EventoLinea, type Seguimiento, type TipoEvento } from "../../lib/seguimientoLinea";
+import { ETIQUETA_SEGUIMIENTO, avancePartidas, puedeMarcarEvento, seguimientoLinea, type EstadoSeguimiento, type EventoLinea, type ExtraLinea, type Seguimiento, type TipoEvento } from "../../lib/seguimientoLinea";
 import { SeguimientoLinea } from "./SeguimientoLinea";
 
 const COLOR_SEGUIMIENTO: Record<EstadoSeguimiento, string> = {
   sin_pedir: "bg-slate-100 text-slate-600",
   pedido_parcial: "bg-amber-100 text-amber-800",
   pedido: "bg-sky-100 text-sky-800",
+  en_bodega: "bg-indigo-100 text-indigo-800",
+  en_transito: "bg-violet-100 text-violet-800",
   entregado_parcial: "bg-amber-100 text-amber-800",
   entregado: "bg-emerald-100 text-emerald-800",
 };
@@ -51,12 +53,16 @@ interface OrdenDeRequisicion {
  * botón "Comprar" (un paso: proveedor, costo, cotización → OC RQ) para
  * almacén, y las órdenes de compra que ya salieron de ella con "Ver orden"
  * (Mario, 29-sep-2026: todo en una sola pantalla). */
-export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { requisicionId: string; solicitadoPor?: string; estado?: string }) {
+export function DetalleRequisicion({ requisicionId, solicitadoPor, estado, esDeLaObra = false }: { requisicionId: string; solicitadoPor?: string; estado?: string; esDeLaObra?: boolean }) {
   const { perfil, soloConsulta } = useAuth();
   const queryClient = useQueryClient();
   // Pedido / entregado / devolución / comentarios: cualquiera que vea la
   // requisición (Jonathan, 29-sep-2026). La base exige que sea a su nombre.
   const puedeMarcar = !!perfil && !soloConsulta;
+  // Bodega la marca almacén; lo recibido en obra, quien pidió o el
+  // responsable/comprador de la obra (5-oct-2026, Mario con Alma).
+  const deLaObra = esDeLaObra || (!!perfil && perfil.id === solicitadoPor);
+  const puede = (t: TipoEvento) => puedeMarcar && puedeMarcarEvento(t, perfil?.rol, deLaObra);
   const [seguimientoAbierto, setSeguimientoAbierto] = useState<{ lineaId: string; tipo: TipoEvento } | null>(null);
   const puedeComprar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
   // Quien la pidió puede seguir agregando renglones mientras esté enviada
@@ -91,12 +97,17 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
   const { data, isLoading, error } = useQuery({
     queryKey: ["requisicion-detalle", requisicionId],
     queryFn: async () => {
-      const [lineas, avance, ordenes, eventos] = await Promise.all([
+      const [lineas, avance, ordenes, eventos, entrega] = await Promise.all([
         supabase.from("requisicion_lineas").select("id, cantidad_solicitada, unidad_medida, descripcion, productos(id, nombre, sku)").eq("requisicion_id", requisicionId).order("created_at"),
         supabase.from("avance_resolucion_linea").select("requisicion_linea_id, cantidad_a_compra, cantidad_a_entrega, cantidad_sin_resolver").eq("requisicion_id", requisicionId),
         supabase.from("v_requisicion_ordenes").select("orden_compra_id, id_orden, proveedor, total, fecha_creacion, autorizada_en, condicion_pago, pagado, saldo").eq("requisicion_id", requisicionId).order("created_at", { ascending: false }),
         supabase.from("requisicion_linea_eventos").select("id, requisicion_linea_id, tipo, cantidad, nota, created_by, created_by_nombre, created_at").eq("requisicion_id", requisicionId).order("created_at"),
+        supabase.from("v_requisicion_linea_entrega").select("requisicion_linea_id, comprado, oc_bodega, oc_obra").eq("requisicion_id", requisicionId),
       ]);
+      const extraPorLinea = new Map<string, ExtraLinea>();
+      ((entrega.data ?? []) as { requisicion_linea_id: string; comprado: number; oc_bodega: number; oc_obra: number }[]).forEach((x) =>
+        extraPorLinea.set(x.requisicion_linea_id, { comprado: Number(x.comprado), ocBodega: Number(x.oc_bodega), ocObra: Number(x.oc_obra) }),
+      );
       if (eventos.error) throw eventos.error;
       const eventosPorLinea = new Map<string, EventoLinea[]>();
       (eventos.data as EventoLinea[]).forEach((e) => eventosPorLinea.set(e.requisicion_linea_id, [...(eventosPorLinea.get(e.requisicion_linea_id) ?? []), e]));
@@ -105,7 +116,7 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
       if (ordenes.error) throw ordenes.error;
       const porLinea = new Map<string, AvanceLinea>();
       (avance.data as AvanceLinea[]).forEach((a) => porLinea.set(a.requisicion_linea_id, a));
-      return { lineas: lineas.data as unknown as LineaDetalle[], porLinea, ordenes: ordenes.data as OrdenDeRequisicion[], eventosPorLinea };
+      return { lineas: lineas.data as unknown as LineaDetalle[], porLinea, ordenes: ordenes.data as OrdenDeRequisicion[], eventosPorLinea, extraPorLinea };
     },
   });
 
@@ -183,8 +194,30 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
   if (error) return <p className="px-3 py-2 text-xs text-red-600">No se pudieron cargar los renglones: {(error as Error).message}</p>;
   if (!data) return null;
 
+  const segs = data.lineas.map((l) => seguimientoLinea(Number(l.cantidad_solicitada), data.eventosPorLinea.get(l.id) ?? [], data.extraPorLinea.get(l.id)));
+  const avanceTotal = avancePartidas(segs);
+  const cuenta = (e: EstadoSeguimiento[]) => segs.filter((x) => e.includes(x.estado)).length;
+
   return (
     <div className="border-t border-slate-100 bg-slate-50 px-3 py-3">
+      {segs.length > 0 && (
+        <div className="mb-2 rounded border border-slate-200 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="font-semibold text-slate-800">Avance {avanceTotal}%</span>
+            <span className="h-2 min-w-[8rem] flex-1 overflow-hidden rounded-full bg-slate-100">
+              <span className={`block h-full ${avanceTotal >= 100 ? "bg-emerald-500" : "bg-sky-500"}`} style={{ width: `${Math.min(100, avanceTotal)}%` }} />
+            </span>
+            <span className="text-slate-500">{segs.length} partidas:</span>
+            <span className="text-slate-600">{cuenta(["sin_pedir"])} sin pedir</span>
+            <span className="text-sky-800">{cuenta(["pedido", "pedido_parcial"])} pedidas</span>
+            <span className="text-indigo-800">{cuenta(["en_bodega"])} en bodega</span>
+            <span className="text-violet-800">{cuenta(["en_transito"])} en camino</span>
+            <span className="text-amber-800">{cuenta(["entregado_parcial"])} en obra parcial</span>
+            <span className="font-medium text-emerald-800">{cuenta(["entregado"])} en obra</span>
+          </div>
+          <p className="mt-1 text-[10px] text-slate-400">El avance cuenta cuatro pasos por partida: pedido · recibido en bodega · enviado a obra · recibido en obra. Recibir en bodega no completa la requisición.</p>
+        </div>
+      )}
       <div className="overflow-x-auto">
       <table className="w-full min-w-[56rem] text-xs">
         <thead className="text-left uppercase text-slate-400">
@@ -195,18 +228,19 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
             <th className="py-1 pr-2 text-right">Surtido</th>
             <th className="py-1 pr-2 text-right">Falta</th>
             <th className="py-1 pr-2 text-right">Pedido</th>
-            <th className="py-1 pr-2 text-right">Entregado</th>
+            <th className="py-1 pr-2 text-right">Bodega</th>
+            <th className="py-1 pr-2 text-right">En obra</th>
             <th className="py-1 pr-2">Comentarios</th>
             <th className="py-1" />
           </tr>
         </thead>
         <tbody>
-          {data.lineas.map((l) => {
+          {data.lineas.map((l, i) => {
             const a = data.porLinea.get(l.id);
             const falta = Number(a?.cantidad_sin_resolver ?? l.cantidad_solicitada);
             const resuelto = Number(a?.cantidad_a_compra ?? 0) + Number(a?.cantidad_a_entrega ?? 0);
             const eventosLinea = data.eventosPorLinea.get(l.id) ?? [];
-            const seg = seguimientoLinea(Number(l.cantidad_solicitada), eventosLinea);
+            const seg = segs[i];
             const abiertoSeg = seguimientoAbierto?.lineaId === l.id ? seguimientoAbierto : null;
             return (
               <FilaLinea
@@ -215,6 +249,7 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
                 seguimiento={seg}
                 eventos={eventosLinea}
                 puedeMarcar={puedeMarcar}
+                puede={puede}
                 seguimientoTipo={abiertoSeg?.tipo ?? null}
                 onSeguimiento={(tipo) => {
                   setCompraAbierta(null);
@@ -252,7 +287,7 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado }: { r
           })}
           {data.lineas.length === 0 && (
             <tr>
-              <td colSpan={9} className="py-2 text-slate-400">
+              <td colSpan={10} className="py-2 text-slate-400">
                 Sin renglones.
               </td>
             </tr>
@@ -338,6 +373,7 @@ interface FilaLineaProps {
   seguimiento: Seguimiento;
   eventos: EventoLinea[];
   puedeMarcar: boolean;
+  puede: (t: TipoEvento) => boolean;
   seguimientoTipo: TipoEvento | null;
   onSeguimiento: (tipo: TipoEvento | null) => void;
   linea: LineaDetalle;
@@ -356,7 +392,7 @@ interface FilaLineaProps {
   onListo: (folio: string) => void;
 }
 
-function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, seguimientoTipo, onSeguimiento, linea, avance, falta, resuelto, puedeComprar, puedeEditar, editando, abierta, onEditar, onGuardar, onQuitar, onComprar, onSurtir, onListo }: FilaLineaProps) {
+function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, puede, seguimientoTipo, onSeguimiento, linea, avance, falta, resuelto, puedeComprar, puedeEditar, editando, abierta, onEditar, onGuardar, onQuitar, onComprar, onSurtir, onListo }: FilaLineaProps) {
   const [descripcion, setDescripcion] = useState(linea.descripcion ?? "");
   const [cantidad, setCantidad] = useState(String(linea.cantidad_solicitada));
   const [unidad, setUnidad] = useState(linea.unidad_medida);
@@ -391,7 +427,7 @@ function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, seguimien
                 )}
               </span>
             </td>
-            <td colSpan={6} className="py-1.5 pr-2 text-right text-slate-500">{intacta ? "" : `ya hay ${resuelto} resueltos: solo puede subir la cantidad`}</td>
+            <td colSpan={7} className="py-1.5 pr-2 text-right text-slate-500">{intacta ? "" : `ya hay ${resuelto} resueltos: solo puede subir la cantidad`}</td>
             <td className="py-1.5 text-right">
               <span className="inline-flex gap-1">
                 <button type="button" onClick={() => onGuardar({ descripcion, cantidad: Number(cantidad), unidad })} className="rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">
@@ -416,10 +452,17 @@ function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, seguimien
             <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">{avance?.cantidad_a_entrega ?? 0}</td>
             <td className={`py-1.5 pr-2 text-right tabular-nums font-medium ${falta > 0 ? "text-amber-700" : "text-emerald-700"}`}>{falta}</td>
             <td className="py-1.5 pr-2 text-right tabular-nums text-slate-700">{seguimiento.pedido}</td>
+            <td className="py-1.5 pr-2 text-right tabular-nums text-slate-700">
+              {seguimiento.enBodega}
+              {seguimiento.enTransito > 0 && <div className="text-[10px] text-violet-700">{seguimiento.enTransito} en camino</div>}
+              {seguimiento.quedaBodega > 0 && <div className="text-[10px] text-slate-500">{seguimiento.quedaBodega} se queda</div>}
+            </td>
             <td className="py-1.5 pr-2 text-right">
               <span className="tabular-nums text-slate-700">{seguimiento.entregado}</span>{" "}
               <span className={`whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] ${COLOR_SEGUIMIENTO[seguimiento.estado]}`}>{ETIQUETA_SEGUIMIENTO[seguimiento.estado]}</span>
+              <div className="text-[10px] text-slate-500">avance {seguimiento.avance}%</div>
               {seguimiento.enCambio > 0 && <div className="text-[10px] text-amber-700">{seguimiento.enCambio} en cambio</div>}
+              {seguimiento.faltante > 0 && <div className="text-[10px] text-red-700">{seguimiento.faltante} faltante</div>}
             </td>
             <td className="max-w-[14rem] py-1.5 pr-2 text-slate-600">
               {seguimiento.comentarios[0] ? (
@@ -440,17 +483,27 @@ function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, seguimien
             </td>
             <td className="py-1.5 text-right">
                 <span className="inline-flex flex-wrap justify-end gap-1">
-                  {puedeMarcar && seguimiento.porPedir > 0 && (
+                  {puede("pedido") && seguimiento.porPedir > 0 && (
                     <button type="button" onClick={() => onSeguimiento("pedido")} className="rounded border border-sky-300 px-2 py-1 text-xs text-sky-800 hover:bg-sky-50">
                       Pedido
                     </button>
                   )}
-                  {puedeMarcar && seguimiento.estado !== "entregado" && (
-                    <button type="button" onClick={() => onSeguimiento("entregado")} className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-800 hover:bg-emerald-50">
-                      Entregado
+                  {puede("en_bodega") && seguimiento.estado !== "entregado" && seguimiento.recibidoBodega + seguimiento.entregado < Number(linea.cantidad_solicitada) - 0.001 && (
+                    <button type="button" onClick={() => onSeguimiento("en_bodega")} className="rounded border border-indigo-300 px-2 py-1 text-xs text-indigo-800 hover:bg-indigo-50">
+                      Recibí en bodega
                     </button>
                   )}
-                  {puedeMarcar && seguimiento.entregado > 0 && (
+                  {puede("enviado_obra") && seguimiento.enBodega > 0 && (
+                    <button type="button" onClick={() => onSeguimiento("enviado_obra")} className="rounded border border-violet-300 px-2 py-1 text-xs text-violet-800 hover:bg-violet-50">
+                      Enviar a obra
+                    </button>
+                  )}
+                  {puede("entregado") && seguimiento.estado !== "entregado" && (
+                    <button type="button" onClick={() => onSeguimiento(seguimiento.enTransito > 0 ? "entregado" : "directo_obra")} className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-800 hover:bg-emerald-50">
+                      Recibido en obra
+                    </button>
+                  )}
+                  {puede("devolucion") && seguimiento.entregado > 0 && (
                     <button type="button" onClick={() => onSeguimiento("cambio")} className="rounded border border-amber-300 px-2 py-1 text-xs text-amber-800 hover:bg-amber-50" title="Cambio de piezas o devolución">
                       Devolver
                     </button>
@@ -483,9 +536,10 @@ function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, seguimien
       </tr>
       {seguimientoTipo && (
         <tr>
-          <td colSpan={9} className="pb-2">
+          <td colSpan={10} className="pb-2">
             <SeguimientoLinea
               key={seguimientoTipo}
+              puede={puede}
               lineaId={linea.id}
               requisicionId={requisicionId}
               solicitado={Number(linea.cantidad_solicitada)}
@@ -500,7 +554,7 @@ function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, seguimien
       )}
       {abierta && (
         <tr>
-          <td colSpan={9} className="pb-2">
+          <td colSpan={10} className="pb-2">
             <div className="rounded border border-emerald-200 bg-white px-3 pb-3">
               <CompraEnUnPaso lineaId={linea.id} sinResolver={falta} unidad={linea.unidad_medida} onListo={onListo} onCancelar={onComprar} />
             </div>

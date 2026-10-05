@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cantidadSugerida, seguimientoLinea, validarEvento, type EventoLinea, type TipoEvento } from "./seguimientoLinea.ts";
+import { avancePartidas, cantidadSugerida, puedeMarcarEvento, seguimientoLinea, validarEvento, type EventoLinea, type TipoEvento } from "./seguimientoLinea.ts";
 
 let n = 0;
 const ev = (tipo: TipoEvento, cantidad: number | null, nota: string | null = null): EventoLinea => ({
@@ -26,6 +26,7 @@ test("pedido completo y entrega parcial", () => {
   assert.equal(s.estado, "entregado_parcial");
   assert.equal(s.pedido, 10);
   assert.equal(s.entregado, 4);
+  assert.equal(s.avance, 55);
   assert.equal(s.porPedir, 0);
   assert.equal(s.porEntregar, 6);
 });
@@ -71,6 +72,45 @@ test("validaciones", () => {
   assert.equal(validarEvento("comentario", null, "  ", s), "Escribe el comentario.");
   assert.equal(validarEvento("pedido", 0, "", s), "La cantidad debe ser mayor a 0.");
   assert.match(validarEvento("cambio", 2, "", s) ?? "", /motivo/);
-  assert.match(validarEvento("devolucion", 5, "no sirve", s) ?? "", /lo entregado/);
+  assert.match(validarEvento("devolucion", 5, "no sirve", s) ?? "", /recibido en obra/);
   assert.equal(validarEvento("devolucion", 4, "no sirve", s), null);
+});
+
+test("bodega no es el final: recibir, enviar parcial, confirmar en obra", () => {
+  let s = seguimientoLinea(10, [ev("pedido", 10), ev("en_bodega", 10)]);
+  assert.equal(s.estado, "en_bodega");
+  assert.equal(s.avance, 50);
+  assert.equal(s.enBodega, 10);
+  s = seguimientoLinea(10, [ev("pedido", 10), ev("en_bodega", 10), ev("enviado_obra", 6)]);
+  assert.equal(s.estado, "en_transito");
+  assert.equal(s.enTransito, 6);
+  assert.equal(s.enBodega, 4);
+  assert.equal(s.avance, 65);
+  s = seguimientoLinea(10, [ev("pedido", 10), ev("en_bodega", 10), ev("enviado_obra", 6), ev("entregado", 5), ev("faltante", 1, "no llegó"), ev("queda_bodega", 4)]);
+  assert.equal(s.enTransito, 0);
+  assert.equal(s.final, 9);
+  assert.equal(s.porEntregar, 1);
+  assert.equal(s.estado, "entregado_parcial");
+  s = seguimientoLinea(10, [ev("en_bodega", 6), ev("directo_obra", 4), ev("enviado_obra", 6), ev("entregado", 6)]);
+  assert.equal(s.estado, "entregado");
+  assert.equal(s.avance, 100);
+});
+
+test("OC del sistema cuentan: recibida en bodega y comprada", () => {
+  const s = seguimientoLinea(8, [], { comprado: 8, ocBodega: 8 });
+  assert.equal(s.estado, "en_bodega");
+  assert.equal(s.avance, 50);
+  const p = seguimientoLinea(8, [], { comprado: 8 });
+  assert.equal(p.estado, "pedido");
+  assert.equal(p.avance, 25);
+  assert.equal(avancePartidas([s, p]), 37.5);
+});
+
+test("quién marca cada paso", () => {
+  assert.equal(puedeMarcarEvento("en_bodega", "almacen", false), true);
+  assert.equal(puedeMarcarEvento("entregado", "almacen", false), false);
+  assert.equal(puedeMarcarEvento("entregado", "supervisor", true), true);
+  assert.equal(puedeMarcarEvento("enviado_obra", "supervisor", true), false);
+  assert.equal(puedeMarcarEvento("pedido", "supervisor", false), true);
+  assert.equal(puedeMarcarEvento("entregado", "empresa", false), true);
 });

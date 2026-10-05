@@ -157,6 +157,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   puso o admin/corporativo. Columnas Pedido / Entregado / Comentarios y
   panel `requisiciones/SeguimientoLinea.tsx` en el detalle. Independiente
   de "En compra"/"Surtido" (OC del sistema): sirve para lo comprado por fuera.
+- **Entrega a obra y avance por partida (5-oct-2026, Mario con Alma)**:
+  recibir en BODEGA ya no completa la requisición; el destino final es la
+  obra. El seguimiento por renglón suma `en_bodega`, `enviado_obra`,
+  `directo_obra`, `queda_bodega`, `faltante`, `regreso_bodega` (y
+  `entregado` = recibido en obra). Bodega la marca almacén; lo de obra, quien
+  pidió o responsable/comprador del proyecto (+ empresa/admin/corporativo)
+  (trigger `requisicion_linea_eventos_antes`; `puedeMarcarEvento` en
+  `lib/seguimientoLinea.ts`). Cálculo por renglón en
+  `v_requisicion_linea_entrega` (incluye OC del sistema recibidas en bodega
+  u obra) y por requisición en `v_requisicion_avance` (avance % = promedio
+  de pedido · bodega · en camino · en obra; conteo de partidas por etapa).
+  La etapa la recalcula `fn_requisicion_recalcular_entrega` (todo en obra →
+  recibida; algo en camino → en_transito; algo en bodega → en_bodega); los
+  botones manuales de etapa ya no ofrecen bodega/tránsito/recibida. Los
+  semáforos (MisRequisiciones, SemaforoRequisiciones, AlmacenProyectos,
+  ResumenObra) usan el avance por partidas (`semaforoEtapa(etapa,
+  cancelada, avance_pct)`). Las 18 marcas "entregado" de Alma pasaron a
+  en_bodega (`20261005100000`, prueba `supabase/tests/requisicion_entrega.sql`).
+- **Membrete por empresa (5-oct-2026)**: `empresas.razon_social,
+  domicilio_fiscal, telefono, correo, banco, cuenta_bancaria, clabe,
+  sucursal_bancaria` (datos públicos que van impresos); la cotización de
+  planta sale en hoja membretada con logo `/logos/<codigo>.png` y cuenta
+  para depósito. Clavicón llenado (BBVA, CLABE 012650001127363818)
+  (`20261005090000`).
 - **Pagos por orden de compra (29-sep-2026)**: `pagos_programados.
   orden_compra_id` liga cada pago a su OC; `ordenes_compra.condicion_pago`
   (contado / credito / anticipo, la pone dirección) y el **saldo se

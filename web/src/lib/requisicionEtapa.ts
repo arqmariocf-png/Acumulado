@@ -17,7 +17,7 @@ export const ETIQUETA_ETAPA: Record<EtapaRequisicion, string> = {
   suministro: "En suministro",
   en_bodega: "En bodega",
   en_transito: "En tránsito",
-  recibida: "Recibida",
+  recibida: "Recibida en obra",
 };
 
 /** Qué falta después de esta etapa (lo que se lee en la lista). */
@@ -33,10 +33,14 @@ export const PENDIENTE_ETAPA: Record<EtapaRequisicion, string> = {
 
 export type ColorEtapa = "rojo" | "ambar" | "azul" | "verde" | "gris";
 
-export function semaforoEtapa(etapa: EtapaRequisicion, cancelada = false): { color: ColorEtapa; paso: number; pct: number; etiqueta: string } {
+/** `avancePartidas` (v_requisicion_avance, 5-oct-2026): avance real por
+ * partidas y cantidades (pedido · bodega · en camino · en obra). Si viene,
+ * manda sobre el avance por etapa, que solo cuenta pasos administrativos. */
+export function semaforoEtapa(etapa: EtapaRequisicion, cancelada = false, avancePartidas?: number | null): { color: ColorEtapa; paso: number; pct: number; etiqueta: string } {
   if (cancelada) return { color: "gris", paso: 0, pct: 0, etiqueta: "Cancelada" };
   const paso = ETAPAS_REQUISICION.indexOf(etapa) + 1; // 1..7
-  const pct = Math.round((100 * (paso - 1)) / (ETAPAS_REQUISICION.length - 1));
+  const pctEtapa = Math.round((100 * (paso - 1)) / (ETAPAS_REQUISICION.length - 1));
+  const pct = avancePartidas != null ? Math.round(Number(avancePartidas)) : pctEtapa;
   const color: ColorEtapa = etapa === "recibida" ? "verde" : etapa === "solicitada" || etapa === "autorizada" ? "rojo" : etapa === "pagada" || etapa === "suministro" ? "ambar" : "azul";
   return { color, paso, pct, etiqueta: PENDIENTE_ETAPA[etapa] };
 }
@@ -77,8 +81,8 @@ export function siguienteEtapa(etapa: EtapaRequisicion): EtapaRequisicion | null
 }
 
 /** Avance promedio (0-100) de un conjunto de requisiciones no canceladas. */
-export function avanceRequisiciones(filas: { etapa: EtapaRequisicion; estado: string }[]): number | null {
+export function avanceRequisiciones(filas: { etapa: EtapaRequisicion; estado: string; avance_pct?: number | null }[]): number | null {
   const vivas = filas.filter((f) => f.estado !== "cancelada");
   if (vivas.length === 0) return null;
-  return Math.round(vivas.reduce((s, f) => s + semaforoEtapa(f.etapa).pct, 0) / vivas.length);
+  return Math.round(vivas.reduce((s, f) => s + semaforoEtapa(f.etapa, false, f.avance_pct).pct, 0) / vivas.length);
 }

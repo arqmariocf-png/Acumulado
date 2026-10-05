@@ -20,6 +20,9 @@ interface Fila {
   comentario: string | null;
   solicitado_por: string;
   profiles: { nombre: string } | null;
+  avance_pct: number | null;
+  partidas: number;
+  en_obra: number;
 }
 
 export function useRequisicionesProyecto(proyectoId: string) {
@@ -33,7 +36,16 @@ export function useRequisicionesProyecto(proyectoId: string) {
         .order("fecha", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return data as unknown as Fila[];
+      const filas = data as unknown as Fila[];
+      const ids = filas.map((f) => f.id);
+      const { data: av } = ids.length
+        ? await supabase.from("v_requisicion_avance").select("requisicion_id, partidas, avance_pct, en_obra").in("requisicion_id", ids)
+        : { data: [] };
+      const porId = new Map((av ?? []).map((a) => [a.requisicion_id as string, a]));
+      return filas.map((f) => {
+        const a = porId.get(f.id);
+        return { ...f, avance_pct: a ? Number(a.avance_pct) : null, partidas: Number(a?.partidas ?? 0), en_obra: Number(a?.en_obra ?? 0) };
+      });
     },
   });
 }
@@ -102,9 +114,11 @@ export function SemaforoRequisiciones({ proyecto, compacto = false }: { proyecto
             <ul className="divide-y divide-slate-100">
               {visibles.map((r) => {
                 const cancelada = r.estado === "cancelada";
-                const s = semaforoEtapa(r.etapa, cancelada);
+                const s = semaforoEtapa(r.etapa, cancelada, r.avance_pct);
                 const clase = CLASE_ETAPA[s.color];
-                const sig = cancelada ? null : siguienteEtapa(r.etapa);
+                // De "en bodega" en adelante la etapa la ponen las partidas.
+                const sigEtapa = cancelada ? null : siguienteEtapa(r.etapa);
+                const sig = sigEtapa && ["en_bodega", "en_transito", "recibida"].includes(sigEtapa) ? null : sigEtapa;
                 const puede = !!perfil && !!sig && puedeMarcarEtapa(perfil.rol, sig, esDelProyecto || perfil.id === r.solicitado_por);
                 return (
                   <li key={r.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
@@ -128,6 +142,7 @@ export function SemaforoRequisiciones({ proyecto, compacto = false }: { proyecto
                       </div>
                       <div className="mt-0.5 text-[10px] text-slate-400">
                         {cancelada ? "Cancelada" : ETIQUETA_ETAPA[r.etapa]} · {s.pct}%
+                        {r.partidas > 0 && !cancelada ? ` · ${r.en_obra}/${r.partidas} en obra` : ""}
                       </div>
                     </div>
                     {sig && puede && (

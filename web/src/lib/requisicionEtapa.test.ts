@@ -34,3 +34,10 @@ test("avance promedio ignora canceladas", () => {
   assert.equal(avanceRequisiciones([]), null);
   assert.equal(avanceRequisiciones([{ etapa: "recibida", estado: "resuelta" }, { etapa: "solicitada", estado: "enviada" }, { etapa: "recibida", estado: "cancelada" }]), 50);
 });
+
+test("el avance por partidas manda sobre el de etapa", async () => {
+  const { semaforoEtapa: sem, avanceRequisiciones: av } = await import("./requisicionEtapa.ts");
+  assert.equal(sem("solicitada", false, 50).pct, 50);
+  assert.equal(sem("solicitada").pct, 0);
+  assert.equal(av([{ etapa: "solicitada", estado: "enviada", avance_pct: 50 }, { etapa: "recibida", estado: "enviada", avance_pct: 100 }]), 75);
+});
