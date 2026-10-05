@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
-import { htmlCotizacionPlanta, sinIva, totalesCotizacion, type LineaCotizacionPlanta } from "../../lib/cotizacionPlanta";
+import { htmlCotizacionPlanta, sinIva, totalesCotizacion, type LineaCotizacionPlanta, type MembreteEmpresa } from "../../lib/cotizacionPlanta";
 
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiqueta = "mb-1 block text-xs font-medium text-slate-700";
@@ -32,6 +32,7 @@ interface CotizacionFila {
   condicion_pago: "contado" | "credito" | null;
   dias_credito: number | null;
   notas: string | null;
+  cliente_id: string | null;
   estatus: "enviada" | "aceptada" | "rechazada";
   created_by_nombre: string | null;
   cotizaciones_produccion_lineas: (LineaCotizacionPlanta & { orden: number })[];
@@ -63,15 +64,16 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
       const [prod, stock, clientes, emp] = await Promise.all([
         supabase.from("productos_produccion").select("id, nombre, calibre, unidad_medida").eq("empresa_id", empresa.id).eq("activo", true).order("nombre"),
         supabase.from("v_stock_producto_terminado").select("producto_id, stock_actual, costo_promedio_ponderado").eq("empresa_id", empresa.id),
-        supabase.from("clientes").select("id, razon_social").eq("empresa_id", empresa.id).eq("activo", true).order("razon_social"),
-        supabase.from("empresas").select("codigo, rfc").eq("id", empresa.id).maybeSingle(),
+        supabase.from("clientes").select("id, razon_social, rfc, domicilio").eq("empresa_id", empresa.id).eq("activo", true).order("razon_social"),
+        supabase.from("empresas").select("codigo, rfc, razon_social, domicilio_fiscal, telefono, correo, banco, cuenta_bancaria, clabe, sucursal_bancaria").eq("id", empresa.id).maybeSingle(),
       ]);
       if (prod.error) throw prod.error;
       const costos = new Map((stock.data ?? []).map((s) => [s.producto_id as string, { costo: s.costo_promedio_ponderado as number | null, stock: s.stock_actual as number | null }]));
       return {
         productos: (prod.data ?? []) as Producto[],
         costos,
-        clientes: (clientes.data ?? []) as { id: string; razon_social: string }[],
+        clientes: (clientes.data ?? []) as { id: string; razon_social: string; rfc: string | null; domicilio: string | null }[],
+        membrete: (emp.data ?? null) as MembreteEmpresa | null,
         codigo: (emp.data?.codigo as string | undefined) ?? "",
         rfc: (emp.data?.rfc as string | null | undefined) ?? null,
       };
@@ -83,7 +85,7 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cotizaciones_produccion")
-        .select("id, folio, fecha, contraparte, obra, vigencia_dias, condicion_pago, dias_credito, notas, estatus, created_by_nombre, cotizaciones_produccion_lineas(orden, descripcion, cantidad, unidad, precio_unitario, costo_unitario)")
+        .select("id, folio, fecha, contraparte, obra, vigencia_dias, condicion_pago, dias_credito, notas, cliente_id, estatus, created_by_nombre, cotizaciones_produccion_lineas(orden, descripcion, cantidad, unidad, precio_unitario, costo_unitario)")
         .eq("empresa_id", empresa.id)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -109,9 +111,19 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
 
   const setLinea = (i: number, cambios: Partial<LineaForm>) => setLineas((p) => p.map((l, j) => (j === i ? { ...l, ...cambios } : l)));
 
-  const imprimir = (c: Pick<CotizacionFila, "folio" | "fecha" | "contraparte" | "obra" | "vigencia_dias" | "condicion_pago" | "dias_credito" | "notas" | "created_by_nombre">, ls: LineaCotizacionPlanta[], ventana: Window | null) => {
+  const imprimir = (c: Pick<CotizacionFila, "folio" | "fecha" | "contraparte" | "obra" | "vigencia_dias" | "condicion_pago" | "dias_credito" | "notas" | "cliente_id" | "created_by_nombre">, ls: LineaCotizacionPlanta[], ventana: Window | null) => {
+    const cli = catalogo?.clientes.find((x) => x.id === c.cliente_id);
     const html = htmlCotizacionPlanta(
-      { ...c, empresa_nombre: empresa.nombre, empresa_rfc: catalogo?.rfc ?? null, elaboro: c.created_by_nombre },
+      {
+        ...c,
+        empresa_nombre: empresa.nombre,
+        empresa_rfc: catalogo?.rfc ?? null,
+        elaboro: c.created_by_nombre,
+        firma_nombre: c.created_by_nombre,
+        membrete: catalogo?.membrete ?? null,
+        cliente_rfc: cli?.rfc ?? null,
+        cliente_domicilio: cli?.domicilio ?? null,
+      },
       ls,
       catalogo?.codigo ? `/logos/${catalogo.codigo.toLowerCase()}.png` : null,
     );
@@ -137,7 +149,7 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
           dias_credito: condicion === "credito" && Number(dias) > 0 ? Math.round(Number(dias)) : null,
           notas: notas.trim() || null,
         })
-        .select("id, folio, fecha, contraparte, obra, vigencia_dias, condicion_pago, dias_credito, notas, created_by_nombre")
+        .select("id, folio, fecha, contraparte, obra, vigencia_dias, condicion_pago, dias_credito, notas, cliente_id, created_by_nombre")
         .single();
       if (error) throw error;
       const filas = lineas
