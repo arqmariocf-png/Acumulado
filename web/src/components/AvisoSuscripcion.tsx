@@ -24,7 +24,7 @@ export function AvisoSuscripcion() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <span>
             {perfilReal?.espectador
-              ? "Tu cuenta es de solo consulta: puedes ver y exportar la información, pero no capturar, editar ni borrar."
+              ? "Cuenta de espectador: puedes conocer los menús; la información se habilita al activar la suscripción."
               : "Tu organización todavía no tiene la suscripción activa: puedes consultar, pero no capturar ni cargar nada."}
           </span>
           {esAdmin && !suscripcion && (

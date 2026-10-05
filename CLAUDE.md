@@ -874,6 +874,34 @@ Cambios chicos partiendo de `main`, mezclando pronto.
 - ARSSA está en 'prueba' hasta 25-oct-2026: al vencer queda en solo
   consulta en TODO, no solo en proyectos.
 
+- **Espectador sin datos (2-oct-2026, Mario: "solo ve barra principal y
+  menús, no enseñes información de ninguna empresa")**:
+  `20261002090000_espectador_sin_datos.sql` (aplicada en producción en
+  partes, `espectador_sin_datos_1_funciones` y `_2_tablas_lote1..3`):
+  restrictiva de lectura `espectador_sin_datos` en las 113 tablas salvo las
+  del encabezado/menú (profiles —solo el propio—, grupos, grupo_modulos,
+  modulos, suscripciones, planes, plan_escalones, permisos_modulo,
+  roles_alcance, push_subscripciones); helpers de alcance vacíos;
+  `auth_rol()` (la que usan las funciones; las policies usan
+  `auth_rol_definer`) responde 'pendiente'; `auth_es_socio` y
+  `auth_rh_directivo` false. En la app, `Layout` pinta
+  `PantallaEspectador` en lugar de cualquier pantalla. **Toda tabla nueva
+  necesita también `espectador_sin_datos`.** Espectadores: María Alejandra
+  (EK) y Aldo (ARSSA). Aplicar DDL sobre ~110 tablas de una vez rebasa los
+  60 s de la herramienta: ir en lotes con `lock_timeout`.
+- **Vistas que corren como su dueño** (se saltan RLS): las 11 ya no se
+  leen sin sesión (`vistas_sin_acceso_anonimo`; antes cualquiera con la
+  llave pública veía 1,887 renglones de OC). `avance_recepcion_oc`,
+  `avance_embarque_ov`, `avance_resolucion_linea`, `v_pu_bandeja_almacen`,
+  `v_pu_analisis_detalle` ya son `security_invoker`. **Pendiente**:
+  `v_checador_marcas` y `v_remisiones_produccion` (pasarlas le quita
+  marcas a RH y remisiones a almacén: corregir sus policies primero),
+  `v_directorio`, `v_bbva_folio_paso`, `v_supervisores_bbva`,
+  `v_personal_produccion`; y funciones definer sin frontera de
+  organización: `fn_equilibrio_bbva_*` (sin guarda alguna),
+  `fn_rh_kpi_*` (cualquier admin de cliente es "RH directivo"),
+  `nomina_api_control_obra`.
+
 ## Estudio K (dado de alta 29-sep-2026)
 - **Organización aparte** (`grupos.codigo = 'EK'`, link
   `https://acumulado-nine.vercel.app/?org=ek`), sin suscripción → solo
@@ -886,7 +914,9 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   Cholula, Pue., C.P. 72760 (salón de belleza). Falta `empresas_perfil_legal`
   (pide representante legal), cuentas bancarias y logo.
 - María Alejandra Ibañez Alcocer (aialcocerspb@gmail.com): admin de Estudio
-  K, **espectador**, socia (inicio en vista de socio).
+  K, **espectador** (no socia: la asignación de socia del 29-sep se perdió
+  y no se rehízo). Estudio K tiene **todos los módulos cerrados**: Mario
+  dice cuáles abrir cuando paguen.
 
 ## Estudio K (plan original, 28-sep-2026)
 - Presentación del alcance por rol y plan de implementación (28-sep-2026):
