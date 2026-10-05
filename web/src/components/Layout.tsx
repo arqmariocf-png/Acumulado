@@ -11,6 +11,7 @@ import { supabase } from "../lib/supabase";
 import { SelectorEmpresa, useEmpresasAlcance } from "./SelectorEmpresa";
 import { ETIQUETA_ROL, NIVELES_ROLES } from "../lib/accesosRoles";
 import type { AppRol } from "../types/database";
+import { IrAlAncla } from "./FiltroDesdeTablero";
 
 export function Layout() {
   const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, cambiarContrasena, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
@@ -99,6 +100,7 @@ export function Layout() {
         {/* Espectador (2-oct-2026, Mario): solo la barra y los menús, ninguna
             pantalla con información. La base tampoco le devuelve datos
             (20261002090000_espectador_sin_datos.sql). */}
+        <IrAlAncla />
         {espectador ? <PantallaEspectador /> : <Outlet />}
       </main>
     </div>

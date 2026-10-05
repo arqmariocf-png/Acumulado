@@ -175,6 +175,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   ResumenObra) usan el avance por partidas (`semaforoEtapa(etapa,
   cancelada, avance_pct)`). Las 18 marcas "entregado" de Alma pasaron a
   en_bodega (`20261005100000`, prueba `supabase/tests/requisicion_entrega.sql`).
+- **Del tablero directo al problema (5-oct-2026, Mario: "dirígelos directo
+  al problema")**: mosaicos de Inicio y KPIs (`lib/indicadores.ts`) llevan
+  filtro: `?ver=` (requisiciones sin_resolver/pendientes/en_bodega/
+  en_transito; match oc_parciales/partidas_faltantes/partidas_excedente/
+  ov_parciales sin elegir empresa; folios sin_atender/viejos/en_ejecucion;
+  movimientos revisar/ambiguos/duplicados/sin_cfdi), `?tab=` (RH) o
+  `#sección` (`#ordenes`, `#pagos-vencidos`, `#pagos-semana` en pagos;
+  `#sin-comprobante` en tesorería). `components/FiltroDesdeTablero.tsx`:
+  `useVer()`, `AvisoFiltro` ("Mostrando solo… · Ver todo") e `IrAlAncla`
+  (en el Layout: baja y resalta la sección). `rutaPermitida` ignora `?`/`#`.
+  **KPI o mosaico nuevo con conteo → su ruta lleva el filtro.**
 - **Membrete por empresa (5-oct-2026)**: `empresas.razon_social,
   domicilio_fiscal, telefono, correo, banco, cuenta_bancaria, clabe,
   sucursal_bancaria` (datos públicos que van impresos); la cotización de

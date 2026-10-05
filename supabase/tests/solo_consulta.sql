@@ -66,16 +66,16 @@ end
 $$;
 reset role;
 
-\echo '── 2. Espectador de la maestra: ve, no escribe, no se quita la marca'
+\echo '── 2. Espectador de la maestra: no ve datos (20261002090000_espectador_sin_datos), no escribe, no se quita la marca'
 set role authenticated;
 select set_config('request.jwt.claim.sub', 'dddddddd-0000-0000-0000-000000000003', false);
 do $$
 begin
-  if (select count(*) from public.empresas) < 8 then
-    raise exception 'FALLA: el espectador de Loma no ve las empresas de Loma';
+  if (select count(*) from public.empresas) > 0 then
+    raise exception 'FALLA: el espectador ve empresas';
   end if;
-  if (select count(*) from public.proyectos) < 1 then
-    raise exception 'FALLA: el espectador de Loma no ve los proyectos de Loma';
+  if (select count(*) from public.proyectos) > 0 then
+    raise exception 'FALLA: el espectador ve proyectos';
   end if;
 
   begin

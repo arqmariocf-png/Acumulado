@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { AvisoFiltro, useVer } from "../../components/FiltroDesdeTablero";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
@@ -188,10 +189,20 @@ export function FoliosCuadrilla() {
   }
 
   const conteo = ESTATUS_CUADRILLA.map((e) => ({ ...e, n: (folios ?? []).filter((f) => f.estatus === e.valor).length }));
-  const lista = (folios ?? []).filter((f) => (filtro === "todos" || f.estatus === filtro) && (filtroSupervisor === "todos" || f.supervisor_id === filtroSupervisor));
+  // Desde los indicadores (?ver=…): directo a los folios con el problema.
+  const [ver, quitarVer] = useVer();
+  const hace7 = Date.now() - 7 * 86_400_000;
+  const FILTROS_VER: Record<string, { texto: string; f: (x: FolioCuadrilla) => boolean }> = {
+    sin_atender: { texto: "folios sin atender", f: (x) => x.estatus !== "atendido" },
+    viejos: { texto: "folios abiertos hace más de 7 días", f: (x) => x.estatus !== "atendido" && new Date(x.creado_en).getTime() < hace7 },
+    en_ejecucion: { texto: "folios en ejecución", f: (x) => x.estatus === "en_ejecucion" },
+  };
+  const filtroVer = ver ? FILTROS_VER[ver] : undefined;
+  const lista = (folios ?? []).filter((f) => (filtro === "todos" || f.estatus === filtro) && (filtroSupervisor === "todos" || f.supervisor_id === filtroSupervisor) && (!filtroVer || filtroVer.f(f)));
 
   return (
     <div className="max-w-3xl space-y-4">
+      {filtroVer && <AvisoFiltro texto={filtroVer.texto} total={lista.length} onQuitar={quitarVer} />}
       <div>
         <h1 className="text-lg font-semibold text-slate-900">Folios BBVA · semáforo de atención</h1>
         <p className="text-sm text-slate-500">

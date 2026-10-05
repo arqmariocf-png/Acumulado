@@ -7,6 +7,42 @@ import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { cantidadTexto } from "../../lib/remision";
 import { dineroMx } from "../../lib/kpisEmpresa";
 import type { AvanceRecepcionOc, AvanceEmbarqueOv, EstadoRecepcion, EstadoEmbarque } from "../../types/database";
+import { AvisoFiltro, useVer } from "../../components/FiltroDesdeTablero";
+
+// Desde los indicadores de almacén / logística (?ver=…): las órdenes con el
+// problema, de todas las empresas del alcance, sin elegir empresa primero.
+const FILTROS_VER: Record<string, { texto: string; vista: "oc" | "ov" }> = {
+  oc_parciales: { texto: "órdenes de compra recibidas a medias", vista: "oc" },
+  partidas_faltantes: { texto: "órdenes de compra con partidas con faltante", vista: "oc" },
+  partidas_excedente: { texto: "órdenes de compra con partidas con excedente", vista: "oc" },
+  ov_parciales: { texto: "órdenes de venta con embarque parcial", vista: "ov" },
+};
+
+function useOrdenesVer(ver: string | null) {
+  return useQuery({
+    queryKey: ["match-ver", ver],
+    enabled: !!ver && !!FILTROS_VER[ver],
+    queryFn: async () => {
+      if (ver === "ov_parciales") {
+        const { data, error } = await supabase.from("avance_embarque_ov").select("*").eq("estado_embarque", "parcial").order("fecha", { ascending: false, nullsFirst: false }).limit(300);
+        if (error) throw error;
+        return { oc: [] as AvanceRecepcionOc[], ov: data as AvanceEmbarqueOv[] };
+      }
+      let q = supabase.from("avance_recepcion_oc").select("*");
+      if (ver === "oc_parciales") q = q.eq("estado_recepcion", "parcial");
+      else {
+        const { data: lineas, error: e1 } = await supabase.from("v_oc_lineas_avance").select("orden_compra_id").eq("estado", ver === "partidas_faltantes" ? "parcial" : "excedido");
+        if (e1) throw e1;
+        const ids = [...new Set((lineas ?? []).map((l) => l.orden_compra_id as string))];
+        if (ids.length === 0) return { oc: [], ov: [] };
+        q = q.in("orden_compra_id", ids);
+      }
+      const { data, error } = await q.order("fecha", { ascending: false, nullsFirst: false }).limit(300);
+      if (error) throw error;
+      return { oc: data as AvanceRecepcionOc[], ov: [] as AvanceEmbarqueOv[] };
+    },
+  });
+}
 
 
 function useAvanceRecepcion(empresaId: string) {
@@ -227,14 +263,25 @@ function PartidasOv({ ordenVentaId }: { ordenVentaId: string }) {
 
 export function Match() {
   const [empresaId, setEmpresaId] = useEmpresaFiltro();
-  const [vista, setVista] = useState<"oc" | "ov">("oc");
+  const [vista, setVista] = useState<"oc" | "ov">(() => {
+    const v = new URLSearchParams(window.location.search).get("ver");
+    return v && FILTROS_VER[v] ? FILTROS_VER[v].vista : "oc";
+  });
   // ?oc=<id>: llega del QR del comprobante de entrada -- abre esa orden con
   // sus partidas y, si hace falta, cambia a su empresa.
   const [params] = useSearchParams();
   const ocDesdeQr = params.get("oc");
   const [ocAbierta, setOcAbierta] = useState<string | null>(ocDesdeQr);
-  const { data: avanceOc, isLoading: cargandoOc } = useAvanceRecepcion(empresaId);
-  const { data: avanceOv, isLoading: cargandoOv } = useAvanceEmbarque(empresaId);
+  const [ver, quitarVer] = useVer();
+  const filtroVer = ver ? FILTROS_VER[ver] : undefined;
+  const ordenesVer = useOrdenesVer(filtroVer ? ver : null);
+  const porEmpresaOc = useAvanceRecepcion(filtroVer ? "" : empresaId);
+  const porEmpresaOv = useAvanceEmbarque(filtroVer ? "" : empresaId);
+  const avanceOc = filtroVer ? ordenesVer.data?.oc : porEmpresaOc.data;
+  const avanceOv = filtroVer ? ordenesVer.data?.ov : porEmpresaOv.data;
+  const cargandoOc = filtroVer ? ordenesVer.isLoading : porEmpresaOc.isLoading;
+  const cargandoOv = filtroVer ? ordenesVer.isLoading : porEmpresaOv.isLoading;
+  const conLista = !!empresaId || !!filtroVer;
   const [ovAbierta, setOvAbierta] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
@@ -295,9 +342,10 @@ export function Match() {
         </label>
       </div>
 
-      {!empresaId && <p className="text-sm text-slate-500">Selecciona una empresa para ver el match.</p>}
+      {filtroVer && <AvisoFiltro texto={`${filtroVer.texto} (todas tus empresas)`} total={vista === "oc" ? avanceOc?.length : avanceOv?.length} onQuitar={quitarVer} />}
+      {!conLista && <p className="text-sm text-slate-500">Selecciona una empresa para ver el match.</p>}
 
-      {empresaId && vista === "oc" && (
+      {conLista && vista === "oc" && (
         <>
           {cargandoOc && <p className="text-sm text-slate-500">Cargando…</p>}
           {avanceOc && (
@@ -366,7 +414,7 @@ export function Match() {
         </>
       )}
 
-      {empresaId && vista === "ov" && (
+      {conLista && vista === "ov" && (
         <>
           {cargandoOv && <p className="text-sm text-slate-500">Cargando…</p>}
           {avanceOv && (

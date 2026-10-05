@@ -311,6 +311,7 @@ export function ProgramacionPagos() {
       )}
 
       <HojaPagosDia filtroEmpresa={filtroEmpresa} hoy={hoy} />
+      <div id="ordenes" className="scroll-mt-20" />
       <OrdenesPorPagar filtroEmpresa={filtroEmpresa} hoy={hoy} nombreEmpresa={nombreEmpresa} cuentas={cuentas ?? []} />
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
@@ -324,7 +325,7 @@ export function ProgramacionPagos() {
         ] as const
       ).map(([clave, titulo, borde]) =>
         grupos[clave].length === 0 ? null : (
-          <div key={clave} className={`mb-4 rounded border bg-white ${borde}`}>
+          <div key={clave} id={`pagos-${clave}`} className={`mb-4 scroll-mt-20 rounded border bg-white ${borde}`}>
             <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
               <p className="text-sm font-semibold text-slate-700">{titulo}</p>
               <p className="text-sm tabular-nums text-slate-600">{moneda(grupos[clave].reduce((s, p) => s + Number(p.monto), 0))}</p>
