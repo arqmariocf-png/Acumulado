@@ -14,6 +14,7 @@ import type { AppRol } from "../types/database";
 
 export function Layout() {
   const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, cambiarContrasena, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
+  const espectador = !!perfilReal?.espectador;
   // Menú por áreas con orientación de uso: la visibilidad por rol vive en
   // lib/menu.ts (misma fuente que el inicio y la guía).
   const secciones = seccionesPara(perfil, alcanceOrganizacion);
@@ -76,8 +77,8 @@ export function Layout() {
           <div className="flex items-center gap-3 text-sm text-slate-600">
             {/* Empresa activa (28-sep-2026): quien maneja varias elige aquí y
                 todas las pantallas se filtran por ella. */}
-            {eligeEmpresa && <SelectorEmpresa value={empresaActiva ?? ""} onChange={(v) => setEmpresaActiva(v || null)} compacto vacio="Todas" className="max-w-[140px] rounded border border-slate-300 px-2 py-1 text-xs" />}
-            {perfilReal?.rol === "admin" && <VerComo vistaComo={vistaComo} onCambiar={setVistaComo} />}
+            {eligeEmpresa && !espectador && <SelectorEmpresa value={empresaActiva ?? ""} onChange={(v) => setEmpresaActiva(v || null)} compacto vacio="Todas" className="max-w-[140px] rounded border border-slate-300 px-2 py-1 text-xs" />}
+            {perfilReal?.rol === "admin" && !espectador && <VerComo vistaComo={vistaComo} onCambiar={setVistaComo} />}
             <span className="hidden sm:inline">
               {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol === "admin" && alcanceOrganizacion?.esMaestra ? "director general" : perfil?.rol}</span>
             </span>
@@ -95,8 +96,23 @@ export function Layout() {
       <AvisoSuscripcion />
       <AvisoVersion />
       <main className="mx-auto max-w-7xl px-4 py-6">
-        <Outlet />
+        {/* Espectador (2-oct-2026, Mario): solo la barra y los menús, ninguna
+            pantalla con información. La base tampoco le devuelve datos
+            (20261002090000_espectador_sin_datos.sql). */}
+        {espectador ? <PantallaEspectador /> : <Outlet />}
       </main>
+    </div>
+  );
+}
+
+function PantallaEspectador() {
+  return (
+    <div className="mx-auto mt-10 max-w-lg rounded-lg border border-sky-200 bg-sky-50 p-6 text-center text-sky-900">
+      <h1 className="mb-2 text-lg font-semibold">Cuenta de espectador</h1>
+      <p className="text-sm">
+        Puedes recorrer los menús para conocer la plataforma. La información de las empresas se habilita cuando tu
+        organización active su suscripción.
+      </p>
     </div>
   );
 }
