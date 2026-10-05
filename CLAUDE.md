@@ -186,6 +186,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `useVer()`, `AvisoFiltro` ("Mostrando solo… · Ver todo") e `IrAlAncla`
   (en el Layout: baja y resalta la sección). `rutaPermitida` ignora `?`/`#`.
   **KPI o mosaico nuevo con conteo → su ruta lleva el filtro.**
+- **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
+  supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
+  administrativo, supervisor y directivo ven en `proyectos` y
+  `requisiciones` solo las obras donde son responsable o comprador, aquellas
+  donde ya pidieron requisiciones (`auth_proyectos_propios()`, definer, una
+  vez por consulta) y, con excepción, las de su empresa extra; ya no todas
+  las de su empresa ni todo el grupo con `todas_las_empresas`. Responsable,
+  empresa, dirección, almacén y demás no cambian. Para que un supervisor vea
+  una obra hay que asignarlo en el encabezado de la obra. **Excepción por
+  persona** `profiles.alcance_propio`: usa sus empresas de "Maneja también"
+  aunque su rol sea de una sola (casilla "excepción: maneja otras" en Admin →
+  Usuarios); Timoteo (administrativo, CSC) la tiene con MCF: ve las 22 obras
+  de MCF y en CSC solo la suya. Trigger `profiles_guarda_alcance`: solo un
+  admin cambia `alcance_propio` o `todas_las_empresas` (antes cualquiera se
+  prendía `todas_las_empresas` a sí mismo). Frontend: `Proyectos.tsx` y
+  `MisRequisiciones` no filtran por empresa a los básicos
+  (`20261005110000`, prueba `supabase/tests/proyectos_asignados.sql`).
 - **Membrete por empresa (5-oct-2026)**: `empresas.razon_social,
   domicilio_fiscal, telefono, correo, banco, cuenta_bancaria, clabe,
   sucursal_bancaria` (datos públicos que van impresos); la cotización de
