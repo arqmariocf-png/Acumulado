@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
+import { esRolBasico } from "../../lib/modulos";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { Proyecto, PuEstado } from "../../types/database";
 import { PuntosSemaforoPu } from "./SemaforoPreciosUnitarios";
@@ -49,7 +50,11 @@ export function Proyectos() {
   const [busqueda, setBusqueda] = useState("");
   const [verInactivos, setVerInactivos] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { data: proyectos, isLoading } = useProyectos(empresaId, busqueda, verInactivos);
+  // Roles básicos (supervisor, administrativo…): solo sus obras asignadas,
+  // de la empresa que sean (Mario, 5-oct-2026; Timoteo es de CSC y lleva
+  // obras de MCF). La base ya acota a las asignadas.
+  const soloAsignadas = esRolBasico(perfil?.rol);
+  const { data: proyectos, isLoading } = useProyectos(soloAsignadas ? "" : empresaId, busqueda, verInactivos);
   // Desactivar deja el proyecto fuera de las listas y de los selectores
   // (requisiciones, PU, tableros) sin borrar nada; se puede reactivar.
   // admin y corporativo en todas; el rol empresa en su empresa.
@@ -74,7 +79,8 @@ export function Proyectos() {
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Proyectos</h1>
 
       <div className="mb-4 flex flex-wrap gap-3">
-        {eligeEmpresa && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}
+        {eligeEmpresa && !soloAsignadas && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}
+        {soloAsignadas && <span className="text-xs text-slate-500">Tus obras asignadas</span>}
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}

@@ -72,6 +72,17 @@ export function Usuarios() {
     onError: (e: Error) => alert(e.message),
   });
 
+  // Excepción por persona: usa sus empresas de "Maneja también" aunque su rol
+  // sea de una sola (Timoteo: CSC con las obras de MCF).
+  const marcarAlcancePropio = useMutation({
+    mutationFn: async ({ id, propio }: { id: string; propio: boolean }) => {
+      const { error } = await supabase.from("profiles").update({ alcance_propio: propio }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-usuarios"] }),
+    onError: (e: Error) => alert(e.message),
+  });
+
   const { data: perfiles, isLoading } = useQuery({
     queryKey: ["admin-usuarios"],
     queryFn: async () => {
@@ -328,10 +339,36 @@ export function Usuarios() {
                   </select>
                 </td>
                 <td className="px-2 py-2">
-                  {rolesAlcance && !rolesAlcance[p.rol] ? (
-                    <span className="text-[11px] text-slate-400" title="Prende el interruptor del rol en Admin → Accesos por rol para asignarle más empresas.">
-                      su rol maneja una sola
-                    </span>
+                  {rolesAlcance && !rolesAlcance[p.rol] && !p.alcance_propio ? (
+                    <div className="flex flex-col gap-0.5 text-[11px] text-slate-400">
+                      <span title="Prende el interruptor del rol en Admin → Accesos por rol para asignarle más empresas a todo el rol.">
+                        su rol maneja una sola
+                      </span>
+                      <label className="flex items-center gap-1 text-slate-600" title="Solo esta persona: podrá manejar las empresas que le marques, y como rol básico verá todas sus obras.">
+                        <input type="checkbox" checked={false} onChange={() => marcarAlcancePropio.mutate({ id: p.id, propio: true })} />
+                        excepción: maneja otras
+                      </label>
+                    </div>
+                  ) : rolesAlcance && !rolesAlcance[p.rol] ? (
+                    <div className="flex max-w-[220px] flex-col gap-0.5 text-xs">
+                      <label className="flex items-center gap-1 font-medium text-violet-800">
+                        <input type="checkbox" checked onChange={() => marcarAlcancePropio.mutate({ id: p.id, propio: false })} />
+                        excepción: maneja otras
+                      </label>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        {empresas
+                          ?.filter((e) => e.id !== p.empresa_id)
+                          .map((e) => {
+                            const activa = (asignaciones?.get(p.id) ?? []).includes(e.id);
+                            return (
+                              <label key={e.id} className={`flex items-center gap-1 ${activa ? "text-slate-800" : "text-slate-500"}`}>
+                                <input type="checkbox" checked={activa} onChange={(ev) => alternarEmpresa.mutate({ profileId: p.id, empresaId: e.id, activa: ev.target.checked })} />
+                                {e.nombre}
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex max-w-[220px] flex-col gap-0.5 text-xs">
                       <label className="flex items-center gap-1 font-medium text-slate-800">

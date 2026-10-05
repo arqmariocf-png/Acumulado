@@ -3,9 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
-import { administraProyectosDe } from "../../lib/modulos";
+import { administraProyectosDe, esRolBasico } from "../../lib/modulos";
 import { CLASE_ETAPA, ETAPAS_REQUISICION, ETIQUETA_ETAPA, puedeMarcarEtapa, semaforoEtapa, siguienteEtapa, type EtapaRequisicion } from "../../lib/requisicionEtapa";
-import type { Producto, Proyecto } from "../../types/database";
+import type { AppRol, Producto, Proyecto } from "../../types/database";
 import { DetalleRequisicion } from "./DetalleRequisicion";
 import { AvisoFiltro, useVer } from "../../components/FiltroDesdeTablero";
 
@@ -34,7 +34,10 @@ function useProyectosDisponibles(rol: string | undefined, userId: string | undef
     queryFn: async () => {
       let query = supabase.from("proyectos").select("*").eq("activo", true).order("nombre");
       if (rol === "responsable") query = query.eq("responsable_id", userId);
-      else if (rol !== "admin" && rol !== "corporativo" && empresaId) query = query.eq("empresa_id", empresaId);
+      // Rol básico (supervisor, administrativo…): la base ya le deja ver solo
+      // sus obras (asignadas, con requisiciones suyas o de su empresa extra,
+      // como Timoteo con MCF); no se acota por empresa.
+      else if (!esRolBasico(rol as AppRol) && rol !== "admin" && rol !== "corporativo" && empresaId) query = query.eq("empresa_id", empresaId);
       const { data, error } = await query;
       if (error) throw error;
       return data as Proyecto[];

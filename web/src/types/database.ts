@@ -119,6 +119,7 @@ export interface Profile {
   /** Maneja todas las empresas de su organización (solo cuenta si su rol
    * tiene el interruptor multiempresa en roles_alcance). */
   todas_las_empresas: boolean;
+  alcance_propio?: boolean;
   activo: boolean;
   telefono: string | null;
   bbva_mantenimiento: boolean;
