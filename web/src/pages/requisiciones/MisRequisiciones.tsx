@@ -65,7 +65,13 @@ function useRequisiciones(empresaId: string) {
       if (empresaId) query = query.eq("empresa_id", empresaId);
       const { data, error } = await query;
       if (error) throw error;
-      return data;
+      // Avance real por partidas (pedido · bodega · en camino · en obra).
+      const ids = (data ?? []).map((r) => r.id as string);
+      const { data: av } = ids.length
+        ? await supabase.from("v_requisicion_avance").select("requisicion_id, partidas, avance_pct, en_bodega, en_transito, en_obra").in("requisicion_id", ids)
+        : { data: [] };
+      const porId = new Map((av ?? []).map((a) => [a.requisicion_id as string, a]));
+      return (data ?? []).map((r) => ({ ...r, avance: porId.get(r.id as string) ?? null }));
     },
   });
 }
@@ -397,7 +403,12 @@ export function MisRequisiciones() {
                   {abierta === r.id && (
                     <tr>
                       <td colSpan={7} className="p-0">
-                        <DetalleRequisicion requisicionId={r.id} solicitadoPor={r.solicitado_por} estado={r.estado} />
+                        <DetalleRequisicion
+                          requisicionId={r.id}
+                          solicitadoPor={r.solicitado_por}
+                          estado={r.estado}
+                          esDeLaObra={!!perfil && (perfil.id === r.proyectos?.responsable_id || perfil.id === r.proyectos?.comprador_id)}
+                        />
                       </td>
                     </tr>
                   )}
@@ -427,9 +438,12 @@ function CeldaEtapa({ r }: { r: any }) {
   const [error, setError] = useState<string | null>(null);
   const cancelada = r.estado === "cancelada";
   const etapa = (r.etapa ?? "solicitada") as EtapaRequisicion;
-  const s = semaforoEtapa(etapa, cancelada);
+  const s = semaforoEtapa(etapa, cancelada, r.avance?.avance_pct);
   const clase = CLASE_ETAPA[s.color];
-  const sig = cancelada ? null : siguienteEtapa(etapa);
+  // De "en bodega" en adelante la etapa la ponen las partidas (recibí en
+  // bodega, enviar a obra, recibido en obra), no un botón (5-oct-2026).
+  const sigEtapa = cancelada ? null : siguienteEtapa(etapa);
+  const sig = sigEtapa && ["en_bodega", "en_transito", "recibida"].includes(sigEtapa) ? null : sigEtapa;
   const esDelProyecto = !!perfil && (perfil.id === r.solicitado_por || perfil.id === r.proyectos?.responsable_id || perfil.id === r.proyectos?.comprador_id);
   const puede = !!perfil && !!sig && puedeMarcarEtapa(perfil.rol, sig, esDelProyecto);
   const marcar = useMutation({
@@ -454,6 +468,13 @@ function CeldaEtapa({ r }: { r: any }) {
         <span className="text-xs text-slate-700">{cancelada ? "Cancelada" : ETIQUETA_ETAPA[etapa]}</span>
         <span className="text-[10px] text-slate-400">{s.pct}%</span>
       </div>
+      {r.avance && r.avance.partidas > 0 && !cancelada && (
+        <div className="text-[10px] text-slate-500">
+          {r.avance.en_obra}/{r.avance.partidas} partidas en obra
+          {r.avance.en_transito > 0 ? ` · ${r.avance.en_transito} en camino` : ""}
+          {r.avance.en_bodega > 0 ? ` · ${r.avance.en_bodega} en bodega` : ""}
+        </div>
+      )}
       <div className="mt-1 flex gap-0.5">
         {ETAPAS_REQUISICION.map((e, i) => (
           <span key={e} className={`h-1 flex-1 rounded-sm ${i < s.paso ? clase.barra : "bg-slate-100"}`} title={ETIQUETA_ETAPA[e]} />

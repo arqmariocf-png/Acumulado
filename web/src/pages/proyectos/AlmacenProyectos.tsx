@@ -9,9 +9,11 @@ import { CLASE_ETAPA, avanceRequisiciones, semaforoEtapa, type ColorEtapa, type 
 // Proyectos. La ve quien ve los proyectos (Jorge incluido).
 
 export interface FilaReq {
+  id: string;
   proyecto_id: string;
   etapa: EtapaRequisicion;
   estado: string;
+  avance_pct?: number | null;
 }
 
 export function useRequisicionesPorProyecto(ids: string[]) {
@@ -19,10 +21,14 @@ export function useRequisicionesPorProyecto(ids: string[]) {
     queryKey: ["req-semaforo-proyectos", ids],
     enabled: ids.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase.from("requisiciones").select("proyecto_id, etapa, estado").in("proyecto_id", ids);
+      const { data, error } = await supabase.from("requisiciones").select("id, proyecto_id, etapa, estado").in("proyecto_id", ids);
       if (error) throw error;
+      // Avance real por partidas (5-oct-2026).
+      const reqIds = (data ?? []).map((f) => f.id as string);
+      const { data: av } = reqIds.length ? await supabase.from("v_requisicion_avance").select("requisicion_id, avance_pct").in("requisicion_id", reqIds) : { data: [] };
+      const pct = new Map((av ?? []).map((a) => [a.requisicion_id as string, Number(a.avance_pct)]));
       const por = new Map<string, FilaReq[]>();
-      for (const f of (data ?? []) as FilaReq[]) {
+      for (const f of ((data ?? []) as FilaReq[]).map((x) => ({ ...x, avance_pct: pct.get(x.id) ?? null }))) {
         const lista = por.get(f.proyecto_id) ?? [];
         lista.push(f);
         por.set(f.proyecto_id, lista);

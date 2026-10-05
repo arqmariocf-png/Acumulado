@@ -21,7 +21,7 @@ function useResumenObra(proyectoId: string) {
         supabase.from("proyecto_controles").select("*").eq("proyecto_id", proyectoId).order("created_at"),
         supabase.from("tableros").select("*").eq("proyecto_id", proyectoId).eq("archivado", false),
         supabase.from("pu_analisis").select("estado, cliente_autorizado_en").eq("proyecto_id", proyectoId),
-        supabase.from("requisiciones").select("etapa, estado").eq("proyecto_id", proyectoId),
+        supabase.from("requisiciones").select("id, etapa, estado").eq("proyecto_id", proyectoId),
       ]);
       for (const r of [controles, tableros, pu, req]) if (r.error) throw r.error;
       const ctrl = (controles.data ?? []) as ProyectoControl[];
@@ -44,6 +44,9 @@ function useResumenObra(proyectoId: string) {
         : [{ data: [], error: null }, { data: [], error: null }];
       if (columnas.error) throw columnas.error;
       if (tarjetas.error) throw tarjetas.error;
+      const reqIds = (req.data ?? []).map((r) => r.id as string);
+      const { data: av } = reqIds.length ? await supabase.from("v_requisicion_avance").select("requisicion_id, avance_pct").in("requisicion_id", reqIds) : { data: [] };
+      const avancePct = new Map((av ?? []).map((a) => [a.requisicion_id as string, Number(a.avance_pct)]));
       return {
         controles: ctrl,
         compras: (compras.data ?? []) as { control_id: string; importe: number; estatus: "pagado" | "pendiente" }[],
@@ -52,7 +55,7 @@ function useResumenObra(proyectoId: string) {
         columnas: (columnas.data ?? []) as TableroColumna[],
         tarjetas: (tarjetas.data ?? []) as Tarjeta[],
         pu: (pu.data ?? []) as { estado: PuEstado; cliente_autorizado_en: string | null }[],
-        requisiciones: (req.data ?? []) as { etapa: EtapaRequisicion; estado: string }[],
+        requisiciones: ((req.data ?? []) as { id: string; etapa: EtapaRequisicion; estado: string }[]).map((r) => ({ ...r, avance_pct: avancePct.get(r.id) ?? null })),
       };
     },
   });

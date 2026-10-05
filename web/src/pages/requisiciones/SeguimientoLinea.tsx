@@ -13,7 +13,13 @@ import {
 
 const TIPOS: TipoEvento[] = [
   "pedido",
+  "en_bodega",
+  "enviado_obra",
+  "queda_bodega",
   "entregado",
+  "directo_obra",
+  "faltante",
+  "regreso_bodega",
   "cambio",
   "devolucion",
   "comentario",
@@ -22,7 +28,13 @@ const TIPOS: TipoEvento[] = [
 const AYUDA: Record<TipoEvento, string> = {
   pedido:
     "Cuánto ya se pidió al proveedor (aunque se haya comprado por fuera).",
-  entregado: "Cuánto llegó a obra o a bodega.",
+  en_bodega: "Cuánto llegó a la bodega. Todavía no cuenta como entregado: falta llevarlo a obra.",
+  enviado_obra: "Cuánto sale de bodega hacia la obra (puede ser parcial). La obra confirma al recibirlo.",
+  queda_bodega: "La parte que no va a obra y se queda en bodega: con eso esa parte queda cumplida.",
+  entregado: "Cuánto llegó a la obra de lo que envió almacén (lo confirma quien pidió o el responsable).",
+  directo_obra: "El proveedor entregó directo en la obra, sin pasar por bodega.",
+  faltante: "Lo que almacén envió y no llegó a la obra (motivo obligatorio); queda pendiente de reponer.",
+  regreso_bodega: "Lo enviado que regresa a la bodega (motivo obligatorio).",
   cambio:
     "Piezas que se regresan para que las repongan: quedan pendientes de entregar otra vez.",
   devolucion:
@@ -42,6 +54,7 @@ export function SeguimientoLinea({
   eventos,
   tipoInicial,
   onCerrar,
+  puede,
 }: {
   lineaId: string;
   requisicionId: string;
@@ -51,6 +64,7 @@ export function SeguimientoLinea({
   eventos: EventoLinea[];
   tipoInicial: TipoEvento;
   onCerrar: () => void;
+  puede?: (t: TipoEvento) => boolean;
 }) {
   const { perfil } = useAuth();
   const queryClient = useQueryClient();
@@ -126,7 +140,7 @@ export function SeguimientoLinea({
   return (
     <div className="rounded border border-sky-200 bg-white px-3 py-2">
       <div className="flex flex-wrap gap-1">
-        {TIPOS.map((t) => (
+        {TIPOS.filter((t) => t === tipo || !puede || puede(t)).map((t) => (
           <button
             key={t}
             type="button"
@@ -165,7 +179,7 @@ export function SeguimientoLinea({
           placeholder={
             tipo === "comentario"
               ? "Comentario…"
-              : tipo === "cambio" || tipo === "devolucion"
+              : tipo === "cambio" || tipo === "devolucion" || tipo === "faltante" || tipo === "regreso_bodega"
                 ? "Motivo (obligatorio)…"
                 : "Nota (opcional): proveedor, remisión…"
           }
