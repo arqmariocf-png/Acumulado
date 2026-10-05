@@ -39,8 +39,13 @@ export function Movimientos() {
     if (empresaParam) setEmpresaId(empresaParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaParam]);
-  const [estado, setEstado] = useState<EstadoClasificacion | "todos">("todos");
-  const [soloDuplicados, setSoloDuplicados] = useState(false);
+  // Desde los indicadores (?ver=…): ambiguos, duplicados o sin factura
+  // (pendiente de revisión) -- lo que cuenta "Movimientos por revisar".
+  const verParam = params.get("ver");
+  const [estado, setEstado] = useState<EstadoClasificacion | "todos">(
+    verParam === "ambiguos" ? "ambiguo" : verParam === "sin_cfdi" || verParam === "revisar" ? "pendiente_revision" : "todos",
+  );
+  const [soloDuplicados, setSoloDuplicados] = useState(verParam === "duplicados");
   const [cuentaReclasificando, setCuentaReclasificando] = useState<string | null>(null);
   const [pagina, setPagina] = useState(0);
 

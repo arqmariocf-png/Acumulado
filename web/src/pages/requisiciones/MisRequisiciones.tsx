@@ -7,6 +7,7 @@ import { administraProyectosDe } from "../../lib/modulos";
 import { CLASE_ETAPA, ETAPAS_REQUISICION, ETIQUETA_ETAPA, puedeMarcarEtapa, semaforoEtapa, siguienteEtapa, type EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { Producto, Proyecto } from "../../types/database";
 import { DetalleRequisicion } from "./DetalleRequisicion";
+import { AvisoFiltro, useVer } from "../../components/FiltroDesdeTablero";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
  * catálogo, como Ergodinova, 28-sep-2026). */
@@ -71,7 +72,13 @@ function useRequisiciones(empresaId: string) {
         ? await supabase.from("v_requisicion_avance").select("requisicion_id, partidas, avance_pct, en_bodega, en_transito, en_obra").in("requisicion_id", ids)
         : { data: [] };
       const porId = new Map((av ?? []).map((a) => [a.requisicion_id as string, a]));
-      return (data ?? []).map((r) => ({ ...r, avance: porId.get(r.id as string) ?? null }));
+      // Renglones sin resolver (lo que cuenta el mosaico de Inicio).
+      const { data: sinResolver } = ids.length
+        ? await supabase.from("avance_resolucion_linea").select("requisicion_id").in("requisicion_id", ids).gt("cantidad_sin_resolver", 0)
+        : { data: [] };
+      const pendientes = new Map<string, number>();
+      for (const x of sinResolver ?? []) pendientes.set(x.requisicion_id as string, (pendientes.get(x.requisicion_id as string) ?? 0) + 1);
+      return (data ?? []).map((r) => ({ ...r, avance: porId.get(r.id as string) ?? null, sin_resolver: pendientes.get(r.id as string) ?? 0 }));
     },
   });
 }
@@ -107,7 +114,18 @@ export function MisRequisiciones() {
 
   const proyectoSeleccionado = proyectosDisponibles?.find((p) => p.id === proyectoId);
   const { data: productos } = useProductosEmpresa(proyectoSeleccionado?.empresa_id ?? "");
-  const { data: requisiciones, isLoading: cargandoRequisiciones, error: errorRequisiciones } = useRequisiciones(empresaFiltro);
+  const { data: todas, isLoading: cargandoRequisiciones, error: errorRequisiciones } = useRequisiciones(empresaFiltro);
+  // Desde Inicio / indicadores: ?ver=sin_resolver (renglones por comprar o
+  // surtir) o ?ver=pendientes (todo lo que no está completo en obra).
+  const [ver, quitarVer] = useVer();
+  const FILTROS: Record<string, { texto: string; f: (r: any) => boolean }> = {
+    sin_resolver: { texto: "requisiciones con renglones sin resolver (por comprar o surtir)", f: (r) => r.estado !== "cancelada" && r.sin_resolver > 0 },
+    pendientes: { texto: "requisiciones sin completar en obra", f: (r) => r.estado !== "cancelada" && r.etapa !== "recibida" },
+    en_bodega: { texto: "requisiciones con material en bodega por llevar a obra", f: (r) => r.estado !== "cancelada" && (r.avance?.en_bodega ?? 0) > 0 },
+    en_transito: { texto: "requisiciones con material en camino a obra", f: (r) => r.estado !== "cancelada" && (r.avance?.en_transito ?? 0) > 0 },
+  };
+  const filtro = ver ? FILTROS[ver] : undefined;
+  const requisiciones = filtro && todas ? todas.filter(filtro.f) : todas;
 
   useEffect(() => {
     if (proyectosDisponibles?.length === 1) setProyectoId(proyectosDisponibles[0].id);
@@ -364,6 +382,7 @@ export function MisRequisiciones() {
 
       {cargandoRequisiciones && <p className="text-sm text-slate-500">Cargando…</p>}
       {errorRequisiciones && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">No se pudo cargar la lista: {(errorRequisiciones as Error).message}</p>}
+      {filtro && <AvisoFiltro texto={filtro.texto} total={requisiciones?.length} onQuitar={quitarVer} />}
       {requisiciones && (
         <div className="overflow-x-auto rounded border border-slate-200 bg-white">
           <table className="w-full text-sm">

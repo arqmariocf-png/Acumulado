@@ -151,7 +151,9 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
 
   return (
     <div>
-      <PagosSinComprobante compacto={compacto} empresaId={filtroEmpresa} />
+      <div id="sin-comprobante" className="scroll-mt-20">
+        <PagosSinComprobante compacto={compacto} empresaId={filtroEmpresa} />
+      </div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className={`${compacto ? "text-base" : "text-xl"} font-semibold text-slate-900`}>Tesorería · pagos de hoy</h1>

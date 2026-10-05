@@ -137,7 +137,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_oc_por_autorizar",
     etiqueta: "Órdenes de compra por autorizar",
-    ruta: "/finanzas/pagos",
+    ruta: "/finanzas/pagos#ordenes",
     area: "finanzas",
     descripcion: "Órdenes de almacén (RQ) y de Excel que dirección no ha autorizado, más las que el backoffice tiene en Pendiente de Autorización; sin autorización no se programa pago.",
     visible: finanzas,
@@ -150,7 +150,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_pagos_vencidos",
     etiqueta: "Pagos programados vencidos",
-    ruta: "/finanzas/pagos",
+    ruta: "/finanzas/pagos#pagos-vencidos",
     area: "finanzas",
     descripcion: "Pagos pendientes cuya fecha programada ya pasó.",
     visible: finanzas,
@@ -162,7 +162,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_pagos_semana",
     etiqueta: "Pagos de los próximos 7 días",
-    ruta: "/finanzas/pagos",
+    ruta: "/finanzas/pagos#pagos-semana",
     area: "finanzas",
     descripcion: "Monto pendiente programado para los próximos 7 días.",
     informativo: true,
@@ -203,7 +203,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "movimientos_revisar",
     etiqueta: "Movimientos por revisar",
-    ruta: "/movimientos",
+    ruta: "/movimientos?ver=revisar",
     area: "contabilidad",
     descripcion: "Movimientos bancarios ambiguos, duplicados o sin factura.",
     visible: contab,
@@ -217,7 +217,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_pagos_sin_comprobante",
     etiqueta: "Pagos sin comprobante (%)",
-    ruta: "/finanzas/tesoreria",
+    ruta: "/finanzas/tesoreria#sin-comprobante",
     area: "finanzas",
     descripcion: "Porcentaje de los pagos ya marcados como pagados que no tienen comprobante; sin él no se completa el acumulado en automático.",
     visible: finanzas,
@@ -309,7 +309,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "cont_sin_cfdi",
     etiqueta: "Movimientos sin factura",
-    ruta: "/movimientos",
+    ruta: "/movimientos?ver=sin_cfdi",
     area: "contabilidad",
     descripcion: "Movimientos bancarios que no tienen CFDI relacionado.",
     visible: contab,
@@ -355,7 +355,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "rh_asistencia_hoy",
     etiqueta: "% de asistencia hoy",
-    ruta: "/rh",
+    ruta: "/rh?tab=checador",
     area: "rh",
     descripcion: "Personas con cuenta que marcaron entrada hoy, sobre el personal activo con cuenta.",
     direccion: "menor_es_peor",
@@ -374,7 +374,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "rh_accesos",
     etiqueta: "Accesos por crear",
-    ruta: "/rh",
+    ruta: "/rh?tab=accesos",
     area: "rh",
     descripcion: "Personal con INE, CURP y comprobante de domicilio pero sin cuenta.",
     visible: rh,
@@ -386,7 +386,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "rh_contratos",
     etiqueta: "Contratos que vencen en 15 días",
-    ruta: "/rh",
+    ruta: "/rh?tab=contrataciones",
     area: "rh",
     descripcion: "Contrataciones vigentes con fecha de fin en los próximos 15 días.",
     visible: rh,
@@ -398,7 +398,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "rh_expedientes",
     etiqueta: "Documentos faltantes en expedientes",
-    ruta: "/rh",
+    ruta: "/rh?tab=documentos",
     area: "rh",
     descripcion: "Documentos obligatorios que faltan o vencieron, sumando todo el personal activo.",
     visible: rh,
@@ -410,7 +410,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "rh_vacantes",
     etiqueta: "Vacantes abiertas",
-    ruta: "/rh",
+    ruta: "/rh?tab=vacantes",
     area: "rh",
     descripcion: "Vacantes en estatus abierta.",
     visible: rh,
@@ -438,7 +438,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "rh_firmas_pendientes",
     etiqueta: "Convenios NDA sin firmar",
-    ruta: "/rh",
+    ruta: "/rh?tab=contrataciones",
     area: "rh",
     descripcion: "Solicitudes de firma enviadas al personal que siguen pendientes.",
     visible: rh,
@@ -454,7 +454,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "inventario_oc",
     etiqueta: "OC recibidas a medias",
-    ruta: "/inventario/match",
+    ruta: "/inventario/match?ver=oc_parciales",
     area: "almacen",
     descripcion: "Órdenes de compra con recepción parcial.",
     visible: inventario,
@@ -466,7 +466,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "alm_partidas_faltantes",
     etiqueta: "Partidas con faltante",
-    ruta: "/inventario/match",
+    ruta: "/inventario/match?ver=partidas_faltantes",
     area: "almacen",
     descripcion: "Partidas de OC recibidas parcialmente: el proveedor debe producto.",
     visible: inventario,
@@ -478,7 +478,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "alm_partidas_excedente",
     etiqueta: "Partidas con excedente",
-    ruta: "/inventario/match",
+    ruta: "/inventario/match?ver=partidas_excedente",
     area: "almacen",
     descripcion: "Partidas donde se recibió más de lo pedido: ajuste o reclamación.",
     visible: inventario,
@@ -554,7 +554,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "log_ov_parciales",
     etiqueta: "OV con embarque parcial",
-    ruta: "/inventario/match",
+    ruta: "/inventario/match?ver=ov_parciales",
     area: "logistica",
     descripcion: "Órdenes de venta embarcadas a medias.",
     visible: inventario,
@@ -566,7 +566,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "log_requisiciones",
     etiqueta: "Renglones de requisición sin resolver",
-    ruta: "/requisiciones",
+    ruta: "/requisiciones?ver=sin_resolver",
     area: "logistica",
     descripcion: "Renglones pedidos por obra que compras no ha resuelto.",
     visible: (p) => operacion(p) || inventario(p),
@@ -610,7 +610,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "bbva_folios",
     etiqueta: "Folios BBVA sin atender",
-    ruta: "/bbva/folios",
+    ruta: "/bbva/folios?ver=sin_atender",
     area: "mantenimiento",
     descripcion: "Folios en estatus pendiente o en ejecución.",
     visible: bbva,
@@ -622,7 +622,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "mant_folios_viejos",
     etiqueta: "Folios abiertos más de 7 días",
-    ruta: "/bbva/folios",
+    ruta: "/bbva/folios?ver=viejos",
     area: "mantenimiento",
     descripcion: "Folios sin atender creados hace más de 7 días.",
     visible: bbva,
@@ -634,7 +634,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "mant_folios_en_ejecucion",
     etiqueta: "Folios en ejecución",
-    ruta: "/bbva/folios",
+    ruta: "/bbva/folios?ver=en_ejecucion",
     area: "mantenimiento",
     descripcion: "Folios que la cuadrilla ya está atendiendo.",
     informativo: true,

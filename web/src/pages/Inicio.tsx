@@ -282,7 +282,7 @@ export function Inicio() {
 
   const mosaicos = [
     veFoliosBbva && {
-      a: "/bbva/folios",
+      a: "/bbva/folios?ver=sin_atender",
       etiqueta: "Folios BBVA",
       descripcion: "semáforo de atención de las cuadrillas",
       icono: ICONOS.pendientes,
@@ -349,7 +349,7 @@ export function Inicio() {
       icono: ICONOS.rh,
     },
     veRequisiciones && {
-      a: "/requisiciones",
+      a: "/requisiciones?ver=sin_resolver",
       etiqueta: "Requisiciones",
       descripcion: "renglones sin resolver",
       icono: ICONOS.requisiciones,
@@ -363,14 +363,14 @@ export function Inicio() {
       conteo: precios,
     },
     veInventario && {
-      a: "/inventario",
+      a: "/inventario/match?ver=oc_parciales",
       etiqueta: "Inventario",
       descripcion: "órdenes recibidas a medias",
       icono: ICONOS.inventario,
       conteo: inventario,
     },
     veFinanzas && {
-      a: "/movimientos",
+      a: "/movimientos?ver=revisar",
       etiqueta: "Movimientos",
       descripcion: "por revisar (ambiguos, duplicados o sin factura)",
       icono: ICONOS.movimientos,
@@ -384,7 +384,7 @@ export function Inicio() {
       conteo: carga,
     },
     veRH && {
-      a: "/rh",
+      a: "/rh?tab=documentos",
       etiqueta: "Recursos humanos",
       descripcion: "documentos faltantes en expedientes",
       icono: ICONOS.rh,

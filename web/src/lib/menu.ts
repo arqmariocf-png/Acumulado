@@ -278,8 +278,10 @@ export function seccionDeRuta(ruta: string): SeccionMenu | undefined {
  * seccionesPara, para que el inicio no ofrezca mosaicos que el menú esconde.
  * Una ruta que no está en el catálogo se considera de plataforma: fuera para
  * una organización cliente. */
-export function rutaPermitida(ruta: string, alcance?: AlcanceOrganizacion | null): boolean {
+export function rutaPermitida(rutaConFiltro: string, alcance?: AlcanceOrganizacion | null): boolean {
   if (!alcance || alcance.esMaestra) return true;
+  // Los atajos del tablero llevan filtro (?ver=…, #sección): se valida la ruta.
+  const ruta = rutaConFiltro.split(/[?#]/)[0];
   const entrada = SECCIONES.flatMap((s) => s.entradas).find((e) => ruta === e.ruta || ruta.startsWith(`${e.ruta}/`));
   if (!entrada) return false;
   return entrada.personal === true || (!!entrada.modulo && alcance.modulos.includes(entrada.modulo));

@@ -11,6 +11,7 @@ import { supabase } from "../lib/supabase";
 import { SelectorEmpresa, useEmpresasAlcance } from "./SelectorEmpresa";
 import { ETIQUETA_ROL, NIVELES_ROLES } from "../lib/accesosRoles";
 import type { AppRol } from "../types/database";
+import { IrAlAncla } from "./FiltroDesdeTablero";
 
 export function Layout() {
   const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, cambiarContrasena, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
@@ -95,6 +96,7 @@ export function Layout() {
       <AvisoSuscripcion />
       <AvisoVersion />
       <main className="mx-auto max-w-7xl px-4 py-6">
+        <IrAlAncla />
         <Outlet />
       </main>
     </div>
