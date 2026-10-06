@@ -5,6 +5,7 @@ import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 import { eliminarPendiente, esErrorDeRed, guardarPendiente, listarPendientes, nuevoId, type MarcaPendiente } from "../lib/colaOffline";
 import { CamaraSelfie } from "../components/CamaraSelfie";
+import { rutaVerArchivo } from "../lib/verArchivo";
 
 /** La foto tomada se respalda en sessionStorage (ya comprimida, ~100-200 KB)
  * para sobrevivir a que el navegador recargue la página mientras se pide
@@ -110,14 +111,9 @@ async function comprimirFoto(archivo: Blob): Promise<Blob> {
   return new Promise((resolve) => lienzo.toBlob((b) => resolve(b ?? archivo), "image/jpeg", 0.82));
 }
 
-async function abrirFoto(registroId: string) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const respuesta = await fetch(`${urlFuncion("checador-marcar")}?registroId=${registroId}`, {
-    headers: { Authorization: `Bearer ${sessionData.session?.access_token}` },
-  });
-  const json = await respuesta.json();
-  if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-  window.open(json.url, "_blank");
+function abrirFoto(registroId: string) {
+  // Página propia que pide la liga firmada al cargar (no caduca en la pestaña).
+  window.open(rutaVerArchivo("checador", registroId), "_blank");
 }
 
 function enlaceMapa(r: RegistroChecador): string | null {
@@ -595,7 +591,7 @@ export function Checador() {
                         </a>
                       )}
                       {r.foto_path && (
-                        <button type="button" onClick={() => abrirFoto(r.id).catch((e) => alert((e as Error).message))} className="text-xs text-slate-500 hover:underline">
+                        <button type="button" onClick={() => abrirFoto(r.id)} className="text-xs text-slate-500 hover:underline">
                           foto
                         </button>
                       )}

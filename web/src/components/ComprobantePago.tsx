@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
+import { rutaVerArchivo } from "../lib/verArchivo";
 
 /** Comprobante de un pago (Delia, 29-sep-2026): subir (admin/corporativo/
  * dirección) y ver (quien ve el pago). Edge `pagos-comprobante`, bucket
@@ -15,16 +16,9 @@ export function ComprobantePago({ pagoId, nombre, compacto = false }: { pagoId: 
   const [error, setError] = useState<string | null>(null);
   const puedeSubir = !soloConsulta && (perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "direccion");
 
-  async function ver() {
-    setError(null);
-    const { data: sessionData } = await supabase.auth.getSession();
-    const respuesta = await fetch(`${urlFuncion("pagos-comprobante")}?id=${pagoId}`, { headers: { Authorization: `Bearer ${sessionData.session?.access_token}` } });
-    const json = await respuesta.json().catch(() => null);
-    if (!respuesta.ok) {
-      setError((await errorDeFuncion(respuesta, json)).message);
-      return;
-    }
-    window.open(json.url, "_blank");
+  function ver() {
+    // Página propia que pide la liga firmada al cargar (no caduca en la pestaña).
+    window.open(rutaVerArchivo("pago", pagoId), "_blank");
   }
 
   async function subir(archivo: File) {

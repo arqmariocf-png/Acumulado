@@ -71,6 +71,7 @@ const Tableros = lazy(() => import("./pages/tareas/Tableros").then((m) => ({ def
 const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((m) => ({ default: m.TableroDetalle })));
 const BbvaMantenimiento = lazy(() => import("./pages/bbva/BbvaMantenimiento").then((m) => ({ default: m.BbvaMantenimiento })));
 const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ default: m.ManoDeObra })));
+const VerArchivo = lazy(() => import("./pages/VerArchivo").then((m) => ({ default: m.VerArchivo })));
 const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
 const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
 
@@ -108,6 +109,8 @@ function Enrutador() {
       <Route path="/login" element={<Login />} />
 
       <Route element={<ProtectedRoute />}>
+        {/* Visor de archivos privados: pide una liga nueva al cargar (ver lib/verArchivo.ts). */}
+        <Route path="/archivo" element={<VerArchivo />} />
         <Route element={<Layout />}>
           <Route path="/" element={<InicioSegunRol />} />
           <Route path="/inicio" element={<Inicio />} />

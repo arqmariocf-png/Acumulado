@@ -5,6 +5,7 @@ import { errorDeFuncion } from "../lib/funciones";
 import { useAuth, useEmpresaFiltro } from "../lib/auth";
 import { SelectorEmpresa } from "../components/SelectorEmpresa";
 import { dineroMx } from "../lib/kpisEmpresa";
+import { rutaVerArchivo } from "../lib/verArchivo";
 
 /** Comprobación de gastos / caja chica: el supervisor sube la factura o nota
  * con monto y obra; finanzas recibe el aviso (push) y la aprueba, rechaza o
@@ -107,20 +108,9 @@ export function Gastos() {
     onError: (e) => setMensaje((e as Error).message),
   });
 
-  async function verArchivo(id: string) {
-    const ventana = window.open("", "_blank");
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const respuesta = await fetch(`${urlFuncion("gastos-comprobar")}?id=${id}`, { headers: { Authorization: `Bearer ${token}` } });
-      const json = await respuesta.json();
-      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-      if (ventana) ventana.location.href = json.url;
-      else window.location.href = json.url;
-    } catch (err) {
-      ventana?.close();
-      setMensaje((err as Error).message);
-    }
+  function verArchivo(id: string) {
+    // Página propia que pide la liga firmada al cargar (no caduca en la pestaña).
+    window.open(rutaVerArchivo("gasto", id), "_blank");
   }
 
   const filas = (lista ?? []).filter((c) => (vista === "mias" ? c.supervisor_id === perfil?.id : vista === "revisar" ? c.estatus === "enviada" : true));

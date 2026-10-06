@@ -397,6 +397,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   catálogo del menú con un perfil de muestra; "edita" es el mapa EDITA a
   mano. **Si cambia una policy, actualizar EDITA.** Los módulos puros que
   se prueban en node importan con extensión `.ts` (`menu.ts` incluido).
+- **Archivos privados se ven en `/archivo` (6-oct-2026, Fernando: "InvalidJWT
+  exp claim timestamp check failed")**: las funciones dan ligas firmadas de
+  Storage de 1-60 min; abrirlas directo en una pestaña caducaba al volver o
+  al recargar (Safari). Ahora los botones abren `/archivo?f=<fuente>&id=`
+  (`pages/VerArchivo.tsx`, `lib/verArchivo.ts` con pruebas; fuentes rh,
+  checador, tarea, plano, pago, cotizacion, gasto), que pide una liga nueva
+  cada vez que carga y muestra imagen o PDF. **Visor nuevo de archivo →
+  agregarlo a `FUENTES_ARCHIVO`, nunca `window.open(json.url)`.**
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
   abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
   (móvil). QR con `qrcode` (import dinámico).

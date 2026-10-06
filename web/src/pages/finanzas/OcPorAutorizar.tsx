@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, urlFuncion } from "../../lib/supabase";
-import { errorDeFuncion } from "../../lib/funciones";
+import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
+import { rutaVerArchivo } from "../../lib/verArchivo";
 
 interface OcPendiente {
   id: string;
@@ -217,15 +217,9 @@ function DetalleOc({ oc, cuentas, onResuelta }: { oc: OcPendiente; cuentas: Cuen
     onError: (e: Error) => setError(e.message),
   });
 
-  async function verCotizacion(necesidadId: string) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const respuesta = await fetch(`${urlFuncion("requisiciones-cotizacion")}?id=${necesidadId}`, { headers: { Authorization: `Bearer ${sessionData.session?.access_token}` } });
-    const json = await respuesta.json().catch(() => null);
-    if (!respuesta.ok) {
-      setError((await errorDeFuncion(respuesta, json)).message);
-      return;
-    }
-    window.open(json.url, "_blank");
+  function verCotizacion(necesidadId: string) {
+    // Página propia que pide la liga firmada al cargar (no caduca en la pestaña).
+    window.open(rutaVerArchivo("cotizacion", necesidadId), "_blank");
   }
 
   return (

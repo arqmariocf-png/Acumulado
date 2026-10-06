@@ -12,6 +12,7 @@ import { SupervisionIA } from "./SupervisionIA";
 import type { Proyecto, ProyectoPlano, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
 import { CosteoObra } from "./CosteoObra";
+import { rutaVerArchivo } from "../../lib/verArchivo";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -304,20 +305,9 @@ function PestanaPlanos({ proyectoId, onUsarConcepto }: { proyectoId: string; onU
     }
   }
 
-  async function onDescargar(planoId: string) {
-    setError(null);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const respuesta = await fetch(`${urlFuncion("proyecto-archivos")}?planoId=${planoId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await respuesta.json();
-      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-      window.open(json.url, "_blank");
-    } catch (err) {
-      setError((err as Error).message);
-    }
+  function onDescargar(planoId: string) {
+    // Página propia que pide la liga firmada al cargar (no caduca en la pestaña).
+    window.open(rutaVerArchivo("plano", planoId), "_blank");
   }
 
   async function onBorrar(planoId: string) {
