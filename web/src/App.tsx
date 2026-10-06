@@ -150,7 +150,7 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["corporativo", "direccion", "rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
             <Route path="/bbva/equilibrio" element={<Equilibrio />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["rh", "supervisor", "directivo"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+          <Route element={<ProtectedRoute roles={["rh", "supervisor", "directivo"]} oPermiso={(p) => p.bbva_mantenimiento || (p.modulos ?? []).includes("checador")} />}>
             <Route path="/bbva/asistencia" element={<AsistenciaEquipo />} />
           </Route>
           <Route element={<ProtectedRoute modulo="proyectos" />}>

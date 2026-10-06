@@ -621,6 +621,20 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   con cuenta que no sea operativo (Christian, responsable+BBVA). Los roles
   de BBVA (supervisor_bbva = cuadrillas de folios, responsable con
   bbva_mantenimiento) no se cambian a básicos: mueven el módulo BBVA.
+- **Responsable de checador (5-oct-2026, Mario: "más que directivo, un rol
+  únicamente de responsable de checador")**: permiso por persona
+  `permisos_modulo` 'checador' (no es rol): `auth_ve_checador_de` le abre
+  las marcas de todo el personal de SU organización; entra a "Asistencia del
+  equipo" (`/bbva/asistencia`); se asigna en RH → Accesos ("Responsable de
+  checador"). Valery López (practicante de RH, administrativo) lo tiene
+  (`20261006090000`). Bajas 5-oct: cuentas Gmail duplicadas de María
+  Fernanda y Mauro (supervisor, nunca entraron) desactivadas y bloqueadas;
+  sus expedientes de RH pasaron a la cuenta que sí usan (responsable).
+- **Backoffice congelado (5-oct-2026, Delia/Laura)**: `api_ocs_aut` devolvió
+  la última OC 41146 (2-oct 17:35); nada del fin de semana ni del lunes. No
+  es de Acumulado: la sincronización corre bien y guarda lo que la API
+  entrega. Si vuelve a pasar: `net.http_get` a la API y contar
+  `ordersProject` antes de buscar el error aquí.
 - **Editar datos del personal (2-oct-2026, Raúl)**: botón "Editar" en RH →
   Personal; reutiliza el formulario de alta prellenado (RLS de `personal`
   ya dejaba actualizar a cualquier rh).
