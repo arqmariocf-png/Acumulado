@@ -2,6 +2,7 @@ import { useState, type DragEvent, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
+import { Recurrentes } from "./Recurrentes";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, Tablero, TableroColumna, Tarjeta } from "../../types/database";
@@ -339,6 +340,8 @@ export function TableroDetalle() {
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <CalendarioVencimientos tarjetas={tarjetas ?? []} onSeleccionar={setTarjetaSeleccionada} />
+
+      {tableroId && <Recurrentes tableroId={tableroId} empresaId={tablero.empresa_id ?? null} directorio={(directorio ?? []).map((d) => ({ id: d.id, nombre: d.nombre }))} />}
 
       <div className="mb-3">
         <button type="button" onClick={() => setVerArchivadas((v) => !v)} className="text-xs text-slate-600 underline">

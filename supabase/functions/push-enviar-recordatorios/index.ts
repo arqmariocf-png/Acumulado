@@ -7,6 +7,10 @@
 // checador.sql -- no hay forma de fijar "secrets" de edge function desde
 // este entorno).
 //
+// Además escala el semáforo (6-oct-2026): tarjetas que entran en amarillo
+// (vencen en 3 días o menos) → jefe inmediato; vencidas (rojo) → RH. Una vez
+// por tarjeta, nivel y fecha límite (fn_tarjetas_escalamientos).
+//
 // POST (sin body), header: x-cron-secret: <el secreto>
 
 import webpush from "npm:web-push@3.6.7";
@@ -73,32 +77,15 @@ Deno.serve(async (req) => {
     let fallidos = 0;
     const suscripcionesABorrar: string[] = [];
 
-    for (const [profileId, tarjetasPersona] of porPersona) {
+    async function enviar(profileId: string, payload: string): Promise<void> {
       const { data: subs, error: errSubs } = await dbServicio
         .from("push_subscripciones")
         .select("id, endpoint, p256dh, auth")
         .eq("profile_id", profileId);
-      if (errSubs || !subs || subs.length === 0) continue;
-
-      const titulos = tarjetasPersona.map((t) => t.titulo);
-      const cuerpo =
-        titulos.length <= 3
-          ? titulos.join(" · ")
-          : `${titulos.slice(0, 3).join(" · ")} y ${titulos.length - 3} más`;
-      // Una tarjeta → se abre ella misma; varias → su lista en "Mis actividades".
-      const url = tarjetasPersona.length === 1 ? `/tareas/${tarjetasPersona[0].tablero_id}?tarjeta=${tarjetasPersona[0].id}` : "/tareas#mis-actividades";
-      const payload = JSON.stringify({
-        titulo: `Tienes ${tarjetasPersona.length} tarea${tarjetasPersona.length > 1 ? "s" : ""} para hoy`,
-        cuerpo,
-        url,
-      });
-
+      if (errSubs || !subs || subs.length === 0) return;
       for (const sub of subs) {
         try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            payload,
-          );
+          await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
           enviados++;
         } catch (err) {
           fallidos++;
@@ -110,11 +97,54 @@ Deno.serve(async (req) => {
       }
     }
 
+    for (const [profileId, tarjetasPersona] of porPersona) {
+      const titulos = tarjetasPersona.map((t) => t.titulo);
+      const cuerpo =
+        titulos.length <= 3
+          ? titulos.join(" · ")
+          : `${titulos.slice(0, 3).join(" · ")} y ${titulos.length - 3} más`;
+      // Una tarjeta → se abre ella misma; varias → su lista en "Mis actividades".
+      const url = tarjetasPersona.length === 1 ? `/tareas/${tarjetasPersona[0].tablero_id}?tarjeta=${tarjetasPersona[0].id}` : "/tareas#mis-actividades";
+      await enviar(
+        profileId,
+        JSON.stringify({ titulo: `Tienes ${tarjetasPersona.length} tarea${tarjetasPersona.length > 1 ? "s" : ""} para hoy`, cuerpo, url }),
+      );
+    }
+
+    // Escalamiento del semáforo: un aviso por persona y nivel con sus tareas.
+    const { data: escalar, error: errEsc } = await dbServicio.rpc("fn_tarjetas_escalamientos");
+    if (errEsc) throw new Error(`Escalamiento: ${errEsc.message}`);
+    interface Escalada { tarjeta_id: string; tablero_id: string; titulo: string; nivel: "amarillo" | "rojo"; fecha_limite: string; responsable: string | null; destinatarios: string[] }
+    const porDestino = new Map<string, Escalada[]>();
+    for (const e of (escalar ?? []) as Escalada[]) {
+      for (const d of e.destinatarios ?? []) {
+        const k = `${d}|${e.nivel}`;
+        porDestino.set(k, [...(porDestino.get(k) ?? []), e]);
+      }
+    }
+    for (const [k, lista] of porDestino) {
+      const [profileId, nivel] = k.split("|");
+      const rojo = nivel === "rojo";
+      const linea = (e: Escalada) => `${e.titulo}${e.responsable ? ` (${e.responsable})` : ""}`;
+      const cuerpo = lista.length <= 3 ? lista.map(linea).join(" · ") : `${lista.slice(0, 3).map(linea).join(" · ")} y ${lista.length - 3} más`;
+      const url = lista.length === 1 ? `/tareas/${lista[0].tablero_id}?tarjeta=${lista[0].tarjeta_id}` : rojo ? "/tareas?ver=tareas_vencidas" : "/tareas#mis-actividades";
+      await enviar(
+        profileId,
+        JSON.stringify({
+          titulo: rojo
+            ? `${lista.length} tarea${lista.length > 1 ? "s" : ""} vencida${lista.length > 1 ? "s" : ""} (RH)`
+            : `${lista.length} tarea${lista.length > 1 ? "s" : ""} de tu equipo por vencer`,
+          cuerpo,
+          url,
+        }),
+      );
+    }
+
     if (suscripcionesABorrar.length > 0) {
       await dbServicio.from("push_subscripciones").delete().in("id", suscripcionesABorrar);
     }
 
-    return jsonResponse({ personas: porPersona.size, enviados, fallidos, suscripcionesLimpiadas: suscripcionesABorrar.length });
+    return jsonResponse({ personas: porPersona.size, escalamientos: (escalar ?? []).length, enviados, fallidos, suscripcionesLimpiadas: suscripcionesABorrar.length });
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }

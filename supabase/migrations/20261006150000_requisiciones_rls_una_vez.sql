@@ -65,8 +65,12 @@ grant execute on function public.auth_requisiciones_organizacion() to authentica
 grant execute on function public.auth_requisiciones_visibles() to authenticated;
 grant execute on function public.auth_requisiciones_editables() to authenticated;
 
+-- solicitado_por va por fila: al crear una requisición la app pide el
+-- renglón de regreso (insert … returning) y el arreglo, calculado al
+-- inicio de la sentencia, todavía no la trae ("new row violates row-level
+-- security policy for table requisiciones", Timoteo, 6-oct-2026).
 alter policy requisiciones_select on public.requisiciones
-  using (id = any ((select public.auth_requisiciones_visibles())::uuid[]));
+  using (solicitado_por = (select auth.uid()) or id = any ((select public.auth_requisiciones_visibles())::uuid[]));
 
 alter policy requisicion_lineas_select on public.requisicion_lineas
   using (requisicion_id = any ((select public.auth_requisiciones_visibles())::uuid[]));

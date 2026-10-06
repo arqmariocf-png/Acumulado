@@ -336,7 +336,7 @@ interface KpiActividadesDatos {
   resumen: { total: number; hechas: number; a_tiempo: number; vencidas: number; pendientes: number; cambios_fecha?: number; con_fecha_movida?: number; pct_cumplimiento?: number | null; pct_a_tiempo?: number | null };
   por_semana: { semana: string; total: number; hechas: number; a_tiempo: number; vencidas: number }[];
   por_persona: { nombre: string; total: number; hechas: number; a_tiempo: number; vencidas: number }[];
-  abiertas?: { id: string; tablero_id: string; titulo: string; fecha_limite: string | null; cambios_fecha?: number; responsable: string | null; supervisor: string | null; columna: string | null; estado: "vencida" | "pendiente" | "sin_fecha" }[];
+  abiertas?: { id: string; tablero_id: string; tablero?: string; titulo: string; fecha_limite: string | null; cambios_fecha?: number; responsable: string | null; supervisor: string | null; columna: string | null; estado: "vencida" | "pendiente" | "sin_fecha" }[];
 }
 
 const ETIQUETA_ABIERTA = { vencida: "Vencida", pendiente: "Pendiente", sin_fecha: "Sin fecha" } as const;
@@ -357,7 +357,7 @@ export function KpiActividades() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-600">Actividades del tablero "RH · Actividades": hechas, a tiempo (cerradas antes de su fecha límite) y vencidas (sin cerrar y con la fecha pasada).</p>
+      <p className="text-sm text-slate-600">Todas las tareas de todos los tableros: hechas, a tiempo (cerradas antes de su fecha límite) y vencidas (sin cerrar y con la fecha pasada).</p>
       <Estado cargando={q.isPending} error={q.error} />
       {d && (
         <>
@@ -400,6 +400,7 @@ export function KpiActividades() {
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-900">{a.titulo}</div>
                         <div className="text-xs text-slate-500">
+                          {a.tablero && <span className="font-medium text-slate-600">{a.tablero} · </span>}
                           {a.responsable ?? "Sin responsable"}
                           {a.supervisor && <> · sup. {a.supervisor}</>}
                           {a.columna && <> · {a.columna}</>}
