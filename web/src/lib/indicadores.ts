@@ -35,7 +35,7 @@ export interface Indicador {
 const esAdmin = (p: Profile) => p.rol === "admin";
 const finanzas = (p: Profile) => ["corporativo", "direccion", "admin"].includes(p.rol);
 const contab = (p: Profile) => ["corporativo", "direccion", "empresa", "admin"].includes(p.rol);
-const veEquipo = (p: Profile) => p.rol === "supervisor" || p.rol === "directivo" || p.rol === "rh" || esAdmin(p) || !!p.bbva_mantenimiento;
+const veEquipo = (p: Profile) => p.rol === "supervisor" || p.rol === "directivo" || p.rol === "rh" || esAdmin(p) || !!p.bbva_mantenimiento || (p.modulos ?? []).includes("checador");
 const rh = (p: Profile) => p.rol === "rh" || esAdmin(p);
 const produccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || (esRolBasico(p.rol) && (p.modulos ?? []).includes("produccion"));
 const inventario = (p: Profile) =>

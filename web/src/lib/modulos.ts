@@ -40,6 +40,7 @@ export const MODULOS_ASIGNABLES: { clave: string; ruta: string; etiqueta: string
   { clave: "proyectos", ruta: "/proyectos", etiqueta: "Proyectos", descripcion: "obras y proyectos de la empresa" },
   { clave: "bbva", ruta: "/bbva/folios", etiqueta: "Folios BBVA", descripcion: "semáforo de atención de cuadrillas" },
   { clave: "comedor", ruta: "/comedor?tab=cocina", etiqueta: "Comedor (cocina)", descripcion: "menú, platillos y entregas del comedor" },
+  { clave: "checador", ruta: "/bbva/asistencia", etiqueta: "Responsable de checador", descripcion: "ve entradas y salidas de todo el personal" },
 ];
 
 /** Deja solo dígitos y, si es un celular mexicano de 10 dígitos, antepone 52 (lo que pide wa.me). */

@@ -112,3 +112,23 @@ end $$;
 
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
+
+\echo '── 6. Responsable de checador: ve las marcas de todos los de su organización'
+insert into auth.users (id, email) values ('dddddddd-0000-0000-0000-000000000009', 'checador.prueba@test');
+update public.profiles set nombre = 'Checador prueba', rol = 'administrativo',
+  grupo_id = (select id from public.grupos where codigo = 'LOMA') where id = 'dddddddd-0000-0000-0000-000000000009';
+do $$
+begin
+  perform set_config('request.jwt.claim.sub', 'dddddddd-0000-0000-0000-000000000009', false);
+  if public.auth_ve_checador_de('dddddddd-0000-0000-0000-000000000001') then
+    raise exception 'FALLA: sin permiso ve el checador ajeno';
+  end if;
+  perform set_config('request.jwt.claim.sub', '', false);
+  insert into public.permisos_modulo (profile_id, modulo) values ('dddddddd-0000-0000-0000-000000000009', 'checador');
+  perform set_config('request.jwt.claim.sub', 'dddddddd-0000-0000-0000-000000000009', false);
+  if not public.auth_ve_checador_de('dddddddd-0000-0000-0000-000000000001') then
+    raise exception 'FALLA: con permiso no ve el checador de su organización';
+  end if;
+  perform set_config('request.jwt.claim.sub', '', false);
+  raise notice 'OK: responsable de checador ve a su organización';
+end $$;
