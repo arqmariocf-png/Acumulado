@@ -96,7 +96,7 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
   if (!perfil) return null;
 
   return (
-    <section className="mb-6 rounded border border-slate-200 bg-white p-4">
+    <section id={compacto ? undefined : "mis-actividades"} className="mb-6 rounded border border-slate-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Mis actividades</h2>

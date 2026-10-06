@@ -175,6 +175,24 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   ResumenObra) usan el avance por partidas (`semaforoEtapa(etapa,
   cancelada, avance_pct)`). Las 18 marcas "entregado" de Alma pasaron a
   en_bodega (`20261005100000`, prueba `supabase/tests/requisicion_entrega.sql`).
+- **La app se trababa (6-oct-2026, Mario)**: desde el 5-oct 19:00 UTC,
+  cientos de "statement timeout" por hora, casi todos en BIND (planeación).
+  Causa: `v_requisicion_linea_entrega` / `v_requisicion_avance` eran
+  security_invoker sobre 7 tablas con RLS y planeaban sus policies anidadas en
+  cada consulta (3.7 s para 19 requisiciones). Ahora el cálculo es
+  `fn_requisicion_linea_entrega_base()` (definer, acotado a la organización)
+  y la vista filtra contra `requisiciones` (13 ms) (`20261006110000`).
+  **Regla: una vista que cruza varias tablas con RLS no se hace
+  security_invoker; se calcula en una función definer acotada y se filtra
+  contra UNA tabla con RLS.** Diagnóstico: `pg_stat_statements` + logs de
+  postgres con `parsed.command_tag = 'BIND'`. React Query ya no usa los
+  valores por defecto: `staleTime` 60 s y 1 reintento (`App.tsx`).
+- **Notificaciones push llevan a lo que hay que atender (6-oct-2026)**:
+  tareas → `/tareas/<tablero>?tarjeta=<id>` (abre la tarjeta);
+  recordatorio diario → la tarjeta o `/tareas#mis-actividades`; gastos →
+  `/gastos#por-revisar` (en repo; desplegar `gastos-comprobar` tras
+  reconciliar su `_shared`). `sw.js` navega la pestaña abierta y, si no
+  puede, abre otra.
 - **Del tablero directo al problema (5-oct-2026, Mario: "dirígelos directo
   al problema")**: mosaicos de Inicio y KPIs (`lib/indicadores.ts`) llevan
   filtro: `?ver=` (requisiciones sin_resolver/pendientes/en_bodega/

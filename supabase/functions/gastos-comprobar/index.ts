@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({
       titulo: "Comprobación de gasto por revisar",
       cuerpo: `${perfil.nombre ?? "Un supervisor"} · ${dinero(monto)} · ${obra || "sin obra"} · ${concepto}`,
-      url: "/gastos",
+      url: "/gastos#por-revisar",
     });
     let aviso = { avisados: 0, enviados: 0 };
     try {
