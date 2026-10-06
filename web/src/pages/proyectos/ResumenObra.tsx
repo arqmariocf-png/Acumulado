@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { contarSemaforoPu } from "../../lib/puSemaforo";
-import { avanceRequisiciones, type EtapaRequisicion } from "../../lib/requisicionEtapa";
+import { type EtapaRequisicion } from "../../lib/requisicionEtapa";
+import { calcularResumenObra } from "../../lib/resumenObra";
 import type { Proyecto, ProyectoControl, PuEstado, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 
 // Resumen físico-financiero de la obra (Mario, 26-sep-2026): pestaña
@@ -67,27 +68,25 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
   if (q.isPending) return <p className="text-sm text-slate-500">Calculando…</p>;
   if (q.error || !d) return <p className="text-sm text-red-600">{(q.error as Error)?.message ?? "Sin datos"}</p>;
 
-  // Financiero
+  // Financiero y físico: misma regla que el panel del director general (lib/resumenObra.ts).
   const presupuesto = d.controles.reduce((s, c) => s + Number(c.presupuesto), 0);
   const materiales = d.compras.reduce((s, c) => s + Number(c.importe), 0);
   const materialesPagados = d.compras.filter((c) => c.estatus === "pagado").reduce((s, c) => s + Number(c.importe), 0);
   const nominaTotal = d.nomina.reduce((s, n) => s + Number(n.sueldo), 0);
-  const ejercido = materiales + nominaTotal;
-  const disponible = presupuesto - ejercido;
-  const avanceFinanciero = presupuesto > 0 ? (100 * ejercido) / presupuesto : null;
-
-  // Físico
   const ultimaColumna = new Map<string, string>();
   for (const c of d.columnas) ultimaColumna.set(c.tablero_id, c.id);
   const hechas = d.tarjetas.filter((t) => ultimaColumna.get(t.tablero_id) === t.columna_id).length;
-  const avanceTareas = d.tarjetas.length > 0 ? (100 * hechas) / d.tarjetas.length : null;
   const conteoPu = contarSemaforoPu(d.pu);
-  const avancePu = d.pu.length > 0 ? conteoPu.avance_pct : null;
-  const avanceSuministro = avanceRequisiciones(d.requisiciones);
-  const fisicos = [avanceTareas, avanceSuministro, avancePu].filter((x): x is number => x !== null);
-  const avanceFisico = fisicos.length > 0 ? fisicos.reduce((s, x) => s + x, 0) / fisicos.length : null;
+  const { ejercido, disponible, avanceFinanciero, avanceTareas, avanceSuministro, avancePu, avanceFisico, desfase } = calcularResumenObra({
+    presupuesto,
+    materiales,
+    nomina: nominaTotal,
+    tarjetas: d.tarjetas.length,
+    hechas,
+    requisiciones: d.requisiciones,
+    pu: d.pu,
+  });
 
-  const desfase = avanceFisico !== null && avanceFinanciero !== null ? avanceFinanciero - avanceFisico : null;
   const tonoDesfase = desfase === null ? "" : desfase > 10 ? "text-red-700" : desfase > 0 ? "text-amber-700" : "text-emerald-700";
 
   const barras: { etiqueta: string; valor: number | null; detalle: string }[] = [
