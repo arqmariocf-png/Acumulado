@@ -54,6 +54,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
 - Costeo de precios unitarios: funciones `fn_pu_*` son SECURITY DEFINER con guarda
   de rol (evitaban timeout por RLS recursivo). `pu_analisis_items.descripcion_manual`
   = descripción propia por renglón sin tocar el catálogo compartido.
+- **Resumen físico-financiero de todas las obras (6-oct-2026, Mario: "solo
+  como director general")**: arriba de `/proyectos`, solo `esAdminGlobal`
+  (`proyectos/ResumenObrasDirector.tsx`): una fila por obra con semáforo,
+  físico, financiero, presupuesto, ejercido, disponible y desfase; ordena
+  rojas primero. Una sola RPC `fn_resumen_obras_director()` (definer; cero
+  filas para cualquiera que no sea admin maestro) y el MISMO cálculo que la
+  pestaña de cada obra (`lib/resumenObra.ts`, con pruebas; `ResumenObra.tsx`
+  ya lo usa) (`20261006120000`).
 - **Precios unitarios en Proyectos (26-sep-2026)**: semáforo por análisis
   (`lib/puSemaforo.ts`, con pruebas) en la lista de proyectos, en Cotización y
   arriba de los tableros de Avance (`proyectos/SemaforoPreciosUnitarios.tsx`).

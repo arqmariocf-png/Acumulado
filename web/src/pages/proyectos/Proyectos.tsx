@@ -8,6 +8,7 @@ import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import type { Proyecto, PuEstado } from "../../types/database";
 import { PuntosSemaforoPu } from "./SemaforoPreciosUnitarios";
 import { AlmacenPorProyecto, PuntosAlmacen, useRequisicionesPorProyecto } from "./AlmacenProyectos";
+import { ResumenObrasDirector } from "./ResumenObrasDirector";
 
 
 function useProyectos(empresaId: string, busqueda: string, incluirInactivos: boolean) {
@@ -44,7 +45,7 @@ function useSemaforoProyectos(ids: string[]) {
 }
 
 export function Proyectos() {
-  const { perfil, veTodasLasEmpresas, eligeEmpresa } = useAuth();
+  const { perfil, veTodasLasEmpresas, eligeEmpresa, esAdminGlobal } = useAuth();
   const queryClient = useQueryClient();
   const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const [busqueda, setBusqueda] = useState("");
@@ -77,6 +78,9 @@ export function Proyectos() {
   return (
     <div>
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Proyectos</h1>
+
+      {/* Solo el director general: resumen físico-financiero de todas las obras. */}
+      {esAdminGlobal && <ResumenObrasDirector />}
 
       <div className="mb-4 flex flex-wrap gap-3">
         {eligeEmpresa && !soloAsignadas && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}
