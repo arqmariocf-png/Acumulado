@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { estadoVencimiento, filtrarYOrdenar, normalizarTexto, semaforoCredito, type EstadoVencimiento, type FilaCxp } from "../../lib/cuentasPorPagar";
+import { deudaCxp, estadoVencimiento, filtrarYOrdenar, llaveCxp, normalizarTexto, semaforoCredito, type EstadoVencimiento, type FilaCxp } from "../../lib/cuentasPorPagar";
+import { useEmpresaFiltro } from "../../lib/auth";
+import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 
 const VENCE: Record<EstadoVencimiento, { punto: string; texto: string }> = {
   sin_fecha: { punto: "bg-slate-300", texto: "sin fecha" },
@@ -18,24 +20,35 @@ function hoyIso(): string {
 
 /** Menú de dirección (Laura): captura de la línea de crédito, días y fecha
  * de vencimiento de cada proveedor, con lo que se le debe hoy al lado. Los
- * proveedores salen de las OC y CFDI (v_cxp_proveedores); la captura va a
- * proveedores_credito por clave normalizada. */
+ * proveedores salen de las OC y CFDI (v_cxp_empresa); la captura va a
+ * proveedores_credito por empresa y clave normalizada (6-oct-2026: cada
+ * empresa tiene su línea y su vencimiento, p. ej. Cemex en AEP y en ERG). */
 export function LineasCredito() {
   const [texto, setTexto] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "con_linea" | "sin_linea" | "por_vencer">("todos");
   const hoy = hoyIso();
+  const [empresaId, setEmpresaId] = useEmpresaFiltro();
+  const { data: empresas } = useQuery({
+    queryKey: ["empresas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("empresas").select("id, nombre, codigo").order("nombre");
+      if (error) throw error;
+      return data as { id: string; nombre: string; codigo: string }[];
+    },
+  });
+  const nombreEmpresa = useMemo(() => new Map((empresas ?? []).map((e) => [e.id, e.codigo || e.nombre])), [empresas]);
 
   const { data: filas, isLoading, error } = useQuery({
     queryKey: ["cxp-proveedores"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_cxp_proveedores").select("*");
+      const { data, error } = await supabase.from("v_cxp_empresa").select("*");
       if (error) throw error;
       return (data ?? []) as FilaCxp[];
     },
   });
 
   const lista = useMemo(() => {
-    const base = filtrarYOrdenar(filas ?? [], texto, "", "por_pagar", false);
+    const base = filtrarYOrdenar(filas ?? [], texto, empresaId, "por_pagar", false);
     return base.filter((f) => {
       const tiene = f.linea_credito != null && Number(f.linea_credito) > 0;
       if (filtro === "con_linea") return tiene;
@@ -46,10 +59,10 @@ export function LineasCredito() {
       }
       return true;
     });
-  }, [filas, texto, filtro, hoy]);
+  }, [filas, texto, filtro, hoy, empresaId]);
 
   const resumen = useMemo(() => {
-    const todas = filas ?? [];
+    const todas = (filas ?? []).filter((f) => !empresaId || f.empresa_id === empresaId);
     const con = todas.filter((f) => f.linea_credito != null && Number(f.linea_credito) > 0);
     return {
       proveedores: todas.length,
@@ -58,14 +71,14 @@ export function LineasCredito() {
       disponible: con.reduce((s, f) => s + Number(f.disponible ?? 0), 0),
       porVencer: con.filter((f) => ["por_vencer", "vencida"].includes(estadoVencimiento(f.vencimiento, hoy).estado)).length,
     };
-  }, [filas, hoy]);
+  }, [filas, hoy, empresaId]);
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Líneas de crédito con proveedores</h1>
-          <p className="text-sm text-slate-500">Monto, días y fecha de vencimiento de la línea de cada proveedor. Se guarda renglón por renglón.</p>
+          <p className="text-sm text-slate-500">Monto, días y fecha de vencimiento de la línea de cada proveedor en cada empresa (cada empresa tiene su propia línea). Se guarda renglón por renglón.</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
           <Link to="/finanzas/proveedores" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-700 hover:bg-slate-100">
@@ -85,6 +98,7 @@ export function LineasCredito() {
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
+        <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />
         <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar proveedor…" className="w-56 rounded border border-slate-300 px-2 py-1.5 text-sm" />
         <select value={filtro} onChange={(e) => setFiltro(e.target.value as typeof filtro)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
           <option value="todos">Todos los proveedores</option>
@@ -104,7 +118,7 @@ export function LineasCredito() {
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-3 py-2">Proveedor</th>
-                <th className="px-3 py-2 text-right">Por pagar hoy</th>
+                <th className="px-3 py-2 text-right">Se debe hoy</th>
                 <th className="px-3 py-2 text-right">Línea (MXN)</th>
                 <th className="px-3 py-2 text-right">Días</th>
                 <th className="px-3 py-2">Vence el</th>
@@ -116,7 +130,7 @@ export function LineasCredito() {
             </thead>
             <tbody>
               {lista.map((f) => (
-                <RenglonLinea key={f.clave} fila={f} hoy={hoy} />
+                <RenglonLinea key={llaveCxp(f)} fila={f} hoy={hoy} empresa={nombreEmpresa.get(f.empresa_id) ?? ""} />
               ))}
               {lista.length === 0 && (
                 <tr>
@@ -130,7 +144,7 @@ export function LineasCredito() {
         </div>
       )}
       <p className="mt-2 text-xs text-slate-400">
-        Los proveedores salen de las órdenes de compra y las facturas recibidas; los nombres que vienen distintos (con o sin razón social) se juntan en un solo renglón. Disponible = línea − por pagar; "por pagar" solo descuenta los pagos que se detectan por nombre.
+        Los proveedores salen de las órdenes de compra y las facturas recibidas; los nombres que vienen distintos (con o sin razón social) se juntan en un solo renglón. Un renglón por empresa: la línea de Cemex en AEP no es la de ERG. Disponible = línea − lo que se debe (facturado sin pagar o saldo de OC, lo mayor).
       </p>
     </div>
   );
@@ -145,7 +159,7 @@ function Dato({ etiqueta, valor, alerta = false }: { etiqueta: string; valor: st
   );
 }
 
-function RenglonLinea({ fila: f, hoy }: { fila: FilaCxp; hoy: string }) {
+function RenglonLinea({ fila: f, hoy, empresa }: { fila: FilaCxp; hoy: string; empresa: string }) {
   const queryClient = useQueryClient();
   const [linea, setLinea] = useState(f.linea_credito != null ? String(f.linea_credito) : "");
   const [dias, setDias] = useState(f.dias_credito != null ? String(f.dias_credito) : "");
@@ -167,7 +181,7 @@ function RenglonLinea({ fila: f, hoy }: { fila: FilaCxp; hoy: string }) {
       if (!Number.isInteger(diasNum) || diasNum < 0) throw new Error("Los días deben ser un entero.");
       const { error } = await supabase
         .from("proveedores_credito")
-        .upsert({ clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, vencimiento: vencimiento || null, notas: notas.trim() || null }, { onConflict: "clave" });
+        .upsert({ empresa_id: f.empresa_id, clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, vencimiento: vencimiento || null, notas: notas.trim() || null }, { onConflict: "empresa_id,clave" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -178,7 +192,7 @@ function RenglonLinea({ fila: f, hoy }: { fila: FilaCxp; hoy: string }) {
     onError: (e: Error) => setAviso(e.message),
   });
 
-  const credito = semaforoCredito(f.por_pagar, f.linea_credito);
+  const credito = semaforoCredito(deudaCxp(f), f.linea_credito);
   const vence = estadoVencimiento(f.vencimiento, hoy);
   const PUNTO = { gris: "bg-slate-300", verde: "bg-emerald-500", ambar: "bg-amber-400", rojo: "bg-red-500" } as const;
 
@@ -187,10 +201,10 @@ function RenglonLinea({ fila: f, hoy }: { fila: FilaCxp; hoy: string }) {
       <td className="px-3 py-2">
         <div className="font-medium text-slate-900">{f.proveedor}</div>
         <div className="text-[11px] text-slate-400">
-          {f.n_oc} OC · {f.n_facturas} facturas
+          <span className="font-medium text-slate-600">{empresa}</span> · {f.n_oc} OC · {f.n_facturas} facturas
         </div>
       </td>
-      <td className="px-3 py-2 text-right font-semibold tabular-nums">{moneda(f.por_pagar)}</td>
+      <td className="px-3 py-2 text-right font-semibold tabular-nums">{moneda(deudaCxp(f))}</td>
       <td className="px-3 py-2 text-right">
         <input value={linea} onChange={(e) => setLinea(e.target.value)} inputMode="decimal" placeholder="0" className="w-28 rounded border border-slate-300 px-2 py-1 text-right text-sm" />
       </td>

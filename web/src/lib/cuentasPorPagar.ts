@@ -2,6 +2,8 @@
 // semáforo de crédito y del filtro/orden de la tabla. Sin DOM, con pruebas.
 
 export interface FilaCxp {
+  /** Una fila por empresa y proveedor (6-oct-2026: cada empresa tiene su línea). */
+  empresa_id: string;
   clave: string;
   proveedor: string;
   n_oc: number;
@@ -20,6 +22,22 @@ export interface FilaCxp {
   ultima_factura: string | null;
   ultimo_pago: string | null;
   empresas: string[] | null;
+  /** Lo que se debe para la línea: facturado sin pagar o saldo de las OC, lo mayor. */
+  deuda: number;
+  /** Pagado por OC: pagos registrados aquí o la OC completa si el backoffice ya la da por pagada. */
+  pagado_oc: number;
+  saldo_oc: number;
+  n_oc_por_pagar: number;
+}
+
+/** Llave única de la fila (la misma clave de proveedor se repite en cada empresa). */
+export function llaveCxp(f: Pick<FilaCxp, "empresa_id" | "clave">): string {
+  return `${f.empresa_id}|${f.clave}`;
+}
+
+/** Deuda de la fila; las filas viejas sin `deuda` usan por pagar. */
+export function deudaCxp(f: Pick<FilaCxp, "por_pagar"> & Partial<Pick<FilaCxp, "deuda">>): number {
+  return Number(f.deuda ?? f.por_pagar ?? 0);
 }
 
 export type ColorCredito = "gris" | "verde" | "ambar" | "rojo";
@@ -72,7 +90,7 @@ export function filtrarYOrdenar(filas: FilaCxp[], texto: string, empresaId: stri
   const res = filas.filter((f) => {
     if (q && !normalizarTexto(`${f.proveedor} ${f.clave}`).includes(q)) return false;
     if (empresaId && !(f.empresas ?? []).includes(empresaId)) return false;
-    if (soloConSaldo && !(Number(f.por_pagar) > 0 || Number(f.sin_facturar) > 0)) return false;
+    if (soloConSaldo && !(deudaCxp(f) > 0 || Number(f.sin_facturar) > 0)) return false;
     if (linea === "con_linea" && !tieneLinea(f)) return false;
     if (linea === "sin_linea" && tieneLinea(f)) return false;
     return true;
@@ -90,16 +108,16 @@ export function filtrarYOrdenar(filas: FilaCxp[], texto: string, empresaId: stri
         return da - db || a.proveedor.localeCompare(b.proveedor, "es");
       }
       default:
-        return n(b.por_pagar) - n(a.por_pagar) || n(b.sin_facturar) - n(a.sin_facturar) || a.proveedor.localeCompare(b.proveedor, "es");
+        return deudaCxp(b) - deudaCxp(a) || n(b.sin_facturar) - n(a.sin_facturar) || a.proveedor.localeCompare(b.proveedor, "es");
     }
   });
   return res;
 }
 
-export function totalesCxp(filas: FilaCxp[]): { comprometido: number; facturado: number; pagado: number; por_pagar: number; sin_facturar: number; con_linea: number; rojos: number } {
+export function totalesCxp(filas: FilaCxp[]): { comprometido: number; facturado: number; pagado: number; por_pagar: number; sin_facturar: number; con_linea: number; rojos: number; deuda: number; saldo_oc: number } {
   return filas.reduce(
     (t, f) => {
-      const s = semaforoCredito(f.por_pagar, f.linea_credito);
+      const s = semaforoCredito(deudaCxp(f), f.linea_credito);
       return {
         comprometido: t.comprometido + Number(f.comprometido || 0),
         facturado: t.facturado + Number(f.facturado || 0),
@@ -108,9 +126,11 @@ export function totalesCxp(filas: FilaCxp[]): { comprometido: number; facturado:
         sin_facturar: t.sin_facturar + Number(f.sin_facturar || 0),
         con_linea: t.con_linea + (f.linea_credito != null && Number(f.linea_credito) > 0 ? 1 : 0),
         rojos: t.rojos + (s.color === "rojo" ? 1 : 0),
+        deuda: t.deuda + deudaCxp(f),
+        saldo_oc: t.saldo_oc + Number(f.saldo_oc || 0),
       };
     },
-    { comprometido: 0, facturado: 0, pagado: 0, por_pagar: 0, sin_facturar: 0, con_linea: 0, rojos: 0 },
+    { comprometido: 0, facturado: 0, pagado: 0, por_pagar: 0, sin_facturar: 0, con_linea: 0, rojos: 0, deuda: 0, saldo_oc: 0 },
   );
 }
 
@@ -135,7 +155,7 @@ export function csvCxp(filas: FilaCxp[], nombreEmpresa: (id: string) => string):
     const t = v == null ? "" : String(v);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
-  const enc = ["Proveedor", "Empresas", "OC", "Comprometido", "Facturas", "Facturado", "Pagado detectado", "Por pagar", "Sin facturar", "Línea de crédito", "Días", "Vence", "Disponible", "Última OC", "Última factura", "Notas"];
+  const enc = ["Proveedor", "Empresa", "OC", "Comprometido", "Facturas", "Facturado", "Pagado", "Por pagar", "Sin facturar", "Saldo de OC", "Deuda", "Línea de crédito", "Días", "Vence", "Disponible", "Última OC", "Última factura", "Notas"];
   const lineas = filas.map((f) =>
     [
       f.proveedor,
@@ -147,6 +167,8 @@ export function csvCxp(filas: FilaCxp[], nombreEmpresa: (id: string) => string):
       Number(f.pagado).toFixed(2),
       Number(f.por_pagar).toFixed(2),
       Number(f.sin_facturar).toFixed(2),
+      Number(f.saldo_oc ?? 0).toFixed(2),
+      deudaCxp(f).toFixed(2),
       f.linea_credito != null ? Number(f.linea_credito).toFixed(2) : "",
       f.dias_credito ?? "",
       f.vencimiento ?? "",

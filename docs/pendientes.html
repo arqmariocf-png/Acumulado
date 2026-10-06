@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pendientes Acumulado</title>
+<style>
+  :root { --bg:#f8fafc; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+          --ok:#047857; --okbg:#ecfdf5; --run:#1d4ed8; --runbg:#eff6ff; --wait:#92400e; --waitbg:#fffbeb; --todo:#475569; --todobg:#f1f5f9; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg:#0b1220; --card:#111a2e; --ink:#e2e8f0; --muted:#94a3b8; --line:#1e293b;
+    --ok:#6ee7b7; --okbg:#052e22; --run:#93c5fd; --runbg:#0b2447; --wait:#fcd34d; --waitbg:#3a2a05; --todo:#cbd5e1; --todobg:#1e293b; } }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:20px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:12px; margin-bottom:16px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:22px 0 8px; }
+  .item { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:8px; display:flex; gap:10px; align-items:flex-start; }
+  .tag { flex:none; font-size:11px; font-weight:600; border-radius:999px; padding:2px 8px; white-space:nowrap; }
+  .ok { color:var(--ok); background:var(--okbg); } .run { color:var(--run); background:var(--runbg); }
+  .wait { color:var(--wait); background:var(--waitbg); } .todo { color:var(--todo); background:var(--todobg); }
+  .t { font-weight:600; } .d { color:var(--muted); font-size:12.5px; margin-top:2px; }
+  .resumen { display:flex; flex-wrap:wrap; gap:8px; }
+  .resumen span { font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pendientes de Acumulado</h1>
+  <div class="sub">Actualizado 6-oct-2026 · lo que Mario pidió en esta conversación</div>
+  <div class="resumen"><span class="tag ok">Listo</span><span class="tag run">En curso</span><span class="tag wait">Espera a alguien</span><span class="tag todo">Por hacer</span></div>
+
+  <h2>Finanzas · Laura y Delia</h2>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Inicio de Laura</div><div class="d">Atajos (OC por autorizar, efectivo por confirmar, base de OC), sus pendientes, saldos por empresa y cuentas por pagar por empresa.</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Efectivo por confirmar · un comprobante para varias órdenes</div><div class="d">Programación de pagos (y menú Finanzas). También en Tesorería para transferencias.</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Órdenes por autorizar en el menú de Finanzas</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Cuentas por pagar por proveedor y por empresa (Cemex)</div><div class="d">Cada empresa con su línea y su vencimiento. Las 4 líneas que había quedaron en AEP; Laura captura las de ERG y demás en Líneas de crédito.</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Confirmar como pagadas las OC que no se marcaron en el backoffice</div><div class="d">Programación de pagos → seleccionar OC → "Confirmar pagadas" con fecha, método, referencia y un comprobante.</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Base de OC y pagos (consultar el pasado)</div><div class="d">OC · proveedor · fecha · estatus · detalle · comprobante por día, semana o mes, con descarga a Excel.</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Hoja de pagos del día se actualiza al programar · sin saldos globales</div></div></div>
+
+  <h2>Inicio para todos</h2>
+  <div class="item"><span class="tag todo">Por hacer</span><div><div class="t">Notificaciones pendientes al entrar, para todas las cuentas</div><div class="d">Hoy solo existen los avisos push (botón "Activar"); falta la bandeja dentro de la app.</div></div></div>
+
+  <h2>Backoffice</h2>
+  <div class="item"><span class="tag wait">Gonzalo</span><div><div class="t">La OC 41167 no llega</div><div class="d">La API del backoffice (api_ocs_aut) hoy a las 17:22 UTC entrega hasta la 41166: no es de Acumulado. Para que sea al momento: que el backoffice nos avise al guardar una OC (webhook) o una API filtrada por fecha. La sincronización corre cada hora (minuto 15) y con el botón "Actualizar OC/OV".</div></div></div>
+
+  <h2>Proyectos</h2>
+  <div class="item"><span class="tag todo">Por hacer</span><div><div class="t">Parque Real: mano de obra de la API + contratistas + lo pagado en "Avance"</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Resumen físico-financiero por obra (solo director general)</div></div></div>
+
+  <h2>Hecho hoy</h2>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">La página se volvía a trabar en requisiciones</div><div class="d">Leer requisiciones tardaba hasta 21 s (Alma); ahora 0.02 s.</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Página más rápida (la app se trababa)</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Las notificaciones push abren la tarjeta o pantalla a atender</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Archivos sin error "InvalidJWT" (Fernando)</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">EPP de RH (Raúl) · Responsable de checador (Valery) · Supervisores ven solo sus obras · Timoteo con las obras de MCF</div></div></div>
+  <div class="item"><span class="tag ok">Listo</span><div><div class="t">Nombre corregido: Laura Orta</div></div></div>
+</main>
+</body>
+</html>
