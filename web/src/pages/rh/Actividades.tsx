@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../lib/auth";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
 import { cambiarFechaOSolicitar } from "../../lib/fechaCompromiso";
 import { ETIQUETA_CUMPLIMIENTO, clasificar, porPersona, porSemana, type ActividadBase, type EstadoCumplimiento } from "../../lib/cumplimiento";
@@ -55,21 +56,42 @@ function useTableroRH() {
   });
 }
 
-function useActividades(tableroId: string | undefined) {
+// Todas las tareas de todos los tableros que la persona ve, no solo las del
+// tablero de RH (Mario, 6-oct-2026: "en las pantallas de cumplimiento de RH
+// deben aparecer y vincularse todas las tareas, no solamente las que
+// asignen"). Las eliminadas no cuentan; las archivadas tampoco se listan.
+interface TarjetaConTablero extends Tarjeta {
+  tableros: { nombre: string; archivado: boolean } | null;
+}
+
+function useActividades(activo: boolean) {
   return useQuery({
-    queryKey: ["rh-actividades", tableroId],
-    enabled: !!tableroId,
+    queryKey: ["rh-actividades", "todas"],
+    enabled: activo,
     queryFn: async () => {
-      const { data: tarjetas, error } = await supabase.from("tarjetas").select("*").eq("tablero_id", tableroId!).eq("archivada", false).order("fecha_limite", { ascending: true, nullsFirst: false });
+      const { data: tarjetas, error } = await supabase
+        .from("tarjetas")
+        .select("*, tableros(nombre, archivado)")
+        .eq("archivada", false)
+        .order("fecha_limite", { ascending: true, nullsFirst: false })
+        .limit(2000);
       if (error) throw error;
-      const ids = (tarjetas ?? []).map((t) => t.id);
-      let movimientos: Movimiento[] = [];
-      if (ids.length > 0) {
-        const { data, error: errMov } = await supabase.from("tarjeta_actividad").select("tarjeta_id, detalle, created_at").in("tarjeta_id", ids).eq("tipo", "movida").order("created_at");
-        if (errMov) throw errMov;
-        movimientos = (data ?? []) as Movimiento[];
+      const lista = ((tarjetas ?? []) as unknown as TarjetaConTablero[]).filter((t) => !t.tableros?.archivado);
+      const tableroIds = [...new Set(lista.map((t) => t.tablero_id))];
+      let columnas: TableroColumna[] = [];
+      if (tableroIds.length > 0) {
+        const { data, error: errCols } = await supabase.from("tablero_columnas").select("*").in("tablero_id", tableroIds).order("orden");
+        if (errCols) throw errCols;
+        columnas = (data ?? []) as TableroColumna[];
       }
-      return { tarjetas: (tarjetas ?? []) as Tarjeta[], movimientos };
+      const ids = lista.map((t) => t.id);
+      const movimientos: Movimiento[] = [];
+      for (let i = 0; i < ids.length; i += 150) {
+        const { data, error: errMov } = await supabase.from("tarjeta_actividad").select("tarjeta_id, detalle, created_at").in("tarjeta_id", ids.slice(i, i + 150)).eq("tipo", "movida").order("created_at");
+        if (errMov) throw errMov;
+        movimientos.push(...((data ?? []) as Movimiento[]));
+      }
+      return { tarjetas: lista, columnas, movimientos };
     },
   });
 }
@@ -92,29 +114,42 @@ async function usuarioActualId(): Promise<string> {
   return id;
 }
 
-/** Actividades asignadas por RH (tablero "RH · Actividades" del módulo de
- * Tareas) con seguimiento de cumplimiento por semana y por persona. */
+/** Cumplimiento de TODAS las tareas (todos los tableros) por semana y por
+ * persona; las que RH asigna desde aquí van al tablero "RH · Actividades". */
 export function Actividades() {
   const queryClient = useQueryClient();
   const { data: tab, isLoading: cargandoTablero } = useTableroRH();
-  const { data: datos, isLoading } = useActividades(tab?.tablero.id);
+  const { data: datos, isLoading } = useActividades(!cargandoTablero);
+  const { perfil } = useAuth();
+  const [filtroTablero, setFiltroTablero] = useState("");
   const { data: directorio } = useDirectorio();
   const [filtroPersona, setFiltroPersona] = useState("");
   const [verHechas, setVerHechas] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const hoy = new Date().toISOString().slice(0, 10);
-  const columnaHecho = tab?.columnas.find((c) => c.nombre === COLUMNA_HECHO) ?? tab?.columnas[tab.columnas.length - 1];
   const columnaInicial = tab?.columnas[0];
+  // Columnas por tablero; "hecha" = está en la última columna de SU tablero.
+  const columnasPorTablero = useMemo(() => {
+    const m = new Map<string, TableroColumna[]>();
+    for (const c of datos?.columnas ?? []) m.set(c.tablero_id, [...(m.get(c.tablero_id) ?? []), c]);
+    for (const l of m.values()) l.sort((a, b) => a.orden - b.orden);
+    return m;
+  }, [datos]);
+  const ultimaColumna = (tableroId: string) => {
+    const l = columnasPorTablero.get(tableroId) ?? [];
+    return l.find((c) => c.nombre === COLUMNA_HECHO) ?? l[l.length - 1];
+  };
   const nombrePorId = useMemo(() => new Map((directorio ?? []).map((d) => [d.id, d.nombre])), [directorio]);
-  const nombreColumna = useMemo(() => new Map((tab?.columnas ?? []).map((c) => [c.id, c.nombre])), [tab]);
+  const nombreColumna = useMemo(() => new Map((datos?.columnas ?? []).map((c) => [c.id, c.nombre])), [datos]);
 
-  const actividades: (ActividadBase & { tarjeta: Tarjeta; columna: string })[] = useMemo(() => {
+  const actividades: (ActividadBase & { tarjeta: TarjetaConTablero; columna: string; tablero: string })[] = useMemo(() => {
     if (!datos) return [];
     return datos.tarjetas.map((t) => {
       const columna = nombreColumna.get(t.columna_id) ?? "";
-      const hecha = !!columnaHecho && t.columna_id === columnaHecho.id;
-      const ultimoAHecho = [...datos.movimientos].reverse().find((m) => m.tarjeta_id === t.id && m.detalle?.a === COLUMNA_HECHO);
+      const hechoCol = ultimaColumna(t.tablero_id);
+      const hecha = !!hechoCol && t.columna_id === hechoCol.id;
+      const ultimoAHecho = [...datos.movimientos].reverse().find((m) => m.tarjeta_id === t.id && m.detalle?.a === hechoCol?.nombre);
       return {
         id: t.id,
         titulo: t.titulo,
@@ -125,9 +160,12 @@ export function Actividades() {
         created_at: t.created_at,
         tarjeta: t,
         columna,
+        tablero: t.tableros?.nombre ?? "",
       };
     });
-  }, [datos, columnaHecho, nombreColumna]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datos, columnasPorTablero, nombreColumna]);
+  const tablerosLista = useMemo(() => [...new Map(actividades.map((a) => [a.tarjeta.tablero_id, a.tablero])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [actividades]);
 
   const invalidar = () => {
     queryClient.invalidateQueries({ queryKey: ["rh-actividades"] });
@@ -215,10 +253,11 @@ export function Actividades() {
     e.currentTarget.reset();
   }
 
-  const filtradas = actividades.filter((a) => (!filtroPersona || a.asignado_a === filtroPersona) && (verHechas || !a.hecha));
-  const semanas = porSemana(actividades.filter((a) => !filtroPersona || a.asignado_a === filtroPersona), hoy, 8);
-  const personas = porPersona(actividades, hoy);
-  const resumen = actividades.reduce(
+  const enTablero = actividades.filter((a) => !filtroTablero || a.tarjeta.tablero_id === filtroTablero);
+  const filtradas = enTablero.filter((a) => (!filtroPersona || a.asignado_a === filtroPersona) && (verHechas || !a.hecha));
+  const semanas = porSemana(enTablero.filter((a) => !filtroPersona || a.asignado_a === filtroPersona), hoy, 8);
+  const personas = porPersona(enTablero, hoy);
+  const resumen = enTablero.reduce(
     (acc, a) => {
       acc[clasificar(a, hoy)]++;
       return acc;
@@ -317,6 +356,14 @@ export function Actividades() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-700">Actividades</h3>
         <div className="flex flex-wrap items-center gap-3">
+          <select value={filtroTablero} onChange={(e) => setFiltroTablero(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
+            <option value="">Todos los tableros</option>
+            {tablerosLista.map(([id, nombre]) => (
+              <option key={id} value={id}>
+                {nombre}
+              </option>
+            ))}
+          </select>
           <select value={filtroPersona} onChange={(e) => setFiltroPersona(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
             <option value="">Todas las personas</option>
             {directorio?.map((d) => (
@@ -329,7 +376,7 @@ export function Actividades() {
             <input type="checkbox" checked={verHechas} onChange={(e) => setVerHechas(e.target.checked)} /> ver hechas
           </label>
           <Link to={`/tareas/${tab.tablero.id}`} className="text-xs text-slate-500 underline">
-            abrir tablero completo
+            abrir tablero de RH
           </Link>
         </div>
       </div>
@@ -339,6 +386,7 @@ export function Actividades() {
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
               <th className="px-3 py-2">Actividad</th>
+              <th className="px-3 py-2">Tablero</th>
               <th className="px-3 py-2">Responsable</th>
               <th className="px-3 py-2">Supervisor</th>
               <th className="px-3 py-2">Fecha límite</th>
@@ -350,14 +398,25 @@ export function Actividades() {
           <tbody>
             {filtradas.map((a) => {
               const estado = clasificar(a, hoy);
+              // Responsables solo los cambia quien asignó la tarea (o el admin).
+              const deFondo = perfil?.rol === "admin" || perfil?.id === a.tarjeta.creado_por;
+              const hechoCol = ultimaColumna(a.tarjeta.tablero_id);
+              const columnasTablero = columnasPorTablero.get(a.tarjeta.tablero_id) ?? [];
               return (
                 <tr key={a.id} className="border-t border-slate-100">
                   <td className="px-3 py-2">
-                    {a.titulo}
+                    <Link to={`/tareas/${a.tarjeta.tablero_id}?tarjeta=${a.id}`} className="text-slate-900 hover:underline">
+                      {a.titulo}
+                    </Link>
                     {a.tarjeta.descripcion && <div className="text-xs text-slate-400">{a.tarjeta.descripcion}</div>}
                   </td>
+                  <td className="px-3 py-2 text-xs text-slate-500">
+                    <Link to={`/tareas/${a.tarjeta.tablero_id}`} className="hover:underline">
+                      {a.tablero}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2">
-                    <select value={a.asignado_a ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, asignadoA: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs">
+                    <select disabled={!deFondo} title={deFondo ? undefined : "Solo quien asignó la tarea cambia el responsable"} value={a.asignado_a ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, asignadoA: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs disabled:bg-slate-50">
                       <option value="">Sin asignar</option>
                       {directorio?.map((d) => (
                         <option key={d.id} value={d.id}>
@@ -367,7 +426,7 @@ export function Actividades() {
                     </select>
                   </td>
                   <td className="px-3 py-2">
-                    <select value={a.tarjeta.supervisor_id ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, supervisorId: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs">
+                    <select disabled={!deFondo} title={deFondo ? undefined : "Solo quien asignó la tarea cambia el supervisor"} value={a.tarjeta.supervisor_id ?? ""} onChange={(e) => reasignar.mutate({ tarjetaId: a.id, supervisorId: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs disabled:bg-slate-50">
                       <option value="">Sin supervisor</option>
                       {directorio?.map((d) => (
                         <option key={d.id} value={d.id}>
@@ -386,7 +445,7 @@ export function Actividades() {
                   </td>
                   <td className="px-3 py-2">
                     <select value={a.tarjeta.columna_id} onChange={(e) => mover.mutate({ tarjeta: a.tarjeta, columnaId: e.target.value })} className="rounded border border-slate-300 px-1 py-0.5 text-xs">
-                      {tab.columnas.map((c) => (
+                      {columnasTablero.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.nombre}
                         </option>
@@ -398,8 +457,8 @@ export function Actividades() {
                     {a.hecha && a.hecha_en && <div className="text-[10px] text-slate-400">hecha {new Date(a.hecha_en).toLocaleDateString("es-MX")}</div>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
-                    {!a.hecha && columnaHecho && (
-                      <button onClick={() => mover.mutate({ tarjeta: a.tarjeta, columnaId: columnaHecho.id })} className="text-emerald-700 underline">
+                    {!a.hecha && hechoCol && (
+                      <button onClick={() => mover.mutate({ tarjeta: a.tarjeta, columnaId: hechoCol.id })} className="text-emerald-700 underline">
                         Marcar hecha
                       </button>
                     )}
@@ -409,7 +468,7 @@ export function Actividades() {
             })}
             {!isLoading && filtradas.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
                   Sin actividades {verHechas ? "" : "pendientes"}.
                 </td>
               </tr>

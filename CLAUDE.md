@@ -101,6 +101,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Eliminar ya no borra: `tarjetas.eliminada_en/_por` (+ archivada) y el
   tablero tiene "Ver archivadas y eliminadas" para reabrir/restaurar
   (`20261006170000`).
+- **Cumplimiento de RH con todas las tareas (6-oct-2026)**: RH →
+  Actividades (`rh/Actividades.tsx`) y el KPI `fn_rh_kpi_actividades()`
+  cuentan las tarjetas de TODOS los tableros activos de la organización
+  (hecha = última columna de su tablero), con columna/filtro de tablero y
+  liga a cada tarjeta; lo nuevo que asigna RH sigue yendo a "RH ·
+  Actividades" (`20261006180000`).
+- **Escalamiento del semáforo de tareas (6-oct-2026)**: amarillo (vence en
+  ≤3 días, sin terminar) → jefe inmediato (supervisor de la tarjeta, si no
+  el jefe RH de la persona, si no quien asignó); rojo (vencida) → RH de la
+  organización. Una vez por tarjeta/nivel/fecha (`tarjeta_alertas`);
+  `fn_tarjetas_escalamientos()` (solo service_role) lo llama
+  `push-enviar-recordatorios` v4 en el cron de las 14:00 UTC
+  (`20261006190000`).
+- **Recurrentes y programadas en cada tablero (6-oct-2026)**: botón
+  "Actividades recurrentes y programadas" (`tareas/Recurrentes.tsx`,
+  `lib/recurrentes.ts` con pruebas): semanal (días; diario), mensual (día
+  del mes; mes corto → último día) o única (fecha; luego se desactiva).
+  Cualquiera que vea el tablero las da de alta; las pausa/borra quien la
+  creó o admin (`20261006200000`).
+- **Ojo RLS al crear con `insert … select`**: la policy de select se evalúa
+  sobre la fila nueva y un arreglo calculado al inicio de la sentencia no
+  la trae → "new row violates row-level security policy" (Timoteo, 6-oct,
+  requisiciones). Las policies con arreglo llevan también la condición por
+  fila del dueño (`solicitado_por = auth.uid()`).
 - **SAT**: NO hay descarga automática del SAT; los CFDI se suben a mano (zip)
   en Carga; la última carga fue el 26-ago-2026.
 - **Requisiciones otra vez lentas (6-oct-2026)**: 40 "statement timeout"
