@@ -9,6 +9,8 @@ import { SECCIONES, rutaPermitida, seccionDeRuta } from "../lib/menu";
 import { Indicadores } from "../components/Indicadores";
 import { MisActividades } from "./tareas/MisActividades";
 import { Tesoreria } from "./finanzas/Tesoreria";
+import { esContabilidad, veTesoreriaEnInicio } from "../lib/puestos";
+import { AcumuladoContable } from "./finanzas/AcumuladoContable";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
 // esperando ahí. La idea es abrirlo desde el celular y saber de un vistazo
@@ -458,16 +460,27 @@ export function Inicio() {
 
       {/* Tesorería (Delia, corporativo): semáforo de pagos de hoy por
           empresa antes que nada (29-sep-2026). */}
-      {veSaldos && (
+      {veSaldos && veTesoreriaEnInicio(perfil) && (
         <div className="mb-6 rounded border border-slate-200 bg-white p-4">
           <Tesoreria compacto />
         </div>
       )}
+      {/* Contabilidad (Belén, 6-oct-2026): su calendario y el acumulado por
+          empresa en lugar de la tesorería. */}
+      {esContabilidad(perfil) && (
+        <>
+          <MisActividades compacto />
+          <AcumuladoContable />
+        </>
+      )}
 
       <Indicadores tienePersonal={!!miPersonal} />
 
-      {/* El personal básico entra aquí: sus tareas pendientes van primero. */}
-      {rolBasico && <MisActividades compacto />}
+      {/* Al entrar, todos ven sus pendientes (tareas como responsable,
+          supervisor o corresponsable; Mario, 6-oct-2026: "a todas las
+          cuentas, sus notificaciones pendientes"). Contabilidad ya las ve
+          arriba. */}
+      {!esContabilidad(perfil) && <MisActividades compacto />}
 
       {/* Agrupado por área (misma clasificación que el menú y la guía) para
           que el inicio también oriente: qué hay en cada bloque y para qué. */}

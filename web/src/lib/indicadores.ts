@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { esRolBasico } from "./modulos";
 import type { Profile } from "../types/database";
 import { avanceComprobantes } from "./comprobantesPago";
+import { INDICADORES_CONTABILIDAD, diasDesde, esContabilidad, lunesDeSemana } from "./puestos";
 
 /** Catálogo de indicadores / KPIs. Cada uno es una consulta ligera sobre
  * vistas que RLS ya acota a quien consulta. Los KPIs del organigrama
@@ -177,7 +178,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_saldos_desactualizados",
     etiqueta: "Cuentas sin movimientos en 7 días",
-    ruta: "/carga",
+    ruta: "/carga?ver=cuentas_sin_movimientos",
     area: "finanzas",
     descripcion: "Cuentas cuyo último movimiento cargado tiene más de 7 días (falta estado de cuenta).",
     visible: finanzas,
@@ -189,7 +190,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_prestamos_abiertos",
     etiqueta: "Préstamos intercompañía con saldo",
-    ruta: "/prestamos-intercompania",
+    ruta: "/prestamos-intercompania?ver=prestamos_con_saldo",
     area: "finanzas",
     descripcion: "Pares de empresas con préstamo sin liquidar.",
     visible: finanzas,
@@ -231,7 +232,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_comprobaciones_por_revisar",
     etiqueta: "Comprobaciones de gasto por revisar",
-    ruta: "/gastos",
+    ruta: "/gastos#por-revisar",
     area: "finanzas",
     descripcion: "Facturas/notas de caja chica enviadas por supervisores que finanzas no ha aprobado ni rechazado.",
     visible: finanzas,
@@ -291,13 +292,45 @@ export const INDICADORES: Indicador[] = [
       return { valor: n, detalle: n === 0 ? "nada pendiente" : "en revisión" };
     },
   },
+  {
+    clave: "cont_cfdi_atrasados",
+    etiqueta: "Empresas con CFDI atrasados",
+    ruta: "/carga?ver=cfdi_atrasados",
+    area: "contabilidad",
+    descripcion: "Empresas cuyo último CFDI cargado (emitido o recibido) tiene más de 7 días: el acumulado no está al día.",
+    visible: contab,
+    consulta: async () => {
+      const { data, error } = await supabase.from("v_cfdi_ultimo_por_empresa").select("empresa_id, ultima_fecha, total_cfdi").gt("total_cfdi", 0);
+      if (error) throw error;
+      const hoy = hoyIso();
+      const atrasadas = (data ?? []).filter((r) => (diasDesde(r.ultima_fecha, hoy) ?? 999) > 7);
+      const peor = Math.max(0, ...(data ?? []).map((r) => diasDesde(r.ultima_fecha, hoy) ?? 0));
+      return { valor: atrasadas.length, alerta: atrasadas.length > 0, detalle: atrasadas.length ? `hasta ${peor} días sin CFDI` : "al día" };
+    },
+  },
+  {
+    clave: "cont_adquira_semana",
+    etiqueta: "Adquira de esta semana",
+    ruta: "/mantenimiento/bbva",
+    area: "contabilidad",
+    descripcion: "Si ya se subió el export de Adquira (pedidos recibidos de BBVA) esta semana; se sube cada viernes.",
+    visible: (p) => esContabilidad(p) || p.rol === "admin",
+    consulta: async () => {
+      const { data, error } = await supabase.from("bbva_adquira_pedidos").select("subido_en").order("subido_en", { ascending: false }).limit(1);
+      if (error) throw error;
+      const ultima = data?.[0]?.subido_en as string | undefined;
+      const lunes = lunesDeSemana(hoyIso());
+      const subido = !!ultima && ultima.slice(0, 10) >= lunes;
+      return { valor: subido ? "Subido" : "Pendiente", alerta: !subido && new Date().getDay() >= 5, detalle: ultima ? `último: ${new Date(ultima).toLocaleDateString("es-MX")}` : "nunca se ha subido" };
+    },
+  },
   { clave: "fin_flujo_30d", etiqueta: "Flujo de caja a 30 días", ruta: "/finanzas/saldos", area: "finanzas", descripcion: "Saldos + cobros esperados − pagos programados en 30 días.", direccion: "menor_es_peor", enDesarrollo: true, visible: finanzas, consulta: pendiente },
 
   // ------------------------------------------------------------ contabilidad
   {
     clave: "carga_sin_estado",
     etiqueta: "Empresas sin estado de cuenta",
-    ruta: "/carga",
+    ruta: "/carga?ver=sin_estado_cuenta",
     area: "contabilidad",
     descripcion: "Empresas que nunca han cargado un estado de cuenta.",
     visible: contab,
@@ -323,7 +356,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "cont_dias_ultima_carga",
     etiqueta: "Días desde la última carga",
-    ruta: "/carga",
+    ruta: "/carga?ver=ultimas_cargas",
     area: "contabilidad",
     descripcion: "Días transcurridos desde la última carga completada (banco o CFDI).",
     visible: contab,
@@ -339,7 +372,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "cont_cargas_error",
     etiqueta: "Cargas con error (30 días)",
-    ruta: "/carga",
+    ruta: "/carga?ver=cargas_error",
     area: "contabilidad",
     descripcion: "Archivos que fallaron al procesarse en los últimos 30 días.",
     visible: contab,
@@ -490,7 +523,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "alm_entradas_sin_oc",
     etiqueta: "Entradas sin OC",
-    ruta: "/inventario",
+    ruta: "/inventario?ver=entradas_sin_oc",
     area: "almacen",
     descripcion: "Entradas de almacén guardadas sin orden de compra vinculada (no ajustes).",
     visible: inventario,
@@ -502,7 +535,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "alm_productos_sin_costo",
     etiqueta: "Productos sin costo",
-    ruta: "/inventario/productos",
+    ruta: "/inventario/productos?ver=productos_sin_costo",
     area: "almacen",
     descripcion: "Productos activos sin costo de referencia.",
     visible: inventario,
@@ -514,7 +547,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "alm_movimientos_hoy",
     etiqueta: "Movimientos de hoy",
-    ruta: "/inventario",
+    ruta: "/inventario?ver=movimientos_hoy",
     area: "almacen",
     descripcion: "Entradas y salidas registradas hoy.",
     informativo: true,
@@ -530,7 +563,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "inventario_remisiones",
     etiqueta: "Remisiones de salida por confirmar",
-    ruta: "/inventario/remisiones",
+    ruta: "/inventario/remisiones?ver=remisiones_por_confirmar",
     area: "logistica",
     descripcion: "Remisiones emitidas que nadie ha confirmado con el QR.",
     visible: inventario,
@@ -542,7 +575,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "produccion_remisiones",
     etiqueta: "Remisiones de planta por confirmar",
-    ruta: "/produccion/clavicon",
+    ruta: "/produccion/clavicon?ver=remisiones_planta_por_confirmar",
     area: "logistica",
     descripcion: "Remisiones de Clavicón/Balken/Carpintería emitidas sin confirmación.",
     visible: (p) => produccion(p) || inventario(p),
@@ -578,7 +611,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "log_dias_entrega",
     etiqueta: "Días promedio para confirmar entrega",
-    ruta: "/inventario/remisiones",
+    ruta: "/inventario/remisiones?ver=remisiones_por_confirmar",
     area: "logistica",
     descripcion: "Promedio de días entre emitir una remisión y confirmarla (últimos 30 días).",
     visible: inventario,
@@ -664,7 +697,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "produccion_ordenes",
     etiqueta: "Órdenes de producción abiertas",
-    ruta: "/produccion/clavicon",
+    ruta: "/produccion/clavicon?ver=ordenes_abiertas",
     area: "operacion",
     descripcion: "Órdenes planeadas o en proceso en las plantas.",
     visible: produccion,
@@ -676,7 +709,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "op_ordenes_atrasadas",
     etiqueta: "Órdenes con embarque vencido",
-    ruta: "/produccion/clavicon",
+    ruta: "/produccion/clavicon?ver=ordenes_atrasadas",
     area: "operacion",
     descripcion: "Órdenes abiertas cuya fecha estimada de embarque ya pasó.",
     visible: produccion,
@@ -688,7 +721,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "op_operaciones_retrasadas",
     etiqueta: "Operaciones de máquina retrasadas",
-    ruta: "/produccion/clavicon",
+    ruta: "/produccion/clavicon?ver=operaciones_retrasadas",
     area: "operacion",
     descripcion: "Pasos programados cuyo fin ya pasó y siguen sin terminar.",
     visible: produccion,
@@ -700,7 +733,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "precios_pendientes",
     etiqueta: "PU esperando autorización",
-    ruta: "/precios",
+    ruta: "/precios?ver=pu_por_autorizar",
     area: "operacion",
     descripcion: "Análisis con material confirmado o autorizados, pendientes de firma o publicación.",
     visible: (p) => ["direccion", "admin", "corporativo"].includes(p.rol),
@@ -712,7 +745,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "op_pu_borrador_viejos",
     etiqueta: "PU en borrador más de 7 días",
-    ruta: "/precios",
+    ruta: "/precios?ver=pu_borrador_viejo",
     area: "operacion",
     descripcion: "Análisis que llevan más de una semana sin moverse del borrador.",
     visible: operacion,
@@ -724,7 +757,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "op_tareas_vencidas",
     etiqueta: "Tareas vencidas",
-    ruta: "/tareas",
+    ruta: "/tareas?ver=tareas_vencidas",
     area: "operacion",
     descripcion: "Tarjetas activas con fecha límite pasada (aunque estén en la última columna).",
     visible: operacion,
@@ -753,7 +786,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "cuentas_pendientes",
     etiqueta: "Cuentas sin rol",
-    ruta: "/admin",
+    ruta: "/admin?ver=cuentas_sin_rol",
     area: "sistemas",
     descripcion: "Cuentas que se registraron solas y siguen en 'pendiente' (sin acceso).",
     visible: esAdmin,
@@ -779,7 +812,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "sis_sync_horas",
     etiqueta: "Horas desde la última sincronización OC/OV",
-    ruta: "/carga",
+    ruta: "/carga?ver=sincronizacion_oc_ov",
     area: "sistemas",
     descripcion: "Tiempo desde la última OC/OV traída del backoffice (debe ser < 2 h).",
     visible: esAdmin,
@@ -795,7 +828,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "sis_fotos_error_7d",
     etiqueta: "Fotos con error de lectura (7 días)",
-    ruta: "/inventario",
+    ruta: "/inventario?ver=fotos_error",
     area: "sistemas",
     descripcion: "Notas de entrega cuya lectura por IA falló en la última semana.",
     visible: esAdmin,
@@ -820,5 +853,11 @@ export const INDICADORES_NUMERICOS = () => INDICADORES.filter((i) => !["mi_asist
 export function indicadoresPara(perfil: Profile | null | undefined, ctx: { tienePersonal: boolean }): Indicador[] {
   if (!perfil || perfil.rol === "pendiente") return [];
   // En el inicio solo los ya calculables; los "en desarrollo" viven en el organigrama.
-  return INDICADORES.filter((i) => !i.enDesarrollo && i.visible(perfil, ctx));
+  const lista = INDICADORES.filter((i) => !i.enDesarrollo && i.visible(perfil, ctx));
+  // Contabilidad (Belén): solo lo suyo, en el orden de su lista.
+  if (esContabilidad(perfil) && perfil.rol !== "admin") {
+    const orden = new Map(INDICADORES_CONTABILIDAD.map((c, i) => [c, i]));
+    return lista.filter((i) => orden.has(i.clave)).sort((a, b) => orden.get(a.clave)! - orden.get(b.clave)!);
+  }
+  return lista;
 }

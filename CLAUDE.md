@@ -54,6 +54,55 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
 - Costeo de precios unitarios: funciones `fn_pu_*` son SECURITY DEFINER con guarda
   de rol (evitaban timeout por RLS recursivo). `pu_analisis_items.descripcion_manual`
   = descripción propia por renglón sin tocar el catálogo compartido.
+- **Puestos por persona: contabilidad y tesorería (6-oct-2026, Mario: "no
+  existe rol de Belén que sea el de contabilidad"; "a Belén no le sirve la
+  tesorería")**: no es rol nuevo (cambiar `app_rol` movería decenas de
+  policies): `permisos_modulo` 'contabilidad' (Belén Vergara, corporativo) y
+  'tesoreria' (Delia, corporativo). `lib/puestos.ts` (con pruebas):
+  Tesorería compacta en el inicio solo para dirección, admin o permiso
+  tesorería (Allison, corporativo sin permiso, ya no la ve); contabilidad
+  ve `MisActividades` + `finanzas/AcumuladoContable.tsx` (por empresa:
+  último CFDI emitido/recibido, estado de cuenta, periodo OC/OV, Adquira de
+  la semana) y SOLO los indicadores de `INDICADORES_CONTABILIDAD` (los que
+  Mario dejó sin cruz + `cont_cfdi_atrasados` y `cont_adquira_semana`).
+  Vista `v_cfdi_ultimo_por_empresa`. El encabezado muestra "contabilidad" /
+  "tesorería" en vez de "corporativo". Belén ve todo OC/OV/CFDI/BBVA
+  (corporativo + todas_las_empresas; verificado por RLS). Ojo: hay una
+  cuenta Gmail duplicada de Belén (bellts1098@gmail.com, supervisor, nunca
+  entró) con la tarjeta "Definir Costo SS" asignada.
+- **Actividades recurrentes (6-oct-2026)**: `actividades_recurrentes`
+  (tablero, título, asignado, `dias_semana` ISO, `cierre_automatico`) +
+  `actividades_recurrentes_generadas`; pg_cron `actividades-recurrentes-diarias`
+  13:30 UTC llama `fn_generar_actividades_recurrentes()` (tarjeta con fecha
+  límite hoy → el recordatorio push de las 14:00 UTC avisa). Belén: "Subir el
+  archivo de Adquira (BBVA)" cada viernes en el tablero "Contabilidad ·
+  Actividades" (CSC); se cierra sola al subir Adquira (trigger
+  `bbva_adquira_cierra_actividad`). Se dan de alta por SQL (solo admin escribe).
+- **Directo al problema, regla general (6-oct-2026)**: todo indicador con
+  conteo lleva `?ver=<clave>` y `components/ProblemaDesdeTablero.tsx` (en el
+  Layout) pinta arriba de CUALQUIER pantalla la lista exacta de lo contado
+  (`PROBLEMAS`: cfdi_atrasados, cuentas_sin_movimientos, sin_estado_cuenta,
+  cargas_error, ultimas_cargas, sincronizacion_oc_ov, prestamos_con_saldo,
+  entradas_sin_oc, movimientos_hoy, productos_sin_costo,
+  remisiones_por_confirmar, remisiones_planta_por_confirmar, órdenes de
+  producción, pu_por_autorizar, pu_borrador_viejo, tareas_vencidas,
+  cuentas_sin_rol, fotos_error). **Indicador nuevo con conteo → ?ver= y su
+  entrada en `PROBLEMAS`** (o un filtro propio de la pantalla).
+- **Notificaciones (6-oct-2026)**: solo 15 de 40 personas activas tenían
+  push. `components/AvisoNotificaciones.tsx` en el Layout: al entrar, si el
+  dispositivo no está suscrito, aviso "Activar notificaciones" (bloqueadas →
+  cómo desbloquear; iPhone → instalar en pantalla de inicio); si ya estaba
+  suscrito, vuelve a ligar la suscripción a la cuenta actual. Todo inicio
+  muestra `MisActividades` (antes solo roles básicos).
+- **Tareas: lo de fondo solo quien asigna (6-oct-2026)**: trigger
+  `tarjetas_guarda_fondo`: título, responsables, supervisor,
+  corresponsables, tablero, archivar y eliminar solo `creado_por` o admin;
+  cualquiera mueve de columna, edita descripción, sube archivos y comenta.
+  Eliminar ya no borra: `tarjetas.eliminada_en/_por` (+ archivada) y el
+  tablero tiene "Ver archivadas y eliminadas" para reabrir/restaurar
+  (`20261006170000`).
+- **SAT**: NO hay descarga automática del SAT; los CFDI se suben a mano (zip)
+  en Carga; la última carga fue el 26-ago-2026.
 - **Requisiciones otra vez lentas (6-oct-2026)**: 40 "statement timeout"
   cada 5 min (BIND) en requisicion_linea_eventos, requisicion_lineas,
   avance_resolucion_linea, v_requisicion_ordenes: cada hija hacía `exists

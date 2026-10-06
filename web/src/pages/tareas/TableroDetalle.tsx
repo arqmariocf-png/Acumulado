@@ -58,6 +58,26 @@ function useTarjetas(tableroId: string) {
   });
 }
 
+// Archivadas y eliminadas del tablero (6-oct-2026): se consultan aparte,
+// solo cuando se abre la lista.
+function useTarjetasArchivadas(tableroId: string, activo: boolean) {
+  return useQuery({
+    queryKey: ["tarjetas-archivadas", tableroId],
+    enabled: activo,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tarjetas")
+        .select("*")
+        .eq("tablero_id", tableroId)
+        .eq("archivada", true)
+        .order("updated_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return data as Tarjeta[];
+    },
+  });
+}
+
 // v_directorio: nombre/rol de cualquier usuario con acceso, visible a todos
 // los no-pendiente -- ver comentario en types/database.ts.
 function useDirectorio() {
@@ -131,6 +151,8 @@ export function TableroDetalle() {
   // ?tarjeta=<id> abre directo el panel (desde "Mis actividades" y los avisos).
   const [params] = useSearchParams();
   const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState<string | null>(params.get("tarjeta"));
+  const [verArchivadas, setVerArchivadas] = useState(false);
+  const { data: archivadas, isLoading: cargandoArchivadas } = useTarjetasArchivadas(tableroId ?? "", verArchivadas && !!tableroId);
   const [nuevaColumna, setNuevaColumna] = useState(false);
   const [editandoTablero, setEditandoTablero] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -317,6 +339,29 @@ export function TableroDetalle() {
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <CalendarioVencimientos tarjetas={tarjetas ?? []} onSeleccionar={setTarjetaSeleccionada} />
+
+      <div className="mb-3">
+        <button type="button" onClick={() => setVerArchivadas((v) => !v)} className="text-xs text-slate-600 underline">
+          {verArchivadas ? "Ocultar archivadas y eliminadas" : "Ver archivadas y eliminadas"}
+        </button>
+        {verArchivadas && (
+          <div className="mt-2 rounded border border-slate-200 bg-white p-2">
+            {cargandoArchivadas && <p className="text-xs text-slate-400">Cargando…</p>}
+            {!cargandoArchivadas && (archivadas ?? []).length === 0 && <p className="text-xs text-slate-400">No hay tareas archivadas ni eliminadas en este tablero.</p>}
+            <ul className="divide-y divide-slate-100">
+              {(archivadas ?? []).map((t) => (
+                <li key={t.id} className="flex items-center gap-2 py-1.5 text-sm">
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${t.eliminada_en ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>{t.eliminada_en ? "eliminada" : "archivada"}</span>
+                  <button type="button" onClick={() => setTarjetaSeleccionada(t.id)} className="flex-1 truncate text-left text-slate-800 hover:underline">
+                    {t.titulo}
+                  </button>
+                  <span className="text-[11px] text-slate-400">{new Date(t.eliminada_en ?? t.updated_at).toLocaleDateString("es-MX")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {columnas.map((columna) => {
