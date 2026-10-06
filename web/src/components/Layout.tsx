@@ -12,6 +12,8 @@ import { SelectorEmpresa, useEmpresasAlcance } from "./SelectorEmpresa";
 import { ETIQUETA_ROL, NIVELES_ROLES } from "../lib/accesosRoles";
 import type { AppRol } from "../types/database";
 import { IrAlAncla } from "./FiltroDesdeTablero";
+import { ProblemaDesdeTablero } from "./ProblemaDesdeTablero";
+import { AvisoNotificaciones } from "./AvisoNotificaciones";
 
 export function Layout() {
   const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, cambiarContrasena, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
@@ -81,7 +83,7 @@ export function Layout() {
             {eligeEmpresa && !espectador && <SelectorEmpresa value={empresaActiva ?? ""} onChange={(v) => setEmpresaActiva(v || null)} compacto vacio="Todas" className="max-w-[140px] rounded border border-slate-300 px-2 py-1 text-xs" />}
             {perfilReal?.rol === "admin" && !espectador && <VerComo vistaComo={vistaComo} onCambiar={setVistaComo} />}
             <span className="hidden sm:inline">
-              {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol === "admin" && alcanceOrganizacion?.esMaestra ? "director general" : perfil?.rol}</span>
+              {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol === "admin" && alcanceOrganizacion?.esMaestra ? "director general" : (perfil?.modulos ?? []).includes("contabilidad") ? "contabilidad" : (perfil?.modulos ?? []).includes("tesoreria") ? "tesorería" : perfil?.rol}</span>
             </span>
             {perfil && <BotonNotificaciones profileId={perfil.id} />}
             <button onClick={cambiarContrasena} className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100" title="Cambiar mi contraseña">
@@ -101,6 +103,8 @@ export function Layout() {
             pantalla con información. La base tampoco le devuelve datos
             (20261002090000_espectador_sin_datos.sql). */}
         <IrAlAncla />
+        {perfilReal && !espectador && !vistaComo && <AvisoNotificaciones profileId={perfilReal.id} />}
+        {!espectador && <ProblemaDesdeTablero />}
         {espectador ? <PantallaEspectador /> : <Outlet />}
       </main>
     </div>

@@ -90,7 +90,7 @@ const TEXTO_ACTIVIDAD: Record<string, (detalle: any) => string> = {
       : d?.rol === "corresponsables"
         ? `cambió los corresponsables: ${d?.nombre || "ninguno"}`
         : d?.nombre ? `la asignó a ${d.nombre}` : "quitó la asignación",
-  archivada: () => "archivó la tarjeta",
+  archivada: (d) => (d?.accion === "eliminada" ? "eliminó la tarjeta" : "archivó la tarjeta"),
   reabierta: () => "reabrió la tarjeta",
   editada: (d) =>
     d?.accion === "archivo_agregado"
@@ -131,7 +131,9 @@ export function TarjetaPanel({
   const [progresoArchivo, setProgresoArchivo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const puedeAdministrar = perfil?.rol === "admin" || perfil?.rol === "corporativo";
+  // Lo de fondo (título, responsables, archivar, eliminar) solo quien la
+  // asignó o el admin (Mario, 6-oct-2026); la base lo exige igual
+  // (trigger tarjetas_guarda_fondo).
   const nombrePorId = new Map(directorio.map((p) => [p.id, p.nombre]));
 
   function invalidarTodo() {
@@ -193,19 +195,39 @@ export function TarjetaPanel({
     },
     onSuccess: () => {
       invalidarTodo();
+      queryClient.invalidateQueries({ queryKey: ["tarjetas-archivadas", tableroId] });
       if (archivarToggle.variables) onClose();
     },
     onError: (err) => setError((err as Error).message),
   });
 
+  // Eliminar ya no borra: queda archivada y marcada, y se restaura desde
+  // "Ver archivadas y eliminadas" (6-oct-2026).
   const eliminar = useMutation({
     mutationFn: async () => {
-      const { error: errDelete } = await supabase.from("tarjetas").delete().eq("id", tarjetaId);
-      if (errDelete) throw errDelete;
+      const userId = await usuarioActualId();
+      const { error: errUpdate } = await supabase.from("tarjetas").update({ eliminada_en: new Date().toISOString(), archivada: true }).eq("id", tarjetaId);
+      if (errUpdate) throw errUpdate;
+      await supabase.from("tarjeta_actividad").insert({ tarjeta_id: tarjetaId, tipo: "archivada", detalle: { accion: "eliminada" }, actor_id: userId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tarjetas", tableroId] });
+      invalidarTodo();
+      queryClient.invalidateQueries({ queryKey: ["tarjetas-archivadas", tableroId] });
       onClose();
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+
+  const restaurar = useMutation({
+    mutationFn: async () => {
+      const userId = await usuarioActualId();
+      const { error: errUpdate } = await supabase.from("tarjetas").update({ eliminada_en: null, archivada: false }).eq("id", tarjetaId);
+      if (errUpdate) throw errUpdate;
+      await supabase.from("tarjeta_actividad").insert({ tarjeta_id: tarjetaId, tipo: "reabierta", actor_id: userId });
+    },
+    onSuccess: () => {
+      invalidarTodo();
+      queryClient.invalidateQueries({ queryKey: ["tarjetas-archivadas", tableroId] });
     },
     onError: (err) => setError((err as Error).message),
   });
@@ -312,6 +334,8 @@ export function TarjetaPanel({
   }
 
   if (!tarjeta) return null;
+  const esDeFondo = perfil?.rol === "admin" || perfil?.id === tarjeta.creado_por;
+  const nombreAsigno = nombrePorId.get(tarjeta.creado_por) ?? "quien la creó";
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose}>
@@ -319,6 +343,7 @@ export function TarjetaPanel({
         <div className="mb-4 flex items-start justify-between">
           <input
             key={tarjeta.titulo}
+            disabled={!esDeFondo}
             defaultValue={tarjeta.titulo}
             onBlur={(e) => e.target.value.trim() && e.target.value !== tarjeta.titulo && actualizar.mutate({ titulo: e.target.value.trim() })}
             className="mr-3 w-full text-lg font-semibold text-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1"
@@ -351,7 +376,7 @@ export function TarjetaPanel({
           </div>
           <div>
             <label className={etiquetaCampo}>Responsable principal</label>
-            <select value={tarjeta.asignado_a ?? ""} onChange={(e) => asignar.mutate({ campo: "asignado_a", valor: e.target.value })} className={campoTexto}>
+            <select disabled={!esDeFondo} value={tarjeta.asignado_a ?? ""} onChange={(e) => asignar.mutate({ campo: "asignado_a", valor: e.target.value })} className={campoTexto}>
               <option value="">Sin asignar</option>
               {directorio.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -362,7 +387,7 @@ export function TarjetaPanel({
           </div>
           <div>
             <label className={etiquetaCampo}>Supervisor a cargo</label>
-            <select value={tarjeta.supervisor_id ?? ""} onChange={(e) => asignar.mutate({ campo: "supervisor_id", valor: e.target.value })} className={campoTexto}>
+            <select disabled={!esDeFondo} value={tarjeta.supervisor_id ?? ""} onChange={(e) => asignar.mutate({ campo: "supervisor_id", valor: e.target.value })} className={campoTexto}>
               <option value="">Sin supervisor</option>
               {directorio.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -386,6 +411,7 @@ export function TarjetaPanel({
                       <label key={p.id} className="flex items-center gap-2 py-0.5 text-xs text-slate-700">
                         <input
                           type="checkbox"
+                          disabled={!esDeFondo}
                           checked={marcado}
                           onChange={(e) => {
                             const actual = tarjeta.corresponsables ?? [];
@@ -442,25 +468,41 @@ export function TarjetaPanel({
           />
         </div>
 
-        <div className="mb-4 flex gap-2">
-          {tarjeta.archivada ? (
-            <button onClick={() => archivarToggle.mutate(false)} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">
-              Reabrir
-            </button>
-          ) : (
-            <button onClick={() => archivarToggle.mutate(true)} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">
-              Archivar
-            </button>
-          )}
-          {puedeAdministrar && (
-            <button
-              onClick={() => confirm("¿Eliminar esta tarjeta y todo su historial?") && eliminar.mutate()}
-              className="rounded border border-red-200 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
-            >
-              Eliminar
-            </button>
-          )}
-        </div>
+        {tarjeta.eliminada_en && (
+          <p className="mb-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700">
+            Eliminada el {fechaHora(tarjeta.eliminada_en)}
+            {tarjeta.eliminada_por ? ` por ${nombrePorId.get(tarjeta.eliminada_por) ?? "…"}` : ""}.
+          </p>
+        )}
+        {esDeFondo ? (
+          <div className="mb-4 flex gap-2">
+            {tarjeta.eliminada_en ? (
+              <button onClick={() => restaurar.mutate()} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">
+                Restaurar
+              </button>
+            ) : tarjeta.archivada ? (
+              <button onClick={() => archivarToggle.mutate(false)} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">
+                Reabrir
+              </button>
+            ) : (
+              <button onClick={() => archivarToggle.mutate(true)} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">
+                Archivar
+              </button>
+            )}
+            {!tarjeta.eliminada_en && (
+              <button
+                onClick={() => confirm("¿Eliminar esta tarjeta? Se podrá ver y restaurar desde \"Ver archivadas y eliminadas\" del tablero.") && eliminar.mutate()}
+                className="rounded border border-red-200 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+              >
+                Eliminar
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="mb-4 text-xs text-slate-500">
+            El título, los responsables, archivar y eliminar los cambia solo {nombreAsigno} (quien asignó la tarea). La descripción, los archivos y los comentarios los puede cambiar cualquiera.
+          </p>
+        )}
 
         <div className="mb-5">
           <h3 className="mb-2 text-sm font-semibold text-slate-800">Archivos</h3>

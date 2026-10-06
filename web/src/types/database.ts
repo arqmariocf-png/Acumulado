@@ -825,6 +825,9 @@ export interface Tarjeta {
   fecha_cambios: number;
   orden: number;
   archivada: boolean;
+  /** Eliminada sin borrar (6-oct-2026): se ve y se restaura desde el tablero. */
+  eliminada_en?: string | null;
+  eliminada_por?: string | null;
   created_at: string;
   updated_at: string;
 }
