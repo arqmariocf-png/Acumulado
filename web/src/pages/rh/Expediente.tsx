@@ -5,6 +5,7 @@ import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
 import { etiquetaSexo } from "../../lib/modulos";
 import type { DocumentoFaltante, ExpedienteFila, ExtraccionDocumento, Personal } from "../../types/database";
+import { rutaVerArchivo } from "../../lib/verArchivo";
 
 // Expediente de personal: cada documento del checklist se sube como archivo
 // (edge function rh-documentos -> bucket privado "cargas"), Claude le extrae
@@ -328,7 +329,6 @@ function FilaDocumento({ fila, persona, puedeAplicar }: { fila: ExpedienteFila; 
   const [subiendo, setSubiendo] = useState(false);
   const [mostrarSubir, setMostrarSubir] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [abriendo, setAbriendo] = useState(false);
 
   const invalidar = () => {
     queryClient.invalidateQueries({ queryKey: ["rh-expediente", persona.id] });
@@ -367,22 +367,10 @@ function FilaDocumento({ fila, persona, puedeAplicar }: { fila: ExpedienteFila; 
     }
   }
 
-  async function verArchivo() {
+  function verArchivo() {
     if (!fila.documento_id) return;
-    setAbriendo(true);
-    setError(null);
-    try {
-      const respuesta = await fetch(`${urlFuncion("rh-documentos")}?documentoId=${fila.documento_id}`, {
-        headers: { Authorization: `Bearer ${await tokenSesion()}` },
-      });
-      const json = await respuesta.json();
-      if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-      window.open(json.url, "_blank", "noopener");
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setAbriendo(false);
-    }
+    // Página propia que pide la liga firmada al cargar (no caduca en la pestaña).
+    window.open(rutaVerArchivo("rh", fila.documento_id), "_blank");
   }
 
   const verificar = useMutation({
@@ -452,8 +440,8 @@ function FilaDocumento({ fila, persona, puedeAplicar }: { fila: ExpedienteFila; 
           </p>
         )}
         {tieneArchivo && (
-          <button onClick={verArchivo} disabled={abriendo} className="text-xs text-slate-600 underline disabled:opacity-50">
-            {abriendo ? "abriendo…" : "ver archivo"}
+          <button onClick={verArchivo} className="text-xs text-slate-600 underline">
+            ver archivo
           </button>
         )}
         {fila.documento_id && puedeAplicar && (

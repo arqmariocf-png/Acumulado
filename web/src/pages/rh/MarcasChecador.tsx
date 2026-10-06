@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase, urlFuncion } from "../../lib/supabase";
-import { errorDeFuncion } from "../../lib/funciones";
+import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { ETIQUETA_MARCA, SIMBOLO_MARCA, type TipoMarca } from "../Checador";
 import { useUbicacionesChecador } from "./UbicacionesChecador";
+import { rutaVerArchivo } from "../../lib/verArchivo";
 
 interface MarcaChecador {
   id: string;
@@ -129,14 +129,9 @@ export function MarcasChecador({
     onError: (err) => setError((err as Error).message),
   });
 
-  async function verFoto(id: string) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const respuesta = await fetch(`${urlFuncion("checador-marcar")}?registroId=${id}`, {
-      headers: { Authorization: `Bearer ${sessionData.session?.access_token}` },
-    });
-    const json = await respuesta.json();
-    if (!respuesta.ok) throw await errorDeFuncion(respuesta, json);
-    window.open(json.url, "_blank");
+  function verFoto(id: string) {
+    // Página propia que pide la liga firmada al cargar (no caduca en la pestaña).
+    window.open(rutaVerArchivo("checador", id), "_blank");
   }
 
   function onManual(e: FormEvent<HTMLFormElement>) {
@@ -295,7 +290,7 @@ export function MarcasChecador({
                 </td>
                 <td className="px-3 py-2">
                   {m.tiene_foto ? (
-                    <button type="button" onClick={() => verFoto(m.id).catch((e) => alert((e as Error).message))} className="text-slate-700 hover:underline">
+                    <button type="button" onClick={() => verFoto(m.id)} className="text-slate-700 hover:underline">
                       ver foto
                     </button>
                   ) : (
