@@ -84,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true);
   const [grupo, setGrupo] = useState<Grupo | null>(null);
   const [modulos, setModulos] = useState<ModuloClave[]>([]);
+  const [catalogoModulos, setCatalogoModulos] = useState<ModuloClave[]>([]);
   const [suscripcion, setSuscripcion] = useState<Suscripcion | null>(null);
   const [alcance, setAlcance] = useState<{ empresas: string[]; todas: boolean; multiempresa: boolean } | null>(null);
   const [empresaActivaGuardada, setEmpresaActivaGuardada] = useState<string | null | undefined>(undefined);
@@ -196,6 +197,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
 
     setGrupo((grupoData as Grupo | null) ?? null);
+    void supabase
+      .from("modulos")
+      .select("clave")
+      .then(({ data }) => setCatalogoModulos(((data ?? []) as { clave: ModuloClave }[]).map((m) => m.clave)));
     setModulos(((modulosData ?? []) as { modulo_clave: ModuloClave }[]).map((m) => m.modulo_clave));
     setSuscripcion((suscripcionData as Suscripcion | null) ?? null);
   }
@@ -272,7 +277,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Lo que la organización tiene abierto. El menú lo usa para no ofrecerle a
   // un cliente módulos que no contrató (la base ya los rechaza; esto es para
   // que no vea puertas que no abren).
-  const alcanceOrganizacion = grupo ? { esMaestra: grupo.es_maestro === true, modulos } : null;
+  //
+  // El espectador (2-oct-2026, Mario: "que vean los módulos que pueden
+  // contratar") ve el menú de TODO el catálogo de módulos: es su vitrina.
+  // Al entrar a cualquiera solo ve el aviso de Layout y la base no le
+  // devuelve datos.
+  const alcanceOrganizacion = grupo
+    ? { esMaestra: grupo.es_maestro === true, modulos: perfilReal?.espectador ? catalogoModulos : modulos }
+    : null;
   const logoUrl = urlPublicaDelLogo(grupo?.logo_path);
 
   // El nombre de la organización manda en el título y en el manifiesto: es lo

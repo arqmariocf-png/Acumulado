@@ -951,7 +951,10 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   `auth_rol()` (la que usan las funciones; las policies usan
   `auth_rol_definer`) responde 'pendiente'; `auth_es_socio` y
   `auth_rh_directivo` false. En la app, `Layout` pinta
-  `PantallaEspectador` en lugar de cualquier pantalla. **Toda tabla nueva
+  `PantallaEspectador` en lugar de cualquier pantalla. **Menú de vitrina**
+  (6-oct, Mario: "que vean los módulos que pueden contratar"): para el
+  espectador `alcanceOrganizacion.modulos` = todo el catálogo `modulos`,
+  no lo abierto de su organización. **Toda tabla nueva
   necesita también `espectador_sin_datos`.** Espectadores: María Alejandra
   (EK) y Aldo (ARSSA). Aplicar DDL sobre ~110 tablas de una vez rebasa los
   60 s de la herramienta: ir en lotes con `lock_timeout`.
