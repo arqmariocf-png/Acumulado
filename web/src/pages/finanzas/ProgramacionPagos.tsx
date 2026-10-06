@@ -4,12 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { moneda } from "../../lib/saldosEmpresas";
-import { useSaldosDia } from "./SaldosEmpresas";
 import { OrdenesPorPagar } from "./OrdenesPorPagar";
 import { HojaPagosDia } from "./HojaPagosDia";
 import { BotonSincronizarOcOv } from "../../components/BotonSincronizarOcOv";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
+import { ConfirmarPagos } from "../../components/ConfirmarPagos";
 
 interface PagoProgramado {
   id: string;
@@ -91,7 +91,6 @@ export function ProgramacionPagos() {
       return data as PagoProgramado[];
     },
   });
-  const { data: saldos } = useSaldosDia(hoy);
 
   const invalidar = () => queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
 
@@ -149,21 +148,6 @@ export function ProgramacionPagos() {
     }
     return g;
   }, [visibles, hoy]);
-
-  // Disponible por empresa: saldo de cierre de hoy menos pendientes de los
-  // próximos 7 días (incluye vencidos).
-  const resumenEmpresas = useMemo(() => {
-    const en7 = sumarDias(hoy, 7);
-    const saldoPorEmpresa = new Map<string, number>();
-    for (const s of saldos ?? []) saldoPorEmpresa.set(s.empresa_id, (saldoPorEmpresa.get(s.empresa_id) ?? 0) + Number(s.saldo_final));
-    const comprometido = new Map<string, number>();
-    for (const p of pendientes) if (p.fecha_programada <= en7) comprometido.set(p.empresa_id, (comprometido.get(p.empresa_id) ?? 0) + Number(p.monto));
-    const ids = new Set([...saldoPorEmpresa.keys(), ...comprometido.keys()]);
-    return [...ids]
-      .map((id) => ({ id, nombre: nombreEmpresa.get(id) ?? "—", saldo: saldoPorEmpresa.get(id) ?? 0, comprometido: comprometido.get(id) ?? 0 }))
-      .filter((r) => !filtroEmpresa || r.id === filtroEmpresa)
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [saldos, pendientes, nombreEmpresa, hoy, filtroEmpresa]);
 
   function imprimir() {
     const filas = pendientes
@@ -282,34 +266,14 @@ export function ProgramacionPagos() {
 
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      {resumenEmpresas.length > 0 && (
-        <div className="mb-4 overflow-x-auto rounded border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Empresa</th>
-                <th className="px-3 py-2 text-right">Saldo de cierre hoy</th>
-                <th className="px-3 py-2 text-right">Pagos próximos 7 días</th>
-                <th className="px-3 py-2 text-right">Disponible después de pagar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumenEmpresas.map((r) => {
-                const disponible = r.saldo - r.comprometido;
-                return (
-                  <tr key={r.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2">{r.nombre}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{moneda(r.saldo)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.comprometido ? moneda(r.comprometido) : "—"}</td>
-                    <td className={`px-3 py-2 text-right font-medium tabular-nums ${disponible < 0 ? "text-red-700" : "text-slate-900"}`}>{moneda(disponible)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
+      <ConfirmarPagos
+        metodo="efectivo"
+        id="efectivo"
+        titulo="Efectivo por confirmar"
+        ayuda="Las devoluciones en efectivo de las órdenes de compra. Elige las que ya se entregaron, sube el comprobante (uno puede cubrir varias) y confírmalas."
+        nombreEmpresa={nombreEmpresa}
+        empresaId={filtroEmpresa || null}
+      />
       <HojaPagosDia filtroEmpresa={filtroEmpresa} hoy={hoy} />
       <div id="ordenes" className="scroll-mt-20" />
       <OrdenesPorPagar filtroEmpresa={filtroEmpresa} hoy={hoy} nombreEmpresa={nombreEmpresa} cuentas={cuentas ?? []} />

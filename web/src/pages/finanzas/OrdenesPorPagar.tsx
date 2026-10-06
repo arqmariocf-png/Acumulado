@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../../lib/supabase";
+import { supabase, urlFuncion } from "../../lib/supabase";
+import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
 import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, estadoPagoOc, etapaOc, porProgramarOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
@@ -153,6 +154,9 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   // Las pendientes también: programar su pago las autoriza internamente
   // (Mario, 30-sep-2026: "que no pare el flujo").
   const programables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && porProgramarOc(o) > 0 && !o.pagada_backoffice);
+  // Lo que se pagó y no se marcó en el backoffice (Mario con Laura, 6-oct-2026).
+  const confirmables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && saldoOc(o) > 0.01);
+  const [verConfirmar, setVerConfirmar] = useState(false);
 
   const programarLote = useMutation({
     mutationFn: async () => {
@@ -230,10 +234,26 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
             <button type="button" onClick={() => programarLote.mutate()} disabled={programarLote.isPending || programables.length === 0} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
               {programarLote.isPending ? "Programando…" : `Programar a pago ${programables.length}`}
             </button>
+            <button type="button" onClick={() => setVerConfirmar((v) => !v)} disabled={confirmables.length === 0} className="rounded border border-emerald-700 bg-white px-2.5 py-1 font-medium text-emerald-800 disabled:opacity-50" title="Ya se pagaron (aunque no se marcó en el backoffice): quedan pagadas y confirmadas aquí">
+              {`Confirmar pagadas ${confirmables.length}`}
+            </button>
             <button type="button" onClick={() => setSeleccion(new Set())} className="underline">
               quitar selección
             </button>
           </span>
+        )}
+        {verConfirmar && confirmables.length > 0 && (
+          <ConfirmarOcPagadas
+            ocs={confirmables}
+            hoy={hoy}
+            onListo={(m) => {
+              setAviso(m);
+              setVerConfirmar(false);
+              setSeleccion(new Set());
+              for (const k of [["oc-pagos"], ["oc-indicadores"], ["pagos-programados"], ["cxp-proveedores"], ["tesoreria"], ["confirmar-pagos"]]) queryClient.invalidateQueries({ queryKey: k });
+            }}
+            onCancelar={() => setVerConfirmar(false)}
+          />
         )}
       </div>
       {indicadores && (
@@ -528,3 +548,77 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
   );
 }
 
+
+/** Confirma como pagadas varias OC de una vez (lo pagado que no se marcó en el
+ * backoffice): fecha, método, referencia y UN comprobante para todas.
+ * fn_oc_confirmar_pagadas deja pagado y confirmado lo que falte de cada una;
+ * después el archivo se liga a todos esos pagos (edge pagos-comprobante). */
+function ConfirmarOcPagadas({ ocs, hoy, onListo, onCancelar }: { ocs: OcPago[]; hoy: string; onListo: (mensaje: string) => void; onCancelar: () => void }) {
+  const [fecha, setFecha] = useState(hoy);
+  const [metodo, setMetodo] = useState<"transferencia" | "efectivo" | "cheque">("transferencia");
+  const [referencia, setReferencia] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const archivoRef = useRef<HTMLInputElement>(null);
+  const suma = ocs.reduce((s, o) => s + saldoOc(o), 0);
+
+  const confirmar = useMutation({
+    mutationFn: async () => {
+      const { data: ids, error: err } = await supabase.rpc("fn_oc_confirmar_pagadas", { p_ocs: ocs.map((o) => o.id), p_fecha: fecha, p_metodo: metodo, p_referencia: referencia.trim() || null, p_cuenta_id: null });
+      if (err) throw err;
+      const pagos = (ids ?? []) as string[];
+      const archivo = archivoRef.current?.files?.[0];
+      if (archivo && pagos.length > 0) {
+        const form = new FormData();
+        form.set("pagoIds", pagos.join(","));
+        form.set("file", archivo);
+        const { data: sesion } = await supabase.auth.getSession();
+        const r = await fetch(urlFuncion("pagos-comprobante"), { method: "POST", headers: { Authorization: `Bearer ${sesion.session?.access_token ?? ""}` }, body: form });
+        const json = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(`Quedaron pagadas, pero el comprobante no se subió: ${(await errorDeFuncion(r, json)).message}`);
+      }
+      return `${ocs.length} orden(es) confirmadas como pagadas · ${moneda(suma)}${archivo ? " · con el mismo comprobante" : ""}.`;
+    },
+    onSuccess: onListo,
+    onError: (e: Error) => setError(e.message),
+  });
+
+  return (
+    <div className="flex w-full flex-wrap items-end gap-2 rounded border border-emerald-300 bg-white p-2 text-xs">
+      <p className="w-full text-slate-600">
+        Confirmar como <b>pagadas</b> {ocs.map((o) => o.id_orden).join(", ")} por <b className="tabular-nums">{moneda(suma)}</b>. Lo programado pendiente pasa a pagado y lo que falte se registra pagado; todo queda confirmado a tu nombre.
+      </p>
+      <label>
+        Fecha de pago
+        <input type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} className="ml-1 rounded border border-slate-300 px-1.5 py-1" />
+      </label>
+      <label>
+        Método
+        <select value={metodo} onChange={(e) => setMetodo(e.target.value as typeof metodo)} className="ml-1 rounded border border-slate-300 px-1.5 py-1">
+          <option value="transferencia">Transferencia</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </label>
+      <input value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Referencia (opcional)" className="rounded border border-slate-300 px-1.5 py-1" />
+      <label>
+        Comprobante (uno para todas, opcional){" "}
+        <input ref={archivoRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+      </label>
+      <button
+        type="button"
+        disabled={confirmar.isPending}
+        onClick={() => {
+          setError(null);
+          confirmar.mutate();
+        }}
+        className="rounded bg-emerald-700 px-3 py-1 font-medium text-white disabled:opacity-50"
+      >
+        {confirmar.isPending ? "Confirmando…" : `Confirmar ${ocs.length} pagadas`}
+      </button>
+      <button type="button" onClick={onCancelar} className="underline">
+        cancelar
+      </button>
+      {error && <p className="w-full text-red-700">{error}</p>}
+    </div>
+  );
+}

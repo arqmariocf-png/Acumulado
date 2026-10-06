@@ -54,6 +54,55 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
 - Costeo de precios unitarios: funciones `fn_pu_*` son SECURITY DEFINER con guarda
   de rol (evitaban timeout por RLS recursivo). `pu_analisis_items.descripcion_manual`
   = descripción propia por renglón sin tocar el catálogo compartido.
+- **Requisiciones otra vez lentas (6-oct-2026)**: 40 "statement timeout"
+  cada 5 min (BIND) en requisicion_linea_eventos, requisicion_lineas,
+  avance_resolucion_linea, v_requisicion_ordenes: cada hija hacía `exists
+  (… requisiciones r …)` y arrastraba la policy de requisiciones, que a su
+  vez preguntaba por proyectos (7 copias anidadas; 21 s para Alma). Ahora
+  `auth_requisiciones_visibles()` / `_editables()` / `_organizacion()`
+  (definer, uuid[], misma lógica que la policy) y las policies comparan
+  `requisicion_id = any((select …)::uuid[])` (`20261006150000`; 0.02 s).
+  **Si cambia quién ve requisiciones, cambiar `auth_requisiciones_visibles`.**
+- **Finanzas de Laura (6-oct-2026, Mario con Laura)**:
+  - Inicio de dirección = `finanzas/InicioDireccion.tsx` (`/` para rol
+    direccion): atajos OC por autorizar / efectivo por confirmar / base de
+    OC, `MisActividades`, `SaldosEmpresas` y resumen de cuentas por pagar
+    por empresa. Menú Finanzas: "Órdenes por autorizar"
+    (`/finanzas/pagos#ordenes`) y "Efectivo por confirmar" (`#efectivo`).
+  - **Confirmar pagos con un comprobante para varios**:
+    `pagos_programados.confirmado_en/_por` (`20261006130000`);
+    `components/ConfirmarPagos.tsx` (efectivo en Programación de pagos,
+    transferencias en Tesorería); edge `pagos-comprobante` v2 acepta
+    `pagoIds` (coma), `confirmar=1`, `marcarPagado=1` y sube el archivo
+    UNA vez para todos.
+  - **Líneas de crédito por empresa** (Cemex en AEP ≠ Cemex en ERG):
+    `proveedores_credito` con `id` y único `(empresa_id, clave)`; las 4
+    líneas viejas quedaron en AEP. Vista **`v_cxp_empresa`** (una fila por
+    empresa y proveedor; `pagado` = mayor entre pagado por OC —pagos de aquí
+    o la OC completa si el backoffice ya la da por pagada— y lo detectado en
+    complementos/bancos; `saldo_oc`; `deuda` = mayor entre por pagar y saldo
+    de OC, la usa el semáforo). `v_cxp_proveedores` quedó **obsoleta** (no
+    se pudo borrar: los DROP por el MCP se quedan colgados 60 s; borrarla
+    cuando se pueda). `fn_cxp_proveedor_detalle(clave, empresa)`;
+    `v_oc_pagos` y `fn_oc_programar_pago` toman la línea de la empresa de la OC.
+  - **Confirmar OC pagadas que no se marcaron en el backoffice**:
+    `fn_oc_confirmar_pagadas(ocs[], fecha, metodo, referencia, cuenta)`
+    (lo pendiente pasa a pagado, lo que falte se registra pagado, todo
+    confirmado; devuelve ids para el comprobante). Botón "Confirmar pagadas
+    N" en la selección de `OrdenesPorPagar` (`20261006140000`).
+  - **Base de OC y pagos** `/finanzas/historial-pagos`
+    (`HistorialPagos.tsx` + `BaseOrdenes.tsx`, `lib/historialPagos.ts` con
+    pruebas): por día/semana/mes con flechas; vista OC (OC · proveedor ·
+    fecha · estatus · detalle · comprobante) y vista pagos por día; Excel.
+  - Programación de pagos ya no muestra los saldos globales; la hoja de
+    pagos del día usa la llave `["pagos-programados", "hoja", fecha]` para
+    refrescarse al programar.
+  - OC 41167 (6-oct): la API `api_ocs_aut` devolvía hasta 41166 a las 17:22
+    UTC; no es de Acumulado. Para "al momento" hace falta que el backoffice
+    avise (webhook) o un filtro por fecha.
+  - **Ojo con el MCP de Supabase**: un `begin … rollback` en el MISMO
+    `execute_sql` que un `create function` deshace la función. Pruebas de
+    RLS en una llamada aparte.
 - **Resumen físico-financiero de todas las obras (6-oct-2026, Mario: "solo
   como director general")**: arriba de `/proyectos`, solo `esAdminGlobal`
   (`proyectos/ResumenObrasDirector.tsx`): una fila por obra con semáforo,
@@ -899,7 +948,7 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   secretos ni datos de tarjeta en esa carpeta.
 
 ## Personas y roles (referencia rápida)
-Mario (admin, todas las empresas) · Laura Ortaza (direccion/finanzas, todas) ·
+Mario (admin, todas las empresas) · Laura Orta (direccion/finanzas, todas) ·
 Jorge Esperón (empresa, ERG: precios unitarios) · Eréndira / Fernando Gómez (rh) ·
 Christian (bbva_mantenimiento) · Jaime Sierra (produccion) · Miguel Tepal
 (responsable, Constructora) · Delia (contabilidad). Contraseñas iniciales se

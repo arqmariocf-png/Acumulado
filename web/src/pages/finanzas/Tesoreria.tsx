@@ -11,6 +11,7 @@ import { ImportarBancariosProveedores } from "../../components/ImportarBancarios
 import { PagosSinComprobante } from "../../components/PagosSinComprobante";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
+import { ConfirmarPagos } from "../../components/ConfirmarPagos";
 
 interface PagoVista {
   id: string;
@@ -166,6 +167,10 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
             <Link to="/finanzas/pagos" className="underline">
               Programación completa
             </Link>
+            {" · "}
+            <Link to="/finanzas/historial-pagos" className="underline">
+              Historial de pagos (días y semanas pasadas)
+            </Link>
           </p>
           {!compacto && (
             <div className="mt-1">
@@ -232,6 +237,13 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
           <Seccion titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
           <Seccion titulo="Pagados hoy" grupos={porEmpresa(pagadosHoy)} vacio="Todavía no se marca ningún pago hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
           <Seccion titulo="Programados a pago para después" grupos={porEmpresa(proximos)} vacio="Dirección no ha programado pagos para los próximos días." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
+          <ConfirmarPagos
+            metodo="transferencia"
+            id="confirmar-transferencias"
+            titulo="Confirmar varios pagos con un comprobante"
+            ayuda="Cuando una sola transferencia cubre varias órdenes: elígelas, sube el comprobante una vez y quedan pagadas y confirmadas."
+            empresaId={filtroEmpresa || null}
+          />
         </>
       )}
     </div>

@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { csvCxp, estadoVencimiento, filtrarYOrdenar, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
+import { csvCxp, estadoVencimiento, filtrarYOrdenar, llaveCxp, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
 
 function fila(p: Partial<FilaCxp>): FilaCxp {
   return {
-    clave: "X", proveedor: "X", n_oc: 0, comprometido: 0, n_facturas: 0, facturado: 0, pagado: 0, por_pagar: 0, sin_facturar: 0,
-    linea_credito: null, dias_credito: null, notas: null, vencimiento: null, disponible: null, ultima_oc: null, ultima_factura: null, ultimo_pago: null, empresas: [],
+    empresa_id: "e", clave: "X", proveedor: "X", n_oc: 0, comprometido: 0, n_facturas: 0, facturado: 0, pagado: 0, por_pagar: 0, sin_facturar: 0,
+    linea_credito: null, dias_credito: null, notas: null, vencimiento: null, disponible: null, ultima_oc: null, ultima_factura: null, ultimo_pago: null, empresas: [], pagado_oc: 0, saldo_oc: 0, n_oc_por_pagar: 0,
     ...p,
-  };
+  } as FilaCxp;
 }
 
 test("sin línea de crédito el semáforo es gris", () => {
@@ -84,7 +84,16 @@ test("csv escapa comas y comillas y trae encabezado", () => {
   const csv = csvCxp([fila({ proveedor: 'Aceros "Norte", SA', por_pagar: 1234.5, empresas: ["e1"] })], (id) => (id === "e1" ? "ERG" : "?"));
   const lineas = csv.split("\r\n");
   assert.equal(lineas.length, 2);
-  assert.ok(lineas[0].startsWith("\ufeffProveedor,Empresas"));
+  assert.ok(lineas[0].startsWith("\ufeffProveedor,Empresa,"));
   assert.ok(lineas[1].startsWith('"Aceros ""Norte"", SA",ERG,'));
   assert.ok(lineas[1].includes(",1234.50,"));
+});
+
+test("la deuda toma el saldo de OC aunque no esté facturado (Cemex por empresa)", () => {
+  const aep = fila({ empresa_id: "aep", clave: "CEMEX", por_pagar: 100, deuda: 170_000, saldo_oc: 170_000, linea_credito: 400_000 });
+  const erg = fila({ empresa_id: "erg", clave: "CEMEX", por_pagar: 70_000, deuda: 70_000 });
+  assert.equal(llaveCxp(aep) === llaveCxp(erg), false);
+  const t = totalesCxp([aep, erg]);
+  assert.equal(t.deuda, 240_000);
+  assert.equal(filtrarYOrdenar([erg, aep], "", "", "por_pagar", true)[0].empresa_id, "aep");
 });

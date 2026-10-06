@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { moneda } from "../../lib/saldosEmpresas";
-import { csvCxp, filtrarYOrdenar, semaforoCredito, tieneLinea, totalesCxp, type ColorCredito, type FilaCxp, type FiltroLinea, type OrdenCxp } from "../../lib/cuentasPorPagar";
+import { csvCxp, deudaCxp, filtrarYOrdenar, llaveCxp, semaforoCredito, tieneLinea, totalesCxp, type ColorCredito, type FilaCxp, type FiltroLinea, type OrdenCxp } from "../../lib/cuentasPorPagar";
 
 const PUNTO: Record<ColorCredito, string> = {
   gris: "bg-slate-300",
@@ -14,7 +14,7 @@ const PUNTO: Record<ColorCredito, string> = {
 };
 
 interface DetalleCxp {
-  ordenes: { id: string; id_orden: string | null; tipo: string | null; fecha: string | null; proyecto: string | null; total: number; empresa_id: string; proveedor: string }[];
+  ordenes: { id: string; id_orden: string | null; tipo: string | null; fecha: string | null; proyecto: string | null; total: number; empresa_id: string; proveedor: string; estatus_backoffice?: string | null; pagado?: number }[];
   facturas: { id: string; folio: string | null; fecha: string | null; total: number; empresa_id: string; contraparte: string; rfc: string | null; complemento: boolean }[];
   pagos: { id: string; fecha: string | null; monto: number; empresa_id: string; nombre: string | null; referencia: string | null; factura: string | null }[];
 }
@@ -54,7 +54,7 @@ export function CuentasPorPagar() {
   const { data: filas, isLoading, error } = useQuery({
     queryKey: ["cxp-proveedores"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_cxp_proveedores").select("*");
+      const { data, error } = await supabase.from("v_cxp_empresa").select("*");
       if (error) throw error;
       return (data ?? []) as FilaCxp[];
     },
@@ -99,8 +99,8 @@ export function CuentasPorPagar() {
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Tarjeta etiqueta="Comprometido en OC" valor={totales.comprometido} />
         <Tarjeta etiqueta="Facturado" valor={totales.facturado} />
-        <Tarjeta etiqueta="Pagado detectado" valor={totales.pagado} />
-        <Tarjeta etiqueta="Por pagar" valor={totales.por_pagar} destacado />
+        <Tarjeta etiqueta="Pagado" valor={totales.pagado} />
+        <Tarjeta etiqueta="Se debe" valor={totales.deuda} destacado nota={`por pagar ${moneda(totales.por_pagar)} · saldo OC ${moneda(totales.saldo_oc)}`} />
         <Tarjeta etiqueta="Proveedores en rojo" valor={totales.rojos} entero nota={`${totales.con_linea} con línea capturada`} />
       </div>
 
@@ -162,9 +162,10 @@ export function CuentasPorPagar() {
                 <th className="px-3 py-2">Proveedor</th>
                 <th className="px-3 py-2 text-right">Comprometido (OC)</th>
                 <th className="px-3 py-2 text-right">Facturado</th>
-                <th className="px-3 py-2 text-right">Pagado detectado</th>
+                <th className="px-3 py-2 text-right">Pagado</th>
                 <th className="px-3 py-2 text-right">Por pagar</th>
                 <th className="px-3 py-2 text-right">Sin facturar</th>
+                <th className="px-3 py-2 text-right">Saldo de OC</th>
                 <th className="px-3 py-2 text-right">Línea de crédito</th>
                 <th className="px-3 py-2 text-right">Disponible</th>
                 <th className="px-3 py-2">Semáforo</th>
@@ -172,15 +173,16 @@ export function CuentasPorPagar() {
             </thead>
             <tbody>
               {lista.map((f) => {
-                const s = semaforoCredito(f.por_pagar, f.linea_credito);
-                const estaAbierto = abierto === f.clave;
+                const s = semaforoCredito(deudaCxp(f), f.linea_credito);
+                const llave = llaveCxp(f);
+                const estaAbierto = abierto === llave;
                 return (
-                  <FilaProveedor key={f.clave} fila={f} semaforo={s} abierto={estaAbierto} onToggle={() => setAbierto(estaAbierto ? null : f.clave)} puedeEditar={puedeEditar} nombreEmpresa={nombreEmpresa} />
+                  <FilaProveedor key={llave} fila={f} semaforo={s} abierto={estaAbierto} onToggle={() => setAbierto(estaAbierto ? null : llave)} puedeEditar={puedeEditar} nombreEmpresa={nombreEmpresa} />
                 );
               })}
               {lista.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
+                  <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
                     {filtroLinea === "con_linea" ? "Ningún proveedor tiene línea de crédito capturada todavía. Captúralas en Líneas de crédito o cambia a \"Sin línea\"." : "Sin proveedores para este filtro."}
                   </td>
                 </tr>
@@ -194,6 +196,7 @@ export function CuentasPorPagar() {
                 <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.pagado)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.por_pagar)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.sin_facturar)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.saldo_oc)}</td>
                 <td colSpan={3} />
               </tr>
             </tfoot>
@@ -201,7 +204,7 @@ export function CuentasPorPagar() {
         </div>
       )}
       <p className="mt-2 text-xs text-slate-400">
-        Por pagar = facturado − pagado. "Pagado detectado" solo cuenta complementos de pago y cargos bancarios cuyo nombre coincide con el del proveedor; si el banco lo registra con otro nombre, el saldo sale alto. Sin facturar = OC comprometidas que aún no tienen CFDI. La línea de crédito la captura dirección
+        Una fila por empresa y proveedor: cada empresa tiene su propia línea y vencimiento. Pagado = lo pagado por OC (pagos registrados aquí, confirmados, o la OC que el backoffice ya da por pagada) o lo detectado en complementos y bancos, lo mayor. Por pagar = facturado − pagado. Saldo de OC = OC comprometidas − pagado por OC; si una OC ya se pagó y no se marcó, confírmala en Programación de pagos ("Confirmar pagadas"). El semáforo y el disponible usan lo mayor entre por pagar y saldo de OC. La línea de crédito la captura dirección
         {puedeEditar ? " dando clic en la fila" : ""}.
       </p>
     </div>
@@ -239,8 +242,8 @@ function FilaProveedor({
         <td className="px-3 py-2">
           <div className="font-medium text-slate-900">{f.proveedor}</div>
           <div className="text-[11px] text-slate-400">
-            {f.n_oc} OC · {f.n_facturas} facturas
-            {(f.empresas ?? []).length > 0 && <> · {(f.empresas ?? []).map((e) => nombreEmpresa.get(e) ?? "?").join(", ")}</>}
+            <span className="font-medium text-slate-600">{nombreEmpresa.get(f.empresa_id) ?? "?"}</span> · {f.n_oc} OC
+            {Number(f.n_oc_por_pagar) > 0 && <> ({f.n_oc_por_pagar} sin pagar)</>} · {f.n_facturas} facturas
           </div>
         </td>
         <td className="px-3 py-2 text-right tabular-nums">{moneda(f.comprometido)}</td>
@@ -248,6 +251,7 @@ function FilaProveedor({
         <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{Number(f.pagado) ? moneda(f.pagado) : "—"}</td>
         <td className="px-3 py-2 text-right font-semibold tabular-nums">{moneda(f.por_pagar)}</td>
         <td className="px-3 py-2 text-right tabular-nums text-slate-500">{Number(f.sin_facturar) ? moneda(f.sin_facturar) : "—"}</td>
+        <td className="px-3 py-2 text-right tabular-nums">{Number(f.saldo_oc) ? moneda(f.saldo_oc) : "—"}</td>
         <td className="px-3 py-2 text-right tabular-nums">{f.linea_credito != null ? moneda(f.linea_credito) : <span className="text-slate-400">—</span>}</td>
         <td className={`px-3 py-2 text-right tabular-nums ${f.disponible != null && Number(f.disponible) < 0 ? "text-red-700" : ""}`}>{f.disponible != null ? moneda(f.disponible) : <span className="text-slate-400">—</span>}</td>
         <td className="whitespace-nowrap px-3 py-2">
@@ -260,7 +264,7 @@ function FilaProveedor({
       </tr>
       {abierto && (
         <tr className="border-t border-slate-100 bg-slate-50/60">
-          <td colSpan={9} className="px-3 py-3">
+          <td colSpan={10} className="px-3 py-3">
             <DetalleProveedor fila={f} puedeEditar={puedeEditar} nombreEmpresa={nombreEmpresa} />
           </td>
         </tr>
@@ -278,9 +282,9 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
   const [aviso, setAviso] = useState<string | null>(null);
 
   const { data: detalle, isLoading } = useQuery({
-    queryKey: ["cxp-detalle", f.clave],
+    queryKey: ["cxp-detalle", f.empresa_id, f.clave],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("fn_cxp_proveedor_detalle", { p_clave: f.clave });
+      const { data, error } = await supabase.rpc("fn_cxp_proveedor_detalle", { p_clave: f.clave, p_empresa: f.empresa_id });
       if (error) throw error;
       return data as DetalleCxp;
     },
@@ -292,7 +296,7 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
       const diasNum = dias.trim() === "" ? 0 : Number(dias);
       if (!Number.isFinite(lineaNum) || lineaNum < 0) throw new Error("La línea de crédito debe ser un número mayor o igual a cero.");
       if (!Number.isInteger(diasNum) || diasNum < 0) throw new Error("Los días de crédito deben ser un entero.");
-      const { error } = await supabase.from("proveedores_credito").upsert({ clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, notas: notas.trim() || null, vencimiento: vencimiento || null }, { onConflict: "clave" });
+      const { error } = await supabase.from("proveedores_credito").upsert({ empresa_id: f.empresa_id, clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, notas: notas.trim() || null, vencimiento: vencimiento || null }, { onConflict: "empresa_id,clave" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -305,7 +309,9 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div className="rounded border border-slate-200 bg-white p-3">
-        <h3 className="mb-2 text-sm font-semibold text-slate-800">Línea de crédito con {f.proveedor}</h3>
+        <h3 className="mb-2 text-sm font-semibold text-slate-800">
+          Línea de crédito con {f.proveedor} · {nombreEmpresa.get(f.empresa_id) ?? ""}
+        </h3>
         {puedeEditar ? (
           <form
             onSubmit={(e) => {
@@ -383,7 +389,10 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
                     <span className="text-slate-400"> · {nombreEmpresa.get(o.empresa_id) ?? ""}</span>
                   </td>
                   <td className="px-2 py-1 text-slate-500">{o.proyecto ?? "—"}</td>
-                  <td className="px-2 py-1 text-right tabular-nums">{moneda(o.total)}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">
+                    {moneda(o.total)}
+                    {o.estatus_backoffice && <div className="text-[10px] text-slate-400">{o.estatus_backoffice}{Number(o.pagado) > 0 ? ` · pagado ${moneda(Number(o.pagado))}` : ""}</div>}
+                  </td>
                 </tr>
               ))}
             </Lista>

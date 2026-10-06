@@ -16,6 +16,7 @@ const Carga = lazy(() => import("./pages/Carga").then((m) => ({ default: m.Carga
 const ReportesEspeciales = lazy(() => import("./pages/ReportesEspeciales").then((m) => ({ default: m.ReportesEspeciales })));
 const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ default: m.SaldosDiarios })));
 const SaldosEmpresas = lazy(() => import("./pages/finanzas/SaldosEmpresas").then((m) => ({ default: m.SaldosEmpresas })));
+const HistorialPagos = lazy(() => import("./pages/finanzas/HistorialPagos").then((m) => ({ default: m.HistorialPagos })));
 const Tesoreria = lazy(() => import("./pages/finanzas/Tesoreria").then((m) => ({ default: m.Tesoreria })));
 const SeguroSocialObras = lazy(() => import("./pages/finanzas/SeguroSocialObras").then((m) => ({ default: m.SeguroSocialObras })));
 const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
@@ -173,6 +174,7 @@ function Enrutador() {
             <Route path="/finanzas/saldos" element={<SaldosEmpresas />} />
             <Route path="/finanzas/pagos" element={<ProgramacionPagos />} />
             <Route path="/finanzas/tesoreria" element={<Tesoreria />} />
+            <Route path="/finanzas/historial-pagos" element={<HistorialPagos />} />
             <Route path="/finanzas/proveedores" element={<CuentasPorPagar />} />
           </Route>
           {/* Contabilidad (Belén, corporativo) captura el seguro social del costeo de obras. */}

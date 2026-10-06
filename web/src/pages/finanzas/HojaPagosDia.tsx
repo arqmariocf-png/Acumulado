@@ -19,7 +19,7 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
   const [abierta, setAbierta] = useState(true);
   const { data: saldos, isLoading: cargandoSaldos } = useSaldosDia(fecha);
   const { data: pagos, isLoading: cargandoPagos, error } = useQuery({
-    queryKey: ["hoja-pagos", fecha],
+    queryKey: ["pagos-programados", "hoja", fecha],
     queryFn: async () => {
       const { data, error: err } = await supabase
         .from("v_pagos_programados")
