@@ -8,7 +8,7 @@
 //   - /assets/* (JS/CSS con hash en el nombre): caché primero -- son
 //     inmutables, un nombre nuevo es un archivo nuevo.
 //   - Todo lo demás (Supabase, funciones): siempre red, nunca caché.
-const CACHE = "acumulado-shell-v1";
+const CACHE = "acumulado-shell-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -79,11 +79,15 @@ self.addEventListener("notificationclick", (event) => {
   const url = event.notification.data?.url ?? "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((lista) => {
-      for (const cliente of lista) {
-        if ("focus" in cliente) {
-          cliente.navigate(url);
-          return cliente.focus();
-        }
+      // Con la app ya abierta, se lleva esa pestaña a la URL del aviso. Si el
+      // navegador no deja navegarla (pestaña que este service worker no
+      // controla), se abre una nueva en vez de quedarse en la pantalla actual.
+      const cliente = lista.find((c) => "focus" in c);
+      if (cliente && "navigate" in cliente) {
+        return cliente
+          .navigate(url)
+          .then((c) => (c ?? cliente).focus())
+          .catch(() => self.clients.openWindow(url));
       }
       return self.clients.openWindow(url);
     }),

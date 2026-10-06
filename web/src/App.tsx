@@ -75,7 +75,14 @@ const VerArchivo = lazy(() => import("./pages/VerArchivo").then((m) => ({ defaul
 const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
 const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
 
-const queryClient = new QueryClient();
+// Mario, 6-oct-2026: "se está trabando mucho". Por defecto react-query daba
+// todo por viejo al instante (staleTime 0), lo volvía a pedir al regresar a la
+// pestaña y reintentaba 3 veces lo que fallaba: con la base cargada, cada
+// corte por tiempo se multiplicaba. Un minuto de vigencia y un reintento; las
+// mutaciones siguen invalidando lo que cambian.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
+});
 
 function Cargando() {
   return <div className="p-8 text-center text-sm text-slate-500">Cargando…</div>;

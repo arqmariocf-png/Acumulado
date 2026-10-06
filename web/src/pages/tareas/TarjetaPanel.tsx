@@ -27,7 +27,7 @@ function useComentarios(tarjetaId: string) {
     queryKey: ["tarjeta-comentarios", tarjetaId],
     // El "chat interno" pedido: no hay Realtime en el proyecto todavía, así
     // que se refresca por polling mientras el panel está abierto.
-    refetchInterval: 5000,
+    refetchInterval: 15000,
     queryFn: async () => {
       const { data, error } = await supabase.from("tarjeta_comentarios").select("*").eq("tarjeta_id", tarjetaId).order("created_at");
       if (error) throw error;

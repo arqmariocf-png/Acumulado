@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     webpush.setVapidDetails(cfg.vapid_subject, cfg.vapid_public_key, cfg.vapid_private_key);
 
     const texto = textoDe(evento, perfil.nombre ?? "Alguien", t.titulo, detalle);
-    const payload = JSON.stringify({ ...texto, url: `/tareas/${t.tablero_id}` });
+    const payload = JSON.stringify({ ...texto, url: `/tareas/${t.tablero_id}?tarjeta=${t.id}` });
 
     const { data: subs } = await dbServicio.from("push_subscripciones").select("id, endpoint, p256dh, auth").in("profile_id", [...destinatarios]);
     let enviados = 0;

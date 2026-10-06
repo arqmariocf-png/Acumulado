@@ -85,7 +85,8 @@ Deno.serve(async (req) => {
         titulos.length <= 3
           ? titulos.join(" · ")
           : `${titulos.slice(0, 3).join(" · ")} y ${titulos.length - 3} más`;
-      const url = tarjetasPersona.length === 1 ? `/tareas/${tarjetasPersona[0].tablero_id}` : "/tareas";
+      // Una tarjeta → se abre ella misma; varias → su lista en "Mis actividades".
+      const url = tarjetasPersona.length === 1 ? `/tareas/${tarjetasPersona[0].tablero_id}?tarjeta=${tarjetasPersona[0].id}` : "/tareas#mis-actividades";
       const payload = JSON.stringify({
         titulo: `Tienes ${tarjetasPersona.length} tarea${tarjetasPersona.length > 1 ? "s" : ""} para hoy`,
         cuerpo,

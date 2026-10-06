@@ -157,7 +157,7 @@ export function Gastos() {
 
       {mensaje && <p className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{mensaje}</p>}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div id="por-revisar" className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex overflow-hidden rounded border border-slate-300">
           {revisa && (
             <button onClick={() => setVista("revisar")} className={`px-3 py-1.5 text-sm ${vista === "revisar" ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}>
