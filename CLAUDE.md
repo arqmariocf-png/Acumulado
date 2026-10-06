@@ -630,6 +630,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`20261006090000`). Bajas 5-oct: cuentas Gmail duplicadas de María
   Fernanda y Mauro (supervisor, nunca entraron) desactivadas y bloqueadas;
   sus expedientes de RH pasaron a la cuenta que sí usan (responsable).
+- **Equipo de protección personal (6-oct-2026, Mario con Raúl)**: RH →
+  Operación → "6. Equipo de protección (EPP)" (`pages/rh/EquipoProteccion.tsx`).
+  Una entrega por persona (`epp_asignaciones`, folio EPP-<emp>-0001) con
+  cargo a la obra que RH elige (para lo que no es de obra: proyectos
+  "Corporativo …"; empresa = la de la obra) y piezas
+  (`epp_asignacion_lineas`: talla, costo, vigencia en meses, origen bodega o
+  compra; por_surtir → entregado → devuelto | sustituido | perdido; trigger
+  calcula `vence_el` y propone descuento = cantidad × costo al perderse).
+  "Pedir a compras" = `fn_epp_pedir_compra` (definer: RH no tiene permiso de
+  requisiciones) crea la requisición en esa obra con las piezas a comprar y
+  Alma la resuelve normal. Responsiva imprimible (`lib/epp.ts`, con pruebas;
+  art. 110 LFT para el descuento), semáforo de vigencia (ámbar ≤30 días) y
+  "Por descontar vía nómina" con "Marcar aplicado" (ya aplicado no se
+  cambia). Operan RH y admin (`auth_opera_epp`); almacén solo ve
+  (`20261006100000`, prueba `supabase/tests/epp.sql`). Pendiente: salida de
+  inventario de bodega ligada a la entrega.
 - **Backoffice congelado (5-oct-2026, Delia/Laura)**: `api_ocs_aut` devolvió
   la última OC 41146 (2-oct 17:35); nada del fin de semana ni del lunes. No
   es de Acumulado: la sincronización corre bien y guarda lo que la API

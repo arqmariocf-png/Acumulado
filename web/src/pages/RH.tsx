@@ -9,6 +9,7 @@ import { Vacantes } from "./rh/Vacantes";
 import { Actividades } from "./rh/Actividades";
 import { PerfilesJornada } from "./rh/PerfilesJornada";
 import { SolicitudesNda } from "./rh/SolicitudesNda";
+import { EquipoProteccion } from "./rh/EquipoProteccion";
 import { Accesos } from "./rh/Accesos";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { KpiActividades, KpiChecador, KpiVacantes } from "./rh/KpisRh";
@@ -23,7 +24,7 @@ import type {
   Personal,
   TipoContrato, FrecuenciaPago } from "../types/database";
 
-type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "checador" | "kpi_checador" | "kpi_vacantes" | "kpi_actividades" | "vacantes" | "actividades" | "accesos";
+type Pestana = "personal" | "asignaciones" | "contrataciones" | "documentos" | "checador" | "kpi_checador" | "kpi_vacantes" | "kpi_actividades" | "vacantes" | "actividades" | "accesos" | "epp";
 
 // Navegación de RH (Mario, 26-sep-2026): al entrar se cae en Indicadores
 // (RH directivo y admin; RH administrativo cae en Personal). Las secciones
@@ -40,6 +41,7 @@ const PESTANAS: { valor: Pestana; etiqueta: string; directivo?: boolean }[] = [
   { valor: "personal", etiqueta: "3. Personal" },
   { valor: "checador", etiqueta: "4. Checador" },
   { valor: "asignaciones", etiqueta: "5. Asignaciones diarias" },
+  { valor: "epp", etiqueta: "6. Equipo de protección (EPP)" },
   { valor: "vacantes", etiqueta: "Vacantes", directivo: true },
   { valor: "actividades", etiqueta: "Actividades" },
   // Accesos: RH administrativo (Raúl) también entra para mandar links y
@@ -53,7 +55,7 @@ type Seccion = "indicadores" | "personal" | "operacion" | "gestion" | "accesos";
 const SECCIONES: { clave: Seccion; etiqueta: string; descripcion: string; pestanas: Pestana[] }[] = [
   { clave: "indicadores", etiqueta: "Indicadores", descripcion: "KPI de asistencia, rotación y cumplimiento", pestanas: ["kpi_checador", "kpi_vacantes", "kpi_actividades"] },
   { clave: "personal", etiqueta: "Personal", descripcion: "Contrato, expediente y datos", pestanas: ["contrataciones", "documentos", "personal"] },
-  { clave: "operacion", etiqueta: "Operación", descripcion: "Checador y asignaciones", pestanas: ["checador", "asignaciones"] },
+  { clave: "operacion", etiqueta: "Operación", descripcion: "Checador, asignaciones y EPP", pestanas: ["checador", "asignaciones", "epp"] },
   { clave: "gestion", etiqueta: "Vacantes y actividades", descripcion: "Captura de vacantes y tablero", pestanas: ["vacantes", "actividades"] },
   { clave: "accesos", etiqueta: "Accesos", descripcion: "Cuentas y roles del personal", pestanas: ["accesos"] },
 ];
@@ -168,6 +170,7 @@ export function RH() {
 
           {pestana === "personal" && <PestanaPersonal />}
           {pestana === "asignaciones" && <PestanaAsignaciones />}
+          {pestana === "epp" && <EquipoProteccion />}
           {pestana === "contrataciones" && <PestanaContrataciones />}
           {pestana === "documentos" && <PestanaDocumentos personalInicial={params.get("personal")} />}
           {pestana === "checador" && <PestanaChecador sub={params.get("sub")} setSub={(v) => { const sig = new URLSearchParams(params); sig.set("sub", v); setParams(sig, { replace: true }); }} />}
