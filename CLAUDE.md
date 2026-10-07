@@ -1157,7 +1157,7 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   espectador `alcanceOrganizacion.modulos` = todo el catálogo `modulos`,
   no lo abierto de su organización. **Toda tabla nueva
   necesita también `espectador_sin_datos`.** Espectadores: María Alejandra
-  (EK) y Aldo (ARSSA). Aplicar DDL sobre ~110 tablas de una vez rebasa los
+  y Paola Leticia (EK) y Aldo (ARSSA). Aplicar DDL sobre ~110 tablas de una vez rebasa los
   60 s de la herramienta: ir en lotes con `lock_timeout`.
 - **Vistas que corren como su dueño** (se saltan RLS): las 11 ya no se
   leen sin sesión (`vistas_sin_acceso_anonimo`; antes cualquiera con la
@@ -1187,6 +1187,17 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   K, **espectador** (no socia: la asignación de socia del 29-sep se perdió
   y no se rehízo). Estudio K tiene **todos los módulos cerrados**: Mario
   dice cuáles abrir cuando paguen.
+- Paola Leticia Pérez Alcocer (7-oct-2026): admin de Estudio K,
+  **espectador**, con correo inventado `paola.perez.ek@acumulado.invalid`
+  (Mario: "créame uno temporal"; `.invalid` es dominio reservado, no recibe
+  correo, así que no puede recuperar contraseña sola: se le dio contraseña
+  temporal por chat a Mario). Cuando tenga correo real, cambiarlo.
+- **Edge functions y el espectador (7-oct-2026, Mario: "recuerda, solo es
+  espectador")**: `admin-crear-usuario` (v6) y `generar-link-acceso` (v5)
+  desplegadas ya rechazan solo consulta. `checador-marcar` no lo hacía (un
+  espectador podía marcar): v4 desplegada a partir del código que corría
+  en producción + la pregunta `auth_solo_consulta` antes de marcar (ver
+  fotos sigue igual). Probado en vivo con Paola: 403 y cero marcas.
 
 ## Estudio K (plan original, 28-sep-2026)
 - Presentación del alcance por rol y plan de implementación (28-sep-2026):
