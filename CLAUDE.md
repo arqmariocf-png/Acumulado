@@ -133,6 +133,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   la trae → "new row violates row-level security policy" (Timoteo, 6-oct,
   requisiciones). Las policies con arreglo llevan también la condición por
   fila del dueño (`solicitado_por = auth.uid()`).
+- **Correcciones de Laura a movimientos (7-oct-2026)**: en Movimientos NO
+  hay forma de capturar la FACTURA/etiqueta a mano; lo "N/A" sale de
+  `reglas_clasificacion` (palabra en concepto/nombre, por organización) al
+  cargar o "Reclasificar". Reglas nuevas: `PENALIZ SDO PROM` → N/A - COMISION
+  BANCARIA; `INTERES-CAPITAL DEL CREDITO` y `PAGO PARCIAL CREDITO` → N/A -
+  PAGO A CREDITO; se aplicaron a 47 movimientos ya cargados (AEP, CSC, LRT,
+  QX, VBB, MCC). Corrección de este tipo → regla nueva, no edición a mano.
 - **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
   mano (zip) en Carga; la última carga fue el 26-ago-2026.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
