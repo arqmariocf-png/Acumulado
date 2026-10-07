@@ -38,9 +38,19 @@ export async function sincronizarCatalogoOcOv(maxEsperaMs = 4 * 60 * 1000): Prom
       .single();
     if (errEstado) throw errEstado;
     if (fila?.terminada_en) {
-      if (fila.error) throw new Error(fila.error);
+      if (fila.error) throw new Error(mensajeErrorSincronizacion(fila.error));
       return (fila.resultado as ResultadoSincronizacionOcOv | null) ?? {};
     }
   }
   throw new Error("La sincronización sigue corriendo en segundo plano; vuelve a intentar en unos minutos.");
+}
+
+/** "invalid input syntax for type json" = el backoffice respondió una página
+ * de error en vez de datos (7-oct-2026: su servidor no entraba a su propia
+ * base de datos, "Access denied for user"). No es de Acumulado. */
+export function mensajeErrorSincronizacion(error: string): string {
+  if (/invalid input syntax for type json|unexpected end of json|token "<"/i.test(error)) {
+    return "el backoffice respondió con error (su servidor no está entregando las OC/OV; no es de Acumulado). Avisa a Gonzalo; lo ya sincronizado sigue disponible.";
+  }
+  return error;
 }

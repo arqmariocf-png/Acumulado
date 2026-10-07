@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
@@ -6,6 +6,8 @@ import { errorDeFuncion } from "../lib/funciones";
 import { useAuth, useEmpresaFiltro } from "../lib/auth";
 import { SelectorEmpresa } from "../components/SelectorEmpresa";
 import { Semaforo } from "../components/Semaforo";
+import { MarcarSinFactura } from "../components/MarcarSinFactura";
+import { puedeMarcarSinFactura } from "../lib/sinFactura";
 import type { EstadoClasificacion, Movimiento } from "../types/database";
 
 const TAMANO_PAGINA = 50;
@@ -48,6 +50,10 @@ export function Movimientos() {
   const [soloDuplicados, setSoloDuplicados] = useState(verParam === "duplicados");
   const [cuentaReclasificando, setCuentaReclasificando] = useState<string | null>(null);
   const [pagina, setPagina] = useState(0);
+  // Marcar "sin factura" con motivo (7-oct-2026): dirección, corporativo, admin.
+  const marcaSinFactura = perfil?.rol === "admin" || perfil?.rol === "direccion" || perfil?.rol === "corporativo";
+  const [marcando, setMarcando] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const empresaFiltro = veTodasLasEmpresas ? empresaId : (perfil?.empresa_id ?? "");
 
@@ -159,6 +165,14 @@ export function Movimientos() {
         </Link>
       </div>
 
+      {aviso && (
+        <p className="mb-3 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {aviso}{" "}
+          <button type="button" onClick={() => setAviso(null)} className="ml-2 text-xs underline">
+            cerrar
+          </button>
+        </p>
+      )}
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
       {error && <p className="text-sm text-red-600">Error: {(error as Error).message}</p>}
 
@@ -179,7 +193,8 @@ export function Movimientos() {
             </thead>
             <tbody>
               {movimientos.map((m) => (
-                <tr key={m.id} className={`border-t border-slate-100 ${m.posible_duplicado ? "bg-orange-50" : ""}`}>
+                <Fragment key={m.id}>
+                <tr className={`border-t border-slate-100 ${m.posible_duplicado ? "bg-orange-50" : ""}`}>
                   <td className="whitespace-nowrap px-3 py-2">{m.fecha_pago}</td>
                   <td className="px-3 py-2">{m.proyecto ?? <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2">{m.nombre_razon_social ?? <span className="text-slate-400">—</span>}</td>
@@ -188,8 +203,20 @@ export function Movimientos() {
                   <td className="px-3 py-2">
                     {m.referencia_tipo ? `${m.referencia_tipo} ${m.referencia_numero}` : "—"}
                   </td>
-                  <td className="max-w-xs truncate px-3 py-2" title={m.factura ?? undefined}>
-                    {m.factura ?? <span className="text-slate-400">—</span>}
+                  <td className="max-w-xs px-3 py-2" title={m.factura ?? undefined}>
+                    <span className="block truncate">{m.factura ?? <span className="text-slate-400">—</span>}</span>
+                    {marcaSinFactura && puedeMarcarSinFactura(m.factura) && marcando !== m.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAviso(null);
+                          setMarcando(m.id);
+                        }}
+                        className="text-xs text-sky-700 underline"
+                      >
+                        {m.factura ? "Cambiar motivo" : "No lleva factura"}
+                      </button>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <Semaforo
@@ -204,6 +231,23 @@ export function Movimientos() {
                     {m.posible_duplicado && <span className="ml-1 text-xs text-orange-600">dup.</span>}
                   </td>
                 </tr>
+                {marcando === m.id && (
+                  <tr>
+                    <td colSpan={8} className="px-3 pb-3">
+                      <MarcarSinFactura
+                        movimientoId={m.id}
+                        concepto={m.nombre_razon_social}
+                        facturaActual={m.factura}
+                        onListo={(msg) => {
+                          setMarcando(null);
+                          setAviso(msg);
+                        }}
+                        onCancelar={() => setMarcando(null)}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
               {movimientos.length === 0 && (
                 <tr>
