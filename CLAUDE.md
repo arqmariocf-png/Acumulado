@@ -67,9 +67,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Mario dejó sin cruz + `cont_cfdi_atrasados` y `cont_adquira_semana`).
   Vista `v_cfdi_ultimo_por_empresa`. El encabezado muestra "contabilidad" /
   "tesorería" en vez de "corporativo". Belén ve todo OC/OV/CFDI/BBVA
-  (corporativo + todas_las_empresas; verificado por RLS). Ojo: hay una
-  cuenta Gmail duplicada de Belén (bellts1098@gmail.com, supervisor, nunca
-  entró) con la tarjeta "Definir Costo SS" asignada.
+  (corporativo + todas_las_empresas; verificado por RLS).
+- **Cuentas duplicadas resueltas (7-oct-2026, Mario: "sí")**: el expediente
+  de RH apuntaba a la cuenta que la persona NO usa, así que sus marcas y
+  tareas no salían en RH. Expedientes ligados a la cuenta en uso (Belén,
+  Allison y Jonathan Sánchez → la @grupoloma.mx; Salvador → 26.12.zamora;
+  Gustavo y Eréndira no tenían liga); tareas y jefe directo pasados a la
+  cuenta buena; cuentas duplicadas con `activo=false` y `banned_until`
+  2999 (bellts1098@gmail, allisonsc_4@outlook, yonisanchezolivera@gmail,
+  arturoda179@gmail). Plantilla 7-oct: 33 expedientes activos, 20 checan;
+  sin expediente pero checando: Jaime, Timoteo, Fernando, Alberto
+  Temalatzi, Alma García, Delia.
 - **Actividades recurrentes (6-oct-2026)**: `actividades_recurrentes`
   (tablero, título, asignado, `dias_semana` ISO, `cierre_automatico`) +
   `actividades_recurrentes_generadas`; pg_cron `actividades-recurrentes-diarias`
