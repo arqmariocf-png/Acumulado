@@ -12,6 +12,11 @@
 // por tarjeta, nivel y fecha límite (fn_tarjetas_escalamientos).
 //
 // POST (sin body), header: x-cron-secret: <el secreto>
+//
+// Aviso de una sola tarjeta (7-oct-2026, para tarjetas que se dan de alta por
+// SQL, p. ej. la de Belén para subir la e.firma): POST con body
+// { "tarjetaId": "<id>" } y el mismo header → "Te asignaron una tarea" al
+// responsable, supervisor y corresponsables de esa tarjeta, nada más.
 
 import webpush from "npm:web-push@3.6.7";
 import { corsHeaders, respuestaCors, jsonResponse } from "../_shared/cors.ts";
@@ -51,6 +56,34 @@ Deno.serve(async (req) => {
     }
 
     webpush.setVapidDetails(config.vapid_subject, config.vapid_public_key, config.vapid_private_key);
+
+    const cuerpoPeticion = (await req.json().catch(() => ({}))) as { tarjetaId?: string };
+    if (cuerpoPeticion.tarjetaId) {
+      const { data: t } = await dbServicio
+        .from("tarjetas")
+        .select("id, titulo, tablero_id, asignado_a, supervisor_id, corresponsables, creado_por")
+        .eq("id", cuerpoPeticion.tarjetaId)
+        .maybeSingle();
+      if (!t) return jsonResponse({ error: "Tarjeta no encontrada" }, 404);
+      const destinos = new Set<string>([t.asignado_a ?? t.creado_por, ...(t.supervisor_id ? [t.supervisor_id] : []), ...(t.corresponsables ?? [])]);
+      let enviadosUna = 0;
+      let fallidosUna = 0;
+      for (const profileId of destinos) {
+        const { data: subs } = await dbServicio.from("push_subscripciones").select("id, endpoint, p256dh, auth").eq("profile_id", profileId);
+        for (const sub of subs ?? []) {
+          try {
+            await webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              JSON.stringify({ titulo: "Te asignaron una tarea", cuerpo: t.titulo, url: `/tareas/${t.tablero_id}?tarjeta=${t.id}` }),
+            );
+            enviadosUna++;
+          } catch {
+            fallidosUna++;
+          }
+        }
+      }
+      return jsonResponse({ personas: destinos.size, enviados: enviadosUna, fallidos: fallidosUna });
+    }
 
     const hoyIso = new Date().toISOString().slice(0, 10);
 

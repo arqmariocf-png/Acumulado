@@ -143,6 +143,11 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `drop` o `delete` (aunque sea dentro del cuerpo de una función) se queda
   colgado 60 s pidiendo confirmación**; aplicar sin esas palabras o en
   partes. Siguiente paso: el trabajo de descarga masiva por empresa.
+  Tarjeta "Subir la e.firma del SAT de cada empresa" a Belén en
+  "Contabilidad · Actividades" (vence 9-oct). **Aviso push de una tarjeta
+  dada de alta por SQL**: `net.http_post` a `push-enviar-recordatorios` (v5)
+  con header `x-cron-secret` (de config_sistema) y body `{"tarjetaId": …}`
+  → "Te asignaron una tarea" solo a sus involucrados.
 - **Requisiciones otra vez lentas (6-oct-2026)**: 40 "statement timeout"
   cada 5 min (BIND) en requisicion_linea_eventos, requisicion_lineas,
   avance_resolucion_linea, v_requisicion_ordenes: cada hija hacía `exists
