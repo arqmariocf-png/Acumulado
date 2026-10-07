@@ -1184,6 +1184,12 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   (Mario: "créame uno temporal"; `.invalid` es dominio reservado, no recibe
   correo, así que no puede recuperar contraseña sola: se le dio contraseña
   temporal por chat a Mario). Cuando tenga correo real, cambiarlo.
+- **Edge functions y el espectador (7-oct-2026, Mario: "recuerda, solo es
+  espectador")**: `admin-crear-usuario` (v6) y `generar-link-acceso` (v5)
+  desplegadas ya rechazan solo consulta. `checador-marcar` no lo hacía (un
+  espectador podía marcar): v4 desplegada a partir del código que corría
+  en producción + la pregunta `auth_solo_consulta` antes de marcar (ver
+  fotos sigue igual). Probado en vivo con Paola: 403 y cero marcas.
 
 ## Estudio K (plan original, 28-sep-2026)
 - Presentación del alcance por rol y plan de implementación (28-sep-2026):
