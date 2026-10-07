@@ -125,8 +125,24 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   la trae → "new row violates row-level security policy" (Timoteo, 6-oct,
   requisiciones). Las policies con arreglo llevan también la condición por
   fila del dueño (`solicitado_por = auth.uid()`).
-- **SAT**: NO hay descarga automática del SAT; los CFDI se suben a mano (zip)
-  en Carga; la última carga fue el 26-ago-2026.
+- **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
+  mano (zip) en Carga; la última carga fue el 26-ago-2026.
+- **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
+  subirlas y dale acceso a Belén")**: Contabilidad → "e.firma del SAT"
+  (`/contabilidad/efirmas-sat`, `finanzas/EfirmasSat.tsx`,
+  `lib/efirmaSat.ts` con pruebas). Suben admin o permiso 'contabilidad'
+  (`auth_opera_sat()`; Belén sí, Delia no). Edge `sat-efirma` (node-forge;
+  helpers en línea): valida que el .cer lo emitió el SAT, que no sea CSD,
+  vigente, RFC = el de la empresa (si la empresa no tenía RFC se le pone),
+  que la contraseña abra el .key y que sean pareja. Archivos en `cargas`
+  `sat/<empresa>/…` (sin lectura para authenticated); contraseña en Vault
+  (`fn_sat_efirma_guardar`, solo service_role); `fn_sat_efirma_credenciales`
+  la entrega a la futura descarga masiva; quitar = `fn_sat_efirma_quitar`
+  (deja el secreto en blanco) + borrar renglón y archivos desde la edge.
+  Tabla `sat_efirmas` (`20261007090000`). **Ojo MCP: cualquier SQL con
+  `drop` o `delete` (aunque sea dentro del cuerpo de una función) se queda
+  colgado 60 s pidiendo confirmación**; aplicar sin esas palabras o en
+  partes. Siguiente paso: el trabajo de descarga masiva por empresa.
 - **Requisiciones otra vez lentas (6-oct-2026)**: 40 "statement timeout"
   cada 5 min (BIND) en requisicion_linea_eventos, requisicion_lineas,
   avance_resolucion_linea, v_requisicion_ordenes: cada hija hacía `exists
