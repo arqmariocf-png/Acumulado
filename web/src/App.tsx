@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { esContabilidad } from "./lib/puestos";
 
 // Cada página en su propio chunk: nadie necesita el código de Admin o Carga
 // en la carga inicial del Dashboard, y viceversa.
@@ -18,6 +19,7 @@ const SaldosDiarios = lazy(() => import("./pages/SaldosDiarios").then((m) => ({ 
 const SaldosEmpresas = lazy(() => import("./pages/finanzas/SaldosEmpresas").then((m) => ({ default: m.SaldosEmpresas })));
 const HistorialPagos = lazy(() => import("./pages/finanzas/HistorialPagos").then((m) => ({ default: m.HistorialPagos })));
 const Tesoreria = lazy(() => import("./pages/finanzas/Tesoreria").then((m) => ({ default: m.Tesoreria })));
+const EfirmasSat = lazy(() => import("./pages/finanzas/EfirmasSat").then((m) => ({ default: m.EfirmasSat })));
 const SeguroSocialObras = lazy(() => import("./pages/finanzas/SeguroSocialObras").then((m) => ({ default: m.SeguroSocialObras })));
 const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
 const CuentasPorPagar = lazy(() => import("./pages/finanzas/CuentasPorPagar").then((m) => ({ default: m.CuentasPorPagar })));
@@ -180,6 +182,10 @@ function Enrutador() {
           {/* Contabilidad (Belén, corporativo) captura el seguro social del costeo de obras. */}
           <Route element={<ProtectedRoute roles={["corporativo"]} />}>
             <Route path="/finanzas/seguro-social-obras" element={<SeguroSocialObras />} />
+          </Route>
+          {/* e.firma del SAT (7-oct-2026): admin y contabilidad (Belén, permiso por persona). */}
+          <Route element={<ProtectedRoute roles={[]} oPermiso={esContabilidad} />}>
+            <Route path="/contabilidad/efirmas-sat" element={<EfirmasSat />} />
           </Route>
           {/* Menú exclusivo de dirección (Laura): líneas de crédito con
               vencimiento. Admin siempre pasa. */}

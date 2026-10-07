@@ -1,4 +1,5 @@
 import { esRhDirectivo, esRolBasico } from "./modulos.ts";
+import { esContabilidad } from "./puestos.ts";
 import type { ModuloClave, Profile } from "../types/database";
 
 /** Catálogo único de módulos, por área, con orientación de uso. Lo consumen
@@ -89,6 +90,7 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/movimientos", etiqueta: "Movimientos", descripcion: "movimientos bancarios conciliados contra CFDI", uso: "Para revisar lo ambiguo, duplicado o sin factura después de cargar un estado de cuenta.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/carga", etiqueta: "Carga de archivos", descripcion: "estados de cuenta, CFDI y catálogo OC/OV", uso: "Cada corte: sube el PDF del banco y el zip de CFDI; el catálogo OC/OV se trae del backoffice.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/pendientes", etiqueta: "Pendientes", descripcion: "concentrado por proveedor", uso: "Qué falta pagar o facturar, agrupado por proveedor.", visible: veFinanzasCompleto , modulo: "conciliacion" },
+      { ruta: "/contabilidad/efirmas-sat", etiqueta: "e.firma del SAT", descripcion: "e.firma de cada empresa para bajar los CFDI del SAT", uso: "Sube el .cer, el .key y la contraseña de cada empresa una vez; con eso la descarga masiva del SAT corre sola. Avisa cuando una e.firma está por vencer.", visible: (p) => esAdmin(p) || esContabilidad(p), modulo: "conciliacion" },
       { ruta: "/perfil-fiscal", etiqueta: "Perfil fiscal", descripcion: "datos fiscales y legales de cada empresa", uso: "Razón social, RFC, representante legal y domicilio que salen en contratos y documentos.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/reportes", etiqueta: "Reportes especiales", descripcion: "reportes a la medida", uso: "Consultas puntuales que no caben en las pantallas normales.", visible: veFinanzasCompleto , modulo: "conciliacion" },
     ],
