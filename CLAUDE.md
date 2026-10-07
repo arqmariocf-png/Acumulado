@@ -140,6 +140,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   BANCARIA; `INTERES-CAPITAL DEL CREDITO` y `PAGO PARCIAL CREDITO` → N/A -
   PAGO A CREDITO; se aplicaron a 47 movimientos ya cargados (AEP, CSC, LRT,
   QX, VBB, MCC). Corrección de este tipo → regla nueva, no edición a mano.
+  **Botón "No lleva factura" (7-oct-2026, Mario: "sí")** en Movimientos
+  (admin/dirección/corporativo; `components/MarcarSinFactura.tsx`,
+  `lib/sinFactura.ts` con pruebas): motivo de la lista de reglas u otro, y
+  opcional "siempre que el concepto diga…" → `fn_movimientos_sin_factura(ids,
+  etiqueta, palabra_clave)` (definer: alcance de empresas, etiqueta "N/A -
+  …", crea la regla de la organización y la aplica a lo pendiente con ese
+  concepto; `20261007100000`). Dirección no tiene update directo en
+  movimientos: todo por la función.
+- **Backoffice caído 7-oct-2026**: `api_ocs_aut`/`api_ov_aut` responden 500
+  con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
+  no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
+  type json"; `lib/sincronizarOcOv.ts` ya lo traduce. Es de Gonzalo.
 - **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
   mano (zip) en Carga; la última carga fue el 26-ago-2026.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
