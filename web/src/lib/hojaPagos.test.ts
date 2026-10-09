@@ -59,3 +59,20 @@ test("HTML y CSV traen los totales por empresa", () => {
   assert.match(csv, /41074,TUDOGAR,,2383\.40,207892\.05/);
   assert.match(csv, /,TOTAL,210275\.45,2383\.40,207892\.05/);
 });
+
+test("traspaso: cargo en la empresa que manda y abono en la que recibe; nómina con su forma de pago", () => {
+  const ERG = { empresa_id: "erg", empresa_nombre: "Ergodinova" };
+  const pagos = [
+    pago({ beneficiario: "TRASPASO A ERGODINOVA BANORTE 7022", monto: 5000, tipo: "traspaso" }),
+    pago({ beneficiario: "NÓMINA FISCAL", concepto: "Semana 41", monto: 1200, tipo: "nomina" }),
+  ];
+  const entradas = [{ ...ERG, origen: "Aceros y Envasados de Puebla BBVA 1226", monto: 5000, fecha_programada: "2026-09-30", estatus: "pendiente" as const, tipo: "traspaso" as const }];
+  const hojas = armarHojaPagos([{ ...AEP, banco: "BBVA", ultimos_4: "1226", alias: null, saldo_inicial: 10000 }], pagos, "2026-09-30", entradas);
+  const aep = hojas.find((h) => h.empresa_id === "aep")!;
+  const erg = hojas.find((h) => h.empresa_id === "erg")!;
+  assert.equal(aep.saldo, 3800);
+  assert.deepEqual(aep.renglones.filter((r) => r.tipo === "pago").map((r) => r.forma_pago), ["Nómina fiscal", "Traspaso"]);
+  assert.equal(erg.abonos, 5000);
+  assert.equal(erg.saldo, 5000);
+  assert.equal(erg.renglones[0].proveedor, "TRASPASO DE ACEROS Y ENVASADOS DE PUEBLA BBVA 1226");
+});

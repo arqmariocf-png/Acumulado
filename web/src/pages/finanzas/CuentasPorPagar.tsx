@@ -160,14 +160,9 @@ export function CuentasPorPagar() {
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-3 py-2">Proveedor</th>
-                <th className="px-3 py-2 text-right">Comprometido (OC)</th>
-                <th className="px-3 py-2 text-right">Facturado</th>
-                <th className="px-3 py-2 text-right">Pagado</th>
-                <th className="px-3 py-2 text-right">Por pagar</th>
-                <th className="px-3 py-2 text-right">Sin facturar</th>
-                <th className="px-3 py-2 text-right">Saldo de OC</th>
                 <th className="px-3 py-2 text-right">Línea de crédito</th>
-                <th className="px-3 py-2 text-right">Disponible</th>
+                <th className="px-3 py-2 text-right">Saldo registrado</th>
+                <th className="px-3 py-2 text-right">Saldo disponible</th>
                 <th className="px-3 py-2">Semáforo</th>
               </tr>
             </thead>
@@ -182,7 +177,7 @@ export function CuentasPorPagar() {
               })}
               {lista.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
+                  <td colSpan={5} className="px-3 py-8 text-center text-slate-400">
                     {filtroLinea === "con_linea" ? "Ningún proveedor tiene línea de crédito capturada todavía. Captúralas en Líneas de crédito o cambia a \"Sin línea\"." : "Sin proveedores para este filtro."}
                   </td>
                 </tr>
@@ -191,13 +186,9 @@ export function CuentasPorPagar() {
             <tfoot className="bg-slate-100 text-sm font-semibold">
               <tr>
                 <td className="px-3 py-2">{lista.length} proveedores</td>
-                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.comprometido)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.facturado)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.pagado)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.por_pagar)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.sin_facturar)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.saldo_oc)}</td>
-                <td colSpan={3} />
+                <td className="px-3 py-2 text-right tabular-nums">{moneda(lista.reduce((t, f) => t + Number(f.linea_credito ?? 0), 0))}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{moneda(totales.deuda)}</td>
+                <td colSpan={2} />
               </tr>
             </tfoot>
           </table>
@@ -236,24 +227,21 @@ function FilaProveedor({
   puedeEditar: boolean;
   nombreEmpresa: Map<string, string>;
 }) {
+  // Laura (8-oct-2026): saldo disponible = línea de crédito − saldo registrado.
+  const disponible = f.linea_credito != null ? Number(f.linea_credito) - deudaCxp(f) : null;
   return (
     <>
       <tr onClick={onToggle} className={`cursor-pointer border-t border-slate-200 hover:bg-slate-50 ${abierto ? "bg-slate-50" : ""}`}>
         <td className="px-3 py-2">
           <div className="font-medium text-slate-900">{f.proveedor}</div>
           <div className="text-[11px] text-slate-400">
-            <span className="font-medium text-slate-600">{nombreEmpresa.get(f.empresa_id) ?? "?"}</span> · {f.n_oc} OC
+            <span className="font-medium text-slate-600">{nombreEmpresa.get(f.empresa_id) ?? "?"}</span> · da clic para consultar · {f.n_oc} OC
             {Number(f.n_oc_por_pagar) > 0 && <> ({f.n_oc_por_pagar} sin pagar)</>} · {f.n_facturas} facturas
           </div>
         </td>
-        <td className="px-3 py-2 text-right tabular-nums">{moneda(f.comprometido)}</td>
-        <td className="px-3 py-2 text-right tabular-nums">{moneda(f.facturado)}</td>
-        <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{Number(f.pagado) ? moneda(f.pagado) : "—"}</td>
-        <td className="px-3 py-2 text-right font-semibold tabular-nums">{moneda(f.por_pagar)}</td>
-        <td className="px-3 py-2 text-right tabular-nums text-slate-500">{Number(f.sin_facturar) ? moneda(f.sin_facturar) : "—"}</td>
-        <td className="px-3 py-2 text-right tabular-nums">{Number(f.saldo_oc) ? moneda(f.saldo_oc) : "—"}</td>
-        <td className="px-3 py-2 text-right tabular-nums">{f.linea_credito != null ? moneda(f.linea_credito) : <span className="text-slate-400">—</span>}</td>
-        <td className={`px-3 py-2 text-right tabular-nums ${f.disponible != null && Number(f.disponible) < 0 ? "text-red-700" : ""}`}>{f.disponible != null ? moneda(f.disponible) : <span className="text-slate-400">—</span>}</td>
+        <td className="px-3 py-2 text-right tabular-nums">{f.linea_credito != null ? moneda(f.linea_credito) : <span className="text-slate-400">sin línea</span>}</td>
+        <td className="px-3 py-2 text-right font-semibold tabular-nums">{moneda(deudaCxp(f))}</td>
+        <td className={`px-3 py-2 text-right tabular-nums ${disponible != null && disponible < 0 ? "text-red-700" : ""}`}>{disponible != null ? moneda(disponible) : <span className="text-slate-400">—</span>}</td>
         <td className="whitespace-nowrap px-3 py-2">
           <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
             <span className={`inline-block h-2.5 w-2.5 rounded-full ${PUNTO[s.color]}`} />
@@ -264,7 +252,7 @@ function FilaProveedor({
       </tr>
       {abierto && (
         <tr className="border-t border-slate-100 bg-slate-50/60">
-          <td colSpan={10} className="px-3 py-3">
+          <td colSpan={5} className="px-3 py-3">
             <DetalleProveedor fila={f} puedeEditar={puedeEditar} nombreEmpresa={nombreEmpresa} />
           </td>
         </tr>

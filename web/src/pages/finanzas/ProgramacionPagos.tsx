@@ -9,7 +9,7 @@ import { HojaPagosDia } from "./HojaPagosDia";
 import { BotonSincronizarOcOv } from "../../components/BotonSincronizarOcOv";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
-import { ConfirmarPagos } from "../../components/ConfirmarPagos";
+import { TraspasosNomina } from "./TraspasosNomina";
 
 interface PagoProgramado {
   id: string;
@@ -173,7 +173,7 @@ export function ProgramacionPagos() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Programación de pagos</h1>
           <p className="text-sm text-slate-500">
-            Órdenes de compra del día y con saldo, y pagos comprometidos por empresa contra el saldo de cierre de hoy.{" "}
+            Hoja de pagos del día, órdenes de compra, préstamos y traspasos, y nómina: todo contra el saldo de cada empresa.{" "}
             <Link to="/finanzas/saldos" className="underline">
               Ver saldos
             </Link>
@@ -266,17 +266,15 @@ export function ProgramacionPagos() {
 
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <ConfirmarPagos
-        metodo="efectivo"
-        id="efectivo"
-        titulo="Efectivo por confirmar"
-        ayuda="Las devoluciones en efectivo de las órdenes de compra. Elige las que ya se entregaron, sube el comprobante (uno puede cubrir varias) y confírmalas."
-        nombreEmpresa={nombreEmpresa}
-        empresaId={filtroEmpresa || null}
-      />
+      {/* Orden que pidió Laura (8-oct-2026): 1) hoja de pagos del día,
+          2) órdenes de compra, 3) préstamos y traspasos, 4) nómina fiscal y
+          mano de obra; todo entra a la hoja y va descontando el saldo. El
+          efectivo por confirmar tiene su propia pantalla (/finanzas/efectivo). */}
       <HojaPagosDia filtroEmpresa={filtroEmpresa} hoy={hoy} />
       <div id="ordenes" className="scroll-mt-20" />
       <OrdenesPorPagar filtroEmpresa={filtroEmpresa} hoy={hoy} nombreEmpresa={nombreEmpresa} cuentas={cuentas ?? []} />
+      <TraspasosNomina modo="traspasos" empresas={empresas ?? []} cuentas={cuentas ?? []} hoy={hoy} filtroEmpresa={filtroEmpresa} />
+      <TraspasosNomina modo="nomina" empresas={empresas ?? []} cuentas={cuentas ?? []} hoy={hoy} filtroEmpresa={filtroEmpresa} />
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
       {(
