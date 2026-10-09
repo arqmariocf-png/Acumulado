@@ -6,6 +6,7 @@ import { moneda } from "../../lib/saldosEmpresas";
 import { deudaCxp, semaforoCredito, type FilaCxp } from "../../lib/cuentasPorPagar";
 import { MisActividades } from "../tareas/MisActividades";
 import { SaldosEmpresas } from "./SaldosEmpresas";
+import { FILTRO_OC_EFECTIVO } from "./EfectivoPorConfirmar";
 
 // Inicio de dirección (Mario con Laura, 6-oct-2026): "Inicio: notificaciones
 // (tareas pendientes), saldos por empresa, cuentas por pagar". Arriba lo que
@@ -18,7 +19,7 @@ function usePendientesDireccion() {
     queryFn: async () => {
       const [autorizar, efectivo] = await Promise.all([
         supabase.from("v_oc_pagos").select("id", { count: "exact", head: true }).eq("autorizacion", "pendiente").gt("saldo", 0.01).eq("programado", 0),
-        supabase.from("pagos_programados").select("id", { count: "exact", head: true }).eq("metodo", "efectivo").neq("estatus", "cancelado").is("confirmado_en", null),
+        supabase.from("v_oc_pagos").select("id", { count: "exact", head: true }).gt("saldo", 0.009).neq("autorizacion", "rechazada").eq("pagada_backoffice", false).or(FILTRO_OC_EFECTIVO),
       ]);
       if (autorizar.error) throw autorizar.error;
       if (efectivo.error) throw efectivo.error;
@@ -32,8 +33,8 @@ export function InicioDireccion() {
   return (
     <div className="space-y-6">
       <div className="grid gap-2 sm:grid-cols-3">
-        <Atajo to="/finanzas/pagos#ordenes" titulo="Órdenes por autorizar" valor={pend?.autorizar} alerta={(pend?.autorizar ?? 0) > 0} />
-        <Atajo to="/finanzas/pagos#efectivo" titulo="Efectivo por confirmar" valor={pend?.efectivo} alerta={(pend?.efectivo ?? 0) > 0} />
+        <Atajo to="/finanzas/por-autorizar" titulo="Órdenes por autorizar" valor={pend?.autorizar} alerta={(pend?.autorizar ?? 0) > 0} />
+        <Atajo to="/finanzas/efectivo" titulo="Efectivo por confirmar" valor={pend?.efectivo} alerta={(pend?.efectivo ?? 0) > 0} />
         <Atajo to="/finanzas/historial-pagos" titulo="Base de pagos y comprobantes" valor={null} />
       </div>
       <section>

@@ -23,6 +23,8 @@ const EfirmasSat = lazy(() => import("./pages/finanzas/EfirmasSat").then((m) => 
 const SeguroSocialObras = lazy(() => import("./pages/finanzas/SeguroSocialObras").then((m) => ({ default: m.SeguroSocialObras })));
 const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
 const CuentasPorPagar = lazy(() => import("./pages/finanzas/CuentasPorPagar").then((m) => ({ default: m.CuentasPorPagar })));
+const OrdenesPorAutorizarPagina = lazy(() => import("./pages/finanzas/OrdenesPorAutorizarPagina").then((m) => ({ default: m.OrdenesPorAutorizarPagina })));
+const EfectivoPorConfirmar = lazy(() => import("./pages/finanzas/EfectivoPorConfirmar").then((m) => ({ default: m.EfectivoPorConfirmar })));
 const LineasCredito = lazy(() => import("./pages/finanzas/LineasCredito").then((m) => ({ default: m.LineasCredito })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
@@ -178,6 +180,8 @@ function Enrutador() {
             <Route path="/finanzas/tesoreria" element={<Tesoreria />} />
             <Route path="/finanzas/historial-pagos" element={<HistorialPagos />} />
             <Route path="/finanzas/proveedores" element={<CuentasPorPagar />} />
+            <Route path="/finanzas/por-autorizar" element={<OrdenesPorAutorizarPagina />} />
+            <Route path="/finanzas/efectivo" element={<EfectivoPorConfirmar />} />
           </Route>
           {/* Contabilidad (Belén, corporativo) captura el seguro social del costeo de obras. */}
           <Route element={<ProtectedRoute roles={["corporativo"]} />}>

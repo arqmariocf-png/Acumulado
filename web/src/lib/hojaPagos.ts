@@ -27,7 +27,31 @@ export interface PagoHoja {
   oc_proyecto: string | null;
   notas: string | null;
   referencia?: string | null;
+  /** proveedor · nomina · mano_obra · traspaso · prestamo (8-oct-2026). */
+  tipo?: TipoPago | null;
 }
+
+export type TipoPago = "proveedor" | "nomina" | "mano_obra" | "traspaso" | "prestamo";
+
+/** Lo que entra a una empresa por un traspaso o préstamo programado desde
+ * otra empresa o cuenta (abono en la hoja de la empresa destino). */
+export interface EntradaHoja {
+  empresa_id: string;
+  empresa_nombre: string;
+  origen: string;
+  monto: number;
+  fecha_programada: string;
+  estatus: "pendiente" | "pagado" | "cancelado";
+  tipo: "traspaso" | "prestamo";
+}
+
+export const ETIQUETA_TIPO_PAGO: Record<TipoPago, string> = {
+  proveedor: "Proveedor",
+  nomina: "Nómina fiscal",
+  mano_obra: "Mano de obra",
+  traspaso: "Traspaso",
+  prestamo: "Préstamo",
+};
 
 export interface RenglonHoja {
   tipo: "saldo" | "pago";
@@ -63,7 +87,7 @@ function ddmm(iso: string): string {
 
 /** Pagos de la fecha (no cancelados) y los pendientes vencidos de días
  * anteriores, que siguen por pagar. El efectivo no toca el saldo. */
-export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: string): HojaEmpresa[] {
+export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: string, entradas: EntradaHoja[] = []): HojaEmpresa[] {
   const mapa = new Map<string, HojaEmpresa>();
   const hoja = (id: string, nombre: string) => {
     let h = mapa.get(id);
@@ -80,7 +104,28 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     h.saldo = r2(h.saldo + monto);
     h.renglones.push({ tipo: "saldo", oc: null, proveedor: `SALDO INICIAL ${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`.toUpperCase(), abono: monto, cargo: null, saldo: h.saldo, forma_pago: null, proyecto: null, comentarios: null });
   }
-  const delDia = pagos.filter((p) => p.estatus !== "cancelado" && (p.fecha_programada === fecha || (p.estatus === "pendiente" && p.fecha_programada < fecha)));
+  const tocaHoy = (p: { estatus: string; fecha_programada: string }) => p.estatus !== "cancelado" && (p.fecha_programada === fecha || (p.estatus === "pendiente" && p.fecha_programada < fecha));
+  // Lo que entra por traspasos o préstamos de otra empresa o cuenta, antes de
+  // los pagos: suma al saldo disponible del día.
+  for (const e of entradas.filter(tocaHoy)) {
+    const h = hoja(e.empresa_id, e.empresa_nombre);
+    const monto = r2(Number(e.monto) || 0);
+    h.abonos = r2(h.abonos + monto);
+    h.saldo = r2(h.saldo + monto);
+    const coment = [e.fecha_programada < fecha ? `vencido del ${ddmm(e.fecha_programada)}` : null, e.estatus === "pagado" ? "realizado" : null].filter(Boolean);
+    h.renglones.push({
+      tipo: "pago",
+      oc: null,
+      proveedor: `${e.tipo === "prestamo" ? "PRÉSTAMO DE" : "TRASPASO DE"} ${e.origen}`.toUpperCase(),
+      abono: monto,
+      cargo: null,
+      saldo: h.saldo,
+      forma_pago: ETIQUETA_TIPO_PAGO[e.tipo],
+      proyecto: null,
+      comentarios: coment.length ? coment.join(" · ") : null,
+    });
+  }
+  const delDia = pagos.filter(tocaHoy);
   // OC de la más reciente a la más vieja (folio como número), luego los
   // pagos sin OC (nómina, préstamos…).
   delDia.sort((a, b) => {
@@ -109,7 +154,7 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
       abono: null,
       cargo: monto,
       saldo: h.saldo,
-      forma_pago: p.tipo_pago_backoffice ?? METODO[p.metodo],
+      forma_pago: p.tipo && p.tipo !== "proveedor" ? ETIQUETA_TIPO_PAGO[p.tipo] : (p.tipo_pago_backoffice ?? METODO[p.metodo]),
       proyecto: p.oc_proyecto,
       comentarios: comentarios.length ? comentarios.join(" · ") : null,
     });

@@ -152,6 +152,36 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
   type json"; `lib/sincronizarOcOv.ts` ya lo traduce. Es de Gonzalo.
+- **Correcciones de Laura, documento "CORRECCIONES SISTEMA GRUPO LOMA"
+  (8-oct-2026)**: cada panel solo con lo suyo. Saldos por empresa ya no
+  trae el flujo ni "Por autorizar" debajo. **Órdenes por autorizar** es
+  pantalla propia `/finanzas/por-autorizar` (`OrdenesPorAutorizarPagina`,
+  reutiliza `OcPorAutorizar`). **Efectivo por confirmar** `/finanzas/efectivo`
+  (`finanzas/EfectivoPorConfirmar.tsx`): OC de `v_oc_pagos` con saldo,
+  no rechazadas, no pagadas en el backoffice y efectivo (condición
+  efectivo, o sin condición y `tipo_pago_backoffice` Efectivo;
+  `FILTRO_OC_EFECTIVO`) → OC · proveedor · monto · ver orden · confirmar;
+  varias con UN comprobante (`fn_oc_confirmar_pagadas` + edge
+  `pagos-comprobante` con `pagoIds`). Cuentas por pagar: Proveedor ·
+  Línea · Saldo registrado (`deudaCxp`) · Disponible (línea − saldo) ·
+  Semáforo, clic = detalle. KPIs `fin_oc_pendiente_pago_banco`
+  (transferencia y tarjetas) y `fin_oc_pendiente_pago_efectivo`.
+  **Programación de pagos**: hoja del día → OC → préstamos/traspasos →
+  nómina fiscal/mano de obra → lista. `pagos_programados.tipo`
+  (proveedor|nomina|mano_obra|traspaso|prestamo) + `destino_empresa_id/
+  _cuenta_id` (`20261008100000`); `finanzas/TraspasosNomina.tsx`; la hoja
+  (`armarHojaPagos(…, entradas)`) carga el traspaso/préstamo en la empresa
+  que manda y lo abona en la que recibe. KPIs que Laura pidió y aún no
+  tienen datos: flujo por obra, DSO, DPO, obra ejecutada no estimada,
+  retenciones por cobrar, margen real vs presupuestado (faltan ingresos/
+  estimaciones/retenciones por obra).
+- **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
+  "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
+  "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el
+  concentrado (`actividades_recurrentes.cierre_evento = 'bbva_concentrado'`,
+  trigger en `bbva_mantenimiento_snapshots`; `20261008090000`).
+- **Arturo Huerta (8-oct-2026)**: puesto Técnico en Seguridad Industrial,
+  rol operativo, jefa inmediata Brenda.
 - **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
   mano (zip) en Carga; la última carga fue el 26-ago-2026.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para

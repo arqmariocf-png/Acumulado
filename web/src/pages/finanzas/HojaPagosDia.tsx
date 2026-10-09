@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { armarHojaPagos, csvHojaPagos, htmlHojaPagos, type PagoHoja } from "../../lib/hojaPagos";
+import { armarHojaPagos, csvHojaPagos, htmlHojaPagos, type EntradaHoja, type PagoHoja } from "../../lib/hojaPagos";
 import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { useSaldosDia } from "./SaldosEmpresas";
 
@@ -23,11 +23,44 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
     queryFn: async () => {
       const { data, error: err } = await supabase
         .from("v_pagos_programados")
-        .select("empresa_id, empresa_nombre, id_orden, beneficiario, concepto, monto, fecha_programada, estatus, metodo, tipo_pago_backoffice, oc_proyecto, notas, referencia")
+        .select("empresa_id, empresa_nombre, id_orden, beneficiario, concepto, monto, fecha_programada, estatus, metodo, tipo_pago_backoffice, oc_proyecto, notas, referencia, tipo")
         .neq("estatus", "cancelado")
         .or(`fecha_programada.eq.${fecha},and(estatus.eq.pendiente,fecha_programada.lt.${fecha})`);
       if (err) throw err;
       return (data ?? []) as PagoHoja[];
+    },
+  });
+
+  // Traspasos y préstamos que llegan a otra empresa o cuenta: abono en la
+  // hoja de la empresa destino (8-oct-2026, Laura).
+  const { data: entradas } = useQuery({
+    queryKey: ["pagos-programados", "hoja-entradas", fecha],
+    queryFn: async () => {
+      const [mov, emp, cta] = await Promise.all([
+        supabase
+          .from("pagos_programados")
+          .select("empresa_id, cuenta_id, destino_empresa_id, monto, fecha_programada, estatus, tipo")
+          .in("tipo", ["traspaso", "prestamo"])
+          .not("destino_empresa_id", "is", null)
+          .neq("estatus", "cancelado")
+          .or(`fecha_programada.eq.${fecha},and(estatus.eq.pendiente,fecha_programada.lt.${fecha})`),
+        supabase.from("empresas").select("id, nombre"),
+        supabase.from("cuentas_bancarias").select("id, banco, ultimos_4"),
+      ]);
+      if (mov.error) throw mov.error;
+      const nombre = new Map((emp.data ?? []).map((e) => [e.id as string, e.nombre as string]));
+      const cuenta = new Map((cta.data ?? []).map((c) => [c.id as string, `${c.banco} ${c.ultimos_4}`]));
+      return (mov.data ?? []).map(
+        (m): EntradaHoja => ({
+          empresa_id: m.destino_empresa_id as string,
+          empresa_nombre: nombre.get(m.destino_empresa_id as string) ?? "",
+          origen: `${nombre.get(m.empresa_id as string) ?? ""}${m.cuenta_id ? ` ${cuenta.get(m.cuenta_id as string) ?? ""}` : ""}`.trim(),
+          monto: Number(m.monto),
+          fecha_programada: m.fecha_programada as string,
+          estatus: m.estatus as EntradaHoja["estatus"],
+          tipo: m.tipo as EntradaHoja["tipo"],
+        }),
+      );
     },
   });
 
@@ -37,8 +70,9 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
         (saldos ?? []).map((s) => ({ empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre, banco: s.banco, ultimos_4: s.ultimos_4, alias: s.alias, saldo_inicial: Number(s.saldo_inicial) })),
         pagos ?? [],
         fecha,
+        entradas ?? [],
       ).filter((h) => !filtroEmpresa || h.empresa_id === filtroEmpresa),
-    [saldos, pagos, fecha, filtroEmpresa],
+    [saldos, pagos, fecha, filtroEmpresa, entradas],
   );
 
   function imprimir() {
@@ -62,7 +96,7 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
           {abierta ? "▾" : "▸"} Hoja de pagos del día por empresa
         </button>
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value || hoy)} className="rounded border border-slate-300 px-2 py-1 text-xs" />
-        <span className="text-xs text-slate-500">saldo inicial de cada cuenta, menos los pagos del día (y los vencidos sin pagar)</span>
+        <span className="text-xs text-slate-500">saldo inicial de cada cuenta, más traspasos y préstamos que llegan, menos OC, nómina, mano de obra, traspasos y préstamos del día (y los vencidos sin pagar)</span>
         <span className="ml-auto flex gap-2">
           <button type="button" onClick={imprimir} disabled={hojas.length === 0} className="rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50">
             Imprimir

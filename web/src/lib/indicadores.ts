@@ -138,7 +138,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "fin_oc_por_autorizar",
     etiqueta: "Órdenes de compra por autorizar",
-    ruta: "/finanzas/pagos#ordenes",
+    ruta: "/finanzas/por-autorizar",
     area: "finanzas",
     descripcion: "Órdenes de almacén (RQ) y de Excel que dirección no ha autorizado, más las que el backoffice tiene en Pendiente de Autorización; sin autorización no se programa pago.",
     visible: finanzas,
@@ -146,6 +146,51 @@ export const INDICADORES: Indicador[] = [
       const propias = await contar(supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).in("fuente", ["requisicion", "excel"]).is("autorizada_en", null).is("rechazada_en", null));
       const backoffice = await contar(supabase.from("ordenes_compra").select("*", { count: "exact", head: true }).eq("fuente", "api").eq("estatus_backoffice", "Pendiente de Autorización"));
       return { valor: propias + backoffice, alerta: propias > 0, detalle: `${propias} esperan a dirección · ${backoffice} en el backoffice` };
+    },
+  },
+  {
+    // Laura (8-oct-2026): pendientes de pago por transferencia y tarjeta
+    // (débito/crédito), aparte de las de efectivo. Autorizadas, con saldo y
+    // que el backoffice no da por pagadas.
+    clave: "fin_oc_pendiente_pago_banco",
+    etiqueta: "OC pendientes de pago (transferencia y tarjeta)",
+    ruta: "/finanzas/pagos#ordenes",
+    area: "finanzas",
+    descripcion: "Órdenes autorizadas con saldo que se pagan por transferencia, tarjeta de débito o de crédito.",
+    visible: finanzas,
+    consulta: async () => {
+      const { data, error } = await supabase
+        .from("v_oc_pagos")
+        .select("saldo")
+        .gt("saldo", 0.009)
+        .eq("autorizacion", "autorizada")
+        .eq("pagada_backoffice", false)
+        .or("condicion_pago.neq.efectivo,and(condicion_pago.is.null,or(tipo_pago_backoffice.is.null,tipo_pago_backoffice.not.ilike.efectivo*))")
+        .limit(5000);
+      if (error) throw error;
+      const total = (data ?? []).reduce((s, r) => s + Number(r.saldo ?? 0), 0);
+      return { valor: (data ?? []).length, alerta: (data ?? []).length > 0, detalle: dinero(total) };
+    },
+  },
+  {
+    clave: "fin_oc_pendiente_pago_efectivo",
+    etiqueta: "OC pendientes de pago en efectivo",
+    ruta: "/finanzas/efectivo",
+    area: "finanzas",
+    descripcion: "Órdenes con saldo que se pagan en efectivo; se confirman con su comprobante en Efectivo por confirmar.",
+    visible: finanzas,
+    consulta: async () => {
+      const { data, error } = await supabase
+        .from("v_oc_pagos")
+        .select("saldo")
+        .gt("saldo", 0.009)
+        .neq("autorizacion", "rechazada")
+        .eq("pagada_backoffice", false)
+        .or("condicion_pago.eq.efectivo,and(condicion_pago.is.null,tipo_pago_backoffice.ilike.efectivo*)")
+        .limit(5000);
+      if (error) throw error;
+      const total = (data ?? []).reduce((s, r) => s + Number(r.saldo ?? 0), 0);
+      return { valor: (data ?? []).length, alerta: (data ?? []).length > 0, detalle: dinero(total) };
     },
   },
   {
