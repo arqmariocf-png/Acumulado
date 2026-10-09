@@ -202,6 +202,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   en la planta). Lote 001: se quitó la captura de 112 h × $295
   ($33,040) → nómina del 25-sep $1,966.66; costo $1,263.16/pieza (entrada y
   RM-000001 revaluadas) (`20261009100000`).
+- **No se pierde lo capturado al cambiar de ventana (9-oct-2026, Mario)**:
+  causa: al volver a la pestaña Supabase renueva el token (objeto de sesión
+  nuevo) y `useAuth` recargaba el perfil con `cargando=true` →
+  `ProtectedRoute` pintaba "Cargando…" y desmontaba la pantalla. Ahora el
+  perfil depende de `session.user.id` y solo la primera carga bloquea
+  (`lib/auth.tsx`). Respaldo para el celular (pestaña descartada):
+  `components/BorradorFormularios.tsx` en el Layout guarda en sessionStorage
+  lo escrito en cualquier `<form>` (por ruta y firma de campos; nunca
+  contraseñas, archivos ni tarjeta; formularios repetidos por renglón no) y
+  lo devuelve al volver, con aviso "Recuperamos… · Descartar"; se borra al
+  enviar o con reset; 12 h de vigencia (`lib/borradores.ts`, con pruebas).
+  Un form que no deba respaldarse lleva `data-sin-borrador`.
 - **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
   mano (zip) en Carga; la última carga fue el 26-ago-2026.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
