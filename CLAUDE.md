@@ -182,6 +182,26 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   trigger en `bbva_mantenimiento_snapshots`; `20261008090000`).
 - **Arturo Huerta (8-oct-2026)**: puesto Técnico en Seguridad Industrial,
   rol operativo, jefa inmediata Brenda.
+- **Costeo de lotes con la nómina real (9-oct-2026, Mario: "vincula todo
+  y replantea el lote uno, únicamente deja las fechas de inicio y
+  término")**: la mano de obra del lote ya NO se captura: sale de
+  `nomina_externa_renglones` (nómina semanal del backoffice, empresa = la
+  de la planta por `normalizar_texto_sql`) entre `fecha_inicio` y
+  `fecha_fin` (o hoy): pago semanal ÷ 6 por día lunes-sábado; semana que la
+  API aún no trae → último pago, marcado `estimado`; varios lotes el mismo
+  día → se reparte; solo lotes en_proceso/terminada.
+  `fn_lotes_mano_obra_nomina()` (definer: produccion/admin/corporativo +
+  alcance; sin usuario = procesos) alimenta `v_costeo_orden_produccion`
+  (nuevas columnas al final: `costo_mano_obra_nomina`, `_captura`,
+  `dias_nomina`, `personas_nomina`, `nomina_estimada`).
+  `fn_lote_actualizar_costo(orden)` revalúa la entrada de producto
+  terminado (la llama Editar lote al cambiar fechas de un lote cerrado).
+  `personal.backoffice_empleado` liga expediente ↔ nómina (Alejandro Lilia y
+  Cristian Herrera ligados; José Eduardo Lila e Isaac Vega no tienen
+  expediente en RH). Nadie de Clavicón checa (no hay ubicación de checador
+  en la planta). Lote 001: se quitó la captura de 112 h × $295
+  ($33,040) → nómina del 25-sep $1,966.66; costo $1,263.16/pieza (entrada y
+  RM-000001 revaluadas) (`20261009100000`).
 - **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
   mano (zip) en Carga; la última carga fue el 26-ago-2026.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
