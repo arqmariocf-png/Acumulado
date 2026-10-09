@@ -1085,6 +1085,12 @@ export interface CosteoOrdenProduccion {
   costo_total: number;
   costo_unitario: number | null;
   empresa_id: string;
+  /** Mano de obra desde la nómina real entre inicio y término del lote. */
+  costo_mano_obra_nomina?: number;
+  costo_mano_obra_captura?: number;
+  dias_nomina?: number;
+  personas_nomina?: number;
+  nomina_estimada?: boolean;
 }
 
 export interface CosteoEstandarOrdenProduccion {
