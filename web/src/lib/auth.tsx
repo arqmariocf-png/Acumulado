@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MODULOS_ASIGNABLES, esRolBasico, modulosEfectivos } from "./modulos";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
@@ -120,29 +120,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Al volver a la pestaña o cada hora, Supabase renueva el token y entrega
+  // un objeto de sesión nuevo para la MISMA persona. Si el perfil se recarga
+  // con "Cargando…" la pantalla se desmonta y se pierde lo capturado en los
+  // formularios (Mario, 9-oct-2026). Por eso el perfil depende del usuario,
+  // no del objeto de sesión, y se refresca sin bloquear la pantalla.
+  const usuarioId = session?.user.id ?? null;
+  const perfilCargadoDe = useRef<string | null>(null);
+
   useEffect(() => {
     let activo = true;
-    if (!session) {
+    if (!usuarioId) {
       setPerfil(null);
       setGrupo(null);
       setModulos([]);
       setSuscripcion(null);
       setAlcance(null);
       setCargando(false);
+      perfilCargadoDe.current = null;
       return;
     }
-    setCargando(true);
+    // Solo la primera carga (o un cambio de cuenta) bloquea con "Cargando…".
+    if (perfilCargadoDe.current !== usuarioId) setCargando(true);
     // Sin señal (checador offline) el perfil no se puede leer; se usa la
     // última copia guardada en este navegador para que la app no mande a
     // "cuenta sin acceso". Con señal, la copia se refresca cada vez.
-    const claveCache = `perfil-cache-${session.user.id}`;
+    const claveCache = `perfil-cache-${usuarioId}`;
     Promise.all([
       supabase
         .from("profiles")
         .select("id, nombre, rol, grupo_id, empresa_id, todas_las_empresas, activo, bbva_mantenimiento, rh_nivel, espectador")
-        .eq("id", session.user.id)
+        .eq("id", usuarioId)
         .single(),
-      supabase.from("permisos_modulo").select("modulo").eq("profile_id", session.user.id),
+      supabase.from("permisos_modulo").select("modulo").eq("profile_id", usuarioId),
       supabase.rpc("fn_mi_alcance"),
     ])
       .then(([{ data: fila, error }, { data: permisos }, { data: alcanceData }]) => {
@@ -172,15 +182,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             cacheado = null;
           }
           setPerfil(cacheado);
-        } else {
+        } else if (perfilCargadoDe.current !== usuarioId) {
           setPerfil(null);
         }
+        // Un refresco silencioso que falla (sin señal) conserva el perfil ya cargado.
+        if (data) perfilCargadoDe.current = usuarioId;
         setCargando(false);
       });
     return () => {
       activo = false;
     };
-  }, [session]);
+  }, [usuarioId]);
 
   async function cargarOrganizacion(grupoId: string | null) {
     if (!grupoId) {

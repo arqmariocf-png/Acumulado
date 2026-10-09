@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 import { seccionesPara, type NivelMenu, type SeccionMenu } from "../lib/menu";
 import { useEsSocio } from "../lib/socio";
 import { AvisoVersion } from "./AvisoVersion";
+import { BorradorFormularios } from "./BorradorFormularios";
 import { AvisoSuscripcion } from "./AvisoSuscripcion";
 import { desuscribirsePush, estaSuscrito, pushSoportado, suscribirsePush } from "../lib/push";
 import { useQuery } from "@tanstack/react-query";
@@ -98,6 +99,7 @@ export function Layout() {
       {vistaComo && <BannerVistaComo vistaComo={vistaComo} onSalir={() => setVistaComo(null)} />}
       <AvisoSuscripcion />
       <AvisoVersion />
+      <BorradorFormularios />
       <main className="mx-auto max-w-7xl px-4 py-6">
         {/* Espectador (2-oct-2026, Mario): solo la barra y los menús, ninguna
             pantalla con información. La base tampoco le devuelve datos
