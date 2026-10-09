@@ -57,3 +57,13 @@ test("entrada repetida toma la primera y salida la última; separa días; totale
   assert.ok(csvReporteChecador(filas).includes('"Ana","2026-10-09","08:00"'));
   assert.ok(htmlReporteChecador(filas, "semana").includes("landscape"));
 });
+
+test("hoy sin salida está en turno, no cuenta como sin cerrar", () => {
+  const ahora = new Date("2026-10-09T13:00:00-06:00");
+  const filas = armarReporteChecador([m("a", "Ana", "entrada", "08:00"), m("a", "Ana", "entrada", "08:00", "2026-10-08")], ahora);
+  const hoy = filas.find((f) => f.fecha === "2026-10-09")!;
+  const ayer = filas.find((f) => f.fecha === "2026-10-08")!;
+  assert.equal(hoy.enTurno, true);
+  assert.equal(ayer.enTurno, false);
+  assert.equal(totalesPorPersona(filas).get("a")!.incompletos, 1);
+});

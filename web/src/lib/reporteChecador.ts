@@ -26,6 +26,8 @@ export interface FilaChecador {
   minutos: number | null;
   /** Qué falta para cerrar el día (vacío si está completo). */
   faltan: string[];
+  /** Hoy, con entrada y sin salida: sigue trabajando (no es falta). */
+  enTurno: boolean;
 }
 
 export const ZONA = "America/Mexico_City";
@@ -52,7 +54,8 @@ const max = (a: string, b: string) => (a > b ? a : b);
 /** Arma una fila por persona y día. Entrada = la primera del día; salida =
  * la última; comida = la primera salida a comer y el último regreso.
  * Ordenado por nombre y luego fecha (más reciente primero). */
-export function armarReporteChecador(marcas: MarcaReporte[]): FilaChecador[] {
+export function armarReporteChecador(marcas: MarcaReporte[], ahora: Date = new Date()): FilaChecador[] {
+  const hoy = fechaLocal(ahora.toISOString());
   const grupos = new Map<string, FilaChecador>();
   for (const m of marcas) {
     if (m.anulada) continue;
@@ -60,7 +63,7 @@ export function armarReporteChecador(marcas: MarcaReporte[]): FilaChecador[] {
     const llave = `${m.profile_id}|${fecha}`;
     let f = grupos.get(llave);
     if (!f) {
-      f = { profile_id: m.profile_id, nombre: m.nombre, fecha, entrada: null, comida_inicio: null, comida_fin: null, salida: null, minutos: null, faltan: [] };
+      f = { profile_id: m.profile_id, nombre: m.nombre, fecha, entrada: null, comida_inicio: null, comida_fin: null, salida: null, minutos: null, faltan: [], enTurno: false };
       grupos.set(llave, f);
     }
     const t = m.created_at;
@@ -74,6 +77,7 @@ export function armarReporteChecador(marcas: MarcaReporte[]): FilaChecador[] {
     if (!f.comida_inicio) f.faltan.push("salida a comer");
     if (!f.comida_fin) f.faltan.push("regreso de comer");
     if (!f.salida) f.faltan.push("salida");
+    f.enTurno = f.fecha === hoy && !!f.entrada && !f.salida;
     if (f.entrada && f.salida && f.salida > f.entrada) {
       let ms = Date.parse(f.salida) - Date.parse(f.entrada);
       if (f.comida_inicio && f.comida_fin && f.comida_fin > f.comida_inicio) ms -= Date.parse(f.comida_fin) - Date.parse(f.comida_inicio);
@@ -90,7 +94,7 @@ export function totalesPorPersona(filas: FilaChecador[]): Map<string, { minutos:
     const x = t.get(f.profile_id) ?? { minutos: 0, dias: 0, incompletos: 0 };
     x.dias += 1;
     if (f.minutos != null) x.minutos += f.minutos;
-    else x.incompletos += 1;
+    else if (!f.enTurno) x.incompletos += 1;
     t.set(f.profile_id, x);
   }
   return t;
@@ -119,7 +123,7 @@ export function htmlReporteChecador(filas: FilaChecador[], periodo: string): str
     .map((fs) => {
       const t = totales.get(fs[0].profile_id)!;
       const renglones = fs
-        .map((f) => `<tr><td>${esc(fechaTexto(f.fecha))}</td><td>${horaLocal(f.entrada)}</td><td>${horaLocal(f.comida_inicio)}</td><td>${horaLocal(f.comida_fin)}</td><td>${horaLocal(f.salida)}</td><td class="n">${formatoHoras(f.minutos)}</td><td class="f">${esc(f.faltan.join(", "))}</td></tr>`)
+        .map((f) => `<tr><td>${esc(fechaTexto(f.fecha))}</td><td>${horaLocal(f.entrada)}</td><td>${horaLocal(f.comida_inicio)}</td><td>${horaLocal(f.comida_fin)}</td><td>${horaLocal(f.salida)}</td><td class="n">${f.enTurno ? "en turno" : formatoHoras(f.minutos)}</td><td class="f">${f.enTurno ? "" : esc(f.faltan.join(", "))}</td></tr>`)
         .join("");
       return `<tbody><tr class="p"><td colspan="7">${esc(fs[0].nombre)}</td></tr>${renglones}<tr class="t"><td colspan="5">Total ${t.dias} día(s)${t.incompletos ? ` · ${t.incompletos} sin cerrar` : ""}</td><td class="n">${formatoHoras(t.minutos)}</td><td></td></tr></tbody>`;
     })
