@@ -5,6 +5,8 @@ import { useAuth } from "../../lib/auth";
 import { ETIQUETA_MARCA, SIMBOLO_MARCA, type TipoMarca } from "../Checador";
 import { useUbicacionesChecador } from "./UbicacionesChecador";
 import { rutaVerArchivo } from "../../lib/verArchivo";
+import { abrirParaImprimir } from "../../lib/imprimir";
+import { armarReporteChecador, csvReporteChecador, formatoHoras, horaLocal, htmlReporteChecador, totalesPorPersona, type FilaChecador } from "../../lib/reporteChecador";
 
 interface MarcaChecador {
   id: string;
@@ -54,6 +56,8 @@ export function MarcasChecador({
   const [editando, setEditando] = useState<string | null>(null);
   const [anulando, setAnulando] = useState<string | null>(null);
   const [mostrarManual, setMostrarManual] = useState(false);
+  // Mario (9-oct-2026): por defecto el reporte horizontal por trabajador.
+  const [vista, setVista] = useState<"trabajador" | "marcas">("trabajador");
   const [error, setError] = useState<string | null>(null);
   const { data: ubicaciones } = useUbicacionesChecador();
 
@@ -63,7 +67,7 @@ export function MarcasChecador({
       const desde = new Date();
       desde.setDate(desde.getDate() - dias);
       desde.setHours(0, 0, 0, 0);
-      const { data, error: err } = await supabase.from("v_checador_marcas").select("*").gte("created_at", desde.toISOString()).order("created_at", { ascending: false }).limit(500);
+      const { data, error: err } = await supabase.from("v_checador_marcas").select("*").gte("created_at", desde.toISOString()).order("created_at", { ascending: false }).limit(5000);
       if (err) throw err;
       return data as MarcaChecador[];
     },
@@ -153,6 +157,14 @@ export function MarcasChecador({
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-700">{titulo}</h3>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded border border-slate-300 text-xs">
+            <button type="button" onClick={() => setVista("trabajador")} className={`px-2 py-1 ${vista === "trabajador" ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}>
+              Por trabajador
+            </button>
+            <button type="button" onClick={() => setVista("marcas")} className={`px-2 py-1 ${vista === "marcas" ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}>
+              Lista de marcas
+            </button>
+          </div>
           <label className="flex items-center gap-1 text-xs text-slate-600">
             <input type="checkbox" checked={verAnuladas} onChange={(e) => setVerAnuladas(e.target.checked)} /> ver anuladas
           </label>
@@ -201,7 +213,9 @@ export function MarcasChecador({
 
       {error && <p className="mb-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+      {vista === "trabajador" && <ReporteHorizontal marcas={marcas ?? []} dias={dias} cargando={isLoading} />}
+
+      <div className={`overflow-x-auto rounded border border-slate-200 bg-white ${vista === "trabajador" ? "hidden" : ""}`}>
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
@@ -342,6 +356,98 @@ export function MarcasChecador({
       <p className="mt-1 text-xs text-slate-400">
         Las marcas anteriores al 21-sep-2026 no traen foto ni ubicación. Una marca "offline" se hizo sin señal y se envió después con su hora real; una "corregida" o "manual" la ajustó RH y conserva la hora original y el motivo.
       </p>
+    </div>
+  );
+}
+
+/** Una fila por trabajador y día: entrada, salida a comer, regreso de comer,
+ * salida y horas activas; total del periodo por trabajador. */
+function ReporteHorizontal({ marcas, dias, cargando }: { marcas: MarcaChecador[]; dias: number; cargando: boolean }) {
+  const filas = armarReporteChecador(marcas);
+  const totales = totalesPorPersona(filas);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const periodo = dias === 1 ? "Hoy" : `Últimos ${dias} días`;
+  let anterior = "";
+
+  function descargar() {
+    const url = URL.createObjectURL(new Blob([csvReporteChecador(filas)], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `checador-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  const celda = (iso: string | null) => <td className={`whitespace-nowrap px-3 py-1.5 tabular-nums ${iso ? "" : "text-amber-600"}`}>{horaLocal(iso)}</td>;
+  const fecha = (f: FilaChecador) =>
+    new Date(`${f.fecha}T12:00:00`).toLocaleDateString("es-MX", { weekday: "short", day: "2-digit", month: "short" });
+
+  return (
+    <div className="mb-3">
+      <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+        {aviso && <span className="text-xs text-amber-700">{aviso}</span>}
+        <button type="button" onClick={() => setAviso(abrirParaImprimir(htmlReporteChecador(filas, periodo)) ? null : "El navegador bloqueó la ventana.")} disabled={filas.length === 0} className="rounded border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+          Imprimir (horizontal)
+        </button>
+        <button type="button" onClick={descargar} disabled={filas.length === 0} className="rounded border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+          Excel
+        </button>
+      </div>
+      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Trabajador</th>
+              <th className="px-3 py-2">Día</th>
+              <th className="px-3 py-2">Entrada</th>
+              <th className="px-3 py-2">Salida a comer</th>
+              <th className="px-3 py-2">Regreso de comer</th>
+              <th className="px-3 py-2">Salida</th>
+              <th className="px-3 py-2 text-right">Horas activas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f) => {
+              const nuevo = f.profile_id !== anterior;
+              anterior = f.profile_id;
+              const t = totales.get(f.profile_id)!;
+              return (
+                <tr key={`${f.profile_id}-${f.fecha}`} className={`border-t ${nuevo ? "border-slate-300" : "border-slate-100"}`}>
+                  <td className="px-3 py-1.5">
+                    {nuevo && (
+                      <>
+                        <div className="font-medium text-slate-900">{f.nombre}</div>
+                        {t.dias > 1 && (
+                          <div className="text-[11px] text-slate-500">
+                            {t.dias} días · {formatoHoras(t.minutos)}
+                            {t.incompletos ? ` · ${t.incompletos} sin cerrar` : ""}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-slate-600">{fecha(f)}</td>
+                  {celda(f.entrada)}
+                  {celda(f.comida_inicio)}
+                  {celda(f.comida_fin)}
+                  {celda(f.salida)}
+                  <td className="whitespace-nowrap px-3 py-1.5 text-right font-semibold tabular-nums" title={f.faltan.length ? `Falta: ${f.faltan.join(", ")}` : ""}>
+                    {f.minutos != null ? formatoHoras(f.minutos) : <span className="text-xs font-normal text-amber-700">falta {f.faltan.includes("entrada") ? "entrada" : "salida"}</span>}
+                  </td>
+                </tr>
+              );
+            })}
+            {!cargando && filas.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                  Sin marcas en este periodo.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-xs text-slate-400">Horas activas = salida − entrada − tiempo de comida. Sin salida a comer se cuenta el día completo. En ámbar, la etapa que no se checó.</p>
     </div>
   );
 }
