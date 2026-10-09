@@ -214,6 +214,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   lo devuelve al volver, con aviso "Recuperamos… · Descartar"; se borra al
   enviar o con reset; 12 h de vigencia (`lib/borradores.ts`, con pruebas).
   Un form que no deba respaldarse lleva `data-sin-borrador`.
+- **Alta manual de OC mientras el backoffice está caído (9-oct-2026,
+  Laura: "sigue sin actualizarse, no puedo subir nada")**: los archivos sí
+  subían; lo detenido era `api_ocs_aut` (500 "Access denied" desde 7-oct,
+  última OC 41177 del 6-oct). Botón "+ Dar de alta OC a mano" en
+  Programación de pagos y en Órdenes por autorizar
+  (`components/AltaOcManual.tsx`) → `fn_oc_alta_manual(empresa, folio,
+  proveedor, total, fecha, proyecto, forma_pago)` (definer: admin/
+  dirección/corporativo + alcance; fuente 'excel'; folio repetido →
+  error). Queda pendiente en "Por autorizar"; al volver el backoffice el
+  upsert por `(id_orden, tipo)` la pasa a 'api' sin duplicarla y conserva
+  autorización y pagos (`20261009120000`).
 - **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
   mano (zip) en Carga; la última carga fue el 26-ago-2026.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
