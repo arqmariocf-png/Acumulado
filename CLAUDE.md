@@ -225,6 +225,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   error). Queda pendiente en "Por autorizar"; al volver el backoffice el
   upsert por `(id_orden, tipo)` la pasa a 'api' sin duplicarla y conserva
   autorización y pagos (`20261009120000`).
+- **Reporte del checador horizontal (9-oct-2026, Mario)**: en las marcas
+  del checador (RH y "Asistencia del equipo") la vista por defecto es "Por
+  trabajador": una fila por persona y día con Entrada · Salida a comer ·
+  Regreso de comer · Salida · Horas activas (salida − entrada − comida; sin
+  comida cuenta el día completo; etapa faltante en ámbar) y total del
+  periodo por trabajador; imprimir en hoja horizontal y Excel.
+  `lib/reporteChecador.ts` (con pruebas; día en hora de México, anuladas
+  fuera, primera entrada y última salida). "Lista de marcas" sigue para
+  corregir/anular.
 - **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
   mano (zip) en Carga; la última carga fue el 26-ago-2026.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
