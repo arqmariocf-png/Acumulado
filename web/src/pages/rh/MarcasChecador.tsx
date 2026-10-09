@@ -378,7 +378,7 @@ function ReporteHorizontal({ marcas, dias, cargando }: { marcas: MarcaChecador[]
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  const celda = (iso: string | null) => <td className={`whitespace-nowrap px-3 py-1.5 tabular-nums ${iso ? "" : "text-amber-600"}`}>{horaLocal(iso)}</td>;
+  const celda = (iso: string | null, enTurno = false) => <td className={`whitespace-nowrap px-3 py-1.5 tabular-nums ${iso ? "" : enTurno ? "text-slate-300" : "text-amber-600"}`}>{horaLocal(iso)}</td>;
   const fecha = (f: FilaChecador) =>
     new Date(`${f.fecha}T12:00:00`).toLocaleDateString("es-MX", { weekday: "short", day: "2-digit", month: "short" });
 
@@ -428,11 +428,11 @@ function ReporteHorizontal({ marcas, dias, cargando }: { marcas: MarcaChecador[]
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-slate-600">{fecha(f)}</td>
                   {celda(f.entrada)}
-                  {celda(f.comida_inicio)}
-                  {celda(f.comida_fin)}
-                  {celda(f.salida)}
+                  {celda(f.comida_inicio, f.enTurno)}
+                  {celda(f.comida_fin, f.enTurno)}
+                  {celda(f.salida, f.enTurno)}
                   <td className="whitespace-nowrap px-3 py-1.5 text-right font-semibold tabular-nums" title={f.faltan.length ? `Falta: ${f.faltan.join(", ")}` : ""}>
-                    {f.minutos != null ? formatoHoras(f.minutos) : <span className="text-xs font-normal text-amber-700">falta {f.faltan.includes("entrada") ? "entrada" : "salida"}</span>}
+                    {f.minutos != null ? formatoHoras(f.minutos) : f.enTurno ? <span className="text-xs font-normal text-sky-700">en turno</span> : <span className="text-xs font-normal text-amber-700">falta {f.faltan.includes("entrada") ? "entrada" : "salida"}</span>}
                   </td>
                 </tr>
               );
