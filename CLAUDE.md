@@ -152,6 +152,9 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
   type json"; `lib/sincronizarOcOv.ts` ya lo traduce. Es de Gonzalo.
+  **Restablecido 9-oct-2026 19:46 UTC**: sincronización manual OK (147 OC
+  y 33 OV nuevas o cambiadas, última OC 41281 del 8-oct; nómina semanal,
+  quincenal y mano de obra OK). Ahora la API responde en ~3 s.
 - **Correcciones de Laura, documento "CORRECCIONES SISTEMA GRUPO LOMA"
   (8-oct-2026)**: cada panel solo con lo suyo. Saldos por empresa ya no
   trae el flujo ni "Por autorizar" debajo. **Órdenes por autorizar** es
