@@ -7,6 +7,7 @@ import { moneda } from "../../lib/saldosEmpresas";
 import { OrdenesPorPagar } from "./OrdenesPorPagar";
 import { HojaPagosDia } from "./HojaPagosDia";
 import { BotonSincronizarOcOv } from "../../components/BotonSincronizarOcOv";
+import { AltaOcManual } from "../../components/AltaOcManual";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
 import { TraspasosNomina } from "./TraspasosNomina";
@@ -196,6 +197,7 @@ export function ProgramacionPagos() {
             <input type="checkbox" checked={verCerrados} onChange={(e) => setVerCerrados(e.target.checked)} /> ver pagados y cancelados
           </label>
           <BotonSincronizarOcOv queryKeys={[["pagos-programados"]]} />
+          <AltaOcManual />
           <button onClick={imprimir} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
             Imprimir / PDF
           </button>

@@ -50,7 +50,7 @@ export async function sincronizarCatalogoOcOv(maxEsperaMs = 4 * 60 * 1000): Prom
  * base de datos, "Access denied for user"). No es de Acumulado. */
 export function mensajeErrorSincronizacion(error: string): string {
   if (/invalid input syntax for type json|unexpected end of json|token "<"/i.test(error)) {
-    return "el backoffice respondió con error (su servidor no está entregando las OC/OV; no es de Acumulado). Avisa a Gonzalo; lo ya sincronizado sigue disponible.";
+    return "el backoffice respondió con error (su servidor no está entregando las OC/OV; no es de Acumulado). Avisa a Gonzalo; lo ya sincronizado sigue disponible y las OC nuevas que urjan se dan de alta con «+ Dar de alta OC a mano».";
   }
   return error;
 }
