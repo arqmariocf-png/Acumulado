@@ -1056,6 +1056,9 @@ export interface StockMateriaPrima {
   stock_actual: number;
   costo_promedio_ponderado: number | null;
   empresa_id: string;
+  /** Costo y valor de la existencia actual por PEPS (capas que quedan). */
+  costo_peps?: number | null;
+  valor_peps?: number | null;
 }
 
 export interface StockProductoTerminado {
@@ -1067,6 +1070,9 @@ export interface StockProductoTerminado {
   stock_actual: number;
   costo_promedio_ponderado: number | null;
   empresa_id: string;
+  /** Costo y valor de la existencia actual por PEPS (capas que quedan). */
+  costo_peps?: number | null;
+  valor_peps?: number | null;
 }
 
 export interface CosteoOrdenProduccion {

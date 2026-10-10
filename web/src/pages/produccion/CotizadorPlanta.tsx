@@ -63,12 +63,12 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
     queryFn: async () => {
       const [prod, stock, clientes, emp] = await Promise.all([
         supabase.from("productos_produccion").select("id, nombre, calibre, unidad_medida").eq("empresa_id", empresa.id).eq("activo", true).order("nombre"),
-        supabase.from("v_stock_producto_terminado").select("producto_id, stock_actual, costo_promedio_ponderado").eq("empresa_id", empresa.id),
+        supabase.from("v_stock_producto_terminado").select("producto_id, stock_actual, costo_promedio_ponderado, costo_peps").eq("empresa_id", empresa.id),
         supabase.from("clientes").select("id, razon_social, rfc, domicilio").eq("empresa_id", empresa.id).eq("activo", true).order("razon_social"),
         supabase.from("empresas").select("codigo, rfc, razon_social, domicilio_fiscal, telefono, correo, banco, cuenta_bancaria, clabe, sucursal_bancaria").eq("id", empresa.id).maybeSingle(),
       ]);
       if (prod.error) throw prod.error;
-      const costos = new Map((stock.data ?? []).map((s) => [s.producto_id as string, { costo: s.costo_promedio_ponderado as number | null, stock: s.stock_actual as number | null }]));
+      const costos = new Map((stock.data ?? []).map((s) => [s.producto_id as string, { costo: (s.costo_peps ?? s.costo_promedio_ponderado) as number | null, stock: s.stock_actual as number | null }]));
       return {
         productos: (prod.data ?? []) as Producto[],
         costos,

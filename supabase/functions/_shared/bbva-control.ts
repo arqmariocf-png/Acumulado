@@ -76,7 +76,7 @@ export interface FolioControl {
   saldo_por_cobrar: number | null;
   revision_cobranza: string | null;
   /** "Mantenimiento" u "Obra Menor" (formato 10-oct-2026: una sola hoja). */
-  tipo_servicio: string | null;
+  tipo_servicio?: string | null;
 }
 
 export interface ObraMenorControl {

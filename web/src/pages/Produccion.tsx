@@ -9,6 +9,7 @@ import { MargenRemisiones } from "./produccion/MargenRemisiones";
 import { CotizadorPlanta } from "./produccion/CotizadorPlanta";
 import { CalendarioMaquinas } from "./produccion/CalendarioMaquinas";
 import { RemisionesPlanta } from "./produccion/RemisionesPlanta";
+import { margenSobreVenta, precioParaMargen, precioPromedio } from "../lib/margenPlanta";
 import type {
   CosteoMensualPlanta,
   CosteoOrdenProduccion,
@@ -35,6 +36,10 @@ const PLANTAS = {
     ejemploProducto: "Clavo cal. 12",
     ejemploCalibre: "12",
     ejemploPresentacion: "Caja 25 kg",
+    // En el backoffice las OC de la planta van a "Corporativo CLAVICON"; las
+    // de "Proyecto X" (Maqui Print, Yulitsadonce…) no son de la planta
+    // (Mario con Jaime, 10-oct-2026).
+    proyectoOc: "Corporativo CLAVICON",
   },
   balken: {
     codigo: "VBB",
@@ -44,6 +49,7 @@ const PLANTAS = {
     ejemploProducto: "Vigueta 12 cm x 3.00 m",
     ejemploCalibre: "12 cm",
     ejemploPresentacion: "Pieza",
+    proyectoOc: "Corporativo Balken",
   },
   // El taller de carpintería se lleva bajo CSC (proyecto "TALLER
   // CARPINTERIA" de esa empresa), por eso comparte empresa con la
@@ -63,7 +69,7 @@ const PLANTAS = {
 } as const;
 
 type PlantaKey = keyof typeof PLANTAS;
-type Planta = (typeof PLANTAS)[PlantaKey] & { proyecto?: string };
+type Planta = (typeof PLANTAS)[PlantaKey] & { proyecto?: string; proyectoOc?: string };
 
 const TIPO_ETIQUETA: Record<ProductoProduccionTipo, string> = {
   malla_armex: "Malla armex",
@@ -537,7 +543,8 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
                 <tr>
                   <th className="px-3 py-2">Materia prima</th>
                   <th className="px-3 py-2 text-right">Stock</th>
-                  <th className="px-3 py-2 text-right">Costo prom. s/IVA</th>
+                  <th className="px-3 py-2 text-right">Costo PEPS s/IVA</th>
+                  <th className="px-3 py-2 text-right">Valor PEPS</th>
                 </tr>
               </thead>
               <tbody>
@@ -547,7 +554,8 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
                     <td className="px-3 py-2 text-right">
                       {formatoNumero(s.stock_actual)} {s.unidad_medida}
                     </td>
-                    <td className="px-3 py-2 text-right">{formatoMoneda(s.costo_promedio_ponderado)}</td>
+                    <td className="px-3 py-2 text-right">{formatoMoneda(s.costo_peps ?? s.costo_promedio_ponderado)}</td>
+                    <td className="px-3 py-2 text-right">{formatoMoneda(s.valor_peps)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -565,7 +573,8 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
                 <tr>
                   <th className="px-3 py-2">Producto</th>
                   <th className="px-3 py-2 text-right">Stock</th>
-                  <th className="px-3 py-2 text-right">Costo prom. s/IVA</th>
+                  <th className="px-3 py-2 text-right">Costo PEPS s/IVA</th>
+                  <th className="px-3 py-2 text-right">Valor PEPS</th>
                 </tr>
               </thead>
               <tbody>
@@ -575,7 +584,8 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
                     <td className="px-3 py-2 text-right">
                       {formatoNumero(s.stock_actual)} {s.unidad_medida}
                     </td>
-                    <td className="px-3 py-2 text-right">{formatoMoneda(s.costo_promedio_ponderado)}</td>
+                    <td className="px-3 py-2 text-right">{formatoMoneda(s.costo_peps ?? s.costo_promedio_ponderado)}</td>
+                    <td className="px-3 py-2 text-right">{formatoMoneda(s.valor_peps)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -586,7 +596,7 @@ function PestanaInventario({ empresa, planta }: { empresa: Empresa; planta: Plan
 
       {vista === "entradas" && (
         <>
-          <EntradaMateriaPrima empresaId={empresa.id} proyecto={planta.proyecto} materias={materias ?? []} />
+          <EntradaMateriaPrima empresaId={empresa.id} proyecto={planta.proyectoOc ?? planta.proyecto} materias={materias ?? []} />
           <RemisionesPlanta empresaId={empresa.id} tipo="entrada" />
         </>
       )}
@@ -891,7 +901,9 @@ function SalidaProductoTerminado({ empresaId, proyecto, productos }: { empresaId
         orden_venta_id = data.id;
       }
       const productoId = fd.get("producto_id") as string;
-      const costoPromedio = stockProd?.find((s) => s.producto_id === productoId)?.costo_promedio_ponderado ?? 0;
+      // Costo PEPS de la existencia (Mario, 10-oct-2026).
+      const stockSel = stockProd?.find((s) => s.producto_id === productoId);
+      const costoPromedio = stockSel?.costo_peps ?? stockSel?.costo_promedio_ponderado ?? 0;
       const { error } = await supabase.from("movimientos_producto_terminado").insert({
         producto_id: productoId,
         tipo: "salida",
@@ -1302,7 +1314,15 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
         .eq("orden_produccion_id", orden.id)
         .eq("tipo", "salida");
       if (error) throw error;
-      return data as (MovimientoMateriaPrima & { materias_primas: { nombre: string; unidad_medida: string } })[];
+      // El costo del consumo es PEPS (primeras entradas, primeras salidas;
+      // Mario, 10-oct-2026), calculado en v_peps_salidas_materia_prima.
+      const { data: peps, error: errPeps } = await supabase.from("v_peps_salidas_materia_prima").select("movimiento_id, costo_peps").eq("orden_produccion_id", orden.id);
+      if (errPeps) throw errPeps;
+      const costoPeps = new Map((peps ?? []).map((r) => [r.movimiento_id as string, Number(r.costo_peps)]));
+      return (data as (MovimientoMateriaPrima & { materias_primas: { nombre: string; unidad_medida: string } })[]).map((c) => ({
+        ...c,
+        costo_unitario: costoPeps.get(c.id) ?? c.costo_unitario,
+      }));
     },
   });
 
@@ -1332,11 +1352,19 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
 
   const agregarConsumo = useMutation({
     mutationFn: async (fd: FormData) => {
+      // El costo ya no se captura: el lote lo toma por PEPS de las capas de
+      // entrada; aquí se guarda el costo PEPS de la existencia como referencia.
+      const { data: stock, error: errStock } = await supabase
+        .from("v_stock_materia_prima")
+        .select("costo_peps, costo_promedio_ponderado")
+        .eq("materia_prima_id", fd.get("materia_prima_id") as string)
+        .maybeSingle();
+      if (errStock) throw errStock;
       const { error } = await supabase.from("movimientos_materia_prima").insert({
         materia_prima_id: fd.get("materia_prima_id"),
         tipo: "salida",
         cantidad: fd.get("cantidad"),
-        costo_unitario: fd.get("costo_unitario"),
+        costo_unitario: stock?.costo_peps ?? stock?.costo_promedio_ponderado ?? 0,
         orden_produccion_id: orden.id,
         fecha: hoyIso(),
       });
@@ -1389,10 +1417,20 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
     mutationFn: async (fd: FormData) => {
       const cantidad_producida = Number(fd.get("cantidad_producida"));
       const cantidad_merma = Number(fd.get("cantidad_merma") || 0);
+      // Las fechas del lote definen los días de nómina (Mario con Jaime,
+      // 10-oct-2026); el inicio solo lo cambia el admin (trigger).
+      const fecha_fin = (fd.get("fecha_fin") as string) || hoyIso();
+      const fecha_inicio = fd.get("fecha_inicio") as string | null;
 
       const { error: errUpdate } = await supabase
         .from("ordenes_produccion")
-        .update({ cantidad_producida, cantidad_merma, estado: "terminada", fecha_fin: hoyIso() })
+        .update({
+          cantidad_producida,
+          cantidad_merma,
+          estado: "terminada",
+          fecha_fin,
+          ...(esAdmin && fecha_inicio && fecha_inicio !== orden.fecha_inicio ? { fecha_inicio } : {}),
+        })
         .eq("id", orden.id);
       if (errUpdate) throw errUpdate;
 
@@ -1420,7 +1458,7 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
         cantidad: cantidad_producida,
         costo_unitario: costeoFinal.costo_unitario ?? 0,
         orden_produccion_id: orden.id,
-        fecha: hoyIso(),
+        fecha: fecha_fin,
       };
       const { error: errEntrada } = entradaPrevia
         ? await supabase.from("movimientos_producto_terminado").update(entrada).eq("id", entradaPrevia.id)
@@ -1562,7 +1600,9 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
         </form>
       )}
 
-      {costeo && (
+      {orden.estado === "planeada" && <CosteoProyectado ordenId={orden.id} />}
+
+      {costeo && orden.estado !== "planeada" && (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <MiniTarjeta titulo="Materia prima" valor={formatoMoneda(costeo.costo_materia_prima)} />
           <MiniTarjeta
@@ -1602,27 +1642,180 @@ function OrdenDetalle({ empresa, orden, onClose }: { empresa: Empresa; orden: Or
       </div>
 
       {!cerrada && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
+        <CierreLote
+          orden={orden}
+          costeo={costeo}
+          esAdmin={esAdmin}
+          pendiente={cerrarLote.isPending}
+          onCerrar={(fd) => {
             setError(null);
-            cerrarLote.mutate(new FormData(e.currentTarget));
+            cerrarLote.mutate(fd);
           }}
-          className="mt-4 flex flex-wrap items-end gap-3 rounded border border-dashed border-slate-300 p-3"
-        >
-          <div>
-            <label className={etiquetaCampo}>Cantidad producida *</label>
-            <input type="number" step="0.0001" min="0.0001" name="cantidad_producida" required defaultValue={Number(orden.cantidad_producida) > 0 ? orden.cantidad_producida : orden.cantidad_planeada} className={campoTexto} />
-          </div>
-          <div>
-            <label className={etiquetaCampo}>Merma</label>
-            <input type="number" step="0.0001" min="0" name="cantidad_merma" defaultValue={orden.cantidad_merma ?? 0} className={campoTexto} />
-          </div>
-          <button disabled={cerrarLote.isPending} className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-            {cerrarLote.isPending ? "Cerrando…" : "Marcar terminada y valuar inventario"}
-          </button>
-        </form>
+        />
       )}
+    </div>
+  );
+}
+
+/** Mano de obra que tendría el lote entre dos fechas (misma regla que el
+ * costeo: pago semanal ÷ 6 por día lunes-sábado, repartido entre lotes). */
+type ManoObraPrevia = { dias: number; personas: number; costo_dia: number; costo: number; estimado: boolean };
+
+function CierreLote({
+  orden,
+  costeo,
+  esAdmin,
+  pendiente,
+  onCerrar,
+}: {
+  orden: OrdenConProducto;
+  costeo: CosteoOrdenProduccion | undefined;
+  esAdmin: boolean;
+  pendiente: boolean;
+  onCerrar: (fd: FormData) => void;
+}) {
+  const [inicio, setInicio] = useState(orden.fecha_inicio);
+  const [fin, setFin] = useState(orden.fecha_fin ?? hoyIso());
+  const [cantidad, setCantidad] = useState(String(Number(orden.cantidad_producida) > 0 ? orden.cantidad_producida : orden.cantidad_planeada));
+  const fechasValidas = !!inicio && !!fin && fin >= inicio;
+  const { data: previa, isFetching } = useQuery({
+    queryKey: ["mano-obra-previa", orden.id, inicio, fin],
+    enabled: fechasValidas,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_lote_mano_obra_previa", { p_orden: orden.id, p_desde: inicio, p_hasta: fin });
+      if (error) throw error;
+      return ((data ?? []) as ManoObraPrevia[])[0] ?? null;
+    },
+  });
+  const otros = Number(costeo?.costo_materia_prima ?? 0) + Number(costeo?.costo_mano_obra_captura ?? 0) + Number(costeo?.costo_indirectos ?? 0);
+  const total = otros + Number(previa?.costo ?? 0);
+  const unitario = Number(cantidad) > 0 ? total / Number(cantidad) : null;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onCerrar(new FormData(e.currentTarget));
+      }}
+      className="mt-4 space-y-3 rounded border border-dashed border-slate-300 p-3"
+    >
+      <h3 className="text-xs font-semibold uppercase text-slate-600">Cargar la producción y cerrar el lote</h3>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className={etiquetaCampo}>Inicio</label>
+          <input type="date" name="fecha_inicio" required value={inicio} readOnly={!esAdmin} onChange={(e) => setInicio(e.target.value)} className={`${campoTexto} ${esAdmin ? "" : "bg-slate-50"}`} />
+        </div>
+        <div>
+          <label className={etiquetaCampo}>Término *</label>
+          <input type="date" name="fecha_fin" required min={inicio} value={fin} onChange={(e) => setFin(e.target.value)} className={campoTexto} />
+        </div>
+        <div>
+          <label className={etiquetaCampo}>Cantidad producida *</label>
+          <input type="number" step="0.0001" min="0.0001" name="cantidad_producida" required value={cantidad} onChange={(e) => setCantidad(e.target.value)} className={campoTexto} />
+        </div>
+        <div>
+          <label className={etiquetaCampo}>Merma</label>
+          <input type="number" step="0.0001" min="0" name="cantidad_merma" defaultValue={orden.cantidad_merma ?? 0} className={campoTexto} />
+        </div>
+      </div>
+      <div className="rounded bg-slate-50 p-2 text-sm text-slate-700">
+        {!fechasValidas ? (
+          <span className="text-red-700">La fecha de término no puede ser antes del inicio.</span>
+        ) : isFetching && !previa ? (
+          "Calculando mano de obra…"
+        ) : (
+          <>
+            <p>
+              Mano de obra: <strong>{formatoNumero(previa?.dias ?? 0)} día(s)</strong> hábiles (lun-sáb) × {formatoMoneda(previa?.costo_dia ?? 0)} de nómina diaria
+              ({previa?.personas ?? 0} persona(s)) = <strong>{formatoMoneda(previa?.costo ?? 0)}</strong>
+              {previa?.estimado && <span className="ml-1 text-xs text-amber-700">(semana estimada con el último pago)</span>}
+            </p>
+            <p className="mt-1">
+              Costo del lote ≈ {formatoMoneda(total)} (materia prima {formatoMoneda(costeo?.costo_materia_prima ?? 0)} + mano de obra + indirectos {formatoMoneda(costeo?.costo_indirectos ?? 0)})
+              {unitario != null && (
+                <>
+                  {" "}· <strong>{formatoMoneda(unitario)}</strong> por pieza
+                </>
+              )}
+            </p>
+          </>
+        )}
+      </div>
+      <button disabled={pendiente || !fechasValidas} className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+        {pendiente ? "Cerrando…" : "Marcar terminada y valuar inventario"}
+      </button>
+    </form>
+  );
+}
+
+type CosteoProyectadoFila = {
+  cantidad: number;
+  dias: number;
+  costo_materia_prima: number;
+  materia_prima_faltante: number;
+  costo_dia_nomina: number;
+  costo_mano_obra: number;
+  costo_indirectos: number;
+  costo_total: number;
+  costo_unitario: number | null;
+  precio_promedio_venta: number | null;
+  detalle: { materia: string; requerido: number; faltante: number; costo: number }[];
+};
+
+function useCosteoProyectado(ordenId: string) {
+  return useQuery({
+    queryKey: ["costeo-proyectado", ordenId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_lote_costeo_proyectado", { p_orden: ordenId });
+      if (error) throw error;
+      return ((data ?? []) as CosteoProyectadoFila[])[0] ?? null;
+    },
+  });
+}
+
+/** Lote programado que aún no empieza (Mario, 10-oct-2026: "calcula de una
+ * vez el costeo aunque no empiece; me sirve para saber a qué precio estaré
+ * vendiendo"): receta × cantidad contra la existencia por PEPS, nómina
+ * diaria × días planeados e indirectos capturados. */
+function CosteoProyectado({ ordenId }: { ordenId: string }) {
+  const { data: p, isLoading } = useCosteoProyectado(ordenId);
+  const [margen, setMargen] = useState("20");
+  if (isLoading) return <p className="mb-4 text-sm text-slate-400">Calculando costeo proyectado…</p>;
+  if (!p) return null;
+  const margenVenta = margenSobreVenta(p.precio_promedio_venta, p.costo_unitario);
+  const sugerido = precioParaMargen(p.costo_unitario, Number(margen));
+  return (
+    <div className="mb-4 rounded border border-violet-200 bg-violet-50 p-3">
+      <h3 className="mb-2 text-xs font-semibold uppercase text-violet-800">Costeo proyectado (lote programado, aún no empieza)</h3>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <MiniTarjeta titulo="Materia prima (PEPS)" valor={formatoMoneda(p.costo_materia_prima)} />
+        <MiniTarjeta titulo={`Mano de obra · ${formatoNumero(p.dias)} día(s) × ${formatoMoneda(p.costo_dia_nomina)}`} valor={formatoMoneda(p.costo_mano_obra)} />
+        <MiniTarjeta titulo="Indirectos" valor={formatoMoneda(p.costo_indirectos)} />
+        <MiniTarjeta titulo={`Costo total · ${formatoNumero(p.cantidad)} pzas (s/IVA)`} valor={formatoMoneda(p.costo_total)} destacado />
+        <MiniTarjeta titulo="Costo unitario proyectado" valor={formatoMoneda(p.costo_unitario)} destacado />
+      </div>
+      {p.detalle.map((d) => (
+        <p key={d.materia} className="mt-2 text-xs text-slate-600">
+          {d.materia}: {formatoNumero(d.requerido)} requerido = {formatoMoneda(d.costo)}
+          {Number(d.faltante) > 0 && <span className="ml-1 text-amber-700">· faltan {formatoNumero(d.faltante)} en almacén (se costean al último precio de compra)</span>}
+        </p>
+      ))}
+      {!p.dias && <p className="mt-1 text-xs text-amber-700">El lote no tiene días planeados: la mano de obra sale en cero. Captura el tiempo planeado.</p>}
+      <div className="mt-3 flex flex-wrap items-end gap-4 text-sm">
+        <p>
+          Precio promedio de venta: <strong>{formatoMoneda(p.precio_promedio_venta)}</strong>
+          {margenVenta != null && (
+            <span className={margenVenta < 0 ? "ml-1 font-semibold text-red-700" : "ml-1 text-slate-600"}>· margen {(margenVenta * 100).toFixed(1)} %</span>
+          )}
+        </p>
+        <label className="flex items-center gap-2">
+          Margen deseado
+          <input type="number" step="1" min="0" max="95" value={margen} onChange={(e) => setMargen(e.target.value)} className={`${campoTexto} w-20`} />%
+        </label>
+        <p>
+          Precio sugerido: <strong>{formatoMoneda(sugerido)}</strong> s/IVA · {formatoMoneda(sugerido != null ? Math.round(sugerido * 116) / 100 : null)} c/IVA
+        </p>
+      </div>
     </div>
   );
 }
@@ -1651,7 +1844,7 @@ function SeccionConsumo({
 }) {
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase text-slate-600">Consumo de materia prima</h3>
+      <h3 className="mb-2 text-xs font-semibold uppercase text-slate-600">Consumo de materia prima (PEPS)</h3>
       <ul className="mb-2 space-y-1 text-sm">
         {consumo.map((c) => (
           <li key={c.id} className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1">
@@ -1690,10 +1883,8 @@ function SeccionConsumo({
               </option>
             ))}
           </select>
-          <div className="flex gap-2">
-            <input type="number" step="0.0001" min="0.0001" name="cantidad" placeholder="Cantidad" required className={campoTexto} />
-            <input type="number" step="0.0001" min="0" name="costo_unitario" placeholder="Costo unit." required className={campoTexto} />
-          </div>
+          <input type="number" step="0.0001" min="0.0001" name="cantidad" placeholder="Cantidad" required className={campoTexto} />
+          <p className="text-[11px] text-slate-500">El costo sale solo por PEPS: primero se consumen las entradas más viejas del almacén.</p>
           <button className="w-full rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white">+ Agregar consumo</button>
         </form>
       )}
@@ -1808,6 +1999,151 @@ function SeccionIndirectos({
 
 // ── Costeo consolidado ───────────────────────────────────────────────────
 
+/** Margen promedio por producto: precio promedio de las remisiones de
+ * salida contra el costo PEPS de la existencia (Mario, 10-oct-2026). */
+function MargenPromedioPeps({ empresa }: { empresa: Empresa }) {
+  const { data } = useQuery({
+    queryKey: ["margen-peps", empresa.id],
+    queryFn: async () => {
+      const [stock, partidas] = await Promise.all([
+        supabase.from("v_stock_producto_terminado").select("*").eq("empresa_id", empresa.id).order("nombre"),
+        supabase
+          .from("remisiones_produccion_lineas")
+          .select("producto_id, cantidad, precio_unitario, remisiones_produccion!inner(empresa_id, tipo)")
+          .eq("remisiones_produccion.empresa_id", empresa.id)
+          .eq("remisiones_produccion.tipo", "salida")
+          .not("producto_id", "is", null),
+      ]);
+      if (stock.error) throw stock.error;
+      if (partidas.error) throw partidas.error;
+      const lineas = (partidas.data ?? []) as unknown as { producto_id: string; cantidad: number; precio_unitario: number | null }[];
+      return (stock.data as StockProductoTerminado[]).map((s) => {
+        const propias = lineas.filter((l) => l.producto_id === s.producto_id);
+        const precio = precioPromedio(propias);
+        const costo = s.costo_peps ?? s.costo_promedio_ponderado;
+        return { ...s, costo, precio, vendido: propias.reduce((t, l) => t + Number(l.cantidad), 0), margen: margenSobreVenta(precio, costo) };
+      });
+    },
+  });
+  return (
+    <div>
+      <h2 className="mb-1 text-sm font-semibold text-slate-700">Margen promedio por producto (costo PEPS de la existencia)</h2>
+      <p className="mb-2 text-xs text-slate-500">PEPS: primeras entradas, primeras salidas. El costo es el promedio de lo que queda en almacén (lotes más nuevos); el precio, el promedio de las remisiones con precio.</p>
+      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Producto</th>
+              <th className="px-3 py-2 text-right">Existencia</th>
+              <th className="px-3 py-2 text-right">Costo PEPS s/IVA</th>
+              <th className="px-3 py-2 text-right">Vendido</th>
+              <th className="px-3 py-2 text-right">Precio prom. s/IVA</th>
+              <th className="px-3 py-2 text-right">Margen prom.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data?.map((m) => (
+              <tr key={m.producto_id} className="border-t border-slate-100">
+                <td className="px-3 py-2">{m.nombre}</td>
+                <td className="px-3 py-2 text-right">
+                  {formatoNumero(m.stock_actual)} {m.unidad_medida}
+                </td>
+                <td className="px-3 py-2 text-right">{formatoMoneda(m.costo)}</td>
+                <td className="px-3 py-2 text-right">{formatoNumero(m.vendido)}</td>
+                <td className="px-3 py-2 text-right">{formatoMoneda(m.precio)}</td>
+                <td className={`px-3 py-2 text-right font-medium ${m.margen != null && m.margen < 0 ? "text-red-700" : "text-slate-700"}`}>
+                  {m.margen != null ? `${(m.margen * 100).toFixed(1)} %` : "—"}
+                </td>
+              </tr>
+            ))}
+            {data?.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                  Sin productos.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Lotes programados que aún no empiezan, con su costo proyectado. */
+function LotesProgramados({ empresa }: { empresa: Empresa }) {
+  const { data } = useQuery({
+    queryKey: ["lotes-programados-costeo", empresa.id],
+    queryFn: async () => {
+      const { data: lotes, error } = await supabase
+        .from("ordenes_produccion")
+        .select("id, folio, fecha_inicio, cantidad_planeada, productos_produccion(nombre)")
+        .eq("empresa_id", empresa.id)
+        .eq("estado", "planeada")
+        .order("fecha_inicio");
+      if (error) throw error;
+      const filas = (lotes ?? []) as unknown as { id: string; folio: string; fecha_inicio: string; cantidad_planeada: number; productos_produccion: { nombre: string } | null }[];
+      return Promise.all(
+        filas.map(async (l) => {
+          const { data: p, error: e } = await supabase.rpc("fn_lote_costeo_proyectado", { p_orden: l.id });
+          if (e) throw e;
+          return { ...l, p: ((p ?? []) as CosteoProyectadoFila[])[0] ?? null };
+        }),
+      );
+    },
+  });
+  if (!data || data.length === 0) return null;
+  return (
+    <div>
+      <h2 className="mb-1 text-sm font-semibold text-slate-700">Lotes programados · costo proyectado</h2>
+      <p className="mb-2 text-xs text-slate-500">Receta × cantidad contra la existencia por PEPS, nómina diaria × días planeados e indirectos capturados.</p>
+      <div className="overflow-x-auto rounded border border-violet-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-violet-50 text-left text-xs uppercase text-violet-800">
+            <tr>
+              <th className="px-3 py-2">Lote</th>
+              <th className="px-3 py-2">Producto</th>
+              <th className="px-3 py-2">Inicia</th>
+              <th className="px-3 py-2 text-right">Cantidad</th>
+              <th className="px-3 py-2 text-right">Materia prima</th>
+              <th className="px-3 py-2 text-right">Mano de obra</th>
+              <th className="px-3 py-2 text-right">Costo total</th>
+              <th className="px-3 py-2 text-right">Costo unitario</th>
+              <th className="px-3 py-2 text-right">Precio prom. / margen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((l) => {
+              const margen = margenSobreVenta(l.p?.precio_promedio_venta, l.p?.costo_unitario);
+              return (
+                <tr key={l.id} className="border-t border-slate-100">
+                  <td className="px-3 py-2">{l.folio}</td>
+                  <td className="px-3 py-2">{l.productos_produccion?.nombre}</td>
+                  <td className="px-3 py-2">{l.fecha_inicio}</td>
+                  <td className="px-3 py-2 text-right">{formatoNumero(l.cantidad_planeada)}</td>
+                  <td className="px-3 py-2 text-right">{formatoMoneda(l.p?.costo_materia_prima)}</td>
+                  <td className="px-3 py-2 text-right">
+                    {formatoMoneda(l.p?.costo_mano_obra)}
+                    <span className="block text-[11px] text-slate-400">
+                      {formatoNumero(l.p?.dias ?? 0)} día(s) × {formatoMoneda(l.p?.costo_dia_nomina)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">{formatoMoneda(l.p?.costo_total)}</td>
+                  <td className="px-3 py-2 text-right font-semibold">{formatoMoneda(l.p?.costo_unitario)}</td>
+                  <td className="px-3 py-2 text-right">
+                    {formatoMoneda(l.p?.precio_promedio_venta)}
+                    {margen != null && <span className={`block text-[11px] ${margen < 0 ? "text-red-700" : "text-slate-500"}`}>{(margen * 100).toFixed(1)} %</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function PestanaCosteo({ empresa }: { empresa: Empresa }) {
   const { data: mensual } = useQuery({
     queryKey: ["costeo-mensual-planta", empresa.id],
@@ -1837,6 +2173,8 @@ function PestanaCosteo({ empresa }: { empresa: Empresa }) {
 
   return (
     <div className="space-y-6">
+      <MargenPromedioPeps empresa={empresa} />
+      <LotesProgramados empresa={empresa} />
       <div>
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Costo mensual por producto (lotes terminados)</h2>
         <p className="mb-2 text-xs text-slate-500">
