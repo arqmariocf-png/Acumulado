@@ -216,6 +216,29 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   en la planta). Lote 001: se quitó la captura de 112 h × $295
   ($33,040) → nómina del 25-sep $1,966.66; costo $1,263.16/pieza (entrada y
   RM-000001 revaluadas) (`20261009100000`).
+- **Clavicón con Jaime (10-oct-2026, Mario)**: (1) **Cerrar lote = cargar
+  la producción con fechas**: `CierreLote` pide término (inicio solo admin)
+  y muestra en vivo días hábiles × nómina diaria = mano de obra y costo por
+  pieza (`fn_lote_mano_obra_previa(orden, desde, hasta)`, mismo cálculo y
+  reparto que el costeo; `20261010100000`); la entrada de producto
+  terminado lleva la fecha de término. (2) **PEPS** (`20261010110000`):
+  `v_peps_capas_materia_prima/_producto_terminado` (lo que queda de cada
+  entrada), `v_peps_salidas_materia_prima` (costo PEPS de cada consumo; lo
+  que rebase las entradas va al último costo); el consumo del lote ya no
+  captura costo y `v_costeo_orden_produccion` usa el PEPS; `v_stock_*`
+  traen `costo_peps`/`valor_peps` al final; la partida de remisión congela
+  `costo_peps`; Costeo → "Margen promedio por producto" (precio promedio de
+  remisiones vs costo PEPS, `lib/margenPlanta.ts` con pruebas). (3)
+  **Costeo proyectado** de lotes planeados `fn_lote_costeo_proyectado`
+  (receta × cantidad contra las capas PEPS, nómina diaria de las últimas 2
+  semanas × días planeados, indirectos, precio promedio de venta) en el
+  detalle del lote (margen deseado → precio sugerido) y en Costeo → "Lotes
+  programados". Lote 002 (37 rollos, 7 días): $1,576.18/rollo vs venta
+  promedio $1,500. (4) El selector de OC de la planta solo trae
+  `proyectoOc` ("Corporativo CLAVICON" / "Corporativo Balken"): las de
+  "Proyecto X" (Maqui Print, Yulitsadonce) no son de la planta. Lote 001
+  quedó reabierto (en proceso, sin término) el 10-oct: al cerrarlo con su
+  fecha real se recalcula todo.
 - **No se pierde lo capturado al cambiar de ventana (9-oct-2026, Mario)**:
   causa: al volver a la pestaña Supabase renueva el token (objeto de sesión
   nuevo) y `useAuth` recargaba el perfil con `cargando=true` →
