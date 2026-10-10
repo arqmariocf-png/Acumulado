@@ -32,6 +32,14 @@ export interface OrdenCompraDoc {
   autorizada_backoffice?: boolean;
   /** Autorizada aquí por dirección (no en el backoffice). */
   autorizacion_interna?: boolean;
+  /** Órdenes propias (folio IA): "ORDEN DE SERVICIO", "ORDEN DE VENTA"… */
+  titulo?: string;
+  /** "Cliente" en la OV (por defecto "Proveedor"). */
+  etiqueta_contraparte?: string;
+  /** La OV no se autoriza: sin sello ni datos bancarios del proveedor. */
+  sin_autorizacion?: boolean;
+  /** Fecha y lugar de entrega. */
+  entrega?: string | null;
 }
 
 export interface LineaOrdenCompra {
@@ -85,6 +93,10 @@ export function totalesConIvaIncluido(lineas: LineaOrdenCompra[]): { subtotal: n
   return { subtotal: r(total - iva), iva: r(iva), total: r(total) };
 }
 
+function pagarA(oc: OrdenCompraDoc): string {
+  return `<div><span>Pagar a</span>${esc(oc.beneficiario) || esc(oc.proveedor) || "—"}${oc.banco ? ` · ${esc(oc.banco)}` : ""}${oc.clabe ? ` · CLABE ${esc(oc.clabe)}` : ""}${oc.cuenta ? ` · cuenta ${esc(oc.cuenta)}` : ""}${!oc.banco && !oc.clabe && !oc.cuenta ? " · sin datos bancarios capturados" : ""}</div>`;
+}
+
 export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], logoUrl: string | null): string {
   const t = oc.importes ?? (oc.precios_con_iva ? totalesConIvaIncluido(lineas) : totalesOrdenCompra(lineas));
   const filas = lineas
@@ -102,7 +114,7 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
     .join("");
   const autorizada = !!oc.autorizada_en || !!oc.autorizada_backoffice;
   return `<!doctype html>
-<html lang="es"><head><meta charset="utf-8"><title>Orden de compra ${esc(oc.id_orden)}</title>
+<html lang="es"><head><meta charset="utf-8"><title>${esc(oc.titulo ? oc.titulo.charAt(0) + oc.titulo.slice(1).toLowerCase() : "Orden de compra")} ${esc(oc.id_orden)}</title>
 <style>
   @page { size: letter; margin: 14mm; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; margin: 0; }
@@ -136,10 +148,10 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
   <div class="cab">
     <div>
       ${logoUrl ? `<img src="${esc(logoUrl)}" alt="" onerror="this.style.display='none'">` : ""}
-      <h1>ORDEN DE COMPRA</h1>
+      <h1>${esc(oc.titulo ?? "ORDEN DE COMPRA")}</h1>
       <div class="emp">${esc(oc.empresa_nombre)}</div>
       <div class="sub">${oc.empresa_rfc ? `RFC ${esc(oc.empresa_rfc)}` : ""}</div>
-      <div style="margin-top:6px">${autorizada ? `<span class="sello">AUTORIZADA ${oc.autorizada_en ? `${oc.autorizacion_interna ? "INTERNA " : ""}${esc(fechaLarga(oc.autorizada_en))}` : "EN BACKOFFICE"}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
+      <div style="margin-top:6px">${oc.sin_autorizacion ? "" : autorizada ? `<span class="sello">AUTORIZADA ${oc.autorizada_en ? `${oc.autorizacion_interna ? "INTERNA " : ""}${esc(fechaLarga(oc.autorizada_en))}` : "EN BACKOFFICE"}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
     </div>
     <div class="folio">
       <div class="num">${esc(oc.id_orden)}</div>
@@ -147,12 +159,12 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
     </div>
   </div>
   <div class="datos">
-    <div><span>Proveedor</span>${esc(oc.proveedor) || "—"}${oc.rfc_proveedor ? ` · RFC ${esc(oc.rfc_proveedor)}` : ""}</div>
+    <div><span>${esc(oc.etiqueta_contraparte ?? "Proveedor")}</span>${esc(oc.proveedor) || "—"}${oc.rfc_proveedor ? ` · RFC ${esc(oc.rfc_proveedor)}` : ""}</div>
     <div><span>Proyecto / obra</span>${esc(oc.proyecto) || "—"}</div>
-    <div><span>Requisición</span>${oc.requisicion_folio != null ? `#${esc(oc.requisicion_folio)}` : "—"}${oc.solicitante ? ` · solicitó ${esc(oc.solicitante)}` : ""}</div>
+    ${oc.requisicion_folio != null || !oc.titulo ? `<div><span>Requisición</span>${oc.requisicion_folio != null ? `#${esc(oc.requisicion_folio)}` : "—"}${oc.solicitante ? ` · solicitó ${esc(oc.solicitante)}` : ""}</div>` : `<div><span>Entrega</span>${esc(oc.entrega) || "—"}</div>`}
     <div><span>Elaboró</span>${esc(oc.creada_por) || "—"}</div>
     <div><span>Forma de pago</span>${esc(oc.forma_pago) || "—"}</div>
-    <div><span>Pagar a</span>${esc(oc.beneficiario) || esc(oc.proveedor) || "—"}${oc.banco ? ` · ${esc(oc.banco)}` : ""}${oc.clabe ? ` · CLABE ${esc(oc.clabe)}` : ""}${oc.cuenta ? ` · cuenta ${esc(oc.cuenta)}` : ""}${!oc.banco && !oc.clabe && !oc.cuenta ? " · sin datos bancarios capturados" : ""}</div>
+    ${oc.sin_autorizacion ? "" : pagarA(oc)}
   </div>
   <table>
     <thead><tr><th class="c" style="width:32px">#</th><th>Concepto</th><th class="c" style="width:60px">Unidad</th><th class="r" style="width:80px">Cantidad</th><th class="r" style="width:95px">P. unitario${oc.precios_con_iva ? " (IVA incl.)" : ""}</th><th class="r" style="width:105px">Importe</th></tr></thead>
@@ -165,9 +177,9 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
   </table>
   <div class="obs"><strong>Notas:</strong> ${esc(oc.nota) || ""}</div>
   <div class="firmas">
-    <div>Elaboró (almacén)</div>
-    <div>Autorizó (dirección)${oc.autorizada_por ? `<br>${esc(oc.autorizada_por)}` : ""}</div>
-    <div>Proveedor</div>
+    <div>Elaboró${oc.titulo ? "" : " (almacén)"}</div>
+    <div>${oc.sin_autorizacion ? "Vendedor" : `Autorizó (dirección)${oc.autorizada_por ? `<br>${esc(oc.autorizada_por)}` : ""}`}</div>
+    <div>${esc(oc.etiqueta_contraparte ?? "Proveedor")}</div>
   </div>
 </div>
 </body></html>`;

@@ -411,7 +411,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
           <span className="font-mono text-xs font-semibold text-slate-900">{oc.id_orden}</span>
           <div className="text-xs text-slate-400">
             {empresa} · {oc.fecha_creacion ?? ""}
-            {oc.fuente !== "api" && <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[10px] uppercase">{oc.fuente === "requisicion" ? "RQ" : oc.fuente}</span>}
+            {oc.fuente !== "api" && <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[10px] uppercase">{oc.fuente === "requisicion" ? "RQ" : oc.fuente === "acumulado" ? "IA" : oc.fuente}</span>}
           </div>
           {!autorizada && (
             <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] ${oc.autorizacion === "rechazada" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`} title={oc.rechazo_motivo ?? oc.estatus_backoffice ?? ""}>

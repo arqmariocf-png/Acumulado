@@ -41,7 +41,7 @@ interface Cuenta {
 // RQ (almacén), Excel (carga manual) y las del backoffice que allá siguen
 // "Pendiente de Autorización": dirección las autoriza aquí para poder
 // programar su pago (Laura, 30-sep-2026).
-const FILTRO_POR_AUTORIZAR = 'fuente.in.(requisicion,excel),and(fuente.eq.api,estatus_backoffice.eq."Pendiente de Autorización")';
+const FILTRO_POR_AUTORIZAR = 'fuente.in.(requisicion,excel,acumulado),and(fuente.eq.api,estatus_backoffice.eq."Pendiente de Autorización")';
 
 function sumarDias(n: number): string {
   const d = new Date();
@@ -139,6 +139,7 @@ export function OcPorAutorizar() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm">
                 <span className="font-mono text-xs font-semibold text-slate-900">{o.id_orden}</span>
+                {o.fuente === "acumulado" && <span className="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] uppercase text-violet-800">{o.id_orden.startsWith("IA-OS") ? "IA · servicio" : "IA"}</span>}
                 {o.fuente === "excel" && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-600">excel</span>}
                 {o.fuente === "api" && <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] uppercase text-sky-800">backoffice</span>} · <b>{o.proveedor ?? "sin proveedor"}</b>
                 <span className="text-slate-500"> · {o.empresas?.codigo ?? ""} · {o.proyecto ?? "sin proyecto"} · {o.fecha_creacion ?? ""}</span>

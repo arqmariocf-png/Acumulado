@@ -85,3 +85,17 @@ test("OC del backoffice autorizada aquí lleva el sello de autorización interna
   );
   assert.match(html, /AUTORIZADA INTERNA 30 de septiembre de 2026/);
 });
+
+test("orden de venta propia: título, cliente y sin sello de autorización", () => {
+  const html = htmlOrdenCompra(
+    { id_orden: "IA-OV-0001", fecha: "2026-10-10", empresa_nombre: "AEP", empresa_rfc: null, empresa_codigo: "AEP", proveedor: "Cliente X", proyecto: null, requisicion_folio: null, solicitante: null, creada_por: "Alma", autorizada_en: null, autorizada_por: null, nota: null, titulo: "ORDEN DE VENTA", etiqueta_contraparte: "Cliente", sin_autorizacion: true, entrega: "2026-10-12 · obra" },
+    [{ item: "Varilla", unidad: "pza", cantidad: 2, costo: 50, iva: true }],
+    null,
+  );
+  assert.match(html, /ORDEN DE VENTA/);
+  assert.match(html, /<span>Cliente<\/span>Cliente X/);
+  assert.doesNotMatch(html, /PENDIENTE DE AUTORIZAR/);
+  assert.doesNotMatch(html, /Pagar a/);
+  assert.match(html, /2026-10-12 · obra/);
+  assert.match(html, /\$ 116\.00/);
+});

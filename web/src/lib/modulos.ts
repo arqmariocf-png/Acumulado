@@ -40,6 +40,7 @@ export const MODULOS_ASIGNABLES: { clave: string; ruta: string; etiqueta: string
   { clave: "proyectos", ruta: "/proyectos", etiqueta: "Proyectos", descripcion: "obras y proyectos de la empresa" },
   { clave: "bbva", ruta: "/bbva/folios", etiqueta: "Folios BBVA", descripcion: "semáforo de atención de cuadrillas" },
   { clave: "comedor", ruta: "/comedor?tab=cocina", etiqueta: "Comedor (cocina)", descripcion: "menú, platillos y entregas del comedor" },
+  { clave: "compras", ruta: "/ordenes", etiqueta: "Compras (órdenes IA)", descripcion: "captura órdenes de compra, servicio y venta con folio IA" },
   { clave: "punto_venta", ruta: "/punto-venta", etiqueta: "Punto de venta", descripcion: "mostrador de ferretería: cobrar, caja y despacho" },
   { clave: "checador", ruta: "/bbva/asistencia", etiqueta: "Responsable de checador", descripcion: "ve entradas y salidas de todo el personal" },
 ];
