@@ -75,6 +75,8 @@ export interface FolioControl {
   pago_aplicado: number | null;
   saldo_por_cobrar: number | null;
   revision_cobranza: string | null;
+  /** "Mantenimiento" u "Obra Menor" (formato 10-oct-2026: una sola hoja). */
+  tipo_servicio: string | null;
 }
 
 export interface ObraMenorControl {
@@ -218,9 +220,14 @@ export function fechaIso(v: unknown): string | null {
   return null;
 }
 
-const COLUMNAS_MANTTO: [keyof FolioControl, string, "texto" | "fecha" | "numero"][] = [
+// Cada columna acepta varios encabezados (prefijos): el control cambió de
+// nombres (10-oct-2026: "Folio cliente" → "Folio/UDA", "Monto cobrado
+// confirmado" → "Monto cobrado con IVA (automático)", Obra Menor dentro de la
+// misma hoja con "Tipo de servicio").
+const COLUMNAS_MANTTO: [keyof FolioControl, string | string[], "texto" | "fecha" | "numero"][] = [
   ["id_interno", "ID INTERNO", "texto"],
-  ["folio", "FOLIO CLIENTE", "texto"],
+  ["folio", ["FOLIO CLIENTE", "FOLIO/UDA", "FOLIO"], "texto"],
+  ["tipo_servicio", "TIPO DE SERVICIO", "texto"],
   ["cr", "CR", "texto"],
   ["sucursal", "SUCURSAL", "texto"],
   ["solicitud", "SOLICITUD / ALCANCE", "texto"],
@@ -261,7 +268,7 @@ const COLUMNAS_MANTTO: [keyof FolioControl, string, "texto" | "fecha" | "numero"
   ["fecha_recepcion_pedido", "FECHA RECEPCIÓN DEL PEDIDO", "fecha"],
   ["fecha_recepcion_factura", "FECHA RECEPCIÓN FACTURA / PAGO", "fecha"],
   ["estado_pago", "ESTADO DEL PAGO", "texto"],
-  ["monto_cobrado", "MONTO COBRADO CONFIRMADO", "numero"],
+  ["monto_cobrado", ["MONTO COBRADO CONFIRMADO", "MONTO COBRADO"], "numero"],
   ["monto_solicitado", "MONTO SOLICITADO A BBVA", "numero"],
   ["pago_aplicado", "PAGO APLICADO AL SERVICIO", "numero"],
   ["saldo_por_cobrar", "SALDO POR COBRAR", "numero"],
@@ -275,9 +282,9 @@ function normalizarEncabezado(h: unknown): string {
 /** true si la hoja trae el encabezado del control nuevo ("ID interno" +
  * "Folio cliente"). */
 export function esFormatoControl(filas: unknown[][]): boolean {
-  return filas.slice(0, 15).some((f) => {
+  return filas.slice(0, 40).some((f) => {
     const hs = f.map(normalizarEncabezado);
-    return hs.includes("ID INTERNO") && hs.some((h) => h.startsWith("FOLIO CLIENTE"));
+    return hs.includes("ID INTERNO") && hs.some((h) => h.startsWith("FOLIO CLIENTE") || h.startsWith("FOLIO/UDA") || h === "FOLIO");
   });
 }
 
@@ -285,7 +292,13 @@ export function parsearMantto(filas: unknown[][]): FolioControl[] {
   const idx = filas.findIndex((f) => f.map(normalizarEncabezado).includes("ID INTERNO"));
   if (idx < 0) throw new Error('No se encontró el encabezado "ID interno" en la hoja BBVA Mantto.');
   const encabezados = filas[idx].map(normalizarEncabezado);
-  const col = (prefijo: string) => encabezados.findIndex((h) => h.startsWith(prefijo));
+  const col = (prefijos: string | string[]) => {
+    for (const p of Array.isArray(prefijos) ? prefijos : [prefijos]) {
+      const i = encabezados.findIndex((h) => h.startsWith(p));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
   const mapa = COLUMNAS_MANTTO.map(([campo, prefijo, tipo]) => [campo, col(prefijo), tipo] as const);
   const faltan = mapa.filter(([campo, i]) => i < 0 && ["id_interno", "folio", "sucursal", "supervisor", "estatus_operativo", "monto_a_cobrar"].includes(campo));
   if (faltan.length) throw new Error(`Faltan columnas en BBVA Mantto: ${faltan.map(([c]) => c).join(", ")}`);
@@ -355,7 +368,7 @@ export function registrosDesdeControl(folios: FolioControl[], obraMenor: ObraMen
       sucursal: f.sucursal,
       descripcion: f.solicitud ?? "",
       monto: f.monto_a_cobrar ?? 0,
-      proceso: "Mantenimiento",
+      proceso: (f.tipo_servicio ?? "").trim().toUpperCase() === "OBRA MENOR" ? "Obra Menor" : "Mantenimiento",
       pedido: f.pedido,
       factura: f.factura,
       fechaPago: pagado ? aDate(f.fecha_recepcion_factura) : null,

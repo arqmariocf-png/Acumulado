@@ -66,3 +66,16 @@ test("resumen por etapa, paso y supervisor", () => {
   assert.equal(res.por_supervisor["Dulce"].cancelados, 1);
   assert.equal(res.sin_pago, 2);
 });
+
+test("formato 10-oct-2026: encabezado abajo, 'Folio/UDA' y Obra Menor por tipo de servicio", () => {
+  const enc = ["ID interno", "Folio/UDA", "CR", "Sucursal", "Solicitud / alcance", "Fecha recepción del folio (correo)", "Tipo de servicio", "x", "Prioridad", "x", "Supervisor BBVA", "Equipo ejecutor", "x", "x", "Estatus operativo", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "Etapa de seguimiento", "x", "Monto a cobrar SIN IVA", "N.º pedido", "N.º factura", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "Fecha recepción factura / pago", "Estado del pago (automático)", "Monto cobrado con IVA (automático)"];
+  const f = (id: string, tipo: string) => { const r: unknown[] = new Array(enc.length).fill(null); r[0] = id; r[1] = "43531638"; r[3] = "Atlixco"; r[5] = "2026-01-02"; r[6] = tipo; r[10] = "Jessica"; r[14] = "Terminado"; r[35] = 100; r[55] = 116; return r; };
+  const hoja: unknown[][] = [[null], ["BBVA MANTTO · control"], ["Subtotal", 1], ...Array.from({ length: 8 }, () => [null]), enc, f("MT-0001", "Mantenimiento"), f("OM-0001", "Obra Menor")];
+  assert.equal(esFormatoControl(hoja), true);
+  const folios = parsearMantto(hoja);
+  assert.equal(folios.length, 2);
+  assert.equal(folios[0].folio, "43531638");
+  assert.equal(folios[0].monto_cobrado, 116);
+  const r = registrosDesdeControl(folios, []);
+  assert.deepEqual(r.map((x) => x.proceso), ["Mantenimiento", "Obra Menor"]);
+});
