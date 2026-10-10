@@ -42,6 +42,8 @@ export interface SupuestosProyeccion {
   semanasCierre: number;
   /** Días de vacaciones por persona sin fecha de ingreso en RH. */
   diasVacacionesSinIngreso: number;
+  /** Kilos de materia prima por pieza (receta), para programar compras. */
+  kgPorPieza?: number;
 }
 
 export interface MesProyeccion {
@@ -54,6 +56,8 @@ export interface MesProyeccion {
   piezasProgramadas: number;
   piezasLibres: number;
   piezas: number;
+  /** Materia prima que pide la producción del mes, en kg. */
+  kgMp: number;
   vendidas: number;
   ventas: number;
   costoMp: number;
@@ -201,6 +205,7 @@ export function proyeccionAnual(lotes: LoteProyeccion[], personas: PersonaProyec
       piezasProgramadas: r2(piezasProg),
       piezasLibres: r2(piezasLibres),
       piezas: r2(piezas),
+      kgMp: r2(piezas * (s.kgPorPieza ?? 0)),
       vendidas: r2(vendidas),
       ventas: r2(ventas),
       costoMp: r2(costoMp),
@@ -214,7 +219,7 @@ export function proyeccionAnual(lotes: LoteProyeccion[], personas: PersonaProyec
 
 /** Suma de los meses. */
 export function totalProyeccion(meses: MesProyeccion[]) {
-  const t = { habiles: 0, festivos: 0, cierre: 0, vacaciones: 0, productivos: 0, piezas: 0, vendidas: 0, ventas: 0, costoMp: 0, nomina: 0, indirectos: 0, utilidad: 0 };
+  const t = { habiles: 0, festivos: 0, cierre: 0, vacaciones: 0, productivos: 0, piezas: 0, kgMp: 0, vendidas: 0, ventas: 0, costoMp: 0, nomina: 0, indirectos: 0, utilidad: 0 };
   for (const m of meses) for (const k of Object.keys(t) as (keyof typeof t)[]) t[k] += m[k];
   for (const k of Object.keys(t) as (keyof typeof t)[]) t[k] = r2(t[k]);
   return { ...t, margen: t.ventas > 0 ? t.utilidad / t.ventas : null };
@@ -230,4 +235,14 @@ export function ritmoPlanta(lotes: LoteProyeccion[]): number | null {
     dias += Number(l.dias);
   }
   return dias > 0 ? Math.round((piezas / dias) * 100) / 100 : null;
+}
+
+/** Primer mes en que la existencia de materia prima ya no alcanza (null si alcanza todo el periodo). */
+export function mesSinMateriaPrima(meses: MesProyeccion[], existenciaKg: number): string | null {
+  let acumulado = 0;
+  for (const m of meses) {
+    acumulado += m.kgMp;
+    if (acumulado > existenciaKg) return m.mes;
+  }
+  return null;
 }

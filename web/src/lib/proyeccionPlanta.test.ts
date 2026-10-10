@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diasVacacionesLFT, festivosLFT, proyeccionAnual, ritmoPlanta, totalProyeccion, type SupuestosProyeccion } from "./proyeccionPlanta.ts";
+import { diasVacacionesLFT, festivosLFT, mesSinMateriaPrima, proyeccionAnual, ritmoPlanta, totalProyeccion, type SupuestosProyeccion } from "./proyeccionPlanta.ts";
 
 test("festivos de ley 2027 y el 1 de octubre cada 6 años", () => {
   assert.deepEqual(festivosLFT(2027), ["2027-01-01", "2027-02-01", "2027-03-15", "2027-05-01", "2027-09-16", "2027-11-15", "2027-12-25"]);
@@ -66,4 +66,14 @@ test("ritmo de la planta con días planeados", () => {
     5.29,
   );
   assert.equal(ritmoPlanta([]), null);
+});
+
+test("kilos de materia prima por mes y hasta dónde alcanza la existencia", () => {
+  const lotes = [{ folio: "002", estado: "planeada", inicio: "2026-10-14", fin: null, dias: 7, cantidad: 37 }];
+  const meses = proyeccionAnual(lotes, [], { ...base, kgPorPieza: 76 });
+  assert.equal(meses[0].kgMp, Math.round(meses[0].piezas * 76 * 100) / 100);
+  const t = totalProyeccion(meses);
+  assert.ok(Math.abs(t.kgMp - t.piezas * 76) < 1);
+  assert.equal(mesSinMateriaPrima(meses, 2885), "2026-10");
+  assert.equal(mesSinMateriaPrima(meses, 1e9), null);
 });

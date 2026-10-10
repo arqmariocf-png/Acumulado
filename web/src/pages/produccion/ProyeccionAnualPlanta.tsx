@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { diasVacacionesLFT, proyeccionAnual, ritmoPlanta, totalProyeccion, type LoteProyeccion, type PersonaProyeccion } from "../../lib/proyeccionPlanta";
+import { diasVacacionesLFT, mesSinMateriaPrima, proyeccionAnual, ritmoPlanta, totalProyeccion, type LoteProyeccion, type PersonaProyeccion } from "../../lib/proyeccionPlanta";
 
 // Proyección anual de la planta, solo director general (Mario, 10-oct-2026):
 // programación actual + ritmo de la planta en los días libres, quitando
@@ -17,6 +17,8 @@ interface DatosProyeccion {
   precio_venta: number | null;
   vendido: number | null;
   gastos_mes: { mes: string; monto: number }[];
+  /** OC marcadas como inversión (ordenes_compra.es_inversion): fuera de la utilidad. */
+  inversiones?: { folio: string; fecha: string; proveedor: string | null; monto: number }[];
 }
 
 const $ = (v: number | null | undefined) => (v == null ? "—" : v.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }));
@@ -40,10 +42,19 @@ export function ProyeccionAnualPlanta({ empresaId }: { empresaId: string }) {
   if (isLoading) return <p className="text-sm text-slate-500">Calculando proyección…</p>;
   if (error) return <p className="text-sm text-red-600">{(error as Error).message}</p>;
   if (!data) return <p className="text-sm text-slate-500">Solo el director general ve la proyección anual.</p>;
-  return <Proyeccion datos={data} />;
+  return <Proyeccion datos={data} empresaId={empresaId} />;
 }
 
-function Proyeccion({ datos }: { datos: DatosProyeccion }) {
+function Proyeccion({ datos, empresaId }: { datos: DatosProyeccion; empresaId: string }) {
+  // Existencia de materia prima para programar compras del año.
+  const { data: stockMp } = useQuery({
+    queryKey: ["stock-materia-prima", empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_stock_materia_prima").select("nombre, stock_actual, unidad_medida, costo_peps").eq("empresa_id", empresaId);
+      if (error) throw error;
+      return (data ?? []) as { nombre: string; stock_actual: number; unidad_medida: string; costo_peps: number | null }[];
+    },
+  });
   const mesActual = hoyMx().slice(0, 7);
   // Indirectos: promedio de los meses completos (el mes en curso va parcial).
   const completos = datos.gastos_mes.filter((g) => g.mes.slice(0, 7) < mesActual);
@@ -58,6 +69,8 @@ function Proyeccion({ datos }: { datos: DatosProyeccion }) {
   const [indirectos, setIndirectos] = useState(String(Math.round(indirectosDefault)));
   const [cierre, setCierre] = useState("1");
   const [vacSin, setVacSin] = useState("12");
+  const receta = datos.receta ?? [];
+  const kgPorPieza = receta.reduce((t, r) => t + Number(r.por_pieza), 0);
 
   const desde = hoyMx();
   const meses = useMemo(
@@ -72,14 +85,20 @@ function Proyeccion({ datos }: { datos: DatosProyeccion }) {
         indirectosMes: Number(indirectos) || 0,
         semanasCierre: Number(cierre) || 0,
         diasVacacionesSinIngreso: Number(vacSin) || 0,
+        kgPorPieza,
       }),
-    [datos, desde, precio, pctVenta, mpPieza, ritmo, nomina, indirectos, cierre, vacSin],
+    [datos, desde, precio, pctVenta, mpPieza, ritmo, nomina, indirectos, cierre, vacSin, kgPorPieza],
   );
   const t = totalProyeccion(meses);
   const programados = datos.lotes.filter((l) => l.estado === "planeada" || l.estado === "en_proceso");
   const maxAbs = Math.max(1, ...meses.map((m) => Math.abs(m.utilidad)));
   const costoPieza = Number(precio) > 0 && t.vendidas > 0 ? (t.costoMp + t.nomina + t.indirectos) / t.vendidas : null;
   const campo = "w-full rounded border border-slate-300 px-2 py-1 text-sm";
+  const nombresReceta = new Set(receta.map((r) => r.materia.trim().toUpperCase()));
+  const existenciaKg = (stockMp ?? []).filter((m) => nombresReceta.has(m.nombre.trim().toUpperCase())).reduce((t, m) => t + Number(m.stock_actual), 0);
+  const porComprarKg = Math.max(0, t.kgMp - existenciaKg);
+  const costoKg = receta.length ? Number(receta[0].costo ?? 0) : 0;
+  const mesFalta = mesSinMateriaPrima(meses, existenciaKg);
 
   return (
     <div className="space-y-5">
@@ -97,6 +116,27 @@ function Proyeccion({ datos }: { datos: DatosProyeccion }) {
         <Tarjeta titulo="Utilidad anual" valor={$(t.utilidad)} nota={t.margen != null ? `margen ${(t.margen * 100).toFixed(1)} %` : ""} rojo={t.utilidad < 0} destacado />
         <Tarjeta titulo="Costo total por pieza" valor={$(costoPieza)} nota={`precio ${$(Number(precio) || 0)}`} rojo={costoPieza != null && costoPieza > Number(precio)} />
       </div>
+
+      {kgPorPieza > 0 && (
+        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <b>Materia prima del año:</b> {num(t.kgMp)} kg ({receta.map((r) => `${num(Number(r.por_pieza), 2)} kg de ${r.materia.trim()}`).join(" + ")} por pieza) · existencia {num(existenciaKg)} kg ·{" "}
+          <b>por comprar {num(porComprarKg)} kg</b>
+          {costoKg > 0 && <> ≈ {$(porComprarKg * costoKg)} s/IVA a {$(costoKg)}/kg</>}
+          {mesFalta ? ` · la existencia alcanza hasta ${nombreMes(mesFalta)}: hay que comprar antes.` : " · la existencia alcanza todo el periodo."}
+        </div>
+      )}
+
+      {(datos.inversiones ?? []).length > 0 && (
+        <div className="rounded border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
+          <b>Inversión (no entra en la utilidad):</b>{" "}
+          {(datos.inversiones ?? []).map((i) => `OC ${i.folio} ${i.proveedor ?? ""} ${$(Number(i.monto))}`).join(" · ")}
+          {(() => {
+            const inversion = (datos.inversiones ?? []).reduce((s, i) => s + Number(i.monto), 0);
+            const mensual = t.utilidad / 12;
+            return mensual > 0 ? ` — se recupera en ≈ ${num(inversion / mensual, 1)} meses con la utilidad proyectada.` : " — con la utilidad proyectada en negativo no se recupera.";
+          })()}
+        </div>
+      )}
 
       <div className="rounded border border-slate-200 bg-white p-3 text-xs text-slate-600">
         Días que se quitan: <b>{t.festivos}</b> festivos de ley · <b>{t.cierre}</b> de cierre de planta · <b>{num(t.vacaciones, 1)}</b> días-planta de vacaciones del personal. La nómina se paga completa los 12 meses.
@@ -133,7 +173,7 @@ function Proyeccion({ datos }: { datos: DatosProyeccion }) {
             <label>
               Indirectos al mes
               <input type="number" value={indirectos} onChange={(e) => setIndirectos(e.target.value)} className={campo} />
-              <span className="text-slate-400">promedio OC de la planta sin materia prima ni ISR</span>
+              <span className="text-slate-400">promedio OC de la planta sin materia prima, ISR, mantenimientos ni inversiones</span>
             </label>
             <label>
               Semanas de cierre (diciembre)
@@ -177,6 +217,7 @@ function Proyeccion({ datos }: { datos: DatosProyeccion }) {
                 <th className="px-2 py-2 text-right">Días prod.</th>
                 <th className="px-2 py-2 text-right">Programado</th>
                 <th className="px-2 py-2 text-right">Piezas</th>
+                <th className="px-2 py-2 text-right">MP (kg)</th>
                 <th className="px-2 py-2 text-right">Ventas</th>
                 <th className="px-2 py-2 text-right">MP</th>
                 <th className="px-2 py-2 text-right">Nómina</th>
@@ -195,6 +236,7 @@ function Proyeccion({ datos }: { datos: DatosProyeccion }) {
                   </td>
                   <td className="px-2 py-1.5 text-right">{m.piezasProgramadas ? num(m.piezasProgramadas) : "—"}</td>
                   <td className="px-2 py-1.5 text-right">{num(m.piezas)}</td>
+                  <td className="px-2 py-1.5 text-right">{num(m.kgMp)}</td>
                   <td className="px-2 py-1.5 text-right">{$(m.ventas)}</td>
                   <td className="px-2 py-1.5 text-right">{$(m.costoMp)}</td>
                   <td className="px-2 py-1.5 text-right">{$(m.nomina)}</td>
@@ -212,6 +254,7 @@ function Proyeccion({ datos }: { datos: DatosProyeccion }) {
                 <td className="px-2 py-2 text-right">{num(t.productivos, 1)}</td>
                 <td className="px-2 py-2"></td>
                 <td className="px-2 py-2 text-right">{num(t.piezas)}</td>
+                <td className="px-2 py-2 text-right">{num(t.kgMp)}</td>
                 <td className="px-2 py-2 text-right">{$(t.ventas)}</td>
                 <td className="px-2 py-2 text-right">{$(t.costoMp)}</td>
                 <td className="px-2 py-2 text-right">{$(t.nomina)}</td>
