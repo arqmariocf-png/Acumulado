@@ -1226,7 +1226,42 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   admin; firmado no se borra) y `legal_documentos.arrendamiento_id` (edge
   `legal-documentos` v3). `20261002120000`.
 
-## Dropbox de trabajo (1-oct-2026)
+## Punto de venta de ferretería (10-oct-2026)
+- Mario: "módulo estilo Odoo, con código de barras para cobrar y para
+  entregar al cliente; es para todas las empresas ya que es el almacén
+  general y debe ser el lugar para despachar e imprimir notas". Decisiones:
+  inventario actual (productos/existencias), cobro en efectivo con corte de
+  caja + tarjeta (terminal aparte) + transferencia + crédito, ticket y
+  factura después (no hay PAC).
+- `20261010140000_punto_venta.sql` (aplicada en 3 partes): módulo
+  `punto_venta` (abierto a LOMA), `productos.precio_venta` (con IVA) e
+  `iva_tasa`, permiso por persona `permisos_modulo` 'punto_venta'.
+  Tablas `pv_turnos` (caja: fondo, cierre, contado), `pv_caja_movimientos`
+  (retiros/ingresos), `pv_ventas` (folio PV-<emp>-0001 = código de barras
+  del ticket; estado pagada|credito|cancelada; entrega
+  pendiente|parcial|entregada; requiere_factura/factura_folio),
+  `pv_venta_lineas` (precio c/IVA, descuento, costo congelado, entregado,
+  movimiento de inventario) y `pv_pagos` (también los abonos). Totales
+  calculados: `v_pv_ventas`, `v_pv_turnos` (corte: esperado y diferencia),
+  `v_pv_saldos_clientes`. Se escribe SOLO por funciones: `fn_pv_abrir_turno`,
+  `_cerrar_turno`, `_caja_movimiento`, `fn_pv_cobrar` (crea venta, pagos y
+  la SALIDA de inventario del primer almacén activo de la empresa; cambio
+  del efectivo; crédito solo a clientes con `clientes_credito.autorizado`
+  sin rebasar la línea), `fn_pv_entregar` (todo o por partida),
+  `fn_pv_cancelar` (regresa inventario con una entrada; solo admin/almacén/
+  corporativo), `fn_pv_abono`, `fn_pv_marcar_facturada`. Operan
+  `auth_opera_pv()` = admin, almacén, corporativo o permiso.
+- Frontend `/punto-venta` (`pages/puntoVenta/`): Vender (buscador que
+  recibe el lector de código de barras + Enter, tarjetas, carrito, cobro
+  mixto, ticket automático), Despachar (escanear ticket → entregar),
+  Ventas (día, reimprimir, cancelar, facturas pendientes), Caja (abrir,
+  retiros/ingresos, corte), Crédito (saldos y abonos), Precios (precio c/IVA
+  y código de barras por producto). `lib/code128.ts` (Code 128 B en SVG, sin
+  dependencias) y `lib/puntoVenta.ts` (totales, pagos, búsqueda, corte,
+  ticket 80 mm), ambos con pruebas. Pendientes: precios de los 112
+  productos de AEP, catálogo de las demás empresas, CFDI con PAC.
+
+
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
   `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,
   logos), `02 Consultas` (lo que Claude prepara a pedido, nombre
