@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { esFormatoControl, parsearMantto, parsearObraMenor, pasoActual, registrosDesdeControl, resumirControl } from "./bbva-control.ts";
+import { esFormatoControl, fechaIso, parsearMantto, parsearObraMenor, pasoActual, registrosDesdeControl, resumirControl } from "./bbva-control.ts";
 
 const ENC = ["ID interno", "Folio cliente", "CR", "Sucursal", "Solicitud / alcance", "Fecha recepción del folio (correo)", "Fecha primera atención (automática)", "Prioridad",
   "Fecha compromiso con el cliente", "Supervisor BBVA", "Equipo ejecutor", "Fecha programada de atención", "Ventana de acceso", "Estatus operativo", "Motivo de bloqueo",
@@ -78,4 +78,13 @@ test("formato 10-oct-2026: encabezado abajo, 'Folio/UDA' y Obra Menor por tipo d
   assert.equal(folios[0].monto_cobrado, 116);
   const r = registrosDesdeControl(folios, []);
   assert.deepEqual(r.map((x) => x.proceso), ["Mantenimiento", "Obra Menor"]);
+});
+
+test("fechas de texto: dd/mm, mm/dd volteada y fechas que no existen", () => {
+  assert.equal(fechaIso("05/10/2026"), "2026-10-05");
+  assert.equal(fechaIso("05/13/2026"), "2026-05-13"); // venía mm/dd (10-oct-2026)
+  assert.equal(fechaIso("2026-13-05"), null);
+  assert.equal(fechaIso("31/02/2026"), null);
+  assert.equal(fechaIso("2026-10-09"), "2026-10-09");
+  assert.equal(fechaIso("sin fecha"), null);
 });

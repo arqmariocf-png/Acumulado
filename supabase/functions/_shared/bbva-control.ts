@@ -212,12 +212,27 @@ export function fechaIso(v: unknown): string | null {
     return `${y}-${m}-${d}`;
   }
   if (typeof v === "string") {
-    const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})/) ?? v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})/) ?? v.trim().match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
     if (!m) return null;
-    if (m[0].includes("/")) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-    return `${m[1]}-${m[2]}-${m[3]}`;
+    let y: number, mes: number, d: number;
+    if (/^\d{4}-/.test(m[0])) [y, mes, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    else {
+      // dd/mm/aaaa; si el "mes" pasa de 12 venía como mm/dd/aaaa (Christian,
+      // 10-oct-2026: "date/time field value out of range: 2026-13-05").
+      [d, mes, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      if (mes > 12 && d <= 12) [d, mes] = [mes, d];
+    }
+    return fechaValida(y, mes, d);
   }
   return null;
+}
+
+/** aaaa-mm-dd solo si la fecha existe (nada de 31 de febrero ni mes 13). */
+function fechaValida(y: number, mes: number, d: number): string | null {
+  if (y < 2000 || y > 2100 || mes < 1 || mes > 12 || d < 1) return null;
+  const ultimo = new Date(Date.UTC(y, mes, 0)).getUTCDate();
+  if (d > ultimo) return null;
+  return `${y}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 // Cada columna acepta varios encabezados (prefijos): el control cambió de
