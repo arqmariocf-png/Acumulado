@@ -190,6 +190,7 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Almacén",
     proposito: "Entradas y salidas de almacén contra OC/OV, existencias y productos.",
     entradas: [
+      { ruta: "/punto-venta", etiqueta: "Punto de venta", descripcion: "mostrador de ferretería: cobra con código de barras, caja y despacho", uso: "Escanea los productos, cobra (efectivo, tarjeta, transferencia o crédito), imprime el ticket y despacha al escanear el ticket.", visible: (p) => esAdmin(p) || p.rol === "almacen" || p.rol === "corporativo" || (p.modulos ?? []).includes("punto_venta"), modulo: "punto_venta" },
       { ruta: "/inventario", etiqueta: "Registrar movimiento", descripcion: "entradas y salidas contra las partidas de la OC/OV", uso: "Al recibir material: elige la OC, marca las partidas que llegaron y guarda; sale el comprobante con QR.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/por-recibir", etiqueta: "Por recibir", descripcion: "OC ya pagadas que faltan de confirmar, en bodega u obra", uso: "Tesorería pagó; almacén u obra confirma qué llegó y cuánto, partida por partida.", visible: veInventario, modulo: "inventario" },
       { ruta: "/inventario/existencias", etiqueta: "Existencias", descripcion: "lo que hay en cada almacén", uso: "Para consultar stock antes de pedir o de prometer entrega.", visible: veInventario , modulo: "inventario" },

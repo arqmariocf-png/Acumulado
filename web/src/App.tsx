@@ -36,6 +36,7 @@ import { InicioSegunRol } from "./pages/InicioSegunRol";
 import { Socio, RutaSocio } from "./pages/Socio";
 const Gastos = lazy(() => import("./pages/Gastos").then((m) => ({ default: m.Gastos })));
 const Comedor = lazy(() => import("./pages/comedor/Comedor").then((m) => ({ default: m.Comedor })));
+const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
@@ -139,6 +140,10 @@ function Enrutador() {
           </Route>
           {/* Comedor: cualquiera con cuenta pide; cocina y nómina se deciden en la base. */}
           <Route path="/comedor" element={<Comedor />} />
+          {/* Punto de venta (ferretería, almacén general): almacén, corporativo o permiso 'punto_venta'. */}
+          <Route element={<ProtectedRoute roles={["almacen", "corporativo"]} oPermiso={(p) => (p.modulos ?? []).includes("punto_venta")} />}>
+            <Route path="/punto-venta" element={<PuntoVenta />} />
+          </Route>
           {/* Legal: permiso por persona ('legal') sin cambiar el rol; dirección entra a crédito y contratos. */}
           <Route element={<ProtectedRoute roles={["direccion"]} oPermiso={(p) => (p.modulos ?? []).includes("legal")} />}>
             <Route path="/legal" element={<Legal />} />
