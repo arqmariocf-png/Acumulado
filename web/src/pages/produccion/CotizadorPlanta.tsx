@@ -278,8 +278,9 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
                 <div className="col-span-1 text-right text-[11px] leading-tight text-slate-500">
                   {veMargen && costo?.costo != null && (
                     <>
-                      costo {$(costo.costo)}
-                      {m != null && <div className={m < 0 ? "text-red-700" : "text-emerald-700"}>{$(m)} c/u</div>}
+                      {/* Mismo criterio que el precio capturado: con IVA contra costo con IVA. */}
+                      costo {conIva ? "c/IVA" : "s/IVA"} {$(Number(costo.costo) * (conIva ? 1.16 : 1))}
+                      {m != null && <div className={m < 0 ? "text-red-700" : "text-emerald-700"}>margen {$(m)} s/IVA c/u</div>}
                     </>
                   )}
                 </div>

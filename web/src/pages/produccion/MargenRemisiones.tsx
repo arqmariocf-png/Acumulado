@@ -70,9 +70,9 @@ export function MargenRemisiones({ empresaId }: { empresaId: string }) {
               <th className="px-3 py-2">Remisión</th>
               <th className="px-3 py-2">Cliente</th>
               <th className="px-3 py-2">Pago</th>
-              <th className="px-3 py-2 text-right">Venta</th>
-              <th className="px-3 py-2 text-right">Costo real</th>
-              <th className="px-3 py-2 text-right">Margen</th>
+              <th className="px-3 py-2 text-right">Venta s/IVA</th>
+              <th className="px-3 py-2 text-right">Costo s/IVA</th>
+              <th className="px-3 py-2 text-right">Margen s/IVA</th>
               <th />
             </tr>
           </thead>
@@ -148,9 +148,9 @@ function FilaRemision({ r, abierta, onAbrir, empresaId, conIva }: { r: MargenRem
                 <tr>
                   <th className="py-1">Partida</th>
                   <th className="py-1 text-right">Cantidad</th>
-                  <th className="py-1 text-right">Costo real</th>
+                  <th className="py-1 text-right">{conIva ? "Costo c/IVA" : "Costo s/IVA"}</th>
                   <th className="py-1 text-right">{conIva ? "Precio c/IVA" : "Precio s/IVA"}</th>
-                  <th className="py-1 text-right">Margen</th>
+                  <th className="py-1 text-right">Margen s/IVA</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,7 +162,9 @@ function FilaRemision({ r, abierta, onAbrir, empresaId, conIva }: { r: MargenRem
                       <td className="py-1 text-right tabular-nums">
                         {Number(p.cantidad).toLocaleString("es-MX")} {p.unidad}
                       </td>
-                      <td className="py-1 text-right tabular-nums">{$(p.costo_unitario)}</td>
+                      {/* Costo en la misma base que el precio que se ve (Mario, 10-oct-2026:
+                          "estamos considerando precios con IVA y se costean contra precios sin IVA"). */}
+                      <td className="py-1 text-right tabular-nums">{p.costo_unitario == null ? "—" : $(Number(p.costo_unitario) * factor)}</td>
                       <td className="py-1 text-right">
                         <input
                           type="number"

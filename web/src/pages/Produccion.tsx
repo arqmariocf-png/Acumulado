@@ -1803,7 +1803,11 @@ function CosteoProyectado({ ordenId }: { ordenId: string }) {
       {!p.dias && <p className="mt-1 text-xs text-amber-700">El lote no tiene días planeados: la mano de obra sale en cero. Captura el tiempo planeado.</p>}
       <div className="mt-3 flex flex-wrap items-end gap-4 text-sm">
         <p>
-          Precio promedio de venta: <strong>{formatoMoneda(p.precio_promedio_venta)}</strong>
+          Costo unitario c/IVA: <strong>{formatoMoneda(p.costo_unitario != null ? Number(p.costo_unitario) * 1.16 : null)}</strong>
+        </p>
+        <p>
+          Precio promedio de venta: <strong>{formatoMoneda(p.precio_promedio_venta)}</strong> s/IVA ·{" "}
+          {formatoMoneda(p.precio_promedio_venta != null ? Number(p.precio_promedio_venta) * 1.16 : null)} c/IVA
           {margenVenta != null && (
             <span className={margenVenta < 0 ? "ml-1 font-semibold text-red-700" : "ml-1 text-slate-600"}>· margen {(margenVenta * 100).toFixed(1)} %</span>
           )}
