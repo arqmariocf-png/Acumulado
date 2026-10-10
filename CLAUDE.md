@@ -194,6 +194,10 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `bbva-importar-folios` v6 desplegada con el `_shared` que ya corría +
   el bbva-control nuevo. Probado con su archivo: 324 folios, 19 Obra Menor,
   17 cancelados, $1,328,380.62.
+  Mismo día, segundo archivo: "date/time field value out of range:
+  2026-13-05" (una fecha escrita como texto mm/dd/aaaa). `fechaIso` ya
+  voltea día/mes si el mes pasa de 12 y deja en blanco fechas que no
+  existen; `bbva-importar-folios` v7.
 - **Arturo Huerta (8-oct-2026)**: puesto Técnico en Seguridad Industrial,
   rol operativo, jefa inmediata Brenda.
 - **Costeo de lotes con la nómina real (9-oct-2026, Mario: "vincula todo
