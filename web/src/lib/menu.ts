@@ -57,6 +57,7 @@ const esBbvaAcotado = (p: Profile) => p.rol === "responsable" && bbva(p);
 const veOperacion = (p: Profile) => (veFinanzasCompleto(p) || p.rol === "responsable" || p.rol === "almacen") && !esBbvaAcotado(p);
 
 const veInventario = (p: Profile) => veOperacion(p) || modulo("inventario")(p);
+const veOrdenes = (p: Profile) => esAdmin(p) || ["almacen", "corporativo", "direccion", "empresa"].includes(p.rol) || (p.modulos ?? []).includes("compras");
 const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || modulo("produccion")(p);
 
 /** Las áreas (departamentos) del organigrama de dirección general (25-sep-2026). El
@@ -191,11 +192,22 @@ export const SECCIONES: SeccionMenu[] = [
     proposito: "Entradas y salidas de almacén contra OC/OV, existencias y productos.",
     entradas: [
       { ruta: "/punto-venta", etiqueta: "Punto de venta", descripcion: "mostrador de ferretería: cobra con código de barras, caja y despacho", uso: "Escanea los productos, cobra (efectivo, tarjeta, transferencia o crédito), imprime el ticket y despacha al escanear el ticket.", visible: (p) => esAdmin(p) || p.rol === "almacen" || p.rol === "corporativo" || (p.modulos ?? []).includes("punto_venta"), modulo: "punto_venta" },
+      { ruta: "/ordenes?tipo=OC", etiqueta: "Órdenes OC / OS / OV", descripcion: "órdenes propias con folio IA", uso: "Captura la orden aquí (ya no en el backoffice); sale el folio IA y va a dirección para autorizar.", visible: veOrdenes, modulo: "inventario" },
       { ruta: "/inventario", etiqueta: "Registrar movimiento", descripcion: "entradas y salidas contra las partidas de la OC/OV", uso: "Al recibir material: elige la OC, marca las partidas que llegaron y guarda; sale el comprobante con QR.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/por-recibir", etiqueta: "Por recibir", descripcion: "OC ya pagadas que faltan de confirmar, en bodega u obra", uso: "Tesorería pagó; almacén u obra confirma qué llegó y cuánto, partida por partida.", visible: veInventario, modulo: "inventario" },
       { ruta: "/inventario/resumen", etiqueta: "Resumen de inventario", descripcion: "valor por empresa y días en que se cargó la información", uso: "Ver qué tan al día está el inventario: última captura por empresa y qué se registró cada día.", visible: veInventario, modulo: "inventario" },
       { ruta: "/inventario/existencias", etiqueta: "Existencias", descripcion: "lo que hay en cada almacén", uso: "Para consultar stock antes de pedir o de prometer entrega.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/productos", etiqueta: "Productos", descripcion: "catálogo de productos por empresa", uso: "Corregir nombres, unidades y códigos de barras.", visible: veInventario , modulo: "inventario" },
+    ],
+  },
+  {
+    clave: "compras",
+    titulo: "Compras",
+    proposito: "Órdenes de compra, servicio y venta con folio propio IA, y requisiciones de obra.",
+    entradas: [
+      { ruta: "/ordenes", etiqueta: "Órdenes de compra (OC)", descripcion: "folio IA-OC: material a proveedor", uso: "Captura proveedor, obra y partidas sin IVA; dirección la autoriza y se programa el pago.", visible: veOrdenes, modulo: "inventario" },
+      { ruta: "/ordenes?tipo=OS", etiqueta: "Órdenes de servicio (OS)", descripcion: "folio IA-OS: servicios y subcontratos", uso: "Fletes, renta de equipo, mano de obra subcontratada: se autoriza y paga como la OC; no entra a inventario.", visible: veOrdenes, modulo: "inventario" },
+      { ruta: "/ordenes?tipo=OV", etiqueta: "Órdenes de venta (OV)", descripcion: "folio IA-OV: venta a cliente", uso: "Captura cliente y partidas; almacén surte la salida contra la OV.", visible: veOrdenes, modulo: "inventario" },
     ],
   },
   {

@@ -13,6 +13,7 @@ const DETALLE: Record<string, { responsable: string | null; color: string }> = {
   legal: { responsable: "Belén Vergara / Eréndira Solís", color: "bg-rose-700" },
   rh: { responsable: "Fernando Gómez / Eréndira Solís", color: "bg-violet-600" },
   almacen: { responsable: null, color: "bg-amber-600" },
+  compras: { responsable: null, color: "bg-violet-600" },
   logistica: { responsable: null, color: "bg-orange-600" },
   mantenimiento: { responsable: "Christian Bonifacio", color: "bg-sky-600" },
   operacion: { responsable: null, color: "bg-slate-700" },

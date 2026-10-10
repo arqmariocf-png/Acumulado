@@ -16,7 +16,7 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
     try {
       const { data: oc, error: errOc } = await supabase
         .from("ordenes_compra")
-        .select("id, id_orden, fecha_creacion, proveedor, proyecto, autorizada_en, empresas(nombre, codigo, rfc), creador:profiles!ordenes_compra_creada_por_fkey(nombre), autorizador:profiles!ordenes_compra_autorizada_por_fkey(nombre)")
+        .select("id, id_orden, tipo, fuente, notas, fecha_entrega, lugar_entrega, fecha_creacion, proveedor, proyecto, autorizada_en, empresas(nombre, codigo, rfc), creador:profiles!ordenes_compra_creada_por_fkey(nombre), autorizador:profiles!ordenes_compra_autorizada_por_fkey(nombre)")
         .eq("id", ocId)
         .maybeSingle();
       if (errOc) throw errOc;
@@ -61,8 +61,10 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
           creada_por: o.creador?.nombre ?? null,
           autorizada_en: o.autorizada_en,
           autorizada_por: o.autorizador?.nombre ?? null,
-          nota,
+          nota: o.notas ?? nota,
           forma_pago: formaPago,
+          titulo: o.tipo === "OS" ? "ORDEN DE SERVICIO" : o.fuente === "acumulado" ? "ORDEN DE COMPRA" : undefined,
+          entrega: [o.fecha_entrega, o.lugar_entrega].filter(Boolean).join(" · ") || null,
           banco: pago?.banco_proveedor ?? null,
           clabe: pago?.clabe ?? null,
           cuenta: pago?.cuenta_proveedor ?? null,

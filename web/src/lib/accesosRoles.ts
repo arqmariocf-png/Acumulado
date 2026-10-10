@@ -66,6 +66,7 @@ export const EDITA: Record<string, Partial<Record<AppRol, string>>> = {
   "/saldos": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/prestamos-intercompania": { admin: "todo", corporativo: "todo", direccion: "solo consulta" },
   "/finanzas/seguro-social-obras": { admin: "ve y captura", corporativo: "captura el seguro social (ve solo el personal asignado)" },
+  "/ordenes": { admin: "captura, edita, cancela y autoriza", direccion: "captura, cancela y autoriza (en Por autorizar)", corporativo: "captura y cancela", almacen: "captura OC/OS/OV y cancela las suyas", empresa: "captura OC/OS/OV de su empresa", operativo: "con permiso compras: captura", administrativo: "con permiso compras: captura", supervisor: "con permiso compras: captura", directivo: "con permiso compras: captura" },
   "/punto-venta": { admin: "vende, cancela, precios y caja", almacen: "vende, despacha, cancela, precios y caja", corporativo: "vende, despacha, cancela, precios y caja", operativo: "con permiso punto de venta: vende y despacha", administrativo: "con permiso punto de venta: vende y despacha", supervisor: "con permiso punto de venta: vende y despacha", directivo: "con permiso punto de venta: vende y despacha" },
   "/comedor": { admin: "cocina, nómina y pide", corporativo: "cocina, nómina y pide", direccion: "descuento vía nómina y pide", rh: "descuento vía nómina y pide", operativo: "pide su comida (con módulo comedor: cocina)", administrativo: "pide su comida (con módulo comedor: cocina)", supervisor: "pide su comida (con módulo comedor: cocina)", directivo: "pide su comida (con módulo comedor: cocina)", responsable: "pide su comida (con módulo comedor: cocina)", almacen: "pide su comida (con módulo comedor: cocina)", empresa: "pide su comida (con módulo comedor: cocina)", produccion: "pide su comida (con módulo comedor: cocina)" },
   "/gastos": { admin: "revisa y aprueba", corporativo: "revisa y aprueba", direccion: "revisa y aprueba", empresa: "comprueba", responsable: "comprueba", supervisor: "comprueba", directivo: "comprueba", administrativo: "comprueba" },
@@ -129,7 +130,7 @@ export function accesosDelRol(rol: AppRol): AccesoRuta[] {
       const veBase = e.visible(base);
       const veConModulo = !veBase && e.visible(todos);
       if (!veBase && !veConModulo) continue;
-      lista.push({ ruta: e.ruta, etiqueta: e.etiqueta, seccion: s.titulo, conModulo: veConModulo, edita: EDITA[e.ruta]?.[rol] ?? null });
+      lista.push({ ruta: e.ruta, etiqueta: e.etiqueta, seccion: s.titulo, conModulo: veConModulo, edita: EDITA[e.ruta.split(/[?#]/)[0]]?.[rol] ?? null });
     }
   }
   return lista;

@@ -1171,6 +1171,45 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   true })`; en SQL no ordenar solo por `id_orden`). Aplica a pantallas
   nuevas, selectores, reportes y la hoja de pagos del día.
 
+## Órdenes propias OC / OS / OV con folio IA (10-oct-2026)
+- Mario: "genera el módulo de backoffice ya directamente en nuestro sistema
+  OC / OV / OS dentro del menú de almacén y compras; folio nuevo para que sea
+  IA". Decisiones: folio por tipo compartido entre empresas **IA-OC-0001,
+  IA-OS-0001, IA-OV-0001** (secuencias `folio_ia_oc/os/ov`, solo las usa la
+  función); **OS = orden de servicio** (va en `ordenes_compra.tipo = 'OS'`:
+  se autoriza y paga como OC, no entra a inventario); **conviven con el
+  backoffice** (la sincronización solo toca fuente 'api'; lo de aquí es
+  fuente **'acumulado'**); capturan admin, corporativo, dirección, almacén,
+  empresa o permiso por persona 'compras' (`auth_captura_ordenes()`);
+  autoriza dirección con `fn_oc_autorizar` en "Órdenes por autorizar".
+- `20261010160000_ordenes_propias_ia.sql`: sin tablas nuevas (reusa
+  `ordenes_compra/_lineas` y `ordenes_venta/_lineas`; columnas `notas`,
+  `fecha_entrega`, `lugar_entrega`; en OV además `creada_por`,
+  `condicion_pago`, `forma_pago`, `subtotal`, `iva`, `cancelada_*`;
+  `ordenes_venta_lineas.iva`). Partidas SIN IVA; el IVA por partida y el
+  total se calculan en `fn_orden_ia_guardar(id|null, tipo, empresa,
+  contraparte, proyecto, fecha, lineas, forma_pago, condicion,
+  fecha_entrega, lugar_entrega, notas)` y se guardan en
+  `subtotal_backoffice/iva_backoffice` (v_oc_importes los toma). Editar solo
+  quien la capturó o dirección, mientras no esté autorizada ni tenga pagos o
+  movimientos; cambiar OC↔OS toma folio de la otra serie.
+  `fn_orden_ia_cancelar(id, es_venta, motivo)`: OC/OS → rechazada con
+  "Cancelada: …" (sin pagos hechos ni entradas; quita lo programado); OV →
+  `cancelada_en` (sin salidas). `periodo` es columna generada: no se escribe.
+- Frontend `/ordenes?tipo=OC|OS|OV` (`pages/ordenes/Ordenes.tsx`,
+  `EditorOrden.tsx`, `VerOrdenVenta.tsx`; `lib/ordenesIa.ts` con pruebas):
+  lista con etapa (por autorizar → autorizada → pago programado → pagada ·
+  por recibir → recibida), "Ver también las del backoffice", captura con
+  sugerencias de proveedores/clientes, obras y productos, imprimir (OC/OS con
+  `BotonVerOc`, que ahora titula "ORDEN DE SERVICIO"; OV con el mismo
+  formato, cliente y sin sello). Menú: sección nueva **Compras** (OC, OS, OV)
+  y entrada en Almacén. "Por autorizar" y el KPI `fin_oc_por_autorizar`
+  incluyen fuente 'acumulado' (etiqueta IA). Probado en producción dentro de
+  transacciones revertidas; consecutivos reiniciados a 1.
+- Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
+  `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
+  producto del catálogo.
+
 ## Legal (1-oct-2026)
 - Mario: "módulo legal; que esté Belén con el rol para dar seguimiento, al
   igual que Eréndira" + el contrato de crédito de los abogados como machote
