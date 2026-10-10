@@ -277,6 +277,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`20261010130000`). Materia prima en kg por mes, existencia, por
   comprar y mes en que se acaba (`mesSinMateriaPrima`). Con eso: 115 t de
   alambrón al año, utilidad −$377 mil, equilibrio ≈ $1,749/rollo s/IVA.
+  **Compras y financiamiento (10-oct, Mario: "las semanas donde tengo
+  que comprar o tendría que llegar el producto para estudiar el tiempo de
+  financiamiento")**: `semanasConsumo` reparte los kg del mes en sus días
+  hábiles por semana; `planCompras` (PEPS, con pruebas) programa pedidos
+  de N kg para que lleguen cuando la existencia ya no cubre esa semana y
+  la siguiente: pedir = llega − días de entrega, pagar = llega + crédito
+  del proveedor, cobro = mitad de su consumo + días de cobro, días
+  financiados = cobro − pago. Supuestos en pantalla (5,700 kg, 7 días, 0
+  crédito, 30 de cobro): 20 pedidos, $2.09 M c/IVA, ≈ 48 días financiados.
 - **No se pierde lo capturado al cambiar de ventana (9-oct-2026, Mario)**:
   causa: al volver a la pestaña Supabase renueva el token (objeto de sesión
   nuevo) y `useAuth` recargaba el perfil con `cargando=true` →

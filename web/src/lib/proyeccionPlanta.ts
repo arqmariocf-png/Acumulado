@@ -246,3 +246,134 @@ export function mesSinMateriaPrima(meses: MesProyeccion[], existenciaKg: number)
   }
   return null;
 }
+
+// ── Compras de materia prima por semana (Mario, 10-oct-2026: "ponme las
+// semanas donde tengo que comprar o tendría que llegar el producto para
+// estudiar el tiempo de financiamiento") ────────────────────────────────
+
+export interface SemanaConsumo {
+  /** Lunes de la semana (YYYY-MM-DD). */
+  semana: string;
+  kg: number;
+}
+
+function lunesDe(d: Date): Date {
+  const dia = d.getUTCDay(); // 0 domingo
+  return sumarDias(d, dia === 0 ? -6 : 1 - dia);
+}
+
+/** Reparte los kg de cada mes en sus días hábiles (sin festivos ni cierre) y los suma por semana. */
+export function semanasConsumo(meses: MesProyeccion[], s: Pick<SupuestosProyeccion, "desde" | "semanasCierre">): SemanaConsumo[] {
+  const inicio = fecha(s.desde);
+  const fin = new Date(Date.UTC(inicio.getUTCFullYear() + 1, inicio.getUTCMonth(), inicio.getUTCDate()));
+  const festivos = new Set<string>();
+  for (let a = inicio.getUTCFullYear(); a <= fin.getUTCFullYear(); a++) festivosLFT(a).forEach((f) => festivos.add(f));
+  const cierre = new Set<string>();
+  let porCerrar = Math.round(s.semanasCierre * 6);
+  for (let d = sumarDias(fin, -1); porCerrar > 0 && d >= inicio; d = sumarDias(d, -1)) {
+    if (d.getUTCMonth() === 11 && esHabil(d) && !festivos.has(iso(d))) {
+      cierre.add(iso(d));
+      porCerrar--;
+    }
+  }
+  const porSemana = new Map<string, number>();
+  for (const m of meses) {
+    const dias: Date[] = [];
+    for (let d = fecha(`${m.mes}-01`); iso(d).slice(0, 7) === m.mes; d = sumarDias(d, 1)) {
+      if (d < inicio || d >= fin || !esHabil(d) || festivos.has(iso(d)) || cierre.has(iso(d))) continue;
+      dias.push(d);
+    }
+    if (dias.length === 0 || m.kgMp <= 0) continue;
+    for (const d of dias) {
+      const k = iso(lunesDe(d));
+      porSemana.set(k, (porSemana.get(k) ?? 0) + m.kgMp / dias.length);
+    }
+  }
+  return [...porSemana.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([semana, kg]) => ({ semana, kg: r2(kg) }));
+}
+
+export interface OpcionesCompra {
+  existenciaKg: number;
+  /** Tamaño de cada pedido (p. ej. un tráiler de alambrón). */
+  kgPedido: number;
+  /** Días entre pedir y que llegue. */
+  diasEntrega: number;
+  /** Días de crédito del proveedor, contados desde que llega. */
+  diasCreditoProveedor: number;
+  /** Días que tarda en cobrarse la venta del producto. */
+  diasCobro: number;
+  /** Costo por kg sin IVA. */
+  costoKg: number;
+  /** Semanas de consumo que deben quedar cubiertas al llegar el pedido. */
+  semanasSeguridad?: number;
+}
+
+export interface PedidoMp {
+  numero: number;
+  pedir: string;
+  llega: string;
+  pagar: string;
+  kg: number;
+  montoSinIva: number;
+  montoConIva: number;
+  /** Semana en que se empieza y se termina de consumir. */
+  consumoDesde: string | null;
+  consumoHasta: string | null;
+  /** Fecha estimada de cobro de lo producido con este pedido. */
+  cobro: string | null;
+  /** Días entre pagar al proveedor y cobrar la venta. */
+  diasFinanciamiento: number | null;
+}
+
+/** Plan de compras PEPS: cuándo pedir para que la existencia cubra el consumo. */
+export function planCompras(semanas: SemanaConsumo[], o: OpcionesCompra): PedidoMp[] {
+  const seguridad = Math.max(0, o.semanasSeguridad ?? 1);
+  const capas: { pedido: PedidoMp | null; kg: number }[] = [{ pedido: null, kg: Math.max(0, o.existenciaKg) }];
+  const pedidos: PedidoMp[] = [];
+  const disponible = () => capas.reduce((t, c) => t + c.kg, 0);
+  for (let i = 0; i < semanas.length; i++) {
+    const necesita = semanas.slice(i, i + 1 + seguridad).reduce((t, w) => t + w.kg, 0);
+    while (o.kgPedido > 0 && disponible() < necesita) {
+      const llega = fecha(semanas[i].semana);
+      const p: PedidoMp = {
+        numero: pedidos.length + 1,
+        pedir: iso(sumarDias(llega, -Math.max(0, o.diasEntrega))),
+        llega: iso(llega),
+        pagar: iso(sumarDias(llega, Math.max(0, o.diasCreditoProveedor))),
+        kg: o.kgPedido,
+        montoSinIva: r2(o.kgPedido * o.costoKg),
+        montoConIva: r2(o.kgPedido * o.costoKg * 1.16),
+        consumoDesde: null,
+        consumoHasta: null,
+        cobro: null,
+        diasFinanciamiento: null,
+      };
+      pedidos.push(p);
+      capas.push({ pedido: p, kg: o.kgPedido });
+    }
+    // Consumo de la semana, primeras entradas primeras salidas.
+    let porConsumir = semanas[i].kg;
+    while (porConsumir > 0.0001 && capas.length) {
+      const c = capas[0];
+      const toma = Math.min(c.kg, porConsumir);
+      if (toma > 0 && c.pedido) {
+        c.pedido.consumoDesde ??= semanas[i].semana;
+        c.pedido.consumoHasta = semanas[i].semana;
+      }
+      c.kg -= toma;
+      porConsumir -= toma;
+      if (c.kg <= 0.0001) capas.shift();
+      else break;
+    }
+  }
+  for (const p of pedidos) {
+    if (!p.consumoDesde || !p.consumoHasta) continue;
+    const desde = fecha(p.consumoDesde).getTime();
+    const hasta = sumarDias(fecha(p.consumoHasta), 6).getTime();
+    const medio = new Date((desde + hasta) / 2);
+    const cobro = sumarDias(new Date(Date.UTC(medio.getUTCFullYear(), medio.getUTCMonth(), medio.getUTCDate())), Math.max(0, o.diasCobro));
+    p.cobro = iso(cobro);
+    p.diasFinanciamiento = Math.round((cobro.getTime() - fecha(p.pagar).getTime()) / 864e5);
+  }
+  return pedidos;
+}

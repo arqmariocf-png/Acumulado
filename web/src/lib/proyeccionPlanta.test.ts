@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diasVacacionesLFT, festivosLFT, mesSinMateriaPrima, proyeccionAnual, ritmoPlanta, totalProyeccion, type SupuestosProyeccion } from "./proyeccionPlanta.ts";
+import { diasVacacionesLFT, festivosLFT, mesSinMateriaPrima, planCompras, proyeccionAnual, ritmoPlanta, semanasConsumo, totalProyeccion, type SupuestosProyeccion } from "./proyeccionPlanta.ts";
 
 test("festivos de ley 2027 y el 1 de octubre cada 6 años", () => {
   assert.deepEqual(festivosLFT(2027), ["2027-01-01", "2027-02-01", "2027-03-15", "2027-05-01", "2027-09-16", "2027-11-15", "2027-12-25"]);
@@ -76,4 +76,26 @@ test("kilos de materia prima por mes y hasta dónde alcanza la existencia", () =
   assert.ok(Math.abs(t.kgMp - t.piezas * 76) < 1);
   assert.equal(mesSinMateriaPrima(meses, 2885), "2026-10");
   assert.equal(mesSinMateriaPrima(meses, 1e9), null);
+});
+
+test("consumo por semana y calendario de compras con días de financiamiento", () => {
+  const meses = proyeccionAnual([], [], { ...base, kgPorPieza: 76 });
+  const semanas = semanasConsumo(meses, base);
+  const totalSem = semanas.reduce((t, w) => t + w.kg, 0);
+  assert.ok(Math.abs(totalSem - totalProyeccion(meses).kgMp) < 1);
+  assert.ok(semanas.every((w) => new Date(`${w.semana}T00:00:00Z`).getUTCDay() === 1));
+  const pedidos = planCompras(semanas, { existenciaKg: 2885, kgPedido: 5700, diasEntrega: 7, diasCreditoProveedor: 0, diasCobro: 30, costoKg: 15.8 });
+  assert.ok(pedidos.length > 10);
+  const p = pedidos[0];
+  assert.equal(p.kg, 5700);
+  assert.equal(p.montoSinIva, 90060);
+  // Se pide 7 días antes de que llegue y se paga al llegar (sin crédito).
+  assert.equal((Date.parse(p.llega) - Date.parse(p.pedir)) / 864e5, 7);
+  assert.equal(p.pagar, p.llega);
+  assert.ok(p.diasFinanciamiento != null && p.diasFinanciamiento > 30);
+  // Con 30 días de crédito del proveedor el financiamiento baja 30 días.
+  const conCredito = planCompras(semanas, { existenciaKg: 2885, kgPedido: 5700, diasEntrega: 7, diasCreditoProveedor: 30, diasCobro: 30, costoKg: 15.8 });
+  assert.equal(conCredito[0].diasFinanciamiento, p.diasFinanciamiento! - 30);
+  // Lo comprado cubre el consumo del periodo.
+  assert.ok(pedidos.reduce((t, x) => t + x.kg, 0) + 2885 >= totalSem);
 });

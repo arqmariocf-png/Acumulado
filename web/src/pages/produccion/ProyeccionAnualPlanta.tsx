@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { diasVacacionesLFT, mesSinMateriaPrima, proyeccionAnual, ritmoPlanta, totalProyeccion, type LoteProyeccion, type PersonaProyeccion } from "../../lib/proyeccionPlanta";
+import { diasVacacionesLFT, mesSinMateriaPrima, planCompras, proyeccionAnual, ritmoPlanta, semanasConsumo, totalProyeccion, type LoteProyeccion, type PersonaProyeccion } from "../../lib/proyeccionPlanta";
 
 // Proyección anual de la planta, solo director general (Mario, 10-oct-2026):
 // programación actual + ritmo de la planta en los días libres, quitando
@@ -69,6 +69,11 @@ function Proyeccion({ datos, empresaId }: { datos: DatosProyeccion; empresaId: s
   const [indirectos, setIndirectos] = useState(String(Math.round(indirectosDefault)));
   const [cierre, setCierre] = useState("1");
   const [vacSin, setVacSin] = useState("12");
+  // Compras de materia prima y financiamiento.
+  const [kgPedido, setKgPedido] = useState("5700");
+  const [diasEntrega, setDiasEntrega] = useState("7");
+  const [creditoProv, setCreditoProv] = useState("0");
+  const [diasCobro, setDiasCobro] = useState("30");
   const receta = datos.receta ?? [];
   const kgPorPieza = receta.reduce((t, r) => t + Number(r.por_pieza), 0);
 
@@ -99,6 +104,19 @@ function Proyeccion({ datos, empresaId }: { datos: DatosProyeccion; empresaId: s
   const porComprarKg = Math.max(0, t.kgMp - existenciaKg);
   const costoKg = receta.length ? Number(receta[0].costo ?? 0) : 0;
   const mesFalta = mesSinMateriaPrima(meses, existenciaKg);
+  const semanas = semanasConsumo(meses, { desde, semanasCierre: Number(cierre) || 0 });
+  const pedidos = planCompras(semanas, {
+    existenciaKg,
+    kgPedido: Number(kgPedido) || 0,
+    diasEntrega: Number(diasEntrega) || 0,
+    diasCreditoProveedor: Number(creditoProv) || 0,
+    diasCobro: Number(diasCobro) || 0,
+    costoKg,
+  });
+  const conDias = pedidos.filter((p) => p.diasFinanciamiento != null);
+  const diasPromedio = conDias.length ? conDias.reduce((t, p) => t + (p.diasFinanciamiento ?? 0), 0) / conDias.length : null;
+  const montoCompras = pedidos.reduce((t, p) => t + p.montoConIva, 0);
+  const fechaCorta = (f: string) => `${Number(f.slice(8, 10))} ${MESES[Number(f.slice(5, 7)) - 1]} ${f.slice(2, 4)}`;
 
   return (
     <div className="space-y-5">
@@ -266,6 +284,80 @@ function Proyeccion({ datos, empresaId }: { datos: DatosProyeccion; empresaId: s
           </table>
         </div>
       </div>
+      {kgPorPieza > 0 && (
+        <div className="rounded border border-slate-200 bg-white p-3">
+          <h3 className="mb-1 text-xs font-semibold uppercase text-slate-600">Compras de materia prima por semana y financiamiento</h3>
+          <p className="mb-2 text-xs text-slate-500">
+            Cada pedido debe llegar la semana en que la existencia ya no cubre el consumo de esa semana y la siguiente. Financiamiento = días desde que se paga el pedido hasta que se cobra lo que se produjo con él (mitad de su consumo + días de cobro).
+          </p>
+          <div className="mb-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <label>
+              kg por pedido
+              <input type="number" value={kgPedido} onChange={(e) => setKgPedido(e.target.value)} className={campo} />
+            </label>
+            <label>
+              Días de entrega del proveedor
+              <input type="number" value={diasEntrega} onChange={(e) => setDiasEntrega(e.target.value)} className={campo} />
+            </label>
+            <label>
+              Días de crédito del proveedor
+              <input type="number" value={creditoProv} onChange={(e) => setCreditoProv(e.target.value)} className={campo} />
+            </label>
+            <label>
+              Días para cobrar al cliente
+              <input type="number" value={diasCobro} onChange={(e) => setDiasCobro(e.target.value)} className={campo} />
+            </label>
+          </div>
+          <p className="mb-2 text-xs text-slate-700">
+            <b>{pedidos.length}</b> pedidos de {num(Number(kgPedido) || 0)} kg en el año · {$(montoCompras)} c/IVA
+            {diasPromedio != null && (
+              <>
+                {" "}· financiamiento promedio <b>{num(diasPromedio)} días</b> por pedido
+              </>
+            )}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-left uppercase text-slate-500">
+                <tr>
+                  <th className="px-2 py-1.5">#</th>
+                  <th className="px-2 py-1.5">Pedir</th>
+                  <th className="px-2 py-1.5">Debe llegar</th>
+                  <th className="px-2 py-1.5">Pagar</th>
+                  <th className="px-2 py-1.5 text-right">kg</th>
+                  <th className="px-2 py-1.5 text-right">Monto c/IVA</th>
+                  <th className="px-2 py-1.5">Se consume</th>
+                  <th className="px-2 py-1.5">Cobro estimado</th>
+                  <th className="px-2 py-1.5 text-right">Días financiados</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pedidos.map((p) => (
+                  <tr key={p.numero} className="border-t border-slate-100">
+                    <td className="px-2 py-1">{p.numero}</td>
+                    <td className={`px-2 py-1 font-medium ${p.pedir < desde ? "text-red-700" : ""}`}>{p.pedir < desde ? "¡ya! (atrasado)" : `sem. ${fechaCorta(p.pedir)}`}</td>
+                    <td className="px-2 py-1">sem. {fechaCorta(p.llega)}</td>
+                    <td className="px-2 py-1">{fechaCorta(p.pagar)}</td>
+                    <td className="px-2 py-1 text-right">{num(p.kg)}</td>
+                    <td className="px-2 py-1 text-right">{$(p.montoConIva)}</td>
+                    <td className="px-2 py-1">{p.consumoDesde ? `${fechaCorta(p.consumoDesde)} → ${fechaCorta(p.consumoHasta!)}` : "—"}</td>
+                    <td className="px-2 py-1">{p.cobro ? fechaCorta(p.cobro) : "—"}</td>
+                    <td className="px-2 py-1 text-right">{p.diasFinanciamiento ?? "—"}</td>
+                  </tr>
+                ))}
+                {pedidos.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-2 py-4 text-center text-slate-400">
+                      La existencia alcanza todo el periodo.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <p className="text-[11px] text-slate-400">
         Vacaciones: art. 76 LFT (12 días el primer año, +2 por año hasta 20, luego +2 cada 5), en el mes del aniversario y en días-planta (días de la persona ÷ personas de la planta). Festivos: art. 74 LFT. No incluye la amortización de la trefiladora ni impuestos.
       </p>
