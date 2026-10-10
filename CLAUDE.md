@@ -265,6 +265,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   lotes; nómina completa todo el año. Supuestos editables en pantalla.
   Primera corrida: ~1,513 rollos, ventas $2.27 M, utilidad −$435 mil a
   $1,500/rollo (equilibrio ≈ $1,787 s/IVA).
+  **Ajustes (10-oct, Mario)**: la capa PEPS de producto terminado de un
+  lote vale lo que cuesta el lote HOY (`v_peps_capas_producto_terminado`
+  lee `v_costeo_orden_produccion`); el costo de cada partida de remisión de
+  salida se calcula por PEPS (`v_peps_remisiones_lineas`) y lo usa
+  `v_margen_remisiones_produccion` (RM-000001: $1,611.49 vs venta $1,500 →
+  −$111.49); `fn_lotes_mano_obra_nomina` ya incluye a dirección.
+  `ordenes_compra.es_inversion` (OC 41094 Lázaro Carbarín $60,000 =
+  inversión): fuera de indirectos y mostrada aparte con meses de
+  recuperación; partidas con "MANTENIMIENTO" tampoco cuentan
+  (`20261010130000`). Materia prima en kg por mes, existencia, por
+  comprar y mes en que se acaba (`mesSinMateriaPrima`). Con eso: 115 t de
+  alambrón al año, utilidad −$377 mil, equilibrio ≈ $1,749/rollo s/IVA.
 - **No se pierde lo capturado al cambiar de ventana (9-oct-2026, Mario)**:
   causa: al volver a la pestaña Supabase renueva el token (objeto de sesión
   nuevo) y `useAuth` recargaba el perfil con `cargando=true` →

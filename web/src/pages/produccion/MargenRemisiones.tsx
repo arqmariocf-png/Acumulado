@@ -56,7 +56,7 @@ export function MargenRemisiones({ empresaId }: { empresaId: string }) {
     <div>
       <h2 className="mb-1 text-sm font-semibold text-slate-700">Margen por entrega (remisiones de salida)</h2>
       <p className="mb-2 text-xs text-slate-500">
-        Precio de venta sin IVA contra el costo real del producto al emitir. Con precio: venta {$(venta)} · margen {$(margen)}
+        Precio de venta sin IVA contra el costo real del lote (PEPS). Con precio: venta {$(venta)} · margen {$(margen)}
         {venta ? ` (${((margen / venta) * 100).toFixed(1)} %)` : ""}. {data.filter((r) => r.sin_precio > 0).length} remisiones con partidas sin precio.
       </p>
       <label className="mb-2 flex items-center gap-1 text-xs text-slate-600">
@@ -104,7 +104,15 @@ function FilaRemision({ r, abierta, onAbrir, empresaId, conIva }: { r: MargenRem
     queryFn: async () => {
       const { data, error: e } = await supabase.from("remisiones_produccion_lineas").select("id, descripcion, cantidad, unidad, precio_unitario, costo_unitario").eq("remision_id", r.remision_id).order("orden");
       if (e) throw e;
-      return data as Partida[];
+      // Costo real por PEPS contra los lotes (Mario, 10-oct-2026); el
+      // congelado al emitir queda de respaldo.
+      const ids = (data ?? []).map((p) => p.id as string);
+      const { data: peps, error: ep } = ids.length
+        ? await supabase.from("v_peps_remisiones_lineas").select("linea_id, costo_peps").in("linea_id", ids)
+        : { data: [], error: null };
+      if (ep) throw ep;
+      const costo = new Map((peps ?? []).map((x) => [x.linea_id as string, Number(x.costo_peps)]));
+      return (data as Partida[]).map((p) => ({ ...p, costo_unitario: costo.get(p.id) ?? p.costo_unitario }));
     },
   });
   const guardar = useMutation({
