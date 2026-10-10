@@ -11,7 +11,10 @@ export interface ProductoVenta {
   unidad_medida: string | null;
   precio_venta: number | null;
   iva_tasa: number;
+  /** Existencia en el almacén del punto de venta (de ahí sale la venta). */
   existencia: number;
+  /** Costo sin IVA: promedio ponderado de las entradas, o el de referencia. */
+  costo: number | null;
 }
 
 export interface Turno {
@@ -92,15 +95,32 @@ export function useProductosVenta(empresaId: string) {
     queryKey: ["pv-productos", empresaId],
     enabled: !!empresaId,
     queryFn: async () => {
+      // Mismo almacén del que fn_pv_cobrar saca la venta.
+      const alm = await supabase.rpc("fn_pv_almacen", { p_empresa: empresaId });
+      if (alm.error) throw alm.error;
+      const almacenId = alm.data as string | null;
       const [prod, ex] = await Promise.all([
-        supabase.from("productos").select("id, nombre, sku, codigo_barras, unidad_medida, precio_venta, iva_tasa").eq("empresa_id", empresaId).eq("activo", true).order("nombre"),
-        supabase.from("existencias").select("producto_id, existencia").eq("empresa_id", empresaId),
+        supabase.from("productos").select("id, nombre, sku, codigo_barras, unidad_medida, precio_venta, iva_tasa, costo_referencia").eq("empresa_id", empresaId).eq("activo", true).order("nombre"),
+        almacenId
+          ? supabase.from("existencias").select("producto_id, existencia, costo_promedio").eq("empresa_id", empresaId).eq("almacen_id", almacenId)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (prod.error) throw prod.error;
       if (ex.error) throw ex.error;
-      const stock = new Map<string, number>();
-      for (const e of ex.data ?? []) stock.set(e.producto_id as string, (stock.get(e.producto_id as string) ?? 0) + Number(e.existencia));
-      return (prod.data ?? []).map((p) => ({ ...p, iva_tasa: Number(p.iva_tasa ?? 0.16), existencia: stock.get(p.id as string) ?? 0 })) as ProductoVenta[];
+      const stock = new Map<string, { q: number; c: number | null }>();
+      for (const e of (ex.data ?? []) as { producto_id: string; existencia: number; costo_promedio: number | null }[]) {
+        const x = stock.get(e.producto_id) ?? { q: 0, c: null };
+        stock.set(e.producto_id, { q: x.q + Number(e.existencia), c: e.costo_promedio != null ? Number(e.costo_promedio) : x.c });
+      }
+      return (prod.data ?? []).map(({ costo_referencia, ...p }) => {
+        const st = stock.get(p.id as string);
+        return {
+          ...p,
+          iva_tasa: Number(p.iva_tasa ?? 0.16),
+          existencia: st?.q ?? 0,
+          costo: st?.c ?? (costo_referencia != null ? Number(costo_referencia) : null),
+        };
+      }) as ProductoVenta[];
     },
   });
 }

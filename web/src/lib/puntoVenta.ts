@@ -102,6 +102,25 @@ export function filtrarProductos<T extends ProductoPv>(productos: T[], texto: st
   });
 }
 
+/** Precio con IVA a partir del costo sin IVA y la utilidad sobre el costo. */
+export function precioConUtilidad(costoSinIva: number, utilidadPct: number, ivaTasa = 0.16): number {
+  return r2(costoSinIva * (1 + utilidadPct / 100) * (1 + ivaTasa));
+}
+
+/** Utilidad sobre el costo (%) de un precio con IVA; null sin costo. */
+export function utilidadDePrecio(precioConIva: number, costoSinIva: number | null, ivaTasa = 0.16): number | null {
+  if (costoSinIva == null || costoSinIva <= 0) return null;
+  return Math.round((precioConIva / (1 + ivaTasa) / costoSinIva - 1) * 10000) / 100;
+}
+
+/** El precio manual tiene que dejar utilidad positiva sobre el costo. */
+export function revisarPrecio(precioConIva: number, costoSinIva: number | null, ivaTasa = 0.16): string | null {
+  if (!Number.isFinite(precioConIva) || precioConIva <= 0) return "El precio tiene que ser mayor a cero.";
+  const u = utilidadDePrecio(precioConIva, costoSinIva, ivaTasa);
+  if (u != null && u <= 0) return `Con ese precio no hay utilidad: el costo sin IVA es $${costoSinIva!.toFixed(2)} (${u}%).`;
+  return null;
+}
+
 /** Efectivo esperado en caja y diferencia contra lo contado. */
 export function corteCaja(t: { fondo_inicial: number; efectivo: number; ingresos: number; retiros: number }, contado: number | null) {
   const esperado = r2(Number(t.fondo_inicial) + Number(t.efectivo) + Number(t.ingresos) - Number(t.retiros));

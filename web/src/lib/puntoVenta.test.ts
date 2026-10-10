@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { agregarAlCarrito, buscarPorCodigo, corteCaja, filtrarProductos, htmlTicket, importeLinea, revisarPagos, totalesCarrito, type LineaCarrito } from "./puntoVenta.ts";
+import { agregarAlCarrito, buscarPorCodigo, corteCaja, filtrarProductos, htmlTicket, importeLinea, precioConUtilidad, revisarPagos, revisarPrecio, utilidadDePrecio, totalesCarrito, type LineaCarrito } from "./puntoVenta.ts";
 
 const linea = (precio: number, cantidad: number, descuentoPct = 0): LineaCarrito => ({ productoId: `p${precio}`, nombre: "x", sku: null, unidad: "pza", precio, cantidad, descuentoPct, ivaTasa: 0.16 });
 
@@ -53,4 +53,16 @@ test("ticket con folio en código de barras", () => {
   assert.ok(h.includes("Clavo &lt;2&gt;"));
   assert.ok(h.includes("$232.00"));
   assert.ok(h.includes("Cambio"));
+});
+
+test("precio con % de utilidad sobre el costo y utilidad positiva", () => {
+  // Costo $100 s/IVA + 30 % = $130 s/IVA = $150.80 c/IVA.
+  assert.equal(precioConUtilidad(100, 30), 150.8);
+  assert.equal(utilidadDePrecio(150.8, 100), 30);
+  assert.equal(utilidadDePrecio(150.8, null), null);
+  assert.equal(revisarPrecio(150.8, 100), null);
+  assert.match(revisarPrecio(116, 100)!, /no hay utilidad/);
+  assert.match(revisarPrecio(100, 100)!, /no hay utilidad/);
+  assert.match(revisarPrecio(0, null)!, /mayor a cero/);
+  assert.equal(revisarPrecio(50, null), null); // sin costo no se puede revisar
 });

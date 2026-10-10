@@ -1260,6 +1260,26 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   dependencias) y `lib/puntoVenta.ts` (totales, pagos, búsqueda, corte,
   ticket 80 mm), ambos con pruebas. Pendientes: precios de los 112
   productos de AEP, catálogo de las demás empresas, CFDI con PAC.
+- **Existencias reales y precio por utilidad (10-oct-2026, Mario: "vincula
+  inventario con el punto de venta para tener existencias reales"; "déjame
+  colocar el precio manual con porcentaje de utilidad positivo")**:
+  `20261010150000`: `fn_pv_cobrar` no vende más de lo que hay en el almacén
+  del punto de venta (`fn_pv_almacen(empresa)` = primer almacén activo, el
+  mismo del que sale la venta; la pantalla pinta solo ese stock y bloquea
+  "Cobrar"); `fn_pv_ajustar_existencia(producto, contado, nota)` = conteo
+  físico (admin/almacén/corporativo) → movimiento `es_ajuste` por la
+  diferencia. Precios: costo s/IVA (costo promedio del almacén o de
+  referencia), utilidad % sobre el costo → precio c/IVA, o precio a mano;
+  no se guarda sin utilidad positiva (`precioConUtilidad`,
+  `utilidadDePrecio`, `revisarPrecio` en `lib/puntoVenta.ts`).
+- **Resumen de inventario (10-oct-2026, Mario: "un resumen y qué días se
+  cargó la información")**: Inventario → Resumen (`inventario/Resumen.tsx`,
+  `lib/resumenInventario.ts` con pruebas): por empresa (productos, con
+  existencia, negativos, valor, movimientos, primera/última carga, días sin
+  capturar) y bitácora por día de captura (created_at en hora de México;
+  entradas, salidas, valor, fecha de los movimientos, quién) con el detalle
+  de cada día (origen OC/OV/remisión/punto de venta/conteo). Al 10-oct solo
+  AEP y MCC tienen movimientos; última carga 7-oct.
 
 
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):

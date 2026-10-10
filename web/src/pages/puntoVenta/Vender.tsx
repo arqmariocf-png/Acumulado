@@ -63,6 +63,10 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
   }
 
   const existencia = new Map(productos.map((p) => [p.id, p.existencia]));
+  // Lo pedido de cada producto (puede venir en varias líneas) contra lo que hay.
+  const pedido = new Map<string, number>();
+  for (const l of carrito) pedido.set(l.productoId, (pedido.get(l.productoId) ?? 0) + l.cantidad);
+  const sinExistencia = [...pedido].filter(([id, c]) => c > (existencia.get(id) ?? 0)).length;
 
   return (
     <div className="grid gap-4 lg:grid-cols-5">
@@ -151,7 +155,7 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
                     </label>
                     <span className="ml-auto font-semibold text-slate-900">{dinero(importeLinea(l))}</span>
                   </div>
-                  {l.cantidad > stock && <p className="mt-1 text-[11px] text-amber-700">Existencia: {stock.toLocaleString("es-MX")}. Se venderá en negativo.</p>}
+                  {(pedido.get(l.productoId) ?? 0) > stock && <p className="mt-1 text-[11px] text-red-700">Solo hay {stock.toLocaleString("es-MX")} en el almacén. Registra la entrada o el conteo físico antes de vender.</p>}
                 </li>
               );
             })}
@@ -181,7 +185,7 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
               <span className="text-slate-600">Total</span>
               <span className="text-2xl font-bold text-slate-900">{dinero(totales.total)}</span>
             </div>
-            <button type="button" disabled={carrito.length === 0 || totales.total <= 0} onClick={() => setCobrando(true)} className="w-full rounded-lg bg-emerald-600 py-3 text-lg font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">
+            <button type="button" disabled={carrito.length === 0 || totales.total <= 0 || sinExistencia > 0} title={sinExistencia ? "Hay productos sin existencia suficiente" : undefined} onClick={() => setCobrando(true)} className="w-full rounded-lg bg-emerald-600 py-3 text-lg font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">
               Cobrar
             </button>
           </div>
@@ -202,6 +206,10 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
             queryClient.invalidateQueries({ queryKey: ["pv-productos", empresaId] });
             queryClient.invalidateQueries({ queryKey: ["pv-turno"] });
             queryClient.invalidateQueries({ queryKey: ["pv-ventas"] });
+            // La venta es una salida del inventario: refresca existencias y resumen.
+            queryClient.invalidateQueries({ queryKey: ["existencias"] });
+            queryClient.invalidateQueries({ queryKey: ["inv-resumen-existencias"] });
+            queryClient.invalidateQueries({ queryKey: ["inv-resumen-movimientos"] });
             limpiar();
           }}
         />

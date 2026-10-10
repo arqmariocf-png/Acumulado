@@ -7,7 +7,7 @@ import { dineroMx } from "../../lib/kpisEmpresa";
 import { fechaLocal, horaLocal } from "../../lib/reporteChecador";
 import { cargasPorDia, diasSinCarga, resumenPorEmpresa, type ExistenciaResumen, type MovimientoResumen } from "../../lib/resumenInventario";
 
-type Mov = MovimientoResumen & { id: string; productos: { nombre: string; sku: string; unidad_medida: string } | null };
+type Mov = MovimientoResumen & { id: string; comentario: string | null; productos: { nombre: string; sku: string; unidad_medida: string } | null };
 
 const fechaCorta = (d: string) =>
   new Date(`${d}T12:00:00Z`).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -35,7 +35,7 @@ export function Resumen() {
     queryFn: async () => {
       let q = supabase
         .from("movimientos_inventario")
-        .select("id, empresa_id, tipo, cantidad, costo_unitario, fecha, es_ajuste, registrado_por, created_at, orden_compra_id, orden_venta_id, remision_id, productos(nombre, sku, unidad_medida)")
+        .select("id, empresa_id, tipo, cantidad, costo_unitario, fecha, es_ajuste, registrado_por, created_at, comentario, orden_compra_id, orden_venta_id, remision_id, productos(nombre, sku, unidad_medida)")
         .order("created_at", { ascending: false });
       if (empresaId) q = q.eq("empresa_id", empresaId);
       const { data, error } = await q.limit(5000);
@@ -194,6 +194,16 @@ export function Resumen() {
   );
 }
 
+function origen(m: Mov): string {
+  if (m.orden_compra_id) return "OC";
+  if (m.orden_venta_id) return "OV";
+  if (m.remision_id) return "Remisión";
+  const c = m.comentario ?? "";
+  if (/^Venta PV-|^Cancelación PV-/i.test(c)) return `Punto de venta · ${(c.split(" ")[1] ?? "").replace(":", "")}`;
+  if (c.startsWith("Conteo físico")) return "Conteo físico";
+  return m.es_ajuste ? "Ajuste" : "Manual";
+}
+
 function Tarjeta({ titulo, valor, nota, alerta }: { titulo: string; valor: string; nota?: string; alerta?: boolean }) {
   return (
     <div className={`rounded border bg-white p-3 ${alerta ? "border-amber-300" : "border-slate-200"}`}>
@@ -228,7 +238,7 @@ function DetalleDia({ movs, empresa, persona }: { movs: Mov[]; empresa: (id: str
             <td className="py-1 pr-2">{m.productos ? `${m.productos.sku} · ${m.productos.nombre}` : "—"}</td>
             <td className="py-1 pr-2 text-right tabular-nums">{Number(m.cantidad).toLocaleString("es-MX")} {m.productos?.unidad_medida ?? ""}</td>
             <td className="py-1 pr-2">{m.fecha}</td>
-            <td className="py-1 pr-2">{m.orden_compra_id ? "OC" : m.orden_venta_id ? "OV" : m.remision_id ? "Remisión" : "Manual"}</td>
+            <td className="py-1 pr-2">{origen(m)}</td>
             <td className="py-1 pr-2">{m.registrado_por ? persona(m.registrado_por) : "—"}</td>
           </tr>
         ))}
