@@ -61,6 +61,7 @@ const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisicion
 const InventarioPorRecibir = lazy(() => import("./pages/inventario/PorRecibir").then((m) => ({ default: m.PorRecibir })));
 const InventarioLayout = lazy(() => import("./pages/inventario/InventarioLayout").then((m) => ({ default: m.InventarioLayout })));
 const InventarioMovimientos = lazy(() => import("./pages/inventario/Movimientos").then((m) => ({ default: m.Movimientos })));
+const InventarioResumen = lazy(() => import("./pages/inventario/Resumen").then((m) => ({ default: m.Resumen })));
 const InventarioExistencias = lazy(() => import("./pages/inventario/Existencias").then((m) => ({ default: m.Existencias })));
 const InventarioProductos = lazy(() => import("./pages/inventario/Productos").then((m) => ({ default: m.Productos })));
 const InventarioMatch = lazy(() => import("./pages/inventario/Match").then((m) => ({ default: m.Match })));
@@ -212,6 +213,7 @@ function Enrutador() {
           <Route element={<ProtectedRoute modulo="inventario" />}>
           <Route path="/inventario" element={<InventarioLayout />}>
             <Route index element={<InventarioMovimientos />} />
+            <Route path="resumen" element={<InventarioResumen />} />
             <Route path="existencias" element={<InventarioExistencias />} />
             <Route path="productos" element={<InventarioProductos />} />
             <Route path="match" element={<InventarioMatch />} />
