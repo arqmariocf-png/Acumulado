@@ -9,6 +9,7 @@ import { MargenRemisiones } from "./produccion/MargenRemisiones";
 import { CotizadorPlanta } from "./produccion/CotizadorPlanta";
 import { CalendarioMaquinas } from "./produccion/CalendarioMaquinas";
 import { RemisionesPlanta } from "./produccion/RemisionesPlanta";
+import { ProyeccionAnualPlanta } from "./produccion/ProyeccionAnualPlanta";
 import { margenSobreVenta, precioParaMargen, precioPromedio } from "../lib/margenPlanta";
 import type {
   CosteoMensualPlanta,
@@ -88,7 +89,7 @@ interface Empresa {
   nombre: string;
 }
 
-type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo" | "despiece" | "calendario" | "cotizador";
+type Pestana = "catalogo" | "inventario" | "ordenes" | "costeo" | "despiece" | "calendario" | "cotizador" | "proyeccion";
 
 const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
   { valor: "catalogo", etiqueta: "Catálogo" },
@@ -103,6 +104,8 @@ const PESTANAS: { valor: Pestana; etiqueta: string }[] = [
 const PESTANA_DESPIECE: { valor: Pestana; etiqueta: string } = { valor: "despiece", etiqueta: "Despiece y cotización" };
 // Clavicón: cotizador de producto terminado, última pestaña (Mario, 30-sep-2026).
 const PESTANA_COTIZADOR: { valor: Pestana; etiqueta: string } = { valor: "cotizador", etiqueta: "Cotizador" };
+// Solo director general (admin de la organización maestra), 10-oct-2026.
+const PESTANA_PROYECCION: { valor: Pestana; etiqueta: string } = { valor: "proyeccion", etiqueta: "Proyección anual (director general)" };
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -147,6 +150,7 @@ export function Produccion() {
 
 function ProduccionPlanta({ planta }: { planta: Planta }) {
   const [pestana, setPestana] = useState<Pestana>("ordenes");
+  const { esAdminGlobal } = useAuth();
   const { data: empresa, isLoading, error } = useEmpresaPlanta(planta.codigo);
 
   if (isLoading) return <p className="text-sm text-slate-500">Cargando…</p>;
@@ -158,7 +162,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       <p className="mb-4 text-sm text-slate-500">{empresa.nombre}</p>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {[...PESTANAS, ...(planta.codigo === "VBB" ? [PESTANA_DESPIECE] : []), ...(planta.codigo === "MCC" ? [PESTANA_COTIZADOR] : [])].map((p) => (
+        {[...PESTANAS, ...(planta.codigo === "VBB" ? [PESTANA_DESPIECE] : []), ...(planta.codigo === "MCC" ? [PESTANA_COTIZADOR] : []), ...(esAdminGlobal ? [PESTANA_PROYECCION] : [])].map((p) => (
           <button
             key={p.valor}
             onClick={() => setPestana(p.valor)}
@@ -176,6 +180,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       {pestana === "despiece" && planta.codigo === "VBB" && <DespieceBalken empresaNombre={empresa.nombre} />}
       {pestana === "cotizador" && planta.codigo === "MCC" && <CotizadorPlanta empresa={empresa} />}
       {pestana === "calendario" && <CalendarioMaquinas empresaId={empresa.id} />}
+      {pestana === "proyeccion" && esAdminGlobal && <ProyeccionAnualPlanta empresaId={empresa.id} />}
     </div>
   );
 }

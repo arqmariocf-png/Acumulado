@@ -245,6 +245,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pantalla: margen por partida y cotizador mostraban precio c/IVA junto al
   costo s/IVA. Ahora el costo se pinta en la misma base que el precio y el
   margen dice "s/IVA".
+  El alambrón del 9-oct a $15.80 es sin IVA (Mario: "de la última OC").
+- **Proyección anual de la planta, solo director general (10-oct-2026)**:
+  pestaña "Proyección anual (director general)" en Producción (visible con
+  `esAdminGlobal`; `produccion/ProyeccionAnualPlanta.tsx`). Datos de
+  `fn_proyeccion_planta_datos(empresa)` (definer; null si no es admin
+  maestro): personas de la última nómina semanal + `fecha_ingreso` de RH,
+  lotes, MP por pieza (receta × PEPS/último costo), precio promedio de
+  remisiones y gastos mensuales de OC "Corporativo…" sin IVA sin materia
+  prima ni ISR (`20261010120000`). Cálculo en `lib/proyeccionPlanta.ts`
+  (con pruebas): 12 meses desde hoy; días hábiles lun-sáb − festivos art. 74
+  LFT − cierre de planta (semanas en diciembre) − vacaciones art. 76 en el
+  mes del aniversario en días-planta (sin expediente: días al año
+  repartidos); lotes programados en sus días y el resto al ritmo de los
+  lotes; nómina completa todo el año. Supuestos editables en pantalla.
+  Primera corrida: ~1,513 rollos, ventas $2.27 M, utilidad −$435 mil a
+  $1,500/rollo (equilibrio ≈ $1,787 s/IVA).
 - **No se pierde lo capturado al cambiar de ventana (9-oct-2026, Mario)**:
   causa: al volver a la pestaña Supabase renueva el token (objeto de sesión
   nuevo) y `useAuth` recargaba el perfil con `cargando=true` →
