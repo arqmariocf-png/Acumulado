@@ -4,6 +4,7 @@ const TABS = [
   { a: "/inventario", etiqueta: "Registrar movimiento", end: true },
   { a: "/inventario/por-recibir", etiqueta: "Por recibir" },
   { a: "/inventario/remisiones", etiqueta: "Remisiones" },
+  { a: "/inventario/resumen", etiqueta: "Resumen" },
   { a: "/inventario/existencias", etiqueta: "Existencias" },
   { a: "/inventario/productos", etiqueta: "Productos" },
   { a: "/inventario/match", etiqueta: "Match con OC/OV" },
@@ -13,7 +14,7 @@ export function InventarioLayout() {
   return (
     <div>
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Inventario</h1>
-      <div className="mb-4 flex gap-2 border-b border-slate-200">
+      <div className="mb-4 flex gap-2 overflow-x-auto border-b border-slate-200">
         {TABS.map((t) => (
           <NavLink
             key={t.a}
