@@ -183,6 +183,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el
   concentrado (`actividades_recurrentes.cierre_evento = 'bbva_concentrado'`,
   trigger en `bbva_mantenimiento_snapshots`; `20261008090000`).
+- **Formato nuevo del control BBVA (10-oct-2026, Christian: "no me deja
+  subir mi archivo, no lo reconoce")**: "BBVA MANTTO - KPIs.xlsm" trae el
+  encabezado en la fila 12 con "Folio/UDA" (antes "FOLIO CLIENTE" en las
+  primeras filas) y Obra Menor ya va en la misma hoja por la columna "Tipo
+  de servicio" (la hoja "Histórico OM" dice "No se suma al control" y no
+  se suma). `_shared/bbva-control.ts` acepta las dos variantes (busca en 40
+  filas; columnas con alternativas) y guarda
+  `bbva_folios_control.tipo_servicio` (`20261010090000`).
+  `bbva-importar-folios` v6 desplegada con el `_shared` que ya corría +
+  el bbva-control nuevo. Probado con su archivo: 324 folios, 19 Obra Menor,
+  17 cancelados, $1,328,380.62.
 - **Arturo Huerta (8-oct-2026)**: puesto Técnico en Seguridad Industrial,
   rol operativo, jefa inmediata Brenda.
 - **Costeo de lotes con la nómina real (9-oct-2026, Mario: "vincula todo
