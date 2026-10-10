@@ -239,6 +239,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   "Proyecto X" (Maqui Print, Yulitsadonce) no son de la planta. Lote 001
   quedó reabierto (en proceso, sin término) el 10-oct: al cerrarlo con su
   fecha real se recalcula todo.
+  **IVA (10-oct, Mario: "consideramos precios con IVA y se costean contra
+  precios sin IVA")**: en la base todo va sin IVA (costos de entrada,
+  consumo PEPS, nómina, precio de remisión); lo que mezclaba era la
+  pantalla: margen por partida y cotizador mostraban precio c/IVA junto al
+  costo s/IVA. Ahora el costo se pinta en la misma base que el precio y el
+  margen dice "s/IVA".
 - **No se pierde lo capturado al cambiar de ventana (9-oct-2026, Mario)**:
   causa: al volver a la pestaña Supabase renueva el token (objeto de sesión
   nuevo) y `useAuth` recargaba el perfil con `cargando=true` →
