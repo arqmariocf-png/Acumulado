@@ -18,6 +18,15 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
   const [fecha, setFecha] = useState(hoy);
   const [abierta, setAbierta] = useState(true);
   const { data: saldos, isLoading: cargandoSaldos } = useSaldosDia(fecha);
+  // De qué día es el saldo de cada cuenta (último estado de cuenta cargado).
+  const { data: saldoAl } = useQuery({
+    queryKey: ["saldos-fecha-cuenta", fecha],
+    queryFn: async () => {
+      const { data, error: err } = await supabase.rpc("fn_saldos_fecha_cuenta", { p_fecha: fecha });
+      if (err) throw err;
+      return new Map(((data ?? []) as { cuenta_id: string; ultimo_movimiento: string }[]).map((r) => [r.cuenta_id, r.ultimo_movimiento]));
+    },
+  });
   const { data: pagos, isLoading: cargandoPagos, error } = useQuery({
     queryKey: ["pagos-programados", "hoja", fecha],
     queryFn: async () => {
@@ -67,12 +76,12 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
   const hojas = useMemo(
     () =>
       armarHojaPagos(
-        (saldos ?? []).map((s) => ({ empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre, banco: s.banco, ultimos_4: s.ultimos_4, alias: s.alias, saldo_inicial: Number(s.saldo_inicial) })),
+        (saldos ?? []).map((s) => ({ empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre, banco: s.banco, ultimos_4: s.ultimos_4, alias: s.alias, saldo_inicial: Number(s.saldo_inicial), saldo_al: saldoAl ? (saldoAl.get(s.cuenta_id) ?? null) : undefined })),
         pagos ?? [],
         fecha,
         entradas ?? [],
       ).filter((h) => !filtroEmpresa || h.empresa_id === filtroEmpresa),
-    [saldos, pagos, fecha, filtroEmpresa, entradas],
+    [saldos, pagos, fecha, filtroEmpresa, entradas, saldoAl],
   );
 
   function imprimir() {
@@ -141,7 +150,7 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
                       <td className={`px-2 py-1 text-right tabular-nums ${r.saldo < 0 ? "font-medium text-red-700" : ""}`}>{moneda(r.saldo)}</td>
                       <td className="px-2 py-1 text-slate-600">{r.forma_pago ?? ""}</td>
                       <td className="px-2 py-1 text-slate-600">{r.proyecto ?? ""}</td>
-                      <td className="px-2 py-1 text-slate-600">{r.comentarios ?? ""}</td>
+                      <td className={`px-2 py-1 ${r.saldo_viejo ? "font-medium text-amber-700" : "text-slate-600"}`}>{r.comentarios ?? ""}</td>
                     </tr>
                   ))}
                   <tr className="bg-sky-50 font-semibold">

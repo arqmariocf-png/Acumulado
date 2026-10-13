@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { armarHojaPagos, csvHojaPagos, htmlHojaPagos, type CuentaHoja, type PagoHoja } from "./hojaPagos.ts";
+import { armarHojaPagos, diaHabilAnterior, notaSaldoInicial, csvHojaPagos, htmlHojaPagos, type CuentaHoja, type PagoHoja } from "./hojaPagos.ts";
 
 const AEP = { empresa_id: "aep", empresa_nombre: "Aceros y Envasados de Puebla" };
 const cuentas: CuentaHoja[] = [
@@ -75,4 +75,18 @@ test("traspaso: cargo en la empresa que manda y abono en la que recibe; nómina 
   assert.equal(erg.abonos, 5000);
   assert.equal(erg.saldo, 5000);
   assert.equal(erg.renglones[0].proveedor, "TRASPASO DE ACEROS Y ENVASADOS DE PUEBLA BBVA 1226");
+});
+
+test("saldo inicial dice de qué día es el estado de cuenta y avisa si está viejo", () => {
+  assert.equal(diaHabilAnterior("2026-10-13"), "2026-10-12");
+  assert.equal(diaHabilAnterior("2026-10-12"), "2026-10-09"); // lunes → viernes
+  assert.deepEqual(notaSaldoInicial("2026-10-12", "2026-10-13"), { texto: "estado de cuenta al 12/10", viejo: false });
+  assert.deepEqual(notaSaldoInicial("2026-10-09", "2026-10-12"), { texto: "estado de cuenta al 09/10", viejo: false });
+  assert.equal(notaSaldoInicial("2026-09-30", "2026-10-13")?.viejo, true);
+  assert.match(notaSaldoInicial("2026-09-30", "2026-10-13")!.texto, /al 30\/09: falta subir/);
+  assert.equal(notaSaldoInicial(null, "2026-10-13")?.texto, "sin estado de cuenta cargado");
+  assert.equal(notaSaldoInicial(undefined, "2026-10-13"), null);
+  const [h] = armarHojaPagos([{ empresa_id: "e", empresa_nombre: "AEP", banco: "Banorte", ultimos_4: "1273", alias: null, saldo_inicial: 100, saldo_al: "2026-09-30" }], [], "2026-10-13");
+  assert.equal(h.renglones[0].saldo_viejo, true);
+  assert.match(h.renglones[0].comentarios ?? "", /30\/09/);
 });
