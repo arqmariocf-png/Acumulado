@@ -328,8 +328,27 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `lib/reporteChecador.ts` (con pruebas; día en hora de México, anuladas
   fuera, primera entrada y última salida). "Lista de marcas" sigue para
   corregir/anular.
-- **SAT**: NO hay descarga automática del SAT todavía; los CFDI se suben a
-  mano (zip) en Carga; la última carga fue el 26-ago-2026.
+- **SAT: descarga masiva automática (13-oct-2026)**: Belén subió la
+  e.firma de las 8 empresas (AEP, CSC, ERG, LRT, MCC, MCF, QX, VBB). Edge
+  `sat-descarga-masiva` (verify_jwt false: cron con `x-cron-secret` o sesión
+  con `auth_opera_sat`; archivos `index.ts` + `sat.ts`, el puro con pruebas
+  en `_shared/sat/descarga-masiva.test.ts`): web service del SAT **v1.5**
+  (SolicitaDescargaEmitidos/Recibidos, Verifica, Descargar; firma RSA-SHA1
+  con node-forge, formato de phpcfdi). Cada corrida: verifica lo abierto,
+  baja los ZIP listos (fflate), lee cada XML (`leerCfdiXml`/`filaCfdi`:
+  UUID = folio, RFC/nombre de la contraparte, complemento de pago = suma
+  de Monto y FechaPago) y hace upsert en `cfdi` con su `archivos_cargados`
+  (zip en `cargas/sat/<empresa>/descargas/…`); una vez al día por empresa y
+  tipo pide CFDI vigentes desde 3 días antes de lo último descargado (o el
+  1-ene-2026) hasta ayer. Bitácora `sat_descargas` (lee contabilidad/admin;
+  escribe solo la edge). pg_cron `sat-descarga-masiva-horaria` (minuto 40) →
+  `disparar_descarga_sat()` (`20261013100000`). "404 Error no controlado"
+  del SAT se reintenta en la siguiente corrida. Pantalla: Contabilidad →
+  e.firma del SAT, abajo "Descarga de CFDI del SAT" con "Descargar ahora".
+  Primera corrida 13-oct: aceptadas todas menos **QX: 305 "Certificado
+  Inválido"** (el SAT rechaza esa e.firma: revocada o sustituida; pedir a
+  Belén la vigente). Pendiente: marcar cancelados posteriores (solicitud
+  Metadata) y ver carga en Perfil fiscal/conciliación con datos reales.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
   subirlas y dale acceso a Belén")**: Contabilidad → "e.firma del SAT"
   (`/contabilidad/efirmas-sat`, `finanzas/EfirmasSat.tsx`,
