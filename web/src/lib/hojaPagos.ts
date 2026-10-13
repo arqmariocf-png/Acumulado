@@ -11,6 +11,9 @@ export interface CuentaHoja {
   ultimos_4: string;
   alias: string | null;
   saldo_inicial: number;
+  /** Día del último movimiento cargado antes de la fecha: de ahí sale el
+   * saldo inicial (13-oct-2026, Laura). null = la cuenta no tiene nada. */
+  saldo_al?: string | null;
 }
 
 export interface PagoHoja {
@@ -63,6 +66,8 @@ export interface RenglonHoja {
   forma_pago: string | null;
   proyecto: string | null;
   comentarios: string | null;
+  /** Saldo inicial de un estado de cuenta viejo (no es del día anterior). */
+  saldo_viejo?: boolean;
 }
 
 export interface HojaEmpresa {
@@ -85,6 +90,24 @@ function ddmm(iso: string): string {
   return `${d}/${m}`;
 }
 
+/** Día hábil anterior (lunes → sábado no cuenta: los bancos no mueven en
+ * fin de semana, así que el lunes basta con el viernes). */
+export function diaHabilAnterior(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  do d.setUTCDate(d.getUTCDate() - 1);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+/** De qué día es el saldo inicial y si está viejo (anterior al día hábil
+ * previo a la fecha de la hoja). */
+export function notaSaldoInicial(saldoAl: string | null | undefined, fecha: string): { texto: string; viejo: boolean } | null {
+  if (saldoAl === undefined) return null;
+  if (saldoAl === null) return { texto: "sin estado de cuenta cargado", viejo: true };
+  const viejo = saldoAl < diaHabilAnterior(fecha);
+  return { texto: viejo ? `estado de cuenta al ${ddmm(saldoAl)}: falta subir lo más reciente` : `estado de cuenta al ${ddmm(saldoAl)}`, viejo };
+}
+
 /** Pagos de la fecha (no cancelados) y los pendientes vencidos de días
  * anteriores, que siguen por pagar. El efectivo no toca el saldo. */
 export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: string, entradas: EntradaHoja[] = []): HojaEmpresa[] {
@@ -102,7 +125,8 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     const monto = r2(Number(c.saldo_inicial) || 0);
     h.abonos = r2(h.abonos + monto);
     h.saldo = r2(h.saldo + monto);
-    h.renglones.push({ tipo: "saldo", oc: null, proveedor: `SALDO INICIAL ${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`.toUpperCase(), abono: monto, cargo: null, saldo: h.saldo, forma_pago: null, proyecto: null, comentarios: null });
+    const nota = notaSaldoInicial(c.saldo_al, fecha);
+    h.renglones.push({ tipo: "saldo", oc: null, proveedor: `SALDO INICIAL ${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`.toUpperCase(), abono: monto, cargo: null, saldo: h.saldo, forma_pago: null, proyecto: null, comentarios: nota?.texto ?? null, saldo_viejo: nota?.viejo ?? false });
   }
   const tocaHoy = (p: { estatus: string; fecha_programada: string }) => p.estatus !== "cancelado" && (p.fecha_programada === fecha || (p.estatus === "pendiente" && p.fecha_programada < fecha));
   // Lo que entra por traspasos o préstamos de otra empresa o cuenta, antes de

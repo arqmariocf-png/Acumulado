@@ -178,6 +178,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   tienen datos: flujo por obra, DSO, DPO, obra ejecutada no estimada,
   retenciones por cobrar, margen real vs presupuestado (faltan ingresos/
   estimaciones/retenciones por obra).
+- **Saldo inicial con su fecha (13-oct-2026, Laura: "sigue sin
+  actualizarse aunque dice ya está actualizado")**: la sincronización de
+  OC estaba bien (el backoffice no había mandado OC del 13-oct; sus cambios
+  de estatus llegan cada hora o con el botón); lo "congelado" eran los
+  saldos de banco, que salen del último estado de cuenta subido (Banorte
+  1273 al 30-sep). La hoja de pagos del día pone en comentarios "estado de
+  cuenta al dd/mm" y en ámbar "falta subir lo más reciente" si es anterior
+  al día hábil previo (`fn_saldos_fecha_cuenta(fecha)`, RLS de quien
+  consulta; `notaSaldoInicial` en `lib/hojaPagos.ts` con pruebas;
+  `20261013090000`). "Actualizar OC/OV" NO toca bancos.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el
