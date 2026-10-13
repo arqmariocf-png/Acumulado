@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { DescargasSat } from "./DescargasSat";
 import { diasParaVencer, estadoEfirma, ETIQUETA_ESTADO, revisarArchivos, type EstadoEfirma } from "../../lib/efirmaSat";
 
 // e.firma del SAT por empresa (Mario, 7-oct-2026: "haz la pantalla para
@@ -199,6 +200,7 @@ export function EfirmasSat() {
         Es la e.firma (antes FIEL) de la empresa, no el certificado de sello digital (CSD) que se usa para facturar. Dura 4 años; se marca "por vencer" 60 días
         antes.
       </p>
+      {conEfirma > 0 && <DescargasSat />}
     </div>
   );
 }
