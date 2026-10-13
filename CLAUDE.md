@@ -208,6 +208,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   2026-13-05" (una fecha escrita como texto mm/dd/aaaa). `fechaIso` ya
   voltea día/mes si el mes pasa de 12 y deja en blanco fechas que no
   existen; `bbva-importar-folios` v7.
+- **Alberto Temalatzi (13-oct-2026, Mario: "necesita acceso a
+  requisiciones")**: era operativo (ERG); un operativo no puede crear
+  requisiciones aunque tenga el módulo (`auth_opera_proyectos_empresa` pide
+  administrativo/supervisor/directivo con 'proyectos'). Quedó como Timoteo:
+  `administrativo`, módulos requisiciones + proyectos, `alcance_propio` con
+  ERG en "Maneja también" → ve las 53 obras de ERG y crea requisiciones
+  (probado con su cuenta en rollback).
 - **Arturo Huerta (8-oct-2026)**: puesto Técnico en Seguridad Industrial,
   rol operativo, jefa inmediata Brenda.
 - **Costeo de lotes con la nómina real (9-oct-2026, Mario: "vincula todo
