@@ -162,7 +162,11 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (comparado OC por OC; ojo: las OS del backoffice se guardan con
   `tipo = 'OS'`, al cruzar por `id_orden` no filtrar solo 'OC'). Solo
   faltan 6 de "Empresa X / Proyecto X", canceladas (pruebas). Es de
-  Gonzalo; mientras, alta manual de OC.
+  Gonzalo; mientras, alta manual de OC. Gonzalo (15:22): "no he tocado
+  nada de los API". A las 15:26 `api_ov_aut` sí trae lo de hoy (OV 15340 y
+  15341 de las 9:01/9:06, ya guardadas a las 9:15) y `api_ocs_aut` sigue
+  en la 41422: o nadie capturó OC hoy, o las de hoy no cumplen lo que su
+  consulta pide (proyecto, partidas, estatus). Se le preguntó por folios.
   **Lo que de verdad no veía Laura**: las OC nuevas llegan ya
   autorizadas ("Pendiente de Pago") y su pestaña "Por autorizar" solo
   traía pendientes; "De hoy" y "Con saldo" las escondían. Mario: "aunque
