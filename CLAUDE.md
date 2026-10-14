@@ -163,6 +163,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `tipo = 'OS'`, al cruzar por `id_orden` no filtrar solo 'OC'). Solo
   faltan 6 de "Empresa X / Proyecto X", canceladas (pruebas). Es de
   Gonzalo; mientras, alta manual de OC.
+  **Lo que de verdad no veía Laura**: las OC nuevas llegan ya
+  autorizadas ("Pendiente de Pago") y su pestaña "Por autorizar" solo
+  traía pendientes; "De hoy" y "Con saldo" las escondían. Mario: "aunque
+  estén autorizadas, que exista la opción de programar a pago". Ahora la
+  pestaña es **"Por autorizar y programar"** (`OrdenesPorPagar`): pendientes
+  + autorizadas con saldo, sin pago programado y no pagadas en el
+  backoffice, con filtro Todas / Por autorizar / Autorizadas sin programar
+  e indicador "Autorizadas sin programar N · $"; "De hoy" ya muestra todas.
+  Órdenes por autorizar (`/finanzas/por-autorizar`) trae abajo esa misma
+  lista (`OrdenesPorPagar soloAutorizadas`) con "Programar pago".
 - **Correcciones de Laura, documento "CORRECCIONES SISTEMA GRUPO LOMA"
   (8-oct-2026)**: cada panel solo con lo suyo. Saldos por empresa ya no
   trae el flujo ni "Por autorizar" debajo. **Órdenes por autorizar** es

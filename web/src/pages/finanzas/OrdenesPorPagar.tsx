@@ -76,10 +76,14 @@ const ESTADO_PAGO: Record<ReturnType<typeof estadoPagoOc>, [string, string]> = {
  * día y las de meses pasados con saldo. El beneficiario sale de la OC;
  * dirección asigna contado / crédito / anticipo y programa el pago con el
  * saldo calculado (total menos pagos hechos). */
-export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: { filtroEmpresa: string; hoy: string; nombreEmpresa: Map<string, string>; cuentas: Cuenta[] }) {
-  // Laura (30-sep-2026): su lista son las pendientes de autorizar; las
-  // "Pendiente de Pago" del backoffice solo como indicador.
+export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, soloAutorizadas = false }: { filtroEmpresa: string; hoy: string; nombreEmpresa: Map<string, string>; cuentas: Cuenta[]; /** Solo la lista de autorizadas sin pago programado, sin pestañas (Órdenes por autorizar). */ soloAutorizadas?: boolean }) {
+  // Laura (30-sep-2026): su lista son las pendientes de autorizar. Mario
+  // (14-oct-2026): "aunque estén autorizadas, que exista la opción de
+  // programar a pago también": la primera pestaña trae además las ya
+  // autorizadas (backoffice "Pendiente de Pago", RQ, IA) que no tienen pago
+  // programado ni están pagadas en el backoffice.
   const [pestana, setPestana] = useState<"autorizar" | "hoy" | "saldo" | "credito">("autorizar");
+  const [verAutorizacion, setVerAutorizacion] = useState<"todas" | "pendiente" | "autorizada">(soloAutorizadas ? "autorizada" : "todas");
   const [verPendientesPago, setVerPendientesPago] = useState(false);
   const [verRechazar, setVerRechazar] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -97,13 +101,16 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["oc-pagos", pestana, filtroEmpresa, verPagadasBackoffice, verPendientesPago],
+    queryKey: ["oc-pagos", pestana, filtroEmpresa, verPagadasBackoffice, verPendientesPago, verAutorizacion],
     queryFn: async () => {
       let q = supabase.from("v_oc_pagos").select("*");
       if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
-      // Pendientes de autorizar (backoffice, RQ, Excel); las del backoffice
-      // autorizadas aquí siguen en la lista hasta que se les programa pago.
-      if (pestana === "autorizar") q = q.neq("autorizacion", "rechazada").gt("saldo", 0.01).eq("programado", 0).or('autorizacion.eq.pendiente,estatus_backoffice.eq."Pendiente de Autorización"').order("fecha_creacion", { ascending: false, nullsFirst: false }).limit(400);
+      // Por autorizar (backoffice, RQ, Excel, IA) y autorizadas sin pago
+      // programado; ninguna pagada ya en el backoffice.
+      if (pestana === "autorizar") {
+        q = q.neq("autorizacion", "rechazada").gt("saldo", 0.01).eq("programado", 0).eq("pagada_backoffice", false).order("fecha_creacion", { ascending: false, nullsFirst: false }).limit(400);
+        if (verAutorizacion !== "todas") q = q.eq("autorizacion", verAutorizacion);
+      }
       else if (pestana === "hoy") q = q.eq("fecha_creacion", hoy);
       else if (pestana === "credito") q = q.eq("es_credito", true).gt("saldo", 0.01).neq("autorizacion", "rechazada").eq("pagada_backoffice", false).order("vence", { ascending: true, nullsFirst: false }).limit(400);
       else {
@@ -112,7 +119,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
       }
       // "Pendiente de Pago" del backoffice sin nada programado aquí: solo
       // indicador, salvo que se pidan en la lista.
-      if ((pestana === "hoy" || pestana === "saldo") && !verPendientesPago) q = q.or('fuente.neq.api,estatus_backoffice.is.null,estatus_backoffice.neq."Pendiente de Pago",programado.gt.0,pagado.gt.0');
+      if (pestana === "saldo" && !verPendientesPago) q = q.or('fuente.neq.api,estatus_backoffice.is.null,estatus_backoffice.neq."Pendiente de Pago",programado.gt.0,pagado.gt.0');
       const { data: filas, error: err } = await q;
       if (err) throw err;
       return (filas ?? []) as OcPago[];
@@ -124,16 +131,20 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   const { data: indicadores } = useQuery({
     queryKey: ["oc-indicadores", filtroEmpresa],
     queryFn: async () => {
-      let q = supabase.from("v_oc_pagos").select("fuente, estatus_backoffice, autorizacion, saldo").gt("saldo", 0.01).neq("autorizacion", "rechazada").or('autorizacion.eq.pendiente,estatus_backoffice.eq."Pendiente de Pago"');
+      let q = supabase.from("v_oc_pagos").select("fuente, estatus_backoffice, autorizacion, saldo, programado, pagada_backoffice").gt("saldo", 0.01).neq("autorizacion", "rechazada").eq("pagada_backoffice", false);
       if (filtroEmpresa) q = q.eq("empresa_id", filtroEmpresa);
       const { data: filas, error: err } = await q.limit(3000);
       if (err) throw err;
-      const r = { autorizar: 0, autorizarMonto: 0, pago: 0, pagoMonto: 0 };
-      for (const f of (filas ?? []) as { fuente: string; estatus_backoffice: string | null; autorizacion: string; saldo: number }[]) {
+      const r = { autorizar: 0, autorizarMonto: 0, sinProgramar: 0, sinProgramarMonto: 0, pago: 0, pagoMonto: 0 };
+      for (const f of (filas ?? []) as { fuente: string; estatus_backoffice: string | null; autorizacion: string; saldo: number; programado: number }[]) {
         if (f.autorizacion === "pendiente") {
           r.autorizar += 1;
           r.autorizarMonto += Number(f.saldo);
-        } else if (f.fuente === "api" && f.estatus_backoffice === "Pendiente de Pago") {
+        } else if (Number(f.programado) <= 0) {
+          r.sinProgramar += 1;
+          r.sinProgramarMonto += Number(f.saldo);
+        }
+        if (f.fuente === "api" && f.estatus_backoffice === "Pendiente de Pago") {
           r.pago += 1;
           r.pagoMonto += Number(f.saldo);
         }
@@ -184,11 +195,12 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
   return (
     <div className="mb-4 rounded border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2">
-        <p className="text-sm font-semibold text-slate-700">Órdenes de compra</p>
+        <p className="text-sm font-semibold text-slate-700">{soloAutorizadas ? "Autorizadas sin pago programado" : "Órdenes de compra"}</p>
+        {!soloAutorizadas && (
         <div className="flex rounded border border-slate-200 text-xs">
           {(
             [
-              ["autorizar", "Por autorizar"],
+              ["autorizar", "Por autorizar y programar"],
               ["hoy", "De hoy"],
               ["saldo", "Con saldo pendiente"],
               ["credito", "Crédito y vencimientos"],
@@ -199,6 +211,22 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
             </button>
           ))}
         </div>
+        )}
+        {pestana === "autorizar" && !soloAutorizadas && (
+          <div className="flex rounded border border-slate-200 text-xs">
+            {(
+              [
+                ["todas", "Todas"],
+                ["pendiente", "Por autorizar"],
+                ["autorizada", "Autorizadas sin programar"],
+              ] as const
+            ).map(([clave, etiqueta]) => (
+              <button key={clave} type="button" onClick={() => setVerAutorizacion(clave)} className={`px-2.5 py-1 ${verAutorizacion === clave ? "bg-amber-600 text-white" : "text-slate-600"}`}>
+                {etiqueta}
+              </button>
+            ))}
+          </div>
+        )}
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Proveedor, folio o proyecto…" className="w-52 rounded border border-slate-300 px-2 py-1 text-xs" />
         {(
           <label className="flex items-center gap-1 text-xs text-slate-600">
@@ -215,7 +243,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
         <label className="flex items-center gap-1 text-xs text-slate-600">
           <input type="checkbox" checked={soloConLinea} onChange={(e) => setSoloConLinea(e.target.checked)} /> solo proveedores con línea de crédito
         </label>
-        {(pestana === "hoy" || pestana === "saldo") && (
+        {pestana === "saldo" && (
           <label className="flex items-center gap-1 text-xs text-slate-600" title="Las que el backoffice tiene en Pendiente de Pago y aquí no tienen pago programado">
             <input type="checkbox" checked={verPendientesPago} onChange={(e) => setVerPendientesPago(e.target.checked)} /> incluir pendientes de pago del backoffice
           </label>
@@ -256,19 +284,22 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
           />
         )}
       </div>
-      {indicadores && (
+      {indicadores && !soloAutorizadas && (
         <div className="flex flex-wrap gap-2 border-b border-slate-100 px-3 py-2 text-xs">
-          <button type="button" onClick={() => setPestana("autorizar")} className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-900">
+          <button type="button" onClick={() => { setPestana("autorizar"); setVerAutorizacion("pendiente"); }} className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-900">
             Por autorizar: <b>{indicadores.autorizar}</b> · <span className="tabular-nums">{moneda(indicadores.autorizarMonto)}</span>
           </button>
-          <span className="rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700" title="Autorizadas en el backoffice y sin pagar allá. Solo indicador: no se listan salvo que marques 'incluir pendientes de pago del backoffice'.">
+          <button type="button" onClick={() => { setPestana("autorizar"); setVerAutorizacion("autorizada"); }} className="rounded border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-emerald-900" title="Ya autorizadas (aquí o en el backoffice), con saldo, sin pago programado y sin pagar en el backoffice">
+            Autorizadas sin programar: <b>{indicadores.sinProgramar}</b> · <span className="tabular-nums">{moneda(indicadores.sinProgramarMonto)}</span>
+          </button>
+          <span className="rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700" title="Autorizadas en el backoffice y sin pagar allá (programadas o no). En 'Con saldo pendiente' se listan si marcas 'incluir pendientes de pago del backoffice'.">
             Pendientes de pago (backoffice): <b>{indicadores.pago}</b> · <span className="tabular-nums">{moneda(indicadores.pagoMonto)}</span>
           </span>
         </div>
       )}
-      {pestana === "autorizar" && (
+      {pestana === "autorizar" && !soloAutorizadas && (
         <div className="flex flex-wrap items-center gap-2 px-3 pt-2 text-xs text-slate-500">
-          <span>Esperan a dirección: las del backoffice en "Pendiente de Autorización", las RQ (almacén) y las de Excel. "Autorizar" y luego "Programar pago" en el mismo renglón.</span>
+          <span>Por autorizar: las del backoffice en "Pendiente de Autorización", las RQ (almacén), IA y Excel ("Autorizar y programar"). Autorizadas: las del backoffice en "Pendiente de Pago" y las autorizadas aquí que aún no tienen pago programado ("Programar pago").</span>
           <button type="button" onClick={() => setVerRechazar((v) => !v)} className="underline">
             {verRechazar ? "ocultar rechazar / archivadas" : "rechazar o ver archivadas"}
           </button>
@@ -282,7 +313,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas }: 
       {isLoading && <p className="px-3 py-3 text-sm text-slate-400">Cargando…</p>}
       {error && <p className="px-3 py-3 text-sm text-red-600">{(error as Error).message}</p>}
       {aviso && <p className={`px-3 py-2 text-xs ${aviso.startsWith("Pago") || aviso.startsWith("Condición") || aviso.startsWith("Orden") || aviso.startsWith("Programadas") ? "text-emerald-800" : "text-red-700"}`}>{aviso}</p>}
-      {!isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "autorizar" ? "No hay órdenes por autorizar." : pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : pestana === "credito" ? "No hay órdenes a crédito con saldo." : "No hay órdenes con saldo pendiente."}</p>}
+      {!isLoading && visibles.length === 0 && <p className="px-3 py-6 text-center text-sm text-slate-400">{pestana === "autorizar" ? (verAutorizacion === "autorizada" ? "No hay órdenes autorizadas sin pago programado." : verAutorizacion === "pendiente" ? "No hay órdenes por autorizar." : "No hay órdenes por autorizar ni por programar.") : pestana === "hoy" ? "No hay órdenes de compra con fecha de hoy." : pestana === "credito" ? "No hay órdenes a crédito con saldo." : "No hay órdenes con saldo pendiente."}</p>}
       {visibles.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
