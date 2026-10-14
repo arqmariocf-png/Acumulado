@@ -215,6 +215,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `administrativo`, módulos requisiciones + proyectos, `alcance_propio` con
   ERG en "Maneja también" → ve las 53 obras de ERG y crea requisiciones
   (probado con su cuenta en rollback).
+- **Christian con requisiciones (14-oct-2026, Mario: "habilita a
+  christian las requisiciones")**: es `responsable` con BBVA, y el menú
+  esconde todo a ese perfil (`esBbvaAcotado`) aunque la base ya lo dejaba
+  (responsable opera los proyectos de su empresa). Permiso por persona
+  `permisos_modulo` 'requisiciones' y en `lib/menu.ts` la entrada
+  Requisiciones también se ve con ese permiso en cualquier rol
+  (`conPermiso`). Ve las 43 obras de CSC y crea requisiciones (rollback).
 - **Arturo Huerta (8-oct-2026)**: puesto Técnico en Seguridad Industrial,
   rol operativo, jefa inmediata Brenda.
 - **Costeo de lotes con la nómina real (9-oct-2026, Mario: "vincula todo

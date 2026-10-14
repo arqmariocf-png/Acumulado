@@ -47,6 +47,9 @@ const esAdmin = (p: Profile) => p.rol === "admin";
 const esFinanzas = (p: Profile) => p.rol === "corporativo" || p.rol === "direccion" || esAdmin(p);
 const bbva = (p: Profile) => !!p.bbva_mantenimiento;
 const modulo = (clave: string) => (p: Profile) => esRolBasico(p.rol) && (p.modulos ?? []).includes(clave);
+// Permiso por persona sin importar el rol (p. ej. Christian, responsable de
+// BBVA, con requisiciones: 14-oct-2026).
+const conPermiso = (clave: string) => (p: Profile) => (p.modulos ?? []).includes(clave);
 // Roles que ven los módulos financieros completos (misma regla que tenía el
 // menú: todo mundo menos los roles acotados).
 const veFinanzasCompleto = (p: Profile) =>
@@ -217,7 +220,7 @@ export const SECCIONES: SeccionMenu[] = [
     entradas: [
       { ruta: "/inventario/remisiones", etiqueta: "Remisiones de salida", descripcion: "entregas de almacén con QR", uso: "Consultar, reimprimir y confirmar entregas escaneando el QR.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/match", etiqueta: "Match con OC/OV", descripcion: "avance de recepción y embarque por orden y partida", uso: "Qué falta por recibir o embarcar de cada orden; lo que el proveedor aún debe.", visible: veInventario , modulo: "inventario" },
-      { ruta: "/requisiciones", etiqueta: "Requisiciones", descripcion: "solicitudes de material por obra", uso: "El responsable pide; compras resuelve renglón por renglón.", visible: (p) => veOperacion(p) || modulo("requisiciones")(p) || modulo("proyectos")(p) },
+      { ruta: "/requisiciones", etiqueta: "Requisiciones", descripcion: "solicitudes de material por obra", uso: "El responsable pide; compras resuelve renglón por renglón.", visible: (p) => veOperacion(p) || modulo("requisiciones")(p) || modulo("proyectos")(p) || conPermiso("requisiciones")(p) },
     ],
   },
   {
