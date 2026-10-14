@@ -155,6 +155,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   **Restablecido 9-oct-2026 19:46 UTC**: sincronización manual OK (147 OC
   y 33 OV nuevas o cambiadas, última OC 41281 del 8-oct; nómina semanal,
   quincenal y mano de obra OK). Ahora la API responde en ~3 s.
+  **Otra vez congelado 14-oct-2026 (Laura: "las OC no me salen
+  actualizadas, no puedo programar")**: a las 15:16 MX `api_ocs_aut`
+  responde (2,012 OC) pero la última es la 41422 del 13-oct 16:24; nada del
+  14-oct. Acumulado tiene todo lo que la API da y con el mismo estatus
+  (comparado OC por OC; ojo: las OS del backoffice se guardan con
+  `tipo = 'OS'`, al cruzar por `id_orden` no filtrar solo 'OC'). Solo
+  faltan 6 de "Empresa X / Proyecto X", canceladas (pruebas). Es de
+  Gonzalo; mientras, alta manual de OC.
 - **Correcciones de Laura, documento "CORRECCIONES SISTEMA GRUPO LOMA"
   (8-oct-2026)**: cada panel solo con lo suyo. Saldos por empresa ya no
   trae el flujo ni "Por autorizar" debajo. **Órdenes por autorizar** es
