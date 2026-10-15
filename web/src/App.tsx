@@ -37,6 +37,7 @@ import { Socio, RutaSocio } from "./pages/Socio";
 const Gastos = lazy(() => import("./pages/Gastos").then((m) => ({ default: m.Gastos })));
 const Comedor = lazy(() => import("./pages/comedor/Comedor").then((m) => ({ default: m.Comedor })));
 const Ordenes = lazy(() => import("./pages/ordenes/Ordenes").then((m) => ({ default: m.Ordenes })));
+const Cotizador = lazy(() => import("./pages/cotizador/Cotizador").then((m) => ({ default: m.Cotizador })));
 const CatalogoCompras = lazy(() => import("./pages/compras/CatalogoCompras").then((m) => ({ default: m.CatalogoCompras })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
@@ -146,6 +147,10 @@ function Enrutador() {
           {/* Punto de venta (ferretería, almacén general): almacén, corporativo o permiso 'punto_venta'. */}
           <Route element={<ProtectedRoute roles={["almacen", "corporativo"]} oPermiso={(p) => (p.modulos ?? []).includes("punto_venta")} />}>
             <Route path="/punto-venta" element={<PuntoVenta />} />
+          </Route>
+          {/* Cotizador de todas las empresas (15-oct-2026). */}
+          <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion", "empresa", "produccion"]} oPermiso={(p) => (p.modulos ?? []).some((m) => m === "compras" || m === "cotizador")} />}>
+            <Route path="/cotizador" element={<Cotizador />} />
           </Route>
           {/* Órdenes propias OC / OS / OV con folio IA: compras/almacén capturan, dirección autoriza. */}
           <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion", "empresa"]} oPermiso={(p) => (p.modulos ?? []).includes("compras")} />}>

@@ -50,3 +50,7 @@ create policy clientes_cotizador_update on public.clientes for update
   with check ((select public.auth_opera_cotizador()) and empresa_id = any ((select public.auth_empresas_organizacion())::uuid[]));
 
 alter table public.proveedores add column if not exists domicilio text;
+
+-- Cotización → orden de venta IA (botón "Convertir en orden de venta").
+alter table public.cotizaciones_produccion add column if not exists orden_venta_id uuid references public.ordenes_venta (id) on delete set null;
+create index if not exists cotizaciones_produccion_orden_venta_idx on public.cotizaciones_produccion (orden_venta_id);
