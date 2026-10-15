@@ -7,6 +7,7 @@ import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
+import { useAuth } from "../../lib/auth";
 
 export interface OcPago {
   id: string;
@@ -364,6 +365,25 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
 
 function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccionada, onSeleccionar }: { oc: OcPago; hoy: string; empresa: string; cuentas: Cuenta[]; abierta: boolean; onAbrir: () => void; onAviso: (m: string | null) => void; seleccionada: boolean; onSeleccionar: (v: boolean) => void }) {
   const queryClient = useQueryClient();
+  const { perfil, soloConsulta } = useAuth();
+  // Cancelar cualquier OC sin pagos (Mario, 15-oct-2026): dirección,
+  // corporativo y admin; queda archivada con el motivo y se puede reactivar.
+  const puedeCancelar = !soloConsulta && !!perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol) && oc.autorizacion !== "rechazada" && Number(oc.pagado) <= 0.01 && !oc.pagada_backoffice;
+  const cancelar = useMutation({
+    mutationFn: async () => {
+      const motivo = window.prompt(`¿Por qué se cancela la orden ${oc.id_orden}? Se quitan sus pagos programados y queda archivada.`);
+      if (!motivo?.trim()) return false;
+      const { error: err } = await supabase.rpc("fn_orden_ia_cancelar", { p_id: oc.id, p_venta: false, p_motivo: motivo.trim() });
+      if (err) throw err;
+      return true;
+    },
+    onSuccess: (hecho) => {
+      if (!hecho) return;
+      onAviso(`Orden ${oc.id_orden} cancelada.`);
+      for (const k of [["oc-pagos"], ["oc-indicadores"], ["oc-por-autorizar"], ["oc-archivadas-n"], ["pagos-programados"], ["cxp-proveedores"], ["tesoreria"], ["ordenes-ia"]]) queryClient.invalidateQueries({ queryKey: k });
+    },
+    onError: (e: Error) => onAviso(mensajeError(e)),
+  });
   // Sin condición capturada: crédito si el proveedor tiene línea, si no contado.
   const condicionInicial: CondicionPago = condicionInicialDe(oc);
   const [condicion, setCondicion] = useState<CondicionPago>(condicionInicial);
@@ -529,6 +549,11 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
             )}
             {saldo > 0 && oc.autorizacion === "rechazada" && <span className="text-xs text-slate-400">no se paga</span>}
             <BotonVerOc ocId={oc.id} />
+            {puedeCancelar && (
+              <button type="button" onClick={() => cancelar.mutate()} disabled={cancelar.isPending} className="whitespace-nowrap text-xs text-red-700 underline disabled:opacity-50" title="Cancela la orden: se quitan sus pagos programados y queda archivada con el motivo">
+                {cancelar.isPending ? "Cancelando…" : "cancelar"}
+              </button>
+            )}
           </div>
         </td>
       </tr>

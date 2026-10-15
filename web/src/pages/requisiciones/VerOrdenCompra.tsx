@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlOrdenCompra, type LineaOrdenCompra } from "../../lib/ordenCompraRq";
+import { datosProveedor, membreteEmpresa } from "../ordenes/datosImpresion";
 
 /** Abre la orden de compra RQ imprimible en una pestaña (almacén, dirección
  * o quien pueda ver la OC). La pestaña se abre durante el clic (móvil). */
@@ -16,7 +17,7 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
     try {
       const { data: oc, error: errOc } = await supabase
         .from("ordenes_compra")
-        .select("id, id_orden, tipo, fuente, notas, fecha_entrega, lugar_entrega, fecha_creacion, proveedor, proyecto, autorizada_en, empresas(nombre, codigo, rfc), creador:profiles!ordenes_compra_creada_por_fkey(nombre), autorizador:profiles!ordenes_compra_autorizada_por_fkey(nombre)")
+        .select("id, id_orden, tipo, fuente, notas, empresa_id, rechazada_en, rechazo_motivo, fecha_entrega, lugar_entrega, fecha_creacion, proveedor, proyecto, autorizada_en, empresas(nombre, codigo, rfc), creador:profiles!ordenes_compra_creada_por_fkey(nombre), autorizador:profiles!ordenes_compra_autorizada_por_fkey(nombre)")
         .eq("id", ocId)
         .maybeSingle();
       if (errOc) throw errOc;
@@ -42,6 +43,8 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
         pago?.proveedor_clave ? supabase.from("proveedores_datos_bancarios").select("rfc").eq("clave", pago.proveedor_clave).maybeSingle() : Promise.resolve({ data: null }),
         supabase.from("v_oc_importes").select("subtotal, iva, total").eq("orden_compra_id", ocId).maybeSingle(),
       ]);
+      // Membrete completo de la empresa y ficha del proveedor (Laura, 15-oct-2026).
+      const [membrete, prov] = await Promise.all([membreteEmpresa((oc as { empresa_id: string }).empresa_id), datosProveedor((oc as { proveedor: string | null }).proveedor)]);
       const preciosConIva = pago?.fuente === "api";
       const formaPago = [pago?.condicion_pago ? ({ contado: "Contado", credito: "Crédito", anticipo: "Anticipo", efectivo: "Efectivo" } as Record<string, string>)[pago.condicion_pago] : null, pago?.tipo_pago_backoffice].filter(Boolean).join(" · ") || null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,7 +55,7 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
           id_orden: o.id_orden,
           fecha: o.fecha_creacion,
           empresa_nombre: o.empresas?.nombre ?? "",
-          empresa_rfc: o.empresas?.rfc ?? null,
+          empresa_rfc: o.empresas?.rfc ?? membrete.rfc,
           empresa_codigo: codigo,
           proveedor: o.proveedor,
           proyecto: o.proyecto,
@@ -69,7 +72,13 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
           clabe: pago?.clabe ?? null,
           cuenta: pago?.cuenta_proveedor ?? null,
           beneficiario: pago?.beneficiario_bancario ?? null,
-          rfc_proveedor: (bancarios as { rfc?: string | null } | null)?.rfc ?? null,
+          rfc_proveedor: prov.rfc ?? (bancarios as { rfc?: string | null } | null)?.rfc ?? null,
+          contraparte_datos: prov.datos,
+          empresa_razon_social: membrete.razon_social,
+          empresa_domicilio: membrete.domicilio,
+          empresa_telefono: membrete.telefono,
+          empresa_correo: membrete.correo,
+          cancelada: o.rechazada_en ? String(o.rechazo_motivo ?? "").replace(/^Cancelada:\s*/, "") || "sin motivo" : null,
           precios_con_iva: preciosConIva,
           autorizada_backoffice: preciosConIva && pago?.autorizacion === "autorizada",
           autorizacion_interna: preciosConIva && pago?.autorizacion_origen === "interna",

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlOrdenCompra, type LineaOrdenCompra } from "../../lib/ordenCompraRq";
+import { datosCliente, membreteEmpresa } from "./datosImpresion";
 
 /** Orden de venta imprimible (mismo formato que la OC, con cliente y sin
  * sello de autorización). La pestaña se abre durante el clic (móvil). */
@@ -16,7 +17,7 @@ export function BotonVerOv({ ovId, etiqueta = "Ver orden" }: { ovId: string; eti
     try {
       const { data: ov, error: e1 } = await supabase
         .from("ordenes_venta")
-        .select("id, id_ov, fecha_ov, cliente, proyecto, total, subtotal, iva, notas, forma_pago, condicion_pago, fecha_entrega, lugar_entrega, cancelada_en, cancelacion_motivo, creada_por, empresas(nombre, codigo, rfc)")
+        .select("id, id_ov, fecha_ov, cliente, proyecto, total, subtotal, iva, notas, forma_pago, condicion_pago, fecha_entrega, lugar_entrega, cancelada_en, cancelacion_motivo, creada_por, empresa_id, empresas(nombre, codigo, rfc)")
         .eq("id", ovId)
         .maybeSingle();
       if (e1) throw e1;
@@ -26,6 +27,8 @@ export function BotonVerOv({ ovId, etiqueta = "Ver orden" }: { ovId: string; eti
       const { data: autor } = ov.creada_por ? await supabase.from("v_directorio").select("nombre").eq("id", ov.creada_por).maybeSingle() : { data: null };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const o = ov as any;
+      // Membrete completo y datos del cliente registrado (Mario, 15-oct-2026).
+      const [membrete, cli] = await Promise.all([membreteEmpresa(o.empresa_id), datosCliente(o.cliente, o.empresa_id)]);
       const codigo: string = o.empresas?.codigo ?? "";
       const condicion = o.condicion_pago ? ({ contado: "Contado", credito: "Crédito", anticipo: "Anticipo", efectivo: "Efectivo" } as Record<string, string>)[o.condicion_pago] : null;
       const html = htmlOrdenCompra(
@@ -33,7 +36,14 @@ export function BotonVerOv({ ovId, etiqueta = "Ver orden" }: { ovId: string; eti
           id_orden: o.id_ov,
           fecha: o.fecha_ov,
           empresa_nombre: o.empresas?.nombre ?? "",
-          empresa_rfc: o.empresas?.rfc ?? null,
+          empresa_rfc: o.empresas?.rfc ?? membrete.rfc,
+          empresa_razon_social: membrete.razon_social,
+          empresa_domicilio: membrete.domicilio,
+          empresa_telefono: membrete.telefono,
+          empresa_correo: membrete.correo,
+          rfc_proveedor: cli.rfc,
+          contraparte_datos: cli.datos,
+          cancelada: o.cancelada_en ? o.cancelacion_motivo ?? "sin motivo" : null,
           empresa_codigo: codigo,
           proveedor: o.cliente,
           proyecto: o.proyecto,
@@ -42,7 +52,7 @@ export function BotonVerOv({ ovId, etiqueta = "Ver orden" }: { ovId: string; eti
           creada_por: (autor as { nombre?: string } | null)?.nombre ?? null,
           autorizada_en: null,
           autorizada_por: null,
-          nota: [o.cancelada_en ? `CANCELADA: ${o.cancelacion_motivo ?? ""}` : null, o.notas].filter(Boolean).join(" · ") || null,
+          nota: o.notas ?? null,
           forma_pago: [condicion, o.forma_pago].filter(Boolean).join(" · ") || null,
           titulo: "ORDEN DE VENTA",
           etiqueta_contraparte: "Cliente",

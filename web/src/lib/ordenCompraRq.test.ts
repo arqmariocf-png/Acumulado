@@ -99,3 +99,41 @@ test("orden de venta propia: título, cliente y sin sello de autorización", () 
   assert.match(html, /2026-10-12 · obra/);
   assert.match(html, /\$ 116\.00/);
 });
+
+test("membrete completo, datos de la contraparte y sello de cancelada", () => {
+  const html = htmlOrdenCompra(
+    {
+      id_orden: "IA-OC-0001",
+      fecha: "2026-10-15",
+      empresa_nombre: "Aceros y Envasados de Puebla",
+      empresa_rfc: "AEL131023CS1",
+      empresa_codigo: "AEP",
+      empresa_razon_social: "ACEROS Y ENVASADOS DE PUEBLA SA DE CV",
+      empresa_domicilio: "Calle 1 #2, Puebla, Pue.",
+      empresa_telefono: "222 123 4567",
+      empresa_correo: "compras@aep.mx",
+      proveedor: "MAQUI PRINT SA DE CV",
+      rfc_proveedor: "MPR200305DH1",
+      contraparte_datos: ["Contacto: Juan Pérez", "Tel. 222 000 1111"],
+      proyecto: "Corporativo",
+      requisicion_folio: null,
+      solicitante: null,
+      creada_por: "Laura Orta",
+      autorizada_en: null,
+      autorizada_por: null,
+      nota: null,
+      titulo: "ORDEN DE COMPRA",
+      entrega: "2026-10-20 · bodega",
+      cancelada: "PRUEBA",
+    },
+    [{ item: "Compra de material", unidad: "PZA", cantidad: 1, costo: 10000, iva: true }],
+    null,
+  );
+  assert.match(html, /ACEROS Y ENVASADOS DE PUEBLA SA DE CV/);
+  assert.match(html, /Calle 1 #2, Puebla, Pue\./);
+  assert.match(html, /Tel\. 222 123 4567 · compras@aep\.mx/);
+  assert.match(html, /MAQUI PRINT SA DE CV · RFC MPR200305DH1<div class="contra">Contacto: Juan Pérez<\/div><div class="contra">Tel\. 222 000 1111<\/div>/);
+  assert.match(html, /<span>Entrega<\/span>2026-10-20 · bodega/);
+  assert.match(html, /CANCELADA · PRUEBA/);
+  assert.doesNotMatch(html, /PENDIENTE DE AUTORIZAR/);
+});
