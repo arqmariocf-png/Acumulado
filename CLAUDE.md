@@ -1304,6 +1304,36 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   fija, flechas/Enter/clic; texto libre permitido) en proveedor/cliente,
   obra y descripción de partida; elegir llena unidad y precio si estaban
   vacíos.
+- **Catálogo de compras e histórico de costos (15-oct-2026, Mario: "en
+  cuanto a los ítems fíltralos por proveedor para no ver todo el universo;
+  necesitamos el módulo para agregar items y proveedores; también es
+  importante tener el histórico por proveedor de costos")**
+  (`20261015100000`, aplicada en 5 partes por el MCP): tablas
+  `proveedores` (por organización, `clave` = `fn_proveedor_clave(nombre)`
+  por trigger, la misma de datos bancarios y líneas de crédito; RFC, contacto,
+  teléfono, correo, giro, activo) y `proveedor_articulos` (descripción,
+  unidad, precio **s/IVA**, IVA; único por proveedor y descripción
+  normalizada). Ven y capturan quienes capturan órdenes
+  (`auth_captura_ordenes`); borrar proveedor solo admin/dirección (en
+  pantalla se desactiva). Frontera, espectador, director general y
+  solo_consulta incluidos (validar-sql en verde).
+  `fn_proveedor_historico_costos(nombre)` (invoker; ~0.1 s) = cada partida
+  de OC a ese proveedor con precio s/IVA. `fn_ordenes_catalogo_captura` ya
+  suma fichas, artículos de lista y `obras` (proyecto de OC/OV de la empresa
+  + proyectos activos). Pantalla **Compras → Proveedores y artículos**
+  (`/compras/catalogo`, `pages/compras/CatalogoCompras.tsx`): lista con
+  "con ficha / solo en órdenes", ficha, datos bancarios, artículos con
+  precio (sugiere lo ya comprado) e histórico por concepto (último, anterior
+  distinto, variación ▲▼, mín/máx, promedio ponderado, detalle por orden,
+  "a la lista", Excel; `lib/historicoCostos.ts` con pruebas); pestaña
+  "Comparar precios" (`compararPrecios`). En el editor de órdenes, con
+  proveedor elegido solo salen SUS partidas (`filtrarItems(..., true)`;
+  casilla "buscar partidas de todos"), aviso si no tiene, y liga a dar de
+  alta. **Mario negó** agregar `clave` al JSON del catálogo por MCP: la
+  ficha se busca con `rpc fn_proveedor_clave` desde la pantalla.
+- **Pendiente (Mario, 15-oct-2026): cotizador para todas las empresas**
+  con la lógica del de Clavicón (`lib/cotizacionPlanta.ts`); "en eso
+  entramos más adelante, ya tenemos el entregable".
 - Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
   `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
   producto del catálogo.

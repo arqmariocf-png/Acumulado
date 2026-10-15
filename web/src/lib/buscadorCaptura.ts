@@ -10,6 +10,14 @@ export interface ContraparteCatalogo {
   veces: number;
   ultima: string | null;
   misma_empresa: boolean;
+  /** Tiene ficha en el catálogo de compras (tabla proveedores). */
+  ficha?: boolean;
+}
+
+export interface ObraCatalogo {
+  nombre: string;
+  veces: number;
+  ultima: string | null;
 }
 
 export interface ItemCatalogo {
@@ -63,17 +71,20 @@ export function filtrarContrapartes(lista: ContraparteCatalogo[], texto: string,
 
 /** Una opción por concepto. Si ya se eligió proveedor/cliente, su propio
  * último precio gana y sus conceptos van primero (sin texto: "lo que le
- * compras a este proveedor"). */
-export function filtrarItems(lista: ItemCatalogo[], texto: string, contraparte: string | null | undefined, limite = 12): ItemCatalogo[] {
+ * compras a este proveedor"). Con `soloDelProveedor` (Mario, 15-oct-2026:
+ * "fíltralos por proveedor para no ver todo el universo") solo salen los
+ * conceptos de ese proveedor. */
+export function filtrarItems(lista: ItemCatalogo[], texto: string, contraparte: string | null | undefined, limite = 12, soloDelProveedor = false): ItemCatalogo[] {
   const ps = palabras(texto);
   const cp = normalizarBusqueda(contraparte);
   const esDe = (i: ItemCatalogo) => !!cp && normalizarBusqueda(i.contraparte) === cp;
+  const estricto = soloDelProveedor && !!cp;
   // Sin texto solo se sugiere si hay proveedor elegido y es de él.
   if (ps.length === 0 && !cp) return [];
   const porConcepto = new Map<string, { i: ItemCatalogo; s: number; propio: boolean; veces: number }>();
   for (const i of lista) {
     const propio = esDe(i);
-    if (ps.length === 0 && !propio) continue;
+    if ((ps.length === 0 || estricto) && !propio) continue;
     const s = puntaje(i.descripcion, ps);
     if (s === 0) continue;
     const clave = normalizarBusqueda(i.descripcion);
@@ -93,6 +104,34 @@ export function filtrarItems(lista: ItemCatalogo[], texto: string, contraparte: 
     .sort((a, b) => b.s - a.s || Number(b.propio) - Number(a.propio) || Number(b.i.misma_empresa) - Number(a.i.misma_empresa) || b.veces - a.veces || a.i.descripcion.localeCompare(b.i.descripcion, "es"))
     .slice(0, limite)
     .map((x) => ({ ...x.i, veces: x.veces }));
+}
+
+/** ¿El proveedor elegido tiene partidas en el catálogo? (para avisar que no). */
+export function tienePartidas(lista: ItemCatalogo[], contraparte: string | null | undefined): boolean {
+  const cp = normalizarBusqueda(contraparte);
+  return !!cp && lista.some((i) => normalizarBusqueda(i.contraparte) === cp);
+}
+
+export function filtrarObras(lista: ObraCatalogo[], texto: string, limite = 12): ObraCatalogo[] {
+  const ps = palabras(texto);
+  const exacta = normalizarBusqueda(texto);
+  return lista
+    .map((o) => ({ o, s: puntaje(o.nombre, ps) }))
+    .filter((x) => x.s > 0 && normalizarBusqueda(x.o.nombre) !== exacta)
+    .sort((a, b) => b.s - a.s || (b.o.ultima ?? "").localeCompare(a.o.ultima ?? "") || a.o.nombre.localeCompare(b.o.nombre, "es"))
+    .slice(0, limite)
+    .map((x) => x.o);
+}
+
+/** Comparar un concepto entre proveedores: todas las coincidencias (sin
+ * juntar por concepto), del precio más bajo al más alto. */
+export function compararPrecios(lista: ItemCatalogo[], texto: string, limite = 60): ItemCatalogo[] {
+  const ps = palabras(texto);
+  if (ps.length === 0) return [];
+  return lista
+    .filter((i) => puntaje(i.descripcion, ps) > 0)
+    .sort((a, b) => normalizarBusqueda(a.descripcion).localeCompare(normalizarBusqueda(b.descripcion), "es") || (a.precio ?? Infinity) - (b.precio ?? Infinity))
+    .slice(0, limite);
 }
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];

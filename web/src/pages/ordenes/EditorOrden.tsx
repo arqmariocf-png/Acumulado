@@ -5,7 +5,7 @@ import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { BotonVerOv } from "./VerOrdenVenta";
 import { CampoBuscador } from "../../components/CampoBuscador";
-import { detalleContraparte, detalleItem, filtrarContrapartes, filtrarItems, normalizarBusqueda, type ContraparteCatalogo, type ItemCatalogo } from "../../lib/buscadorCaptura";
+import { detalleContraparte, detalleItem, fechaCortaCatalogo, filtrarContrapartes, filtrarItems, filtrarObras, normalizarBusqueda, tienePartidas, type ContraparteCatalogo, type ItemCatalogo, type ObraCatalogo } from "../../lib/buscadorCaptura";
 import {
   FORMAS_PAGO,
   importePartida,
@@ -101,22 +101,20 @@ export function EditorOrden({
     enabled: !!enc.empresaId,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const [cat, obras] = await Promise.all([
-        supabase.rpc("fn_ordenes_catalogo_captura", { p_venta: tipo === "OV", p_empresa: enc.empresaId }),
-        supabase.from("proyectos").select("nombre").eq("empresa_id", enc.empresaId).eq("activo", true).order("nombre"),
-      ]);
+      const cat = await supabase.rpc("fn_ordenes_catalogo_captura", { p_venta: tipo === "OV", p_empresa: enc.empresaId });
       if (cat.error) throw cat.error;
-      const j = (cat.data ?? {}) as { contrapartes?: ContraparteCatalogo[]; items?: ItemCatalogo[] };
-      return { contrapartes: j.contrapartes ?? [], items: j.items ?? [], obras: (obras.data ?? []).map((x) => x.nombre as string) };
+      const j = (cat.data ?? {}) as { contrapartes?: ContraparteCatalogo[]; items?: ItemCatalogo[]; obras?: ObraCatalogo[] };
+      return { contrapartes: j.contrapartes ?? [], items: j.items ?? [], obras: j.obras ?? [] };
     },
   });
   const [partidaBuscando, setPartidaBuscando] = useState<number | null>(null);
   const opcionesContraparte = filtrarContrapartes(catalogo.data?.contrapartes ?? [], enc.contraparte).filter((c) => normalizarBusqueda(c.nombre) !== normalizarBusqueda(enc.contraparte) || enc.contraparte === "");
-  const opcionesObra = (() => {
-    const q = normalizarBusqueda(enc.proyecto);
-    return (catalogo.data?.obras ?? []).filter((o) => q.split(" ").every((w) => normalizarBusqueda(o).includes(w)) && normalizarBusqueda(o) !== q).slice(0, 12);
-  })();
-  const itemsDe = (texto: string) => filtrarItems(catalogo.data?.items ?? [], texto, enc.contraparte);
+  const opcionesObra = filtrarObras(catalogo.data?.obras ?? [], enc.proyecto);
+  // Con proveedor elegido solo se ven SUS partidas (Mario, 15-oct-2026: "para
+  // no ver todo el universo"); la casilla abre las de todos.
+  const [todosProveedores, setTodosProveedores] = useState(false);
+  const conPartidas = tienePartidas(catalogo.data?.items ?? [], enc.contraparte);
+  const itemsDe = (texto: string) => filtrarItems(catalogo.data?.items ?? [], texto, enc.contraparte, 12, !todosProveedores);
 
   function cambiar(i: number, cambio: Partial<PartidaCaptura>) {
     setPartidas((ps) => {
@@ -237,7 +235,7 @@ export function EditorOrden({
               <CampoBuscador
                 value={enc.proyecto}
                 onChange={(v) => setEnc({ ...enc, proyecto: v })}
-                opciones={opcionesObra.map((o) => ({ clave: o, titulo: o }))}
+                opciones={opcionesObra.map((o) => ({ clave: o.nombre, titulo: o.nombre, detalle: [o.veces ? `${o.veces} partidas en órdenes` : "proyecto dado de alta", o.ultima ? `última ${fechaCortaCatalogo(o.ultima)}` : null].filter(Boolean).join(" · ") }))}
                 onElegir={(o) => setEnc({ ...enc, proyecto: o })}
                 placeholder="Busca la obra"
                 className={`mt-1 ${campo}`}
@@ -282,7 +280,24 @@ export function EditorOrden({
             </label>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+            {enc.contraparte.trim() && (
+              <label className="flex items-center gap-1">
+                <input type="checkbox" checked={todosProveedores} onChange={(e) => setTodosProveedores(e.target.checked)} />
+                buscar partidas de todos los {tipo === "OV" ? "clientes" : "proveedores"}
+              </label>
+            )}
+            {enc.contraparte.trim() && !todosProveedores && catalogo.data && !conPartidas && (
+              <span className="text-amber-700">Este {info.contraparte.toLowerCase()} aún no tiene partidas: escríbelas o busca en todos.</span>
+            )}
+            {tipo !== "OV" && (
+              <a href="/compras/catalogo" target="_blank" rel="noreferrer" className="ml-auto underline">
+                Dar de alta proveedor o artículos
+              </a>
+            )}
+          </div>
+
+          <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase text-slate-500">
                 <tr>
