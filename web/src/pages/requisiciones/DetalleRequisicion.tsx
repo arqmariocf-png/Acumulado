@@ -9,6 +9,7 @@ import { RecepcionOc } from "./RecepcionOc";
 import { ETIQUETA_CONDICION, type CondicionPago } from "../../lib/pagosOc";
 import { ETIQUETA_SEGUIMIENTO, avancePartidas, puedeMarcarEvento, seguimientoLinea, type EstadoSeguimiento, type EventoLinea, type ExtraLinea, type Seguimiento, type TipoEvento } from "../../lib/seguimientoLinea";
 import { SeguimientoLinea } from "./SeguimientoLinea";
+import { BotonImprimirRequisicion } from "./ImprimirRequisicion";
 
 const COLOR_SEGUIMIENTO: Record<EstadoSeguimiento, string> = {
   sin_pedir: "bg-slate-100 text-slate-600",
@@ -200,6 +201,11 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado, esDeL
 
   return (
     <div className="border-t border-slate-100 bg-slate-50 px-3 py-3">
+      {/* PDF para la cuadrilla y hoja de entrega para almacén (Mario, 15-oct-2026). */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <BotonImprimirRequisicion requisicionId={requisicionId} modo="requisicion" />
+        <BotonImprimirRequisicion requisicionId={requisicionId} modo="entrega" />
+      </div>
       {segs.length > 0 && (
         <div className="mb-2 rounded border border-slate-200 bg-white px-3 py-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
