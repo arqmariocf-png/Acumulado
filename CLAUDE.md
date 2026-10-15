@@ -1349,9 +1349,29 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   los clientes registrados (3: dos de MCC y RAMSICON de AEP) porque sin
   órdenes quedaban al final: `filtrarContrapartes` pone primero los de
   ficha ("registrado") y el editor muestra hasta 40.
-- **Pendiente (Mario, 15-oct-2026): cotizador para todas las empresas**
-  con la lógica del de Clavicón (`lib/cotizacionPlanta.ts`); "en eso
-  entramos más adelante, ya tenemos el entregable".
+- **Cotizador para todas las empresas (15-oct-2026, Mario: "los mismos
+  productos y los mismos clientes y la lógica de la de Clavicón para cada
+  una de las empresas; un módulo completo")**: `/cotizador`
+  (`pages/cotizador/Cotizador.tsx`, menú Compras → Cotizador). Reusa
+  `cotizaciones_produccion` / `_lineas` (folio COT-<emp>, precio s/IVA,
+  captura c/IVA, costo congelado por partida) y la impresión
+  `htmlCotizacionPlanta` con membrete (`empresas` + `empresas_perfil_legal`).
+  Productos (`lib/cotizador.ts`, con pruebas): planta (PEPS) > catálogo
+  `productos` > lo ya vendido en OV de la empresa; costo de lo que no es
+  planta = última compra con la misma descripción (OC s/IVA) o costo de
+  referencia. Clientes compartidos: los registrados de TODAS las empresas
+  primero + los de OV; "+ dar de alta cliente" (queda en `clientes`).
+  "Convertir en orden de venta" → `fn_orden_ia_guardar('OV')` y liga
+  `cotizaciones_produccion.orden_venta_id` (la OV la genera quien captura
+  órdenes; producción no). `20261015120000`: `auth_opera_cotizador()`
+  (producción, admin, corporativo, dirección, empresa, almacén, permiso
+  compras o 'cotizador' —nuevo en `permisos_modulo` y en
+  `MODULOS_ASIGNABLES`—), policy de cotizaciones con ella, director_general
+  en cotizaciones, clientes: ver/alta/corregir para quien cotiza. El
+  cotizador de la pestaña de Clavicón (`CotizadorPlanta`) sigue igual y
+  comparte el historial. Probado como Laura en rollback (COT-AEP-0001 →
+  IA-OV-0001); `folio_ia_ov` reiniciado a 1 (las secuencias no se
+  revierten con rollback).
 - Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
   `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
   producto del catálogo.
