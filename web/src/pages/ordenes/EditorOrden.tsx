@@ -4,6 +4,8 @@ import { supabase } from "../../lib/supabase";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { BotonVerOv } from "./VerOrdenVenta";
+import { CampoBuscador } from "../../components/CampoBuscador";
+import { detalleContraparte, detalleItem, filtrarContrapartes, filtrarItems, normalizarBusqueda, type ContraparteCatalogo, type ItemCatalogo } from "../../lib/buscadorCaptura";
 import {
   FORMAS_PAGO,
   importePartida,
@@ -91,51 +93,50 @@ export function EditorOrden({
     };
   }, [id, tipo]);
 
-  // Sugerencias: proveedores/clientes ya usados, obras y productos de la empresa.
-  const sugerencias = useQuery({
-    queryKey: ["ordenes-ia-sugerencias", tipo === "OV" ? "OV" : "OC", enc.empresaId],
+  // Buscador (Mario, 15-oct-2026): proveedores/clientes de todas las órdenes
+  // que quien captura puede ver y cada partida ya comprada/vendida con su
+  // unidad y último precio s/IVA (fn_ordenes_catalogo_captura), más las obras.
+  const catalogo = useQuery({
+    queryKey: ["ordenes-ia-catalogo", tipo === "OV", enc.empresaId],
     enabled: !!enc.empresaId,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
-      const [contra, obras, prods] = await Promise.all([
-        tipo === "OV"
-          ? Promise.all([
-              supabase.from("clientes").select("razon_social").eq("empresa_id", enc.empresaId).eq("activo", true).limit(500),
-              supabase.from("ordenes_venta").select("cliente").eq("empresa_id", enc.empresaId).not("cliente", "is", null).order("fecha_ov", { ascending: false }).limit(500),
-            ]).then(([a, b]) => [...(a.data ?? []).map((x) => x.razon_social as string), ...(b.data ?? []).map((x) => x.cliente as string)])
-          : supabase
-              .from("ordenes_compra")
-              .select("proveedor")
-              .eq("empresa_id", enc.empresaId)
-              .not("proveedor", "is", null)
-              .order("fecha_creacion", { ascending: false })
-              .limit(1000)
-              .then((r) => (r.data ?? []).map((x) => x.proveedor as string)),
+      const [cat, obras] = await Promise.all([
+        supabase.rpc("fn_ordenes_catalogo_captura", { p_venta: tipo === "OV", p_empresa: enc.empresaId }),
         supabase.from("proyectos").select("nombre").eq("empresa_id", enc.empresaId).eq("activo", true).order("nombre"),
-        supabase.from("productos").select("nombre, unidad_medida, costo_referencia, precio_venta, iva_tasa").eq("empresa_id", enc.empresaId).eq("activo", true).order("nombre").limit(2000),
       ]);
-      return {
-        contrapartes: [...new Set(contra.map((x) => x?.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")),
-        obras: (obras.data ?? []).map((x) => x.nombre as string),
-        productos: (prods.data ?? []) as { nombre: string; unidad_medida: string | null; costo_referencia: number | null; precio_venta: number | null; iva_tasa: number | null }[],
-      };
+      if (cat.error) throw cat.error;
+      const j = (cat.data ?? {}) as { contrapartes?: ContraparteCatalogo[]; items?: ItemCatalogo[] };
+      return { contrapartes: j.contrapartes ?? [], items: j.items ?? [], obras: (obras.data ?? []).map((x) => x.nombre as string) };
     },
   });
+  const [partidaBuscando, setPartidaBuscando] = useState<number | null>(null);
+  const opcionesContraparte = filtrarContrapartes(catalogo.data?.contrapartes ?? [], enc.contraparte).filter((c) => normalizarBusqueda(c.nombre) !== normalizarBusqueda(enc.contraparte) || enc.contraparte === "");
+  const opcionesObra = (() => {
+    const q = normalizarBusqueda(enc.proyecto);
+    return (catalogo.data?.obras ?? []).filter((o) => q.split(" ").every((w) => normalizarBusqueda(o).includes(w)) && normalizarBusqueda(o) !== q).slice(0, 12);
+  })();
+  const itemsDe = (texto: string) => filtrarItems(catalogo.data?.items ?? [], texto, enc.contraparte);
 
   function cambiar(i: number, cambio: Partial<PartidaCaptura>) {
     setPartidas((ps) => {
       const nuevas = ps.map((p, j) => (j === i ? { ...p, ...cambio } : p));
-      // Al elegir un producto del catálogo se llenan unidad y costo/precio.
-      if (cambio.item !== undefined) {
-        const prod = sugerencias.data?.productos.find((p) => p.nombre === cambio.item);
-        if (prod) {
-          const base = tipo === "OV" ? (prod.precio_venta != null ? Number(prod.precio_venta) / (1 + Number(prod.iva_tasa ?? 0.16)) : null) : prod.costo_referencia;
-          nuevas[i] = { ...nuevas[i], unidad: nuevas[i].unidad || prod.unidad_medida || "", costo: nuevas[i].costo === "" && base != null ? Math.round(Number(base) * 100) / 100 : nuevas[i].costo };
-        }
-      }
       // Siempre queda un renglón vacío al final para seguir capturando.
       const ultimo = nuevas[nuevas.length - 1];
       if (ultimo.item.trim() || String(ultimo.cantidad).trim() || String(ultimo.costo).trim()) nuevas.push(partidaVacia());
       return nuevas;
+    });
+  }
+
+  // Elegir una partida del buscador: descripción, unidad y último precio
+  // s/IVA (sin pisar lo que ya se escribió en unidad o precio).
+  function elegirItem(i: number, item: ItemCatalogo) {
+    const p = partidas[i];
+    cambiar(i, {
+      item: item.descripcion,
+      unidad: p.unidad || item.unidad || "",
+      costo: p.costo === "" && item.precio != null ? Number(item.precio) : p.costo,
+      iva: item.iva ?? p.iva,
     });
   }
 
@@ -221,17 +222,26 @@ export function EditorOrden({
             )}
             <label className="text-xs text-slate-600 lg:col-span-2">
               {info.contraparte}
-              <input list="ordenes-ia-contrapartes" value={enc.contraparte} onChange={(e) => setEnc({ ...enc, contraparte: e.target.value })} className={`mt-1 ${campo}`} />
-              <datalist id="ordenes-ia-contrapartes">
-                {sugerencias.data?.contrapartes.map((c) => <option key={c} value={c} />)}
-              </datalist>
+              <CampoBuscador
+                value={enc.contraparte}
+                onChange={(v) => setEnc({ ...enc, contraparte: v })}
+                opciones={opcionesContraparte.map((c) => ({ clave: c.nombre, titulo: c.nombre, detalle: detalleContraparte(c) }))}
+                onElegir={(nombre) => setEnc({ ...enc, contraparte: nombre })}
+                placeholder={catalogo.isLoading ? "Cargando…" : `Busca por nombre o RFC (${catalogo.data?.contrapartes.length ?? 0})`}
+                vacio={`Nuevo ${info.contraparte.toLowerCase()}: se guarda como lo escribiste`}
+                className={`mt-1 ${campo}`}
+              />
             </label>
             <label className="text-xs text-slate-600 lg:col-span-2">
               Proyecto / obra
-              <input list="ordenes-ia-obras" value={enc.proyecto} onChange={(e) => setEnc({ ...enc, proyecto: e.target.value })} className={`mt-1 ${campo}`} />
-              <datalist id="ordenes-ia-obras">
-                {sugerencias.data?.obras.map((c) => <option key={c} value={c} />)}
-              </datalist>
+              <CampoBuscador
+                value={enc.proyecto}
+                onChange={(v) => setEnc({ ...enc, proyecto: v })}
+                opciones={opcionesObra.map((o) => ({ clave: o, titulo: o }))}
+                onElegir={(o) => setEnc({ ...enc, proyecto: o })}
+                placeholder="Busca la obra"
+                className={`mt-1 ${campo}`}
+              />
             </label>
             <label className="text-xs text-slate-600">
               Fecha
@@ -291,7 +301,21 @@ export function EditorOrden({
                   <tr key={i} className="border-t border-slate-100">
                     <td className="py-1 pr-2 text-xs text-slate-400">{i + 1}</td>
                     <td className="py-1 pr-2">
-                      <input list="ordenes-ia-productos" value={p.item} onChange={(e) => cambiar(i, { item: e.target.value })} className="w-full min-w-[14rem] rounded border border-slate-200 px-1.5 py-1" />
+                      <CampoBuscador
+                        value={p.item}
+                        onChange={(v) => {
+                          setPartidaBuscando(i);
+                          cambiar(i, { item: v });
+                        }}
+                        opciones={(partidaBuscando === i || p.item === "" ? itemsDe(p.item) : []).map((x, k) => ({ clave: String(k), titulo: x.descripcion, detalle: detalleItem(x, tipo === "OV") }))}
+                        onElegir={(k) => {
+                          const x = itemsDe(p.item)[Number(k)];
+                          if (x) elegirItem(i, x);
+                          setPartidaBuscando(null);
+                        }}
+                        placeholder={i === 0 && p.item === "" ? (enc.contraparte ? `Busca o elige lo que le ${tipo === "OV" ? "vendes" : "compras"}` : "Busca material o servicio") : ""}
+                        className="w-full min-w-[16rem] rounded border border-slate-200 px-1.5 py-1"
+                      />
                     </td>
                     <td className="py-1 pr-2">
                       <input value={p.unidad} onChange={(e) => cambiar(i, { unidad: e.target.value })} className="w-20 rounded border border-slate-200 px-1.5 py-1" />
@@ -331,9 +355,6 @@ export function EditorOrden({
                 </tr>
               </tfoot>
             </table>
-            <datalist id="ordenes-ia-productos">
-              {sugerencias.data?.productos.map((p) => <option key={p.nombre} value={p.nombre} />)}
-            </datalist>
           </div>
 
           {errores.length > 0 && (

@@ -1289,6 +1289,21 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   y entrada en Almacén. "Por autorizar" y el KPI `fin_oc_por_autorizar`
   incluyen fuente 'acumulado' (etiqueta IA). Probado en producción dentro de
   transacciones revertidas; consecutivos reiniciados a 1.
+- **Buscador al capturar (15-oct-2026, Mario: "pon el filtro para que
+  busquen proveedores, items, para que sea fácil su captura")**: el editor
+  ya no usa `datalist` (solo traía proveedores de la misma empresa y el
+  catálogo de productos). `fn_ordenes_catalogo_captura(p_venta, empresa)`
+  (invoker: RLS de quien captura; ~0.4 s, una vez al abrir) devuelve
+  contrapartes de TODAS las OC (o clientes + OV) con RFC, veces, última
+  fecha y misma empresa, y cada partida ya comprada/vendida por proveedor
+  con unidad y último precio **s/IVA** (api: costo/1.16) + productos del
+  catálogo (`20261015090000`). `lib/buscadorCaptura.ts` (con pruebas)
+  filtra al instante sin acentos y por palabras en cualquier orden; con
+  proveedor elegido gana su propio precio y, con la partida vacía, sugiere
+  lo que se le compra. `components/CampoBuscador.tsx` (lista con posición
+  fija, flechas/Enter/clic; texto libre permitido) en proveedor/cliente,
+  obra y descripción de partida; elegir llena unidad y precio si estaban
+  vacíos.
 - Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
   `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
   producto del catálogo.
