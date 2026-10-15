@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { eliminarPendiente, esErrorDeRed, guardarPendiente, listarPendientes, nuevoId, type MarcaPendiente } from "../lib/colaOffline";
 import { CamaraSelfie } from "../components/CamaraSelfie";
 import { rutaVerArchivo } from "../lib/verArchivo";
+import { fechaLocal } from "../lib/reporteChecador";
 
 /** La foto tomada se respalda en sessionStorage (ya comprimida, ~100-200 KB)
  * para sobrevivir a que el navegador recargue la página mientras se pide
@@ -252,7 +253,8 @@ export function horasTrabajadas(registros: { tipo: TipoMarca; created_at: string
 function agruparPorDia(registros: RegistroChecador[]): { fecha: string; registros: RegistroChecador[] }[] {
   const porDia = new Map<string, RegistroChecador[]>();
   for (const r of registros) {
-    const fecha = r.created_at.slice(0, 10);
+    // Día en hora de México: una salida a las 7:28 p. m. es 01:28 UTC del día siguiente (Alberto, 14-oct-2026).
+    const fecha = fechaLocal(r.created_at);
     const lista = porDia.get(fecha) ?? [];
     lista.push(r);
     porDia.set(fecha, lista);
@@ -326,8 +328,8 @@ export function Checador() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enLinea, profileId]);
 
-  const hoyIso = new Date().toISOString().slice(0, 10);
-  const registrosHoy = useMemo(() => (registros ?? []).filter((r) => r.created_at.slice(0, 10) === hoyIso), [registros, hoyIso]);
+  const hoyIso = fechaLocal(new Date().toISOString());
+  const registrosHoy = useMemo(() => (registros ?? []).filter((r) => fechaLocal(r.created_at) === hoyIso), [registros, hoyIso]);
   const horasHoy = useMemo(() => horasTrabajadas(registrosHoy), [registrosHoy]);
   const historial = useMemo(() => agruparPorDia(registros ?? []), [registros]);
 

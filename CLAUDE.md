@@ -364,6 +364,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `lib/reporteChecador.ts` (con pruebas; día en hora de México, anuladas
   fuera, primera entrada y última salida). "Lista de marcas" sigue para
   corregir/anular.
+  **Día en hora de México también en el checador personal (14-oct-2026,
+  Alberto: "cheque mi salida de hoy miércoles y me la marca para
+  jueves")**: `Checador.tsx` agrupaba "Últimos 14 días" y "hoy" con
+  `created_at.slice(0, 10)` (UTC): después de las 6 p. m. la marca caía en
+  el día siguiente. Ahora usa `fechaLocal` de `lib/reporteChecador.ts`. La
+  marca estaba bien guardada; solo se pintaba mal. Nunca agrupar por día
+  con `slice(0, 10)` de un timestamp.
 - **SAT: descarga masiva automática (13-oct-2026)**: Belén subió la
   e.firma de las 8 empresas (AEP, CSC, ERG, LRT, MCC, MCF, QX, VBB). Edge
   `sat-descarga-masiva` (verify_jwt false: cron con `x-cron-secret` o sesión
