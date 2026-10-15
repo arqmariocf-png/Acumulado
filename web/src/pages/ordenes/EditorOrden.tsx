@@ -108,7 +108,7 @@ export function EditorOrden({
     },
   });
   const [partidaBuscando, setPartidaBuscando] = useState<number | null>(null);
-  const opcionesContraparte = filtrarContrapartes(catalogo.data?.contrapartes ?? [], enc.contraparte).filter((c) => normalizarBusqueda(c.nombre) !== normalizarBusqueda(enc.contraparte) || enc.contraparte === "");
+  const opcionesContraparte = filtrarContrapartes(catalogo.data?.contrapartes ?? [], enc.contraparte, 40).filter((c) => normalizarBusqueda(c.nombre) !== normalizarBusqueda(enc.contraparte) || enc.contraparte === "");
   const opcionesObra = filtrarObras(catalogo.data?.obras ?? [], enc.proyecto);
   // Con proveedor elegido solo se ven SUS partidas (Mario, 15-oct-2026: "para
   // no ver todo el universo"); la casilla abre las de todos.

@@ -132,6 +132,7 @@ interface Ficha {
   id: string;
   nombre: string;
   rfc: string | null;
+  domicilio: string | null;
   contacto: string | null;
   telefono: string | null;
   correo: string | null;
@@ -160,7 +161,7 @@ function DetalleProveedor({ nombre, items, onCerrar, onGuardado }: { nombre: str
       const { data: clave, error: e1 } = await supabase.rpc("fn_proveedor_clave", { p_nombre: nombre });
       if (e1) throw e1;
       const [f, b] = await Promise.all([
-        supabase.from("proveedores").select("id, nombre, rfc, contacto, telefono, correo, giro, notas, activo").eq("clave", clave as string).maybeSingle(),
+        supabase.from("proveedores").select("id, nombre, rfc, domicilio, contacto, telefono, correo, giro, notas, activo").eq("clave", clave as string).maybeSingle(),
         supabase.from("proveedores_datos_bancarios").select("beneficiario, banco, clabe, cuenta, rfc, correo").eq("clave", clave as string).maybeSingle(),
       ]);
       if (f.error) throw f.error;
@@ -211,6 +212,7 @@ function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado
   const [v, setV] = useState({
     nombre: ficha?.nombre ?? nombreInicial ?? "",
     rfc: ficha?.rfc ?? rfcSugerido ?? "",
+    domicilio: ficha?.domicilio ?? "",
     contacto: ficha?.contacto ?? "",
     telefono: ficha?.telefono ?? "",
     correo: ficha?.correo ?? "",
@@ -224,7 +226,7 @@ function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado
       if (!v.nombre.trim()) throw new Error("Escribe el nombre del proveedor.");
       const rfc = v.rfc.trim().toUpperCase();
       if (rfc && !/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(rfc)) throw new Error("El RFC no tiene el formato correcto (12 o 13 caracteres).");
-      const fila = { nombre: v.nombre.trim(), rfc: rfc || null, contacto: v.contacto.trim() || null, telefono: v.telefono.trim() || null, correo: v.correo.trim() || null, giro: v.giro.trim() || null, notas: v.notas.trim() || null, activo: v.activo };
+      const fila = { nombre: v.nombre.trim(), rfc: rfc || null, domicilio: v.domicilio.trim() || null, contacto: v.contacto.trim() || null, telefono: v.telefono.trim() || null, correo: v.correo.trim() || null, giro: v.giro.trim() || null, notas: v.notas.trim() || null, activo: v.activo };
       const { error } = ficha ? await supabase.from("proveedores").update(fila).eq("id", ficha.id) : await supabase.from("proveedores").insert(fila);
       if (error) throw new Error(/duplicate key|unique/i.test(error.message) ? "Ya existe un proveedor con ese nombre en el catálogo." : error.message);
       return fila.nombre;
@@ -248,6 +250,7 @@ function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado
         {input("nombre", "Nombre o razón social", "lg:col-span-2")}
         {input("rfc", "RFC")}
         {input("giro", "Giro (material, flete, renta…)")}
+        {input("domicilio", "Domicilio (sale en la OC impresa)", "sm:col-span-2")}
         {input("contacto", "Contacto")}
         {input("telefono", "Teléfono")}
         {input("correo", "Correo")}

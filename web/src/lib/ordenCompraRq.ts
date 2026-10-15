@@ -40,6 +40,17 @@ export interface OrdenCompraDoc {
   sin_autorizacion?: boolean;
   /** Fecha y lugar de entrega. */
   entrega?: string | null;
+  /** Membrete completo de la empresa (Laura, 15-oct-2026: "no aparecen
+   * todos los datos"): razón social, domicilio fiscal, teléfono y correo. */
+  empresa_razon_social?: string | null;
+  empresa_domicilio?: string | null;
+  empresa_telefono?: string | null;
+  empresa_correo?: string | null;
+  /** Datos de la contraparte además del nombre y RFC: domicilio, contacto,
+   * teléfono, correo, régimen… ya formateados ("Tel. 222…"). */
+  contraparte_datos?: string[];
+  /** Motivo si la orden está cancelada: sello rojo en vez de autorización. */
+  cancelada?: string | null;
 }
 
 export interface LineaOrdenCompra {
@@ -138,6 +149,8 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
   .firmas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; margin-top: 44px; }
   .firmas div { border-top: 1px solid #111; padding-top: 6px; text-align: center; font-size: 11px; }
   .sello { display: inline-block; border: 2px solid #15803d; color: #15803d; padding: 2px 8px; font-weight: bold; border-radius: 4px; font-size: 11px; }
+  .cancel { display: inline-block; border: 2px solid #b91c1c; color: #b91c1c; padding: 2px 8px; font-weight: bold; border-radius: 4px; font-size: 11px; }
+  .contra { margin-top: 2px; color: #333; font-size: 11px; }
   .pend { display: inline-block; border: 2px solid #b45309; color: #b45309; padding: 2px 8px; font-weight: bold; border-radius: 4px; font-size: 11px; }
   .btn { position: fixed; top: 10px; right: 10px; padding: 8px 14px; background: #0f172a; color: #fff; border: 0; border-radius: 6px; font-size: 13px; cursor: pointer; }
   @media print { .btn { display: none; } .hoja { padding: 0; } }
@@ -150,8 +163,11 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
       ${logoUrl ? `<img src="${esc(logoUrl)}" alt="" onerror="this.style.display='none'">` : ""}
       <h1>${esc(oc.titulo ?? "ORDEN DE COMPRA")}</h1>
       <div class="emp">${esc(oc.empresa_nombre)}</div>
+      ${oc.empresa_razon_social && oc.empresa_razon_social !== oc.empresa_nombre ? `<div class="sub">${esc(oc.empresa_razon_social)}</div>` : ""}
       <div class="sub">${oc.empresa_rfc ? `RFC ${esc(oc.empresa_rfc)}` : ""}</div>
-      <div style="margin-top:6px">${oc.sin_autorizacion ? "" : autorizada ? `<span class="sello">AUTORIZADA ${oc.autorizada_en ? `${oc.autorizacion_interna ? "INTERNA " : ""}${esc(fechaLarga(oc.autorizada_en))}` : "EN BACKOFFICE"}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
+      ${oc.empresa_domicilio ? `<div class="sub">${esc(oc.empresa_domicilio)}</div>` : ""}
+      ${oc.empresa_telefono || oc.empresa_correo ? `<div class="sub">${[oc.empresa_telefono ? `Tel. ${esc(oc.empresa_telefono)}` : "", esc(oc.empresa_correo)].filter(Boolean).join(" · ")}</div>` : ""}
+      <div style="margin-top:6px">${oc.cancelada ? `<span class="cancel">CANCELADA · ${esc(oc.cancelada)}</span>` : oc.sin_autorizacion ? "" : autorizada ? `<span class="sello">AUTORIZADA ${oc.autorizada_en ? `${oc.autorizacion_interna ? "INTERNA " : ""}${esc(fechaLarga(oc.autorizada_en))}` : "EN BACKOFFICE"}</span>` : `<span class="pend">PENDIENTE DE AUTORIZAR</span>`}</div>
     </div>
     <div class="folio">
       <div class="num">${esc(oc.id_orden)}</div>
@@ -159,9 +175,10 @@ export function htmlOrdenCompra(oc: OrdenCompraDoc, lineas: LineaOrdenCompra[], 
     </div>
   </div>
   <div class="datos">
-    <div><span>${esc(oc.etiqueta_contraparte ?? "Proveedor")}</span>${esc(oc.proveedor) || "—"}${oc.rfc_proveedor ? ` · RFC ${esc(oc.rfc_proveedor)}` : ""}</div>
+    <div><span>${esc(oc.etiqueta_contraparte ?? "Proveedor")}</span>${esc(oc.proveedor) || "—"}${oc.rfc_proveedor ? ` · RFC ${esc(oc.rfc_proveedor)}` : ""}${(oc.contraparte_datos ?? []).filter(Boolean).map((d) => `<div class="contra">${esc(d)}</div>`).join("")}</div>
     <div><span>Proyecto / obra</span>${esc(oc.proyecto) || "—"}</div>
-    ${oc.requisicion_folio != null || !oc.titulo ? `<div><span>Requisición</span>${oc.requisicion_folio != null ? `#${esc(oc.requisicion_folio)}` : "—"}${oc.solicitante ? ` · solicitó ${esc(oc.solicitante)}` : ""}</div>` : `<div><span>Entrega</span>${esc(oc.entrega) || "—"}</div>`}
+    ${oc.requisicion_folio != null || !oc.titulo ? `<div><span>Requisición</span>${oc.requisicion_folio != null ? `#${esc(oc.requisicion_folio)}` : "—"}${oc.solicitante ? ` · solicitó ${esc(oc.solicitante)}` : ""}</div>` : ""}
+    ${oc.entrega || (oc.titulo && oc.requisicion_folio == null) ? `<div><span>Entrega</span>${esc(oc.entrega) || "—"}</div>` : ""}
     <div><span>Elaboró</span>${esc(oc.creada_por) || "—"}</div>
     <div><span>Forma de pago</span>${esc(oc.forma_pago) || "—"}</div>
     ${oc.sin_autorizacion ? "" : pagarA(oc)}

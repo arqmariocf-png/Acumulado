@@ -64,7 +64,9 @@ export function filtrarContrapartes(lista: ContraparteCatalogo[], texto: string,
   return lista
     .map((c) => ({ c, s: Math.max(puntaje(c.nombre, ps), ps.length && c.rfc ? puntaje(c.rfc, ps) : 0) }))
     .filter((x) => x.s > 0)
-    .sort((a, b) => b.s - a.s || Number(b.c.misma_empresa) - Number(a.c.misma_empresa) || b.c.veces - a.c.veces || a.c.nombre.localeCompare(b.c.nombre, "es"))
+    // Los registrados (ficha de proveedor / cliente dado de alta) van primero:
+    // sin órdenes quedaban al final y no se veían (Mario, 15-oct-2026).
+    .sort((a, b) => b.s - a.s || Number(!!b.c.ficha) - Number(!!a.c.ficha) || Number(b.c.misma_empresa) - Number(a.c.misma_empresa) || b.c.veces - a.c.veces || a.c.nombre.localeCompare(b.c.nombre, "es"))
     .slice(0, limite)
     .map((x) => x.c);
 }
@@ -145,7 +147,7 @@ export function fechaCortaCatalogo(iso: string | null | undefined): string {
 
 /** Segunda línea de cada opción en la lista. */
 export function detalleContraparte(c: ContraparteCatalogo): string {
-  return [c.rfc ? `RFC ${c.rfc}` : null, c.veces ? `${c.veces} ${c.veces === 1 ? "orden" : "órdenes"}` : "sin órdenes", c.ultima ? `última ${fechaCortaCatalogo(c.ultima)}` : null, c.misma_empresa ? null : "otra empresa"]
+  return [c.ficha ? "registrado" : null, c.rfc ? `RFC ${c.rfc}` : null, c.veces ? `${c.veces} ${c.veces === 1 ? "orden" : "órdenes"}` : "sin órdenes", c.ultima ? `última ${fechaCortaCatalogo(c.ultima)}` : null, c.misma_empresa ? null : "otra empresa"]
     .filter(Boolean)
     .join(" · ");
 }

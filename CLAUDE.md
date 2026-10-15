@@ -1331,6 +1331,24 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   casilla "buscar partidas de todos"), aviso si no tiene, y liga a dar de
   alta. **Mario negó** agregar `clave` al JSON del catálogo por MCP: la
   ficha se busca con `rpc fn_proveedor_clave` desde la pantalla.
+- **Cancelar, impresión completa y clientes registrados (15-oct-2026,
+  Mario)**: (1) `fn_orden_ia_cancelar` ya cancela CUALQUIER OC/OS
+  (backoffice, Excel, RQ: solo admin/corporativo/dirección; IA también
+  quien la capturó), sin pagos hechos ni entradas: quita pagos pendientes,
+  RQ regresa sus necesidades a almacén, queda `rechazada_en` + "Cancelada:
+  motivo" (la sincronización no toca `rechazada_en`)
+  (`20261015110000`). Botón "cancelar" en Programación de pagos / Órdenes
+  por autorizar (`OrdenesPorPagar`) y en `/ordenes` para todas sin pagos.
+  La IA-OC-0001 de Laura (15-oct) era prueba: ella la canceló ("PRUEBA").
+  (2) OC/OV impresas con membrete completo (`empresas` y, si falta,
+  `empresas_perfil_legal`), ficha del proveedor (`proveedores`: domicilio
+  —columna nueva—, contacto, teléfono, correo) o del cliente registrado
+  (`clientes`: domicilio, C.P., régimen, teléfono, correo) y sello rojo
+  CANCELADA (`pages/ordenes/datosImpresion.ts`, `htmlOrdenCompra` con
+  `empresa_*`, `contraparte_datos`, `cancelada`). (3) En la OV no salían
+  los clientes registrados (3: dos de MCC y RAMSICON de AEP) porque sin
+  órdenes quedaban al final: `filtrarContrapartes` pone primero los de
+  ficha ("registrado") y el editor muestra hasta 40.
 - **Pendiente (Mario, 15-oct-2026): cotizador para todas las empresas**
   con la lógica del de Clavicón (`lib/cotizacionPlanta.ts`); "en eso
   entramos más adelante, ya tenemos el entregable".

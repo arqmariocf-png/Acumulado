@@ -84,7 +84,7 @@ export function Ordenes() {
       }
       let q = supabase
         .from("v_oc_pagos")
-        .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado")
+        .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice")
         .eq("tipo", tipo)
         .order("fecha_creacion", { ascending: false })
         .limit(300);
@@ -112,7 +112,9 @@ export function Ordenes() {
           creada_por: creadores.get(o.id as string) ?? null,
           etapa,
           editable: ordenEditable({ fuente: o.fuente as string, autorizacion: o.autorizacion as string }),
-          cancelable: o.fuente === "acumulado" && o.autorizacion !== "rechazada" && Number(o.saldo) >= Number(o.total ?? 0) - 0.01,
+          // Cualquier OC/OS sin pagos (Mario, 15-oct-2026); las que no son IA
+          // solo las cancela dirección (puedeTocar + fn_orden_ia_cancelar).
+          cancelable: o.autorizacion !== "rechazada" && !o.pagada_backoffice && Number(o.saldo) >= Number(o.total ?? 0) - 0.01,
         };
       });
     },

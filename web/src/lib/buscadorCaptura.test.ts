@@ -56,6 +56,12 @@ test("sin texto: solo lo que se le compra al proveedor elegido; sin proveedor, n
   assert.equal(filtrarItems(items, "alambron", null)[0].descripcion, "Alambrón 5.5 mm");
 });
 
+test("los registrados van primero aunque no tengan órdenes", () => {
+  const lista: ContraparteCatalogo[] = [...provs, { nombre: "Ramsicon SA de CV", rfc: "RAM0210042V9", veces: 0, ultima: null, misma_empresa: false, ficha: true }];
+  assert.equal(filtrarContrapartes(lista, "")[0].nombre, "Ramsicon SA de CV");
+  assert.equal(detalleContraparte(lista[4]), "registrado · RFC RAM0210042V9 · sin órdenes · otra empresa");
+});
+
 test("textos de detalle", () => {
   assert.equal(detalleContraparte(provs[0]), "RFC AEP010101AAA · 254 órdenes · última 13 oct 26");
   assert.equal(detalleContraparte(provs[2]), "3 órdenes · última 1 sep 26 · otra empresa");
