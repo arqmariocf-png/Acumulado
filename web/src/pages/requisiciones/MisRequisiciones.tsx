@@ -7,6 +7,7 @@ import { administraProyectosDe, esRolBasico } from "../../lib/modulos";
 import { CLASE_ETAPA, ETAPAS_REQUISICION, ETIQUETA_ETAPA, puedeMarcarEtapa, semaforoEtapa, siguienteEtapa, type EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { AppRol, Producto, Proyecto } from "../../types/database";
 import { DetalleRequisicion } from "./DetalleRequisicion";
+import { BotonImprimirRequisicion } from "./ImprimirRequisicion";
 import { AvisoFiltro, useVer } from "../../components/FiltroDesdeTablero";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
@@ -416,7 +417,8 @@ export function MisRequisiciones() {
                     <td className="px-3 py-2">
                       <CeldaEtapa r={r} />
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                      <BotonImprimirRequisicion requisicionId={r.id} modo="requisicion" etiqueta="PDF" className="mr-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50" />
                       <button type="button" onClick={() => setAbierta(abierta === r.id ? null : r.id)} className={`rounded px-2.5 py-1 text-xs font-medium ${abierta === r.id ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700 hover:bg-slate-100"}`}>
                         {abierta === r.id ? "Cerrar" : puedeComprarAqui ? "Abrir / comprar" : "Abrir"}
                       </button>

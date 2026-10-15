@@ -573,6 +573,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   puso o admin/corporativo. Columnas Pedido / Entregado / Comentarios y
   panel `requisiciones/SeguimientoLinea.tsx` en el detalle. Independiente
   de "En compra"/"Surtido" (OC del sistema): sirve para lo comprado por fuera.
+- **Requisición imprimible (15-oct-2026, Mario: "un descargable en PDF
+  para que puedan imprimirlo los chavos y también en almacén para revisar
+  entregas físicas")**: `lib/requisicionImpresa.ts` (con pruebas) +
+  `requisiciones/ImprimirRequisicion.tsx` (`BotonImprimirRequisicion`,
+  abre la pestaña en el clic y el navegador guarda PDF). Dos formatos:
+  **requisición** (vertical: renglones, cantidad, casilla "recibido",
+  observaciones, firmas solicitó / Vo. Bo. / almacén) y **hoja de entrega**
+  para almacén (horizontal: solicitado, en bodega, en camino, recibido en
+  obra y por entregar del seguimiento por renglón + "entregado hoy", OK y
+  firmas entrega / transporta / recibe). Botones arriba del detalle de la
+  requisición; "PDF" también en cada renglón de la lista.
 - **Entrega a obra y avance por partida (5-oct-2026, Mario con Alma)**:
   recibir en BODEGA ya no completa la requisición; el destino final es la
   obra. El seguimiento por renglón suma `en_bodega`, `enviado_obra`,
