@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detalleContraparte, detalleItem, filtrarContrapartes, filtrarItems, normalizarBusqueda, type ContraparteCatalogo, type ItemCatalogo } from "./buscadorCaptura.ts";
+import { compararPrecios, detalleContraparte, detalleItem, filtrarContrapartes, filtrarItems, filtrarObras, normalizarBusqueda, tienePartidas, type ContraparteCatalogo, type ItemCatalogo } from "./buscadorCaptura.ts";
 
 const provs: ContraparteCatalogo[] = [
   { nombre: "Aceros y Envasados de Puebla", rfc: "AEP010101AAA", veces: 254, ultima: "2026-10-13", misma_empresa: true },
@@ -61,4 +61,29 @@ test("textos de detalle", () => {
   assert.equal(detalleContraparte(provs[2]), "3 órdenes · última 1 sep 26 · otra empresa");
   assert.equal(detalleItem(items[2], false), "BULTO · $210.00 s/IVA · de Cementos Cruz Azul · 5 oct 26 · 30 veces");
   assert.equal(detalleItem(items[4], true), "PZA · $2.00 s/IVA · catálogo");
+});
+
+test("solo del proveedor: no se ve el universo", () => {
+  assert.deepEqual(filtrarItems(items, "varilla", "Ferretería Peña", 12, true).map((i) => i.contraparte), ["Ferretería Peña"]);
+  assert.deepEqual(filtrarItems(items, "cemento", "Ferretería Peña", 12, true), []);
+  // Sin proveedor elegido el modo estricto no aplica.
+  assert.equal(filtrarItems(items, "cemento", null, 12, true).length, 1);
+  assert.equal(tienePartidas(items, "ferreteria pena"), true);
+  assert.equal(tienePartidas(items, "Proveedor Nuevo"), false);
+});
+
+test("obras: por palabras, recientes primero, sin repetir la elegida", () => {
+  const obras = [
+    { nombre: "Paseo 6 Ampliación", veces: 3, ultima: "2026-10-01" },
+    { nombre: "Pisos Falla geológica N21", veces: 100, ultima: "2026-10-13" },
+    { nombre: "Corporativo CLAVICON", veces: 50, ultima: "2026-10-10" },
+  ];
+  assert.deepEqual(filtrarObras(obras, "").map((o) => o.nombre), ["Pisos Falla geológica N21", "Corporativo CLAVICON", "Paseo 6 Ampliación"]);
+  assert.deepEqual(filtrarObras(obras, "ampliacion paseo").map((o) => o.nombre), ["Paseo 6 Ampliación"]);
+  assert.deepEqual(filtrarObras(obras, "Paseo 6 Ampliación"), []);
+});
+
+test("comparar precios entre proveedores, del más barato al más caro", () => {
+  assert.deepEqual(compararPrecios(items, "varilla").map((i) => i.precio), [115, 120]);
+  assert.deepEqual(compararPrecios(items, ""), []);
 });

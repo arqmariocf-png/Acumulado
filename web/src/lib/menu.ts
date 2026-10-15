@@ -211,6 +211,7 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/ordenes", etiqueta: "Órdenes de compra (OC)", descripcion: "folio IA-OC: material a proveedor", uso: "Captura proveedor, obra y partidas sin IVA; dirección la autoriza y se programa el pago.", visible: veOrdenes, modulo: "inventario" },
       { ruta: "/ordenes?tipo=OS", etiqueta: "Órdenes de servicio (OS)", descripcion: "folio IA-OS: servicios y subcontratos", uso: "Fletes, renta de equipo, mano de obra subcontratada: se autoriza y paga como la OC; no entra a inventario.", visible: veOrdenes, modulo: "inventario" },
       { ruta: "/ordenes?tipo=OV", etiqueta: "Órdenes de venta (OV)", descripcion: "folio IA-OV: venta a cliente", uso: "Captura cliente y partidas; almacén surte la salida contra la OV.", visible: veOrdenes, modulo: "inventario" },
+      { ruta: "/compras/catalogo", etiqueta: "Proveedores y artículos", descripcion: "alta, precios de lista e histórico de costos", uso: "Da de alta proveedores y lo que te venden con su precio s/IVA; ve cuánto les has pagado por cada cosa y compara precios entre proveedores.", visible: veOrdenes, modulo: "inventario" },
     ],
   },
   {
