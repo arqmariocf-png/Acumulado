@@ -244,6 +244,11 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `permisos_modulo` 'requisiciones' y en `lib/menu.ts` la entrada
   Requisiciones también se ve con ese permiso en cualquier rol
   (`conPermiso`). Ve las 43 obras de CSC y crea requisiciones (rollback).
+  16-oct (Mario: "el proyecto asignado es BBVA Mantenimiento"): no
+  existía; se dio de alta la obra **BBVA Mantenimiento** (CSC, cliente BBVA,
+  responsable Christian, por SQL). Ojo: las OC de mantenimiento del
+  backoffice siguen llegando a "BBVA Puebla" (135 OC); esta obra no
+  recibe OC del backoffice salvo que allá se use el mismo nombre.
 - **Supervisores con precios unitarios y tareas propias (16-oct-2026,
   Mario: "a todos los supervisores habilitarles el módulo de precios
   unitarios y que puedan asignarse tareas a ellos mismos")**: permiso
