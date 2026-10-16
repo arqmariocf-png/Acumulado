@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { clasificar, type EstadoCumplimiento } from "../../lib/cumplimiento";
@@ -54,10 +54,11 @@ function fechaCorta(iso: string): string {
 }
 
 export function MisActividades({ compacto = false }: { compacto?: boolean }) {
-  const { perfil } = useAuth();
+  const { perfil, soloConsulta } = useAuth();
   const q = useMisTarjetas(perfil?.id);
   const [verHechas, setVerHechas] = useState(false);
   const [papelFiltro, setPapelFiltro] = useState<Papel | "">("");
+  const [nuevaPropia, setNuevaPropia] = useState(false);
   const hoy = new Date().toISOString().slice(0, 10);
 
   const filas: Fila[] = useMemo(() => {
@@ -112,8 +113,14 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
           <label className="flex items-center gap-1 text-slate-600">
             <input type="checkbox" checked={verHechas} onChange={(e) => setVerHechas(e.target.checked)} /> ver hechas
           </label>
+          {!soloConsulta && (
+            <button type="button" onClick={() => setNuevaPropia((v) => !v)} className="rounded bg-slate-900 px-2.5 py-1 font-medium text-white">
+              {nuevaPropia ? "Cerrar" : "+ Agregarme una actividad"}
+            </button>
+          )}
         </div>
       </div>
+      {nuevaPropia && <NuevaActividadPropia profileId={perfil.id} onListo={() => setNuevaPropia(false)} />}
 
       {q.isPending && <p className="text-sm text-slate-500">Cargando…</p>}
       {q.error && <p className="text-sm text-red-600">{(q.error as Error).message}</p>}
@@ -191,5 +198,91 @@ function FilaActividad({ fila: f }: { fila: Fila }) {
         </div>
       </Link>
     </li>
+  );
+}
+
+const CLAVE_TABLERO = "acumulado.tablero-propio";
+
+/** Actividad para uno mismo (Mario, 16-oct-2026: "que los supervisores
+ * puedan asignarse tareas a ellos mismos"): título, tablero (de los que la
+ * persona ve; se recuerda el último) y fecha; queda en la primera columna,
+ * con la persona como responsable y creadora (así la puede editar). */
+function NuevaActividadPropia({ profileId, onListo }: { profileId: string; onListo: () => void }) {
+  const queryClient = useQueryClient();
+  const [titulo, setTitulo] = useState("");
+  const [fecha, setFecha] = useState("");
+  const [tableroId, setTableroId] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_TABLERO) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [error, setError] = useState<string | null>(null);
+  const tableros = useQuery({
+    queryKey: ["tableros-para-mi"],
+    queryFn: async () => {
+      const { data, error: e } = await supabase.from("tableros").select("id, nombre, archivado").order("nombre");
+      if (e) throw e;
+      return ((data ?? []) as { id: string; nombre: string; archivado?: boolean | null }[]).filter((t) => !t.archivado);
+    },
+  });
+  const elegido = tableroId && tableros.data?.some((t) => t.id === tableroId) ? tableroId : "";
+  const crear = useMutation({
+    mutationFn: async () => {
+      if (!titulo.trim()) throw new Error("Escribe qué vas a hacer.");
+      if (!elegido) throw new Error("Elige el tablero donde va.");
+      const { data: col, error: e1 } = await supabase.from("tablero_columnas").select("id").eq("tablero_id", elegido).order("orden").limit(1).maybeSingle();
+      if (e1) throw e1;
+      if (!col) throw new Error("Ese tablero no tiene columnas.");
+      const { count } = await supabase.from("tarjetas").select("id", { count: "exact", head: true }).eq("columna_id", col.id);
+      const { data: t, error: e2 } = await supabase
+        .from("tarjetas")
+        .insert({ tablero_id: elegido, columna_id: col.id, titulo: titulo.trim(), creado_por: profileId, asignado_a: profileId, fecha_limite: fecha || null, orden: count ?? 0 })
+        .select("id")
+        .single();
+      if (e2) throw e2;
+      await supabase.from("tarjeta_actividad").insert({ tarjeta_id: t.id, tipo: "creada", actor_id: profileId });
+      try {
+        localStorage.setItem(CLAVE_TABLERO, elegido);
+      } catch {
+        // sin almacenamiento local: no pasa nada
+      }
+    },
+    onSuccess: () => {
+      setTitulo("");
+      setFecha("");
+      queryClient.invalidateQueries({ queryKey: ["mis-tarjetas", profileId] });
+      onListo();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(null);
+        crear.mutate();
+      }}
+      className="mb-4 grid gap-2 rounded border border-slate-200 bg-slate-50 p-3 sm:grid-cols-6"
+    >
+      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="¿Qué vas a hacer?" autoFocus className="rounded border border-slate-300 px-2 py-1.5 text-sm sm:col-span-3" />
+      <select value={elegido} onChange={(e) => setTableroId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm sm:col-span-2">
+        <option value="">{tableros.isLoading ? "Cargando tableros…" : "Tablero…"}</option>
+        {(tableros.data ?? []).map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.nombre}
+          </option>
+        ))}
+      </select>
+      <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} title="Fecha compromiso (la primera la pones tú; cambiarla después la autoriza tu jefe)" className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+      <div className="flex items-center gap-3 sm:col-span-6">
+        <button type="submit" disabled={crear.isPending} className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+          {crear.isPending ? "Guardando…" : "Agregarme la actividad"}
+        </button>
+        <span className="text-xs text-slate-500">Quedas como responsable; la ves aquí y en el tablero.</span>
+        {error && <span className="text-xs text-red-600">{error}</span>}
+      </div>
+    </form>
   );
 }
