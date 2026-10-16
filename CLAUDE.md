@@ -244,6 +244,21 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `permisos_modulo` 'requisiciones' y en `lib/menu.ts` la entrada
   Requisiciones también se ve con ese permiso en cualquier rol
   (`conPermiso`). Ve las 43 obras de CSC y crea requisiciones (rollback).
+- **Supervisores con precios unitarios y tareas propias (16-oct-2026,
+  Mario: "a todos los supervisores habilitarles el módulo de precios
+  unitarios y que puedan asignarse tareas a ellos mismos")**: permiso
+  `permisos_modulo` 'precios' a los 5 supervisores activos (Brenda,
+  Guadalupe, Javier Monroy, Jonathan Cáceres, José Antonio) y trigger
+  `profiles_supervisor_precios` (a quien pase a rol supervisor se le da
+  solo; quitarlo después, desde RH → Accesos) (`20261016090000`). OJO:
+  Guadalupe, Javier y José Antonio no tienen empresa principal ni "todas
+  las empresas": entran al módulo pero no ven análisis (los 15 son de ERG)
+  hasta que se les asigne empresa en Admin → Usuarios. Tareas: la base ya
+  dejaba a cualquiera crear tarjetas en los tableros que ve y asignárselas
+  (quien crea es "de fondo"); faltaba el camino: "+ Agregarme una
+  actividad" en Mis actividades (`NuevaActividadPropia`: título, tablero
+  de los que ve —se recuerda el último en localStorage—, fecha; primera
+  columna, responsable y creador = la persona). Probado como Brenda.
 - **Arturo Huerta (8-oct-2026)**: puesto Técnico en Seguridad Industrial,
   rol operativo, jefa inmediata Brenda.
 - **Costeo de lotes con la nómina real (9-oct-2026, Mario: "vincula todo
