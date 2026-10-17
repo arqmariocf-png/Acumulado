@@ -1568,6 +1568,44 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pedí". Es filtro de pantalla, no RLS: el responsable de la obra todavía
   confirma lo recibido de requisiciones de otros.
 
+## CRM de ventas por WhatsApp y redes (17-oct-2026)
+- Mario: "módulo de ventas a través de redes sociales y de WhatsApp; un CRM
+  de atención que genere las cotizaciones de manera automática". Decidió:
+  la cotización **la revisa una persona** antes de enviarse; todavía **no
+  hay cuenta de Meta** (WhatsApp Business / Facebook / Instagram); empezar
+  con **Clavicón (MCC) y AEP**.
+- `20261017110000_crm_ventas.sql` (aplicada): `crm_prospectos` (contacto
+  por empresa: nombre, teléfono, canal, etapa nuevo → cotizado →
+  negociacion → ganado | perdido con motivo, vendedor asignado, cliente
+  registrado, `ultimo_entrante_en` / `ultimo_saliente_en`) y `crm_mensajes`
+  (entrante/saliente, `cotizacion_id`, `externo_id` único reservado para el
+  webhook de Meta). `cotizaciones_produccion.crm_prospecto_id`. Triggers:
+  el mensaje hereda empresa/canal y el nombre de quien lo registró; mueve
+  las fechas del prospecto y, si sale con cotización, nuevo → cotizado.
+  Operan quienes cotizan (`auth_opera_cotizador()`) en su alcance; frontera,
+  espectador, director_general y solo_consulta incluidos.
+- Pantalla **Compras → CRM de ventas** (`/ventas/crm`, `pages/crm/Crm.tsx`,
+  misma ruta protegida que el cotizador): lista ordenada por quién lleva
+  más tiempo esperando respuesta (ámbar ≥30 min, rojo ≥2 h), filtros por
+  etapa, alta de contacto con su primer mensaje; conversación (registrar lo
+  que escribió el cliente, "Responder por WhatsApp" = abre wa.me y lo deja
+  registrado); **cotización automática**: toma los mensajes del cliente
+  desde nuestra última respuesta, `interpretarPedido` (`lib/crmVentas.ts`,
+  con pruebas; reglas, sin IA: cantidades en número o letra, unidades,
+  medidas como "10.5" o "3/8" pesan doble) propone producto, cantidad y
+  precio de los productos del cotizador (`datosCotizador.ts`, compartido
+  con `/cotizador`); lo dudoso queda en ámbar con alternativas; el vendedor
+  corrige y guarda (folio COT-<emp>), luego "Enviar por WhatsApp" (texto
+  con precios c/IVA) y "Aceptó → orden de venta" (`fn_orden_ia_guardar`
+  OV; prospecto ganado). Probado como Laura en rollback (COT-MCC-0002).
+- **Ojo precios**: al 17-oct MCC tiene 2 productos y AEP 113, **ninguno con
+  precio de lista**; la cotización toma lo ya vendido en OV (22 de MCC, 421
+  de AEP) o el costo de la planta. Cargar precios en Punto de venta →
+  Precios para que salga completa.
+- Siguiente paso cuando abran la cuenta de Meta Business: webhook de
+  WhatsApp Cloud API / Messenger / Instagram que inserte en `crm_mensajes`
+  con `externo_id` (sin duplicar) y envío por la API en vez de wa.me.
+
 ## Mensaje de la semana (17-oct-2026)
 - Mario: "¿quiénes faltan por activar notificaciones?" → 17-oct: 47
   personas activas de LOMA, **25 con push y 22 sin** (lista con

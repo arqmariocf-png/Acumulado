@@ -39,6 +39,7 @@ const Comedor = lazy(() => import("./pages/comedor/Comedor").then((m) => ({ defa
 const Ordenes = lazy(() => import("./pages/ordenes/Ordenes").then((m) => ({ default: m.Ordenes })));
 const Cotizador = lazy(() => import("./pages/cotizador/Cotizador").then((m) => ({ default: m.Cotizador })));
 const CatalogoCompras = lazy(() => import("./pages/compras/CatalogoCompras").then((m) => ({ default: m.CatalogoCompras })));
+const Crm = lazy(() => import("./pages/crm/Crm").then((m) => ({ default: m.Crm })));
 const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
@@ -157,6 +158,7 @@ function Enrutador() {
           {/* Cotizador de todas las empresas (15-oct-2026). */}
           <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion", "empresa", "produccion"]} oPermiso={(p) => (p.modulos ?? []).some((m) => m === "compras" || m === "cotizador")} />}>
             <Route path="/cotizador" element={<Cotizador />} />
+            <Route path="/ventas/crm" element={<Crm />} />
           </Route>
           {/* Órdenes propias OC / OS / OV con folio IA: compras/almacén capturan, dirección autoriza. */}
           <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion", "empresa"]} oPermiso={(p) => (p.modulos ?? []).includes("compras")} />}>
