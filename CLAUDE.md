@@ -1558,6 +1558,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pedí". Es filtro de pantalla, no RLS: el responsable de la obra todavía
   confirma lo recibido de requisiciones de otros.
 
+## Mensaje de la semana (17-oct-2026)
+- Mario: "¿quiénes faltan por activar notificaciones?" → 17-oct: 47
+  personas activas de LOMA, **25 con push y 22 sin** (lista con
+  `push_subscripciones` vs `profiles`). Y "mándales el sábado a la 1 p. m. un
+  mensaje de mi parte; programado, pero mándamelo primero a mí; genérame
+  frases y las elijo semana con semana; solo notificación (los 25)".
+- `20261017100000_mensaje_semana.sql`: tabla `mensajes_semana` (grupo,
+  sábado, texto, enviado_en/enviados; solo director general),
+  `fn_mensaje_semana_programar(fecha, texto)`, `fn_mensaje_semana_destinatarios()`
+  y pg_cron (UTC; México UTC-6 fijo): `mensaje-semana-recordatorio-viernes`
+  (vie 17:00 MX) y `-sabado` (sáb 10:00 MX) avisan a Mario si no ha elegido;
+  `mensaje-semana-envio-sabado` (sáb 13:00 MX) lo manda a todos los de la
+  organización con push; si no hubo frase, avisa a Mario. Edge
+  **`push-mensaje-semana`** (verify_jwt false; x-cron-secret o sesión del
+  director general; helpers en línea, sin `_shared`): modos recordatorio,
+  enviar, prueba (solo a él) y enviar_ahora.
+- Pantalla Sistemas → **Mensaje de la semana** (`/admin/mensaje-semana`,
+  `pages/admin/MensajeSemana.tsx`, solo `esAdminGlobal`): sábados
+  siguientes, texto (300 caracteres), banco de 30 frases
+  (`lib/mensajeSemana.ts`, con pruebas; marca las ya usadas y sugiere una
+  distinta cada semana), "Mandármelo a mí primero", "Programar" y "Mandar
+  a todos ahora". 17-oct: el primer recordatorio llegó a Mario (4
+  dispositivos).
+
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
   `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,
   logos), `02 Consultas` (lo que Claude prepara a pedido, nombre

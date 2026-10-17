@@ -39,6 +39,7 @@ const Comedor = lazy(() => import("./pages/comedor/Comedor").then((m) => ({ defa
 const Ordenes = lazy(() => import("./pages/ordenes/Ordenes").then((m) => ({ default: m.Ordenes })));
 const Cotizador = lazy(() => import("./pages/cotizador/Cotizador").then((m) => ({ default: m.Cotizador })));
 const CatalogoCompras = lazy(() => import("./pages/compras/CatalogoCompras").then((m) => ({ default: m.CatalogoCompras })));
+const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
@@ -139,6 +140,7 @@ function Enrutador() {
           </Route>
           <Route element={<ProtectedRoute soloAdmin />}>
             <Route path="/organigrama/configurar" element={<ConfigurarKpis />} />
+            <Route path="/admin/mensaje-semana" element={<MensajeSemana />} />
           </Route>
           <Route element={<ProtectedRoute roles={["supervisor", "responsable", "directivo", "administrativo", "corporativo", "direccion", "empresa"]} />}>
             <Route path="/gastos" element={<Gastos />} />
