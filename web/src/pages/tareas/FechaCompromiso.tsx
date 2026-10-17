@@ -133,7 +133,7 @@ export function FechaCompromiso({ tarjeta, nombrePorId, onCambio }: { tarjeta: T
               <input type="date" value={propuesta} onChange={(e) => setPropuesta(e.target.value)} className={campoTexto} />
               <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (obligatorio)" className={campoTexto} />
               <button onClick={() => cambiar.mutate(propuesta || null)} disabled={cambiar.isPending || !propuesta || !motivo.trim()} className="rounded bg-slate-900 px-2 py-1 text-white disabled:opacity-50">
-                Enviar solicitud al jefe
+                Enviar
               </button>
             </div>
           </details>
