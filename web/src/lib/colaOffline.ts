@@ -72,3 +72,4 @@ export function nuevoId(): string {
 export function esErrorDeRed(err: unknown): boolean {
   return err instanceof TypeError || (err instanceof Error && /Failed to fetch|NetworkError|Load failed|network/i.test(err.message));
 }
+

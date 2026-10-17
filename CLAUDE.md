@@ -391,6 +391,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   el día siguiente. Ahora usa `fechaLocal` de `lib/reporteChecador.ts`. La
   marca estaba bien guardada; solo se pintaba mal. Nunca agrupar por día
   con `slice(0, 10)` de un timestamp.
+  **Marca atorada en el teléfono (17-oct-2026, Maria Fernanda: "no me
+  aparece mi registro de hoy")**: su iPhone guardaba desde el 9-oct una
+  copia local de la entrada de ese día que SÍ estaba en el servidor; cada
+  vez que abría el checador la reenviaba y el servidor la rechazaba ("más de
+  7 días"), y por esa pendiente toda marca nueva se iba a la cola offline
+  (todas sus marcas salían "offline"). El sábado 17 no llegó ninguna marca
+  suya, solo ese reenvío (400 a las 8:23, 12:41 y 13:00). Ahora
+  (`lib/marcasPendientes.ts`, con pruebas): lo que ya está en el servidor
+  (mismo tipo ±2 min) se borra del teléfono sin reenviar; lo rechazado no
+  bloquea marcas nuevas ni se reenvía solo (solo con "Enviar ahora").
 - **SAT: descarga masiva automática (13-oct-2026)**: Belén subió la
   e.firma de las 8 empresas (AEP, CSC, ERG, LRT, MCC, MCF, QX, VBB). Edge
   `sat-descarga-masiva` (verify_jwt false: cron con `x-cron-secret` o sesión

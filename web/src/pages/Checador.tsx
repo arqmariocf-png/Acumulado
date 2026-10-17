@@ -4,6 +4,7 @@ import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 import { eliminarPendiente, esErrorDeRed, guardarPendiente, listarPendientes, nuevoId, type MarcaPendiente } from "../lib/colaOffline";
+import { pendientesPorEnviar, yaRegistrada } from "../lib/marcasPendientes";
 import { CamaraSelfie } from "../components/CamaraSelfie";
 import { rutaVerArchivo } from "../lib/verArchivo";
 import { fechaLocal } from "../lib/reporteChecador";
@@ -283,7 +284,8 @@ export function Checador() {
   // La última marca puede ser una pendiente todavía en el teléfono.
   const ultimoRegistro = useMemo(() => {
     const ultimaGuardada = registros?.length ? registros[registros.length - 1] : null;
-    const ultimaPendiente = pendientes.length ? pendientes[pendientes.length - 1] : null;
+    const activas = pendientesPorEnviar(pendientes);
+    const ultimaPendiente = activas.length ? activas[activas.length - 1] : null;
     if (ultimaPendiente && (!ultimaGuardada || ultimaPendiente.marcadaEn > ultimaGuardada.created_at)) {
       return { tipo: ultimaPendiente.tipo, created_at: ultimaPendiente.marcadaEn, pendiente: true };
     }
@@ -295,7 +297,9 @@ export function Checador() {
   // Envía en orden lo guardado sin señal. Un rechazo del servidor (no de
   // red) se anota en la marca para que la persona la vea y la descarte o
   // avise a RH; un fallo de red detiene el intento hasta la próxima vez.
-  const sincronizar = useCallback(async () => {
+  // Lo que ya está en el servidor se borra del teléfono sin reenviarlo, y lo
+  // rechazado solo se reintenta con "Enviar ahora" (`reintentarRechazadas`).
+  const sincronizar = useCallback(async (reintentarRechazadas = false) => {
     if (!profileId || sincronizando) return;
     const lista = await listarPendientes(profileId).catch(() => [] as MarcaPendiente[]);
     if (lista.length === 0) return;
@@ -303,6 +307,11 @@ export function Checador() {
     let enviadas = 0;
     try {
       for (const m of lista) {
+        if (yaRegistrada(m, registros ?? [])) {
+          await eliminarPendiente(m.id);
+          continue;
+        }
+        if (m.error && !reintentarRechazadas) continue;
         try {
           await enviarMarca(formDataDePendiente(m));
           await eliminarPendiente(m.id);
@@ -320,13 +329,14 @@ export function Checador() {
         queryClient.invalidateQueries({ queryKey: ["checador-registros", profileId] });
       }
     }
-  }, [profileId, sincronizando, recargarPendientes, queryClient]);
+  }, [profileId, sincronizando, recargarPendientes, queryClient, registros]);
 
   useEffect(() => {
-    if (enLinea) sincronizar();
-    // Solo al recuperar señal / entrar a la pantalla.
+    if (enLinea && registros) sincronizar();
+    // Al recuperar señal / entrar a la pantalla (con los registros ya
+    // cargados, para no reenviar lo que ya llegó).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enLinea, profileId]);
+  }, [enLinea, profileId, !!registros]);
 
   const hoyIso = fechaLocal(new Date().toISOString());
   const registrosHoy = useMemo(() => (registros ?? []).filter((r) => fechaLocal(r.created_at) === hoyIso), [registros, hoyIso]);
@@ -428,7 +438,7 @@ export function Checador() {
       };
       // Sin señal, o con marcas anteriores todavía en el teléfono (para no
       // desordenarlas), la marca se guarda local y se envía después.
-      if (!navigator.onLine || pendientes.length > 0) {
+      if (!navigator.onLine || pendientesPorEnviar(pendientes).length > 0) {
         await guardarPendiente(pendiente);
         return "guardada";
       }
@@ -478,7 +488,7 @@ export function Checador() {
             <span>
               {pendientes.length} marca(s) guardada(s) en el teléfono, pendiente(s) de enviar.
             </span>
-            <button onClick={() => sincronizar()} disabled={sincronizando || !enLinea} className="rounded border border-amber-400 bg-white px-2 py-1 text-xs font-medium text-amber-900 disabled:opacity-50">
+            <button onClick={() => sincronizar(true)} disabled={sincronizando || !enLinea} className="rounded border border-amber-400 bg-white px-2 py-1 text-xs font-medium text-amber-900 disabled:opacity-50">
               {sincronizando ? "Enviando…" : "Enviar ahora"}
             </button>
           </div>
