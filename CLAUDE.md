@@ -1541,6 +1541,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   asignados a ninguna y no pueden pedir hasta que se les asigne en el
   encabezado de la obra. Probado en producción en rollback (Jonathan pide
   SH-ERG-0001, Alma da de alta y surte, Brenda no ve nada).
+  **Desde Requisiciones (17-oct, Mario: "en las requisiciones agrega la
+  opción de herramienta y equipo")**: "Nueva requisición" tiene el selector
+  Material o servicio / **Herramienta y equipo**; con herramienta los
+  renglones van en piezas, pide fecha en que se necesita y de regreso, y se
+  envía como solicitud SH-… (`fn_herramienta_solicitar`), no como
+  requisición de compra. Abajo de la lista, "Herramienta y equipo pedida"
+  (abiertas + últimos 30 días, surtido/cantidad, liga a la pantalla del
+  almacén) (`MisRequisiciones.tsx`).
 
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
   `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,

@@ -9,6 +9,8 @@ import type { AppRol, Producto, Proyecto } from "../../types/database";
 import { DetalleRequisicion } from "./DetalleRequisicion";
 import { BotonImprimirRequisicion } from "./ImprimirRequisicion";
 import { AvisoFiltro, useVer } from "../../components/FiltroDesdeTablero";
+import { Link } from "react-router-dom";
+import { CLASE_SOLICITUD, ETIQUETA_SOLICITUD, type EstadoSolicitudHerramienta } from "../../lib/herramientas";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
  * catálogo, como Ergodinova, 28-sep-2026). */
@@ -115,6 +117,13 @@ export function MisRequisiciones() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro();
   const [abierta, setAbierta] = useState<string | null>(null);
+  // Herramienta y equipo (17-oct-2026, Mario: "en las requisiciones agrega
+  // la opción de herramienta y equipo"): no se compra, se presta del
+  // almacén; se envía como solicitud SH-… del módulo Herramienta y equipo.
+  const [tipo, setTipo] = useState<"material" | "herramienta">("material");
+  const esHerramienta = tipo === "herramienta";
+  const [fechaRequerida, setFechaRequerida] = useState("");
+  const [devolverEl, setDevolverEl] = useState("");
 
   const proyectoSeleccionado = proyectosDisponibles?.find((p) => p.id === proyectoId);
   const { data: productos } = useProductosEmpresa(proyectoSeleccionado?.empresa_id ?? "");
@@ -162,7 +171,7 @@ export function MisRequisiciones() {
 
   function agregarLibre() {
     if (!filaPendiente) {
-      setError(libreDescripcion.trim() ? "La cantidad debe ser mayor a 0." : "Escribe qué material o servicio necesitas.");
+      setError(libreDescripcion.trim() ? "La cantidad debe ser mayor a 0." : esHerramienta ? "Escribe qué herramienta o equipo necesitas." : "Escribe qué material o servicio necesitas.");
       return;
     }
     setError(null);
@@ -199,6 +208,27 @@ export function MisRequisiciones() {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
       if (!userId) throw new Error("Sesión expirada, vuelve a iniciar sesión.");
+
+      if (esHerramienta) {
+        const { data: id, error: errSol } = await supabase.rpc("fn_herramienta_solicitar", {
+          p_proyecto: proyectoId,
+          p_lineas: filas.map((f) => ({ descripcion: f.producto ? f.producto.nombre : f.descripcion, cantidad: Math.max(1, Math.ceil(f.cantidad)) })),
+          p_fecha_requerida: fechaRequerida || null,
+          p_devolver_el: devolverEl || null,
+          p_nota: comentario,
+        });
+        if (errSol) throw errSol;
+        const { data: sol } = await supabase.from("herramienta_solicitudes").select("folio").eq("id", id as string).single();
+        setMensaje(`Solicitud de herramienta ${sol?.folio ?? ""} enviada al almacén con ${filas.length} renglón(es). Te la asignan desde Herramienta y equipo y firmas el resguardo al recibirla.`);
+        setCarrito([]);
+        setLibreDescripcion("");
+        setLibreCantidad("1");
+        setComentario("");
+        setFechaRequerida("");
+        setDevolverEl("");
+        queryClient.invalidateQueries({ queryKey: ["herramienta-solicitudes"] });
+        return;
+      }
 
       const { data: requisicion, error: errReq } = await supabase
         .from("requisiciones")
@@ -258,10 +288,37 @@ export function MisRequisiciones() {
             )}
           </div>
 
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-600">¿Qué necesitas?</label>
+            <div className="inline-flex overflow-hidden rounded border border-slate-300 text-sm">
+              {(
+                [
+                  ["material", "Material o servicio"],
+                  ["herramienta", "Herramienta y equipo"],
+                ] as const
+              ).map(([clave, etiqueta]) => (
+                <button
+                  key={clave}
+                  type="button"
+                  onClick={() => {
+                    setTipo(clave);
+                    setCarrito([]);
+                    setError(null);
+                    setMensaje(null);
+                  }}
+                  className={`px-3 py-1.5 ${tipo === clave ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  {etiqueta}
+                </button>
+              ))}
+            </div>
+            {esHerramienta && <p className="mt-1 text-xs text-slate-500">Se presta del almacén para la obra y se regresa: no se compra. Almacén te la asigna y firmas el resguardo al recibirla.</p>}
+          </div>
+
           {proyectoId && (
             <>
               <div className="mb-3">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Material o servicio que necesitas</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">{esHerramienta ? "Herramienta o equipo que necesitas" : "Material o servicio que necesitas"}</label>
                 <div className="flex flex-wrap gap-2">
                   <input
                     ref={descripcionRef}
@@ -269,17 +326,21 @@ export function MisRequisiciones() {
                     onChange={(e) => setLibreDescripcion(e.target.value)}
                     onKeyDown={enterAgrega}
                     enterKeyHint="enter"
-                    placeholder="Ej. Cemento gris 50 kg, varilla 3/8, flete…"
+                    placeholder={esHerramienta ? "Ej. Rotomartillo, andamio tubular, nivel láser…" : "Ej. Cemento gris 50 kg, varilla 3/8, flete…"}
                     className="min-w-[12rem] flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
                   />
-                  <input type="number" min="0.001" step="0.001" value={libreCantidad} onChange={(e) => setLibreCantidad(e.target.value)} onKeyDown={enterAgrega} enterKeyHint="enter" className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Cantidad" />
-                  <select value={libreUnidad} onChange={(e) => setLibreUnidad(e.target.value)} onKeyDown={enterAgrega} className="rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Unidad">
-                    {UNIDADES_LIBRES.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
+                  <input type="number" min={esHerramienta ? "1" : "0.001"} step={esHerramienta ? "1" : "0.001"} value={libreCantidad} onChange={(e) => setLibreCantidad(e.target.value)} onKeyDown={enterAgrega} enterKeyHint="enter" className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Cantidad" />
+                  {esHerramienta ? (
+                    <span className="self-center text-sm text-slate-500">pza</span>
+                  ) : (
+                    <select value={libreUnidad} onChange={(e) => setLibreUnidad(e.target.value)} onKeyDown={enterAgrega} className="rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Unidad">
+                      {UNIDADES_LIBRES.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <button type="button" onClick={agregarLibre} className="rounded border border-slate-900 px-3 py-1.5 text-sm font-medium text-slate-900">
                     Agregar
                   </button>
@@ -287,7 +348,7 @@ export function MisRequisiciones() {
                 <p className="mt-1 text-xs text-slate-400">Escribe cada material y da Enter o "Agregar"; se van juntando abajo. Lo que quede escrito sin agregar también se envía.</p>
               </div>
 
-              {(productos?.length ?? 0) > 0 && (
+              {!esHerramienta && (productos?.length ?? 0) > 0 && (
               <div className="mb-3">
                 <label className="mb-1 block text-xs font-medium text-slate-600">O busca en el catálogo de productos</label>
                 <input
@@ -354,6 +415,19 @@ export function MisRequisiciones() {
                 </div>
               )}
 
+              {esHerramienta && (
+                <div className="mb-3 flex flex-wrap gap-3">
+                  <label className="text-xs font-medium text-slate-600">
+                    La necesito el
+                    <input type="date" value={fechaRequerida} onChange={(e) => setFechaRequerida(e.target.value)} className="mt-1 block rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-medium text-slate-600">
+                    La regreso el (estimado)
+                    <input type="date" value={devolverEl} onChange={(e) => setDevolverEl(e.target.value)} className="mt-1 block rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </label>
+                </div>
+              )}
+
               <div className="mb-3">
                 <label className="mb-1 block text-xs font-medium text-slate-600">Comentario (opcional)</label>
                 <input
@@ -368,7 +442,7 @@ export function MisRequisiciones() {
                 disabled={enviando || (carrito.length === 0 && !filaPendiente)}
                 className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
-                {enviando ? "Enviando…" : `Enviar requisición (${carrito.length + (filaPendiente ? 1 : 0)} línea(s))`}
+                {enviando ? "Enviando…" : `${esHerramienta ? "Pedir herramienta al almacén" : "Enviar requisición"} (${carrito.length + (filaPendiente ? 1 : 0)} línea(s))`}
               </button>
             </>
           )}
@@ -449,6 +523,81 @@ export function MisRequisiciones() {
           </table>
         </div>
       )}
+
+      <SolicitudesHerramienta />
+    </div>
+  );
+}
+
+interface SolicitudHerramientaFila {
+  id: string;
+  folio: string;
+  estado: EstadoSolicitudHerramienta;
+  solicitante_nombre: string | null;
+  created_at: string;
+  devolver_el: string | null;
+  respuesta: string | null;
+  proyectos: { nombre: string } | null;
+  herramienta_solicitud_lineas: { descripcion: string; cantidad: number; surtido: number }[];
+}
+
+/** Herramienta y equipo pedida desde aquí: lo abierto y lo de los últimos
+ * 30 días, con liga a la pantalla del almacén. */
+function SolicitudesHerramienta() {
+  const desde = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = useQuery({
+    queryKey: ["herramienta-solicitudes", "requisiciones"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("herramienta_solicitudes")
+        .select("id, folio, estado, solicitante_nombre, created_at, devolver_el, respuesta, proyectos(nombre), herramienta_solicitud_lineas(descripcion, cantidad, surtido)")
+        .or(`estado.in.(pendiente,parcial),created_at.gte.${desde}`)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return (data ?? []) as unknown as SolicitudHerramientaFila[];
+    },
+  });
+  if (!data?.length) return null;
+  return (
+    <div className="mt-6">
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        <h2 className="text-sm font-semibold text-slate-700">Herramienta y equipo pedida</h2>
+        <Link to="/almacen/herramienta" className="text-xs text-sky-700 underline">
+          ir a Herramienta y equipo
+        </Link>
+      </div>
+      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Folio</th>
+              <th className="px-3 py-2">Fecha</th>
+              <th className="px-3 py-2">Proyecto</th>
+              <th className="px-3 py-2">Solicitado por</th>
+              <th className="px-3 py-2">Pide</th>
+              <th className="px-3 py-2">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((s) => (
+              <tr key={s.id} className="border-t border-slate-100 align-top">
+                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{s.folio}</td>
+                <td className="whitespace-nowrap px-3 py-2">{new Date(s.created_at).toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" })}</td>
+                <td className="px-3 py-2">{s.proyectos?.nombre}</td>
+                <td className="px-3 py-2">{s.solicitante_nombre ?? "—"}</td>
+                <td className="px-3 py-2 text-xs text-slate-600">
+                  {s.herramienta_solicitud_lineas.map((l) => `${l.descripcion} (${l.surtido}/${l.cantidad})`).join(" · ")}
+                  {s.respuesta && <div className="text-red-700">Almacén: {s.respuesta}</div>}
+                </td>
+                <td className="px-3 py-2">
+                  <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${CLASE_SOLICITUD[s.estado]}`}>{ETIQUETA_SOLICITUD[s.estado]}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
