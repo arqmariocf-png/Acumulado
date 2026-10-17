@@ -1507,6 +1507,41 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   AEP y MCC tienen movimientos; última carga 7-oct.
 
 
+## Herramienta y equipo (17-oct-2026)
+- Mario: "dentro del almacén el área de herramienta y equipo; puede ser
+  asignado y pedido por los supervisores para las diferentes obras".
+  `20261017090000_herramienta_equipo.sql` (aplicada en 3 partes). Menú
+  Almacén → **Herramienta y equipo** (`/almacen/herramienta`,
+  `pages/herramienta/Herramienta.tsx`; `lib/herramientas.ts` con pruebas;
+  prueba SQL `supabase/tests/herramienta.sql`).
+- `herramientas`: una fila por pieza, folio **HE-<emp>-0001** (es la etiqueta
+  con Code 128; se escanea en la pantalla), categoría, marca, modelo, serie,
+  costo; estado disponible / asignada / reparacion / baja / extraviada, con
+  obra, responsable (`responsable_id` + nombre, también sin cuenta) y
+  `devolver_el`. Ese "dónde está" lo pone la bitácora
+  `herramienta_movimientos` (alta, asignacion, traspaso, devolucion con
+  condición, reparacion, fin_reparacion, baja, extravio); nadie lo edita.
+- Solicitudes **SH-<emp>-0001** (`herramienta_solicitudes` / `_lineas`, texto
+  libre + cantidad, fecha requerida y de regreso): pide quien VE la obra
+  (`fn_herramienta_solicitar` es invoker; la policy de insert pregunta por
+  `proyectos` con su RLS). Almacén surte por renglón con piezas disponibles
+  (`fn_herramienta_asignar(…, p_linea)`: obra y responsable = la solicitud;
+  `surtido` y estado se recalculan) y sale el **resguardo** para firma (art.
+  110 LFT). También asigna directo a obra/persona, recibe de regreso
+  (`fn_herramienta_devolver`, condición mala → reparación), reparación, baja
+  y extravío con motivo (`fn_herramienta_estado`); pestaña "Por obra" con
+  vencidas.
+- Operan `auth_opera_herramienta()`: admin, corporativo, almacén, empresa o
+  permiso por persona 'herramienta' (en `permisos_modulo` y
+  `MODULOS_ASIGNABLES`). Ven: los que operan y dirección/responsable en su
+  alcance; el supervisor lo que tiene a su cargo y lo de sus obras
+  (`auth_herramienta_obras()`: responsable/comprador, `auth_proyectos_propios`
+  y donde ya pidió). **Ojo (17-oct)**: de los 5 supervisores solo Jonathan
+  Cáceres ve obras (2 de ERG, por sus requisiciones); los demás no están
+  asignados a ninguna y no pueden pedir hasta que se les asigne en el
+  encabezado de la obra. Probado en producción en rollback (Jonathan pide
+  SH-ERG-0001, Alma da de alta y surte, Brenda no ve nada).
+
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
   `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,
   logos), `02 Consultas` (lo que Claude prepara a pedido, nombre

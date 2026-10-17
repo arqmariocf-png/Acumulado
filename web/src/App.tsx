@@ -39,6 +39,7 @@ const Comedor = lazy(() => import("./pages/comedor/Comedor").then((m) => ({ defa
 const Ordenes = lazy(() => import("./pages/ordenes/Ordenes").then((m) => ({ default: m.Ordenes })));
 const Cotizador = lazy(() => import("./pages/cotizador/Cotizador").then((m) => ({ default: m.Cotizador })));
 const CatalogoCompras = lazy(() => import("./pages/compras/CatalogoCompras").then((m) => ({ default: m.CatalogoCompras })));
+const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
@@ -145,6 +146,9 @@ function Enrutador() {
           {/* Comedor: cualquiera con cuenta pide; cocina y nómina se deciden en la base. */}
           <Route path="/comedor" element={<Comedor />} />
           {/* Punto de venta (ferretería, almacén general): almacén, corporativo o permiso 'punto_venta'. */}
+          <Route element={<ProtectedRoute roles={["almacen", "corporativo", "empresa", "direccion", "responsable", "supervisor", "administrativo", "directivo"]} oPermiso={(p) => (p.modulos ?? []).includes("herramienta")} />}>
+            <Route path="/almacen/herramienta" element={<Herramienta />} />
+          </Route>
           <Route element={<ProtectedRoute roles={["almacen", "corporativo"]} oPermiso={(p) => (p.modulos ?? []).includes("punto_venta")} />}>
             <Route path="/punto-venta" element={<PuntoVenta />} />
           </Route>

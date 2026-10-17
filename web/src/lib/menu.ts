@@ -61,6 +61,10 @@ const veOperacion = (p: Profile) => (veFinanzasCompleto(p) || p.rol === "respons
 
 const veInventario = (p: Profile) => veOperacion(p) || modulo("inventario")(p);
 const veOrdenes = (p: Profile) => esAdmin(p) || ["almacen", "corporativo", "direccion", "empresa"].includes(p.rol) || (p.modulos ?? []).includes("compras");
+// Herramienta y equipo (17-oct-2026): almacén la administra; los supervisores
+// y responsables la piden para sus obras.
+const veHerramienta = (p: Profile) =>
+  esAdmin(p) || ["almacen", "corporativo", "empresa", "direccion", "responsable", "supervisor", "administrativo", "directivo"].includes(p.rol) || (p.modulos ?? []).includes("herramienta");
 const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || modulo("produccion")(p);
 
 /** Las áreas (departamentos) del organigrama de dirección general (25-sep-2026). El
@@ -198,6 +202,7 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/ordenes?tipo=OC", etiqueta: "Órdenes OC / OS / OV", descripcion: "órdenes propias con folio IA", uso: "Captura la orden aquí (ya no en el backoffice); sale el folio IA y va a dirección para autorizar.", visible: veOrdenes, modulo: "inventario" },
       { ruta: "/inventario", etiqueta: "Registrar movimiento", descripcion: "entradas y salidas contra las partidas de la OC/OV", uso: "Al recibir material: elige la OC, marca las partidas que llegaron y guarda; sale el comprobante con QR.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/por-recibir", etiqueta: "Por recibir", descripcion: "OC ya pagadas que faltan de confirmar, en bodega u obra", uso: "Tesorería pagó; almacén u obra confirma qué llegó y cuánto, partida por partida.", visible: veInventario, modulo: "inventario" },
+      { ruta: "/almacen/herramienta", etiqueta: "Herramienta y equipo", descripcion: "piezas con folio, solicitudes de obra y resguardos", uso: "El supervisor pide para su obra; almacén surte con las piezas (folio y etiqueta), imprime el resguardo para firma y recibe de regreso.", visible: veHerramienta, modulo: "inventario" },
       { ruta: "/inventario/resumen", etiqueta: "Resumen de inventario", descripcion: "valor por empresa y días en que se cargó la información", uso: "Ver qué tan al día está el inventario: última captura por empresa y qué se registró cada día.", visible: veInventario, modulo: "inventario" },
       { ruta: "/inventario/existencias", etiqueta: "Existencias", descripcion: "lo que hay en cada almacén", uso: "Para consultar stock antes de pedir o de prometer entrega.", visible: veInventario , modulo: "inventario" },
       { ruta: "/inventario/productos", etiqueta: "Productos", descripcion: "catálogo de productos por empresa", uso: "Corregir nombres, unidades y códigos de barras.", visible: veInventario , modulo: "inventario" },
