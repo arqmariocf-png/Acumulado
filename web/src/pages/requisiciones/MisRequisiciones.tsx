@@ -138,7 +138,16 @@ export function MisRequisiciones() {
     en_transito: { texto: "requisiciones con material en camino a obra", f: (r) => r.estado !== "cancelada" && (r.avance?.en_transito ?? 0) > 0 },
   };
   const filtro = ver ? FILTROS[ver] : undefined;
-  const requisiciones = filtro && todas ? todas.filter(filtro.f) : todas;
+  // Cada quien ve solo las que pidió (17-oct-2026, Mario: "cada quien
+  // debería poder ver únicamente las suyas, para no confundirlos"). Quienes
+  // las procesan (almacén, dirección, empresa, admin, corporativo) siguen
+  // viendo todas, con la opción de ver solo las suyas. Es filtro de pantalla:
+  // el responsable de la obra todavía puede abrir las de otros para
+  // confirmar lo recibido.
+  const procesa = ["admin", "corporativo", "almacen", "direccion", "empresa"].includes(perfil?.rol ?? "");
+  const [soloMias, setSoloMias] = useState(!procesa);
+  const conFiltro = filtro && todas ? todas.filter(filtro.f) : todas;
+  const requisiciones = soloMias && conFiltro ? conFiltro.filter((r: any) => r.solicitado_por === perfil?.id) : conFiltro;
 
   useEffect(() => {
     if (proyectosDisponibles?.length === 1) setProyectoId(proyectosDisponibles[0].id);
@@ -460,6 +469,17 @@ export function MisRequisiciones() {
 
       {cargandoRequisiciones && <p className="text-sm text-slate-500">Cargando…</p>}
       {errorRequisiciones && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">No se pudo cargar la lista: {(errorRequisiciones as Error).message}</p>}
+      <label className="mb-2 flex items-center gap-1 text-xs text-slate-600">
+        {procesa ? (
+          <>
+            <input type="checkbox" checked={soloMias} onChange={(e) => setSoloMias(e.target.checked)} /> solo las que yo pedí
+          </>
+        ) : (
+          <>
+            <input type="checkbox" checked={!soloMias} onChange={(e) => setSoloMias(!e.target.checked)} /> ver también las que pidieron otras personas en mis obras
+          </>
+        )}
+      </label>
       {filtro && <AvisoFiltro texto={filtro.texto} total={requisiciones?.length} onQuitar={quitarVer} />}
       {requisiciones && (
         <div className="overflow-x-auto rounded border border-slate-200 bg-white">
@@ -515,7 +535,7 @@ export function MisRequisiciones() {
               {requisiciones.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
-                    Sin requisiciones todavía.
+                    {soloMias ? "No has pedido requisiciones todavía." : "Sin requisiciones todavía."}
                   </td>
                 </tr>
               )}
@@ -524,7 +544,7 @@ export function MisRequisiciones() {
         </div>
       )}
 
-      <SolicitudesHerramienta />
+      <SolicitudesHerramienta soloDe={soloMias ? perfil?.id ?? null : null} />
     </div>
   );
 }
@@ -532,6 +552,7 @@ export function MisRequisiciones() {
 interface SolicitudHerramientaFila {
   id: string;
   folio: string;
+  solicitado_por: string;
   estado: EstadoSolicitudHerramienta;
   solicitante_nombre: string | null;
   created_at: string;
@@ -543,14 +564,14 @@ interface SolicitudHerramientaFila {
 
 /** Herramienta y equipo pedida desde aquí: lo abierto y lo de los últimos
  * 30 días, con liga a la pantalla del almacén. */
-function SolicitudesHerramienta() {
+function SolicitudesHerramienta({ soloDe }: { soloDe: string | null }) {
   const desde = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const { data } = useQuery({
     queryKey: ["herramienta-solicitudes", "requisiciones"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("herramienta_solicitudes")
-        .select("id, folio, estado, solicitante_nombre, created_at, devolver_el, respuesta, proyectos(nombre), herramienta_solicitud_lineas(descripcion, cantidad, surtido)")
+        .select("id, folio, estado, solicitado_por, solicitante_nombre, created_at, devolver_el, respuesta, proyectos(nombre), herramienta_solicitud_lineas(descripcion, cantidad, surtido)")
         .or(`estado.in.(pendiente,parcial),created_at.gte.${desde}`)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -558,7 +579,8 @@ function SolicitudesHerramienta() {
       return (data ?? []) as unknown as SolicitudHerramientaFila[];
     },
   });
-  if (!data?.length) return null;
+  const lista = soloDe ? (data ?? []).filter((s) => s.solicitado_por === soloDe) : data ?? [];
+  if (!lista.length) return null;
   return (
     <div className="mt-6">
       <div className="mb-2 flex flex-wrap items-center gap-3">
@@ -580,7 +602,7 @@ function SolicitudesHerramienta() {
             </tr>
           </thead>
           <tbody>
-            {data.map((s) => (
+            {lista.map((s) => (
               <tr key={s.id} className="border-t border-slate-100 align-top">
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{s.folio}</td>
                 <td className="whitespace-nowrap px-3 py-2">{new Date(s.created_at).toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" })}</td>

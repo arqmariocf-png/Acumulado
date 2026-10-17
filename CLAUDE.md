@@ -1549,6 +1549,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   requisición de compra. Abajo de la lista, "Herramienta y equipo pedida"
   (abiertas + últimos 30 días, surtido/cantidad, liga a la pantalla del
   almacén) (`MisRequisiciones.tsx`).
+- **Cada quien ve sus requisiciones (17-oct-2026, Mario: "cada quien
+  debería poder ver únicamente las suyas, para no confundirlos")**: en
+  `MisRequisiciones` la lista (y "Herramienta y equipo pedida") muestra solo
+  lo que la persona pidió; casilla "ver también las que pidieron otras
+  personas en mis obras". Admin, corporativo, almacén, dirección y empresa
+  (los que procesan) siguen viendo todas, con casilla "solo las que yo
+  pedí". Es filtro de pantalla, no RLS: el responsable de la obra todavía
+  confirma lo recibido de requisiciones de otros.
 
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
   `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,
