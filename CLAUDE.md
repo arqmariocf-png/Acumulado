@@ -1568,6 +1568,59 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pedí". Es filtro de pantalla, no RLS: el responsable de la obra todavía
   confirma lo recibido de requisiciones de otros.
 
+## Cumplimiento (18-oct-2026)
+- Mario mandó la imagen del curso "Domina Claude para responsables de
+  cumplimiento" (cambios normativos, revisar controles, informe de
+  incidencia, informe al comité, flujos de control): "implementar estos
+  pasos en todos mis procesos". Pantalla **Legal → Cumplimiento**
+  (`/cumplimiento`, `pages/cumplimiento/`, una pestaña por paso; lógica pura
+  en `lib/cumplimientoNormativo.ts` con pruebas — OJO: `lib/cumplimiento.ts`
+  es otra cosa, el cumplimiento de tareas de RH).
+- `20261018090000_cumplimiento.sql` (aplicada en 4 partes): operan admin o
+  permiso por persona 'legal' o 'cumplimiento' (nuevo en `permisos_modulo` y
+  `MODULOS_ASIGNABLES`; `auth_opera_cumplimiento`); dirección consulta, prueba
+  controles y registra incidencias (`auth_ve_cumplimiento`). Belén y Eréndira
+  entran por su permiso legal. Frontera, espectador, director_general y
+  solo_consulta en las 5 tablas.
+  1. `cumplimiento_normas` (autoridad, publicación, entrada en vigor, qué
+     cambia, áreas, responsable, estatus) → "Volverla tareas":
+     `accionesSugeridas` propone 5 pasos (el primero el lunes, uno por semana,
+     sin pasar de la entrada en vigor) y se crean como tarjetas del tablero que
+     se elija (`cumplimiento_acciones` liga acción ↔ tarjeta;
+     `v_cumplimiento_acciones` dice si ya está en la última columna).
+  2. `cumplimiento_controles` (catálogo por organización, frecuencia mensual
+     o trimestral, tolerancia %) + `cumplimiento_pruebas` (resultado,
+     población, excepciones, muestra de 50 casos). **14 controles
+     automáticos** sembrados para LOMA: `fn_cumplimiento_ejecutar(prueba,
+     grupo, desde, hasta)` (definer, revocada) con pagos_con_comprobante,
+     pagos_con_oc, oc_sin_sobrepago, estados_cuenta_al_dia, cfdi_sat_al_dia,
+     efirma_vigente, expedientes_rh_completos, accesos_bajas,
+     documentos_legales_vigentes, arrendamientos_vigentes, epp_vigente,
+     herramienta_devuelta, inventario_sin_negativos, gastos_revisados.
+     "Probar ahora" = `fn_cumplimiento_probar(control, periodo)`. Controles
+     manuales: revisión con resultado, comentario y evidencia. **Prueba nueva
+     → rama nueva en `fn_cumplimiento_ejecutar` + control sembrado.**
+  3. `cumplimiento_incidencias` (folio INC-<emp>-0001; qué pasó, qué
+     significa, causa, qué hicimos, qué sigue, próxima actualización,
+     a quién se informó): informe imprimible y texto para WhatsApp; se
+     registra también desde una revisión con excepciones; acciones
+     correctivas → tarjetas.
+  4. Informe al comité: una hoja (trimestral o mensual) con semáforo,
+     controles vs periodo anterior, incidencias, normas pendientes y
+     decisiones que se piden (`resumenComite`, `htmlInformeComite`).
+  5. Flujos: pg_cron `cumplimiento-cierre-periodo` (día 1, 7:30 MX) corre los
+     automáticos del periodo que cerró (trimestrales al cerrar mar/jun/sep/
+     dic); la pestaña dice qué falta revisar y el histórico por control.
+- Primera corrida 18-oct (oct / T4): no cumplen PAG-01 (16 de 74 pagos sin
+  comprobante), ALM-02 (19 de 99 existencias negativas, varias de MCC),
+  CON-01 (3 de 19 cuentas sin movimientos recientes) y **SIS-01: 2 personas
+  dadas de baja con la cuenta activa** (Daissy Karina Sanchez Alazcano, baja 30-sep;
+  Josafat Eduardo Lopez Garrido, baja 7-oct; no se desactivaron: esperar a
+  Mario); RH-01 con 1 expediente
+  incompleto (Gonzalo Xochimitl). Probado en producción en rollback: Belén
+  ve y prueba (INC-CSC-0001), Laura ve y prueba pero no da de alta normas,
+  Alma (almacén) no ve nada ni puede llamar la función.
+
 ## CRM de ventas por WhatsApp y redes (17-oct-2026)
 - Mario: "módulo de ventas a través de redes sociales y de WhatsApp; un CRM
   de atención que genere las cotizaciones de manera automática". Decidió:
