@@ -1602,6 +1602,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   personaje"; no para `pendiente`): crear/cambiar el avatar con la cámara
   (`CamaraSelfie`) o galería, hoja completa y pestaña **Equipo**. Al 18-oct
   nadie tiene avatar todavía; Jonathan Cáceres va primero (124 XP, racha 19).
+- **Credencial QR (18-oct-2026, Mario: "una vez abran su NPC puedan ver su
+  QR para tener acceso a servicios de la empresa como comedor o compra de
+  materiales y herramienta")**: `20261018110000_credencial_qr.sql`
+  (aplicada): `credenciales_qr` (código al azar `ACU1:…`, **dura 10 min**,
+  la pantalla lo renueva cada minuto; nadie lee la tabla directo).
+  `fn_mi_credencial()` y `fn_credencial_leer(codigo)` (solo admin o quien
+  opera comedor, herramienta o punto de venta, misma organización; devuelve
+  nombre, empresa, avatar, expediente, pedido del comedor de hoy y
+  herramienta a su cargo). Pestaña "🪪 Mi QR" en `/personaje`
+  (`components/personaje/CredencialQr.tsx`) y botón en la tarjeta del
+  inicio. Lector `components/LectorCredencial.tsx` (cámara con `jsqr`, o
+  lector de mano que escribe + Enter) en: Comedor → Cocina ("Entregar" el
+  pedido de hoy), Herramienta → Asignar (llena quién recibe y muestra lo que
+  ya tiene) y Punto de venta → Vender (cliente "Empleado: nombre").
+  **Pendiente de Mario**: si la compra de materiales del trabajador va con
+  descuento vía nómina (hoy se cobra con las formas de pago normales).
 
 ## Cumplimiento (18-oct-2026)
 - Mario mandó la imagen del curso "Domina Claude para responsables de

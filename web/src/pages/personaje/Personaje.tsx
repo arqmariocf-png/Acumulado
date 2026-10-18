@@ -4,6 +4,7 @@ import { useAuth } from "../../lib/auth";
 import { avanceDelDia, claseDe, habilidades, logros, misionesDelDia, nivelDe, oficios, rangoDe } from "../../lib/personaje";
 import { AvatarPixel } from "../../components/personaje/AvatarPixel";
 import { CrearAvatar } from "../../components/personaje/CrearAvatar";
+import { CredencialQr } from "../../components/personaje/CredencialQr";
 import { PersonajeDelDia } from "../../components/personaje/PersonajeDelDia";
 import { useEquipo, useMiAvatar, useMiPersonaje } from "../../components/personaje/datos";
 
@@ -12,7 +13,7 @@ import { useEquipo, useMiAvatar, useMiPersonaje } from "../../components/persona
 export function Personaje() {
   const { perfilReal } = useAuth();
   const [params, setParams] = useSearchParams();
-  const pestana = params.get("tab") === "equipo" ? "equipo" : "yo";
+  const pestana = params.get("tab") === "equipo" ? "equipo" : params.get("tab") === "qr" ? "qr" : "yo";
   const [crear, setCrear] = useState(params.get("crear") === "1");
   const hoja = useMiPersonaje();
   const avatar = useMiAvatar();
@@ -26,9 +27,9 @@ export function Personaje() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-slate-900">Mi personaje</h1>
         <div className="flex gap-1 rounded border border-slate-300 p-0.5 text-sm">
-          {(["yo", "equipo"] as const).map((p) => (
+          {(["yo", "qr", "equipo"] as const).map((p) => (
             <button key={p} type="button" onClick={() => setParams(p === "yo" ? {} : { tab: p })} className={`rounded px-3 py-1 ${pestana === p ? "bg-slate-900 text-white" : "text-slate-600"}`}>
-              {p === "yo" ? "Yo" : "Equipo"}
+              {p === "yo" ? "Yo" : p === "qr" ? "🪪 Mi QR" : "Equipo"}
             </button>
           ))}
         </div>
@@ -46,6 +47,8 @@ export function Personaje() {
           {hoja.data && <HojaCompleta />}
         </>
       )}
+
+      {pestana === "qr" && <CredencialQr />}
 
       {pestana === "equipo" && (
         <div>

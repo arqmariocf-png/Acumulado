@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { ETIQUETA_METODO, agregarAlCarrito, buscarPorCodigo, filtrarProductos, importeLinea, revisarPagos, totalesCarrito, type LineaCarrito, type MetodoPago, type PagoCaptura } from "../../lib/puntoVenta";
+import { LectorCredencial } from "../../components/LectorCredencial";
 import { botonPrimario, botonSecundario, campo, dinero, imprimirTicket, useClientesEmpresa, useProductosVenta, type ProductoVenta, type Turno } from "./datos";
 
 // Mostrador estilo Odoo (Mario, 10-oct-2026): el lector de código de barras
@@ -173,6 +174,7 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
               ))}
             </select>
             {!clienteId && <input value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} placeholder="Nombre del cliente (opcional)" className={campo} />}
+            {!clienteId && <LectorCredencial titulo="¿Compra un trabajador? Su credencial" onLeida={(p) => setClienteNombre(`Empleado: ${p.nombre}${p.empresa ? ` (${p.empresa})` : ""}`)} />}
             <label className="flex items-center gap-2 text-xs text-slate-600">
               <input type="checkbox" checked={requiereFactura} onChange={(e) => setRequiereFactura(e.target.checked)} />
               El cliente pide factura

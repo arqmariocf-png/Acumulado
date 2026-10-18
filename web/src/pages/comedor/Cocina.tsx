@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
 import { porPreparar, type PedidoComedor } from "../../lib/comedor";
 import { hoyMx, mensajeError, useConfigComedor } from "./comun";
+import { FichaCredencial, LectorCredencial, type PersonaCredencial } from "../../components/LectorCredencial";
 
 interface Platillo {
   id: string;
@@ -23,6 +24,7 @@ export function Cocina() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState({ nombre: "", categoria: "", descripcion: "", precio: "" });
   const [buscar, setBuscar] = useState("");
+  const [credencial, setCredencial] = useState<PersonaCredencial | null>(null);
 
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ["comedor"] });
   const falla = (e: unknown) => setAviso(mensajeError(e));
@@ -165,6 +167,38 @@ export function Cocina() {
 
   return (
     <div className="space-y-5">
+      {/* Entrega con la credencial QR del personaje (18-oct-2026). */}
+      <div className="space-y-2">
+        <LectorCredencial titulo="Entregar con la credencial del trabajador" onLeida={setCredencial} />
+        {credencial && (
+          <FichaCredencial persona={credencial}>
+            {!credencial.comedor ? (
+              <p className="mt-1 text-amber-800">No pidió comida hoy.</p>
+            ) : credencial.comedor.estado === "entregado" ? (
+              <p className="mt-1 text-slate-600">Ya se le entregó hoy: {credencial.comedor.detalle}.</p>
+            ) : credencial.comedor.estado === "cancelado" ? (
+              <p className="mt-1 text-slate-600">Su pedido de hoy está cancelado.</p>
+            ) : (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span>
+                  {credencial.comedor.detalle} · {moneda(credencial.comedor.total)}
+                </span>
+                <button
+                  type="button"
+                  className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white"
+                  disabled={entregar.isPending}
+                  onClick={() => {
+                    entregar.mutate({ id: credencial.comedor!.id, entregado: true });
+                    setCredencial({ ...credencial, comedor: { ...credencial.comedor!, estado: "entregado" } });
+                  }}
+                >
+                  Entregar
+                </button>
+              </div>
+            )}
+          </FichaCredencial>
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <label className="flex items-center gap-2">
           Día
