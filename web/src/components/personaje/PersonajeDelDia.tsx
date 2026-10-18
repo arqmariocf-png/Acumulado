@@ -66,7 +66,9 @@ export function PersonajeDelDia() {
             📷 Crea tu personaje con tu foto
           </Link>
         ) : (
-          <span />
+          <Link to="/personaje?tab=qr" className="rounded border border-slate-900 bg-white px-2 py-1 font-medium text-slate-900">
+            🪪 Mi QR (comedor, almacén, mostrador)
+          </Link>
         )}
         <Link to="/personaje" className="text-sky-700 underline">
           Ver mi personaje y al equipo

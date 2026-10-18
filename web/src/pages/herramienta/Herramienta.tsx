@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { CampoBuscador } from "../../components/CampoBuscador";
+import { FichaCredencial, LectorCredencial, type PersonaCredencial } from "../../components/LectorCredencial";
 import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import {
   CLASE_ESTADO,
@@ -1070,6 +1071,7 @@ function AsignarObra({
   const [nombre, setNombre] = useState("");
   const [devolver, setDevolver] = useState("");
   const [nota, setNota] = useState("");
+  const [credencial, setCredencial] = useState<PersonaCredencial | null>(null);
   const { data: personas = [] } = useQuery({
     queryKey: ["directorio-activo"],
     queryFn: async () => {
@@ -1123,6 +1125,25 @@ function AsignarObra({
     >
       <h2 className="font-medium text-slate-900">Asignar {piezas.length} a una obra</h2>
       <p className="text-xs text-slate-500">{piezas.map((p) => p.folio).join(", ")}</p>
+      <LectorCredencial
+        titulo="Credencial de quien recibe"
+        onLeida={(p) => {
+          setCredencial(p);
+          setResponsable(p.profile_id);
+          setNombre(p.nombre);
+        }}
+      />
+      {credencial && (
+        <FichaCredencial persona={credencial}>
+          {credencial.herramientas.length > 0 ? (
+            <p className="mt-1 text-xs text-slate-600">
+              Ya tiene a su cargo: {credencial.herramientas.map((h) => `${h.folio} ${h.nombre}${h.obra ? ` (${h.obra})` : ""}`).join("; ")}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-600">No tiene herramienta a su cargo.</p>
+          )}
+        </FichaCredencial>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
           <span className="text-slate-600">Obra</span>
