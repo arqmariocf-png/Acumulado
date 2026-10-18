@@ -7,6 +7,7 @@ import { deudaCxp, semaforoCredito, type FilaCxp } from "../../lib/cuentasPorPag
 import { MisActividades } from "../tareas/MisActividades";
 import { SaldosEmpresas } from "./SaldosEmpresas";
 import { FILTRO_OC_EFECTIVO } from "./EfectivoPorConfirmar";
+import { PersonajeDelDia } from "../../components/personaje/PersonajeDelDia";
 
 // Inicio de dirección (Mario con Laura, 6-oct-2026): "Inicio: notificaciones
 // (tareas pendientes), saldos por empresa, cuentas por pagar". Arriba lo que
@@ -37,6 +38,7 @@ export function InicioDireccion() {
         <Atajo to="/finanzas/efectivo" titulo="Efectivo por confirmar" valor={pend?.efectivo} alerta={(pend?.efectivo ?? 0) > 0} />
         <Atajo to="/finanzas/historial-pagos" titulo="Base de pagos y comprobantes" valor={null} />
       </div>
+      <PersonajeDelDia />
       <section>
         <h2 className="mb-2 text-lg font-semibold text-slate-900">Mis pendientes</h2>
         <MisActividades compacto />

@@ -1568,6 +1568,41 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pedí". Es filtro de pantalla, no RLS: el responsable de la obra todavía
   confirma lo recibido de requisiciones de otros.
 
+## Personajes: avatar y misiones del día (18-oct-2026)
+- Mario: "ponernos a todos un avatar, que tengan que tomarse su foto de
+  frente para generarlo; una especie de NPC de videojuego con skills y
+  trabajos pendientes, muy dinámico, de lo que deben avanzar durante el
+  día". Sin servicio externo de imágenes: la selfie se vuelve **pixel-art en
+  el navegador** (`components/personaje/datos.ts` `generarAvatar`: recorte
+  cuadrado centrado con zoom, espejo, reducción a 28/40/56 px y
+  `pixelar` de `lib/personaje.ts`: contraste, paleta de 24 colores con tonos
+  de piel, óvalo transparente y contorno de sprite). **La foto nunca se
+  sube**: solo se guarda el PNG chico.
+- `20261018100000_personajes.sql` (aplicada): tabla `personajes`
+  (profile_id, grupo por trigger, `avatar` data URL PNG ≤60 KB, título
+  opcional); la ve su organización, la escribe solo su dueño (no pendiente);
+  frontera, espectador, director_general, solo_consulta.
+  `fn_personajes_stats(grupo, persona)` (definer, revocada; ~0.5 s para 46
+  personas): XP = tarea terminada ×10 (última columna de su tablero,
+  responsable o corresponsable) + día con entrada ×3 + tarjeta creada ×2 +
+  comentario ×1; habilidades a 30 días (cumplimiento, constancia,
+  iniciativa, colaboración), racha de días hábiles con entrada, hechas hoy,
+  pendientes hoy y vencidas. `fn_mi_personaje()` (hoja + misiones: tareas
+  vencidas o que vencen hoy, marcas de hoy, terminadas hoy, próximas 7
+  días) y `fn_equipo_personajes()` (la organización ordenada por XP).
+- `lib/personaje.ts` (con pruebas): nivel = 25·n·(n−1) XP, rangos
+  (Aprendiz → Leyenda), clase por rol (supervisor "Capitán de obra",
+  almacén "Intendente del almacén", producción "Herrero de la planta",
+  dirección/tesorería "Guardiana del tesoro", contabilidad "Escriba del
+  reino"…), oficios = módulos, misiones del día (atrasadas, checador, hoy,
+  terminadas), `dialogoNpc` (lo que le dice el personaje según la hora y el
+  avance) y logros.
+- Pantallas: tarjeta `PersonajeDelDia` arriba del inicio (también en el de
+  dirección), avatar en el encabezado → `/personaje` (menú personal "Mi
+  personaje"; no para `pendiente`): crear/cambiar el avatar con la cámara
+  (`CamaraSelfie`) o galería, hoja completa y pestaña **Equipo**. Al 18-oct
+  nadie tiene avatar todavía; Jonathan Cáceres va primero (124 XP, racha 19).
+
 ## Cumplimiento (18-oct-2026)
 - Mario mandó la imagen del curso "Domina Claude para responsables de
   cumplimiento" (cambios normativos, revisar controles, informe de
