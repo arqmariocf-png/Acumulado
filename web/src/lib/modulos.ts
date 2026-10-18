@@ -44,6 +44,7 @@ export const MODULOS_ASIGNABLES: { clave: string; ruta: string; etiqueta: string
   { clave: "cotizador", ruta: "/cotizador", etiqueta: "Cotizador", descripcion: "cotizaciones a clientes con los productos de la empresa" },
   { clave: "punto_venta", ruta: "/punto-venta", etiqueta: "Punto de venta", descripcion: "mostrador de ferretería: cobrar, caja y despacho" },
   { clave: "herramienta", ruta: "/almacen/herramienta", etiqueta: "Herramienta y equipo (almacén)", descripcion: "da de alta, asigna a obras y recibe herramienta" },
+  { clave: "cumplimiento", ruta: "/cumplimiento", etiqueta: "Cumplimiento", descripcion: "normas, controles, incidencias e informe al comité" },
   { clave: "checador", ruta: "/bbva/asistencia", etiqueta: "Responsable de checador", descripcion: "ve entradas y salidas de todo el personal" },
 ];
 

@@ -106,7 +106,7 @@ export const SECCIONES: SeccionMenu[] = [
   {
     clave: "legal",
     titulo: "Legal",
-    proposito: "Asuntos y juicios de cada empresa, crédito a clientes y contratos.",
+    proposito: "Asuntos y juicios de cada empresa, crédito a clientes, contratos y cumplimiento normativo.",
     entradas: [
       {
         ruta: "/legal",
@@ -120,6 +120,21 @@ export const SECCIONES: SeccionMenu[] = [
           { etiqueta: "Crédito y contratos", ruta: "/legal?tab=credito" },
           { etiqueta: "Arrendamientos", ruta: "/legal?tab=arrendamientos", visible: (p) => esAdmin(p) || (p.modulos ?? []).includes("legal") },
           { etiqueta: "Datos legales de las empresas", ruta: "/legal?tab=empresa", visible: (p) => esAdmin(p) || (p.modulos ?? []).includes("legal") },
+        ],
+      },
+      {
+        ruta: "/cumplimiento",
+        etiqueta: "Cumplimiento",
+        descripcion: "normas, controles, incidencias e informe al comité",
+        uso: "Vuelve cada norma nueva tareas con responsable; prueba los controles contra los datos del sistema (pagos, bancos, SAT, RH, almacén…) y dice qué casos fallan; informa incidencias con calma y arma el informe al comité en una página.",
+        visible: (p) => esAdmin(p) || p.rol === "direccion" || (p.modulos ?? []).some((m) => m === "legal" || m === "cumplimiento"),
+        modulo: "legal",
+        niveles: [
+          { etiqueta: "Cambios normativos", ruta: "/cumplimiento?tab=normas" },
+          { etiqueta: "Revisar controles", ruta: "/cumplimiento?tab=controles" },
+          { etiqueta: "Incidencias", ruta: "/cumplimiento?tab=incidencias" },
+          { etiqueta: "Informe al comité", ruta: "/cumplimiento?tab=comite" },
+          { etiqueta: "Flujos de control", ruta: "/cumplimiento?tab=flujos" },
         ],
       },
     ],
