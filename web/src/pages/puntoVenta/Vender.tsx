@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { ETIQUETA_METODO, agregarAlCarrito, buscarPorCodigo, filtrarProductos, importeLinea, revisarPagos, totalesCarrito, type LineaCarrito, type MetodoPago, type PagoCaptura } from "../../lib/puntoVenta";
-import { LectorCredencial } from "../../components/LectorCredencial";
+import { LectorCredencial, type PersonaCredencial } from "../../components/LectorCredencial";
+import { calendarioDescuentos, descuentoPorPago, nivelPorClave, pagosMinimos, proximoViernes } from "../../lib/cuentaNomina";
 import { botonPrimario, botonSecundario, campo, dinero, imprimirTicket, useClientesEmpresa, useProductosVenta, type ProductoVenta, type Turno } from "./datos";
 
 // Mostrador estilo Odoo (Mario, 10-oct-2026): el lector de código de barras
@@ -18,6 +19,7 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [clienteNombre, setClienteNombre] = useState("");
+  const [empleado, setEmpleado] = useState<PersonaCredencial | null>(null);
   const [requiereFactura, setRequiereFactura] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [cobrando, setCobrando] = useState(false);
@@ -58,6 +60,7 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
     setCarrito([]);
     setClienteId("");
     setClienteNombre("");
+    setEmpleado(null);
     setRequiereFactura(false);
     setCobrando(false);
     setTimeout(() => buscador.current?.focus(), 50);
@@ -174,7 +177,23 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
               ))}
             </select>
             {!clienteId && <input value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} placeholder="Nombre del cliente (opcional)" className={campo} />}
-            {!clienteId && <LectorCredencial titulo="¿Compra un trabajador? Su credencial" onLeida={(p) => setClienteNombre(`Empleado: ${p.nombre}${p.empresa ? ` (${p.empresa})` : ""}`)} />}
+            {!clienteId && !empleado && (
+              <LectorCredencial
+                titulo="¿Compra un trabajador? Su credencial"
+                onLeida={(p) => {
+                  setEmpleado(p);
+                  setClienteNombre(`Empleado: ${p.nombre}${p.empresa ? ` (${p.empresa})` : ""}`);
+                }}
+              />
+            )}
+            {empleado && (
+              <p className="flex items-center justify-between rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-800">
+                🪪 {empleado.nombre}: puede pagar con su cuenta de nómina
+                <button type="button" className="underline" onClick={() => { setEmpleado(null); setClienteNombre(""); }}>
+                  quitar
+                </button>
+              </p>
+            )}
             <label className="flex items-center gap-2 text-xs text-slate-600">
               <input type="checkbox" checked={requiereFactura} onChange={(e) => setRequiereFactura(e.target.checked)} />
               El cliente pide factura
@@ -202,6 +221,7 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
           carrito={carrito}
           clienteId={clienteId || null}
           clienteNombre={clienteNombre}
+          empleado={empleado}
           requiereFactura={requiereFactura}
           onCancelar={() => setCobrando(false)}
           onCobrado={() => {
@@ -227,6 +247,7 @@ function Cobro({
   carrito,
   clienteId,
   clienteNombre,
+  empleado,
   requiereFactura,
   onCancelar,
   onCobrado,
@@ -237,6 +258,7 @@ function Cobro({
   carrito: LineaCarrito[];
   clienteId: string | null;
   clienteNombre: string;
+  empleado: PersonaCredencial | null;
   requiereFactura: boolean;
   onCancelar: () => void;
   onCobrado: () => void;
@@ -245,7 +267,16 @@ function Cobro({
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ folio: string; cambio: number } | null>(null);
   const r = revisarPagos(total, pagos);
-  const metodos: MetodoPago[] = ["efectivo", "tarjeta", "transferencia", "credito"];
+  const metodos: MetodoPago[] = empleado ? ["efectivo", "tarjeta", "transferencia", "nomina"] : ["efectivo", "tarjeta", "transferencia", "credito"];
+  const cuenta = useQuery({
+    queryKey: ["nomina-disponible", empleado?.profile_id],
+    enabled: !!empleado,
+    queryFn: async () => {
+      const { data, error: e } = await supabase.rpc("fn_nomina_disponible", { p_profile: empleado!.profile_id });
+      if (e) throw e;
+      return data as { tiene: boolean; nivel?: string; linea?: number; disponible?: number; atraso?: number; plazo_max_semanas?: number; descuento_maximo?: number };
+    },
+  });
 
   const cobrar = useMutation({
     mutationFn: async (ventana: Window | null) => {
@@ -255,7 +286,13 @@ function Cobro({
         p_cliente: clienteId,
         p_cliente_nombre: clienteNombre || null,
         p_lineas: carrito.map((l) => ({ producto_id: l.productoId, cantidad: l.cantidad, precio: l.precio, descuento_pct: l.descuentoPct, codigo: l.codigo ?? null })),
-        p_pagos: pagos.filter((p) => Number(p.monto) > 0).map((p) => ({ metodo: p.metodo, monto: Number(p.monto), referencia: p.referencia ?? null })),
+        p_pagos: pagos
+          .filter((p) => Number(p.monto) > 0)
+          .map((p) =>
+            p.metodo === "nomina"
+              ? { metodo: p.metodo, monto: Number(p.monto), empleado: empleado?.profile_id ?? null, pagos: p.pagos ?? 1 }
+              : { metodo: p.metodo, monto: Number(p.monto), referencia: p.referencia ?? null },
+          ),
         p_requiere_factura: requiereFactura,
         p_notas: null,
       });
@@ -312,7 +349,15 @@ function Cobro({
               ))}
             </select>
             <input type="number" min="0" step="0.01" value={p.monto || ""} onChange={(e) => ponerMonto(i, Number(e.target.value))} className="w-32 rounded border border-slate-300 px-2 py-1.5 text-right text-base" autoFocus={i === 0} />
-            {p.metodo !== "efectivo" && p.metodo !== "credito" && (
+            {p.metodo === "nomina" && cuenta.data && (
+              <NominaPagos
+                cuenta={cuenta.data}
+                monto={Number(p.monto) || 0}
+                pagos={p.pagos ?? 1}
+                onPagos={(n) => setPagos((ps) => ps.map((x, j) => (j === i ? { ...x, pagos: n } : x)))}
+              />
+            )}
+            {p.metodo !== "efectivo" && p.metodo !== "credito" && p.metodo !== "nomina" && (
               <input value={p.referencia ?? ""} onChange={(e) => setPagos((ps) => ps.map((x, j) => (j === i ? { ...x, referencia: e.target.value } : x)))} placeholder="Referencia / autorización" className="min-w-[140px] flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm" />
             )}
             {pagos.length > 1 && (
@@ -368,5 +413,50 @@ export function Modal({ children }: { children: React.ReactNode }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-xl">{children}</div>
     </div>
+  );
+}
+
+/** Pagos semanales del cargo a la cuenta de nómina (sin intereses, art. 111
+ * LFT) y lo que la ley deja descontar por semana. */
+function NominaPagos({
+  cuenta,
+  monto,
+  pagos,
+  onPagos,
+}: {
+  cuenta: { tiene: boolean; nivel?: string; disponible?: number; atraso?: number; plazo_max_semanas?: number; descuento_maximo?: number };
+  monto: number;
+  pagos: number;
+  onPagos: (n: number) => void;
+}) {
+  const minimo = pagosMinimos(monto, cuenta.descuento_maximo ?? 0);
+  const maximo = cuenta.plazo_max_semanas ?? 1;
+  // Si el monto sube, los pagos suben al mínimo que respeta el tope semanal.
+  useEffect(() => {
+    if (Number.isFinite(minimo) && pagos < minimo && minimo <= maximo) onPagos(minimo);
+  }, [minimo, maximo, pagos, onPagos]);
+  if (!cuenta.tiene || !cuenta.disponible) {
+    return <span className="text-xs text-red-700">{cuenta.atraso ? "Tiene descuentos atrasados." : "No tiene línea de nómina autorizada."}</span>;
+  }
+  const opciones = Array.from({ length: maximo }, (_, k) => k + 1).filter((n) => n >= Math.min(minimo, maximo));
+  const nivel = nivelPorClave(cuenta.nivel);
+  const cal = calendarioDescuentos(monto, Math.max(pagos, 1), proximoViernes(new Date().toISOString().slice(0, 10)));
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+      <span className={`rounded px-1.5 py-0.5 ${nivel.clase}`}>
+        {nivel.icono} {nivel.nombre}
+      </span>
+      disponible {dinero(cuenta.disponible)}
+      <select value={pagos} onChange={(e) => onPagos(Number(e.target.value))} className="rounded border border-slate-300 px-1 py-1">
+        {opciones.map((n) => (
+          <option key={n} value={n}>
+            {n} pago{n === 1 ? "" : "s"} de {dinero(descuentoPorPago(monto, n))}
+          </option>
+        ))}
+      </select>
+      {minimo > maximo && <span className="text-red-700">No alcanza el plazo: baja el monto o paga una parte en efectivo.</span>}
+      {monto > (cuenta.disponible ?? 0) && <span className="text-red-700">Pasa de su disponible.</span>}
+      {cal.length > 0 && <span>· primer descuento el viernes {cal[0].fecha.split("-").reverse().join("/")}, sin intereses</span>}
+    </span>
   );
 }

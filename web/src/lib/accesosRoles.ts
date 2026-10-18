@@ -77,6 +77,7 @@ export const EDITA: Record<string, Partial<Record<AppRol, string>>> = {
   "/movimientos": { admin: "clasifica y concilia", corporativo: "clasifica y concilia", direccion: "solo consulta" },
   "/carga": { admin: "sube archivos", corporativo: "sube archivos", direccion: "solo consulta" },
   "/pendientes": { admin: "resuelve", corporativo: "resuelve", direccion: "solo consulta" },
+  "/financiamiento": { admin: "todo", direccion: "estudio, autoriza líneas, préstamos, descuentos y reglas", rh: "estudio, autoriza líneas, préstamos y aplica descuentos de nómina" },
   "/cumplimiento": { admin: "todo", direccion: "consulta, prueba controles y registra incidencias", corporativo: "con permiso legal o cumplimiento: normas, controles, revisiones e incidencias", rh: "con permiso legal o cumplimiento: normas, controles, revisiones e incidencias" },
   "/legal": { admin: "todo", direccion: "autoriza el crédito de clientes y genera contratos", corporativo: "con permiso legal: asuntos, crédito (sin autorizar), contratos y arrendamientos", rh: "con permiso legal: asuntos, crédito (sin autorizar), contratos y arrendamientos" },
   "/perfil-fiscal": { admin: "edita", corporativo: "edita", direccion: "solo consulta" },
