@@ -45,6 +45,7 @@ const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) 
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
+const Financiamiento = lazy(() => import("./pages/financiamiento/Financiamiento").then((m) => ({ default: m.Financiamiento })));
 const Cumplimiento = lazy(() => import("./pages/cumplimiento/Cumplimiento").then((m) => ({ default: m.Cumplimiento })));
 const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
@@ -170,6 +171,10 @@ function Enrutador() {
           {/* Legal: permiso por persona ('legal') sin cambiar el rol; dirección entra a crédito y contratos. */}
           <Route element={<ProtectedRoute roles={["direccion"]} oPermiso={(p) => (p.modulos ?? []).includes("legal")} />}>
             <Route path="/legal" element={<Legal />} />
+          </Route>
+          {/* Cuentas de nómina y financiamiento: RH, dirección y admin. */}
+          <Route element={<ProtectedRoute roles={["direccion", "rh"]} />}>
+            <Route path="/financiamiento" element={<Financiamiento />} />
           </Route>
           {/* Cumplimiento: permiso 'legal' o 'cumplimiento'; dirección consulta y registra incidencias. */}
           <Route element={<ProtectedRoute roles={["direccion"]} oPermiso={(p) => (p.modulos ?? []).some((m) => m === "legal" || m === "cumplimiento")} />}>

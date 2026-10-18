@@ -4,13 +4,14 @@
 // del efectivo.
 import { svgCode128 } from "./code128.ts";
 
-export type MetodoPago = "efectivo" | "tarjeta" | "transferencia" | "credito";
+export type MetodoPago = "efectivo" | "tarjeta" | "transferencia" | "credito" | "nomina";
 
 export const ETIQUETA_METODO: Record<MetodoPago, string> = {
   efectivo: "Efectivo",
   tarjeta: "Tarjeta",
   transferencia: "Transferencia",
   credito: "Crédito",
+  nomina: "Cuenta de nómina",
 };
 
 export interface LineaCarrito {
@@ -30,6 +31,9 @@ export interface PagoCaptura {
   metodo: MetodoPago;
   monto: number;
   referencia?: string | null;
+  /** Cuenta de nómina: el trabajador (leído con su credencial) y en cuántos pagos semanales. */
+  empleado?: string | null;
+  pagos?: number;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -63,12 +67,12 @@ export function agregarAlCarrito(lineas: LineaCarrito[], nueva: Omit<LineaCarrit
 export function revisarPagos(total: number, pagos: PagoCaptura[]) {
   const suma = (m: MetodoPago) => r2(pagos.filter((p) => p.metodo === m).reduce((s, p) => s + (Number(p.monto) || 0), 0));
   const efectivo = suma("efectivo");
-  const noEfectivo = r2(suma("tarjeta") + suma("transferencia"));
+  const noEfectivo = r2(suma("tarjeta") + suma("transferencia") + suma("nomina"));
   const credito = suma("credito");
   const pagado = r2(efectivo + noEfectivo + credito);
   let error: string | null = null;
   if (total <= 0) error = "Agrega productos.";
-  else if (noEfectivo + credito > total + 0.005) error = "Tarjeta, transferencia y crédito no pueden pasar del total.";
+  else if (noEfectivo + credito > total + 0.005) error = "Tarjeta, transferencia, crédito y nómina no pueden pasar del total.";
   else if (pagado < total - 0.005) error = `Falta por pagar ${r2(total - pagado).toFixed(2)}.`;
   return { efectivo, noEfectivo, credito, pagado, falta: r2(Math.max(total - pagado, 0)), cambio: r2(Math.max(pagado - total, 0)), error };
 }

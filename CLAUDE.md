@@ -1616,8 +1616,61 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   lector de mano que escribe + Enter) en: Comedor → Cocina ("Entregar" el
   pedido de hoy), Herramienta → Asignar (llena quién recibe y muestra lo que
   ya tiene) y Punto de venta → Vender (cliente "Empleado: nombre").
-  **Pendiente de Mario**: si la compra de materiales del trabajador va con
-  descuento vía nómina (hoy se cobra con las formas de pago normales).
+  La compra del trabajador puede ir a su cuenta de nómina (sección
+  siguiente).
+
+## Cuentas de nómina y financiamiento (18-oct-2026)
+- Mario: "llevaría una cuenta para descontarse vía nómina; por antigüedad y
+  por buen comportamiento y pago daremos financiamiento estilo Mercado
+  Pago". `20261018120000_cuentas_nomina.sql` (aplicada en 7 partes,
+  `cuentas_nomina_1_tablas` … `_7_redondeo`).
+- **Ley (no se negocia en pantalla)**: art. 111 LFT sin intereses; art.
+  110-I la deuda no pasa de un mes de sueldo (sueldo semanal × 30/7) y cada
+  descuento no pasa del 30 % del excedente del salario mínimo (2026: $315.04
+  diarios, zona general; verificar contra el DOF). Configurable por
+  organización en `nomina_financiamiento_config` (`fn_nomina_config`,
+  `fn_nomina_topes`); lo valida la base: trigger `cuentas_nomina_antes`
+  (línea ≤ un mes) y `fn_nomina_crear_cargo` (línea, atraso, plazo y tope
+  semanal; redondea el descuento por pago hacia arriba al centavo).
+- Tablas: `cuentas_nomina` (una por persona: sueldo_semanal, línea, plazo
+  máximo, nivel sin_acceso/bronce/plata/oro/diamante, puntaje, estatus,
+  quién autorizó), `nomina_cargos` (origen punto_venta/prestamo/anticipo/
+  otro, monto, pagos, descuento por pago, primer viernes; nombre del
+  trabajador guardado: profiles no se lee desde RH) y `nomina_descuentos`
+  (triggers: no más del saldo; liquidado solo). `v_nomina_cargos` (pagado,
+  saldo, atraso, siguiente descuento). Cancelar una venta del punto de venta
+  cancela su cargo (falla si ya se descontó algo).
+- Operan admin, dirección y RH (`auth_opera_cuentas_nomina`); el
+  trabajador ve solo lo suyo; el cajero (`auth_opera_pv`) solo crea cargos
+  de origen punto_venta. `fn_nomina_disponible`, `fn_nomina_aplicar_descuentos(
+  fecha, cargos[], referencia)`, `fn_estudio_financiamiento()` (por persona
+  activa: antigüedad, sueldo —capturado o el de la contratación vigente—,
+  checador y tareas a 30 días, EPP/herramienta perdida o vencida, historial
+  de cargos).
+- Estudio en `lib/cuentaNomina.ts` (con pruebas): puntaje 0-100 =
+  antigüedad 30 + asistencia 15 + cumplimiento 15 + cuidado 10 + historial
+  de pago 30 (sin historial 12, +6 por cargo liquidado, 0 con atraso);
+  niveles bronce ≥40 (25 % del tope, 2 semanas), plata ≥55 (50 %, 4), oro
+  ≥70 (75 %, 8), diamante ≥85 (100 %, 12); línea = min(% × un mes,
+  descuento máximo × plazo) redondeada a $50; bloqueos: <3 meses, atraso,
+  sin sueldo, gana el mínimo.
+- Pantalla RH → **Cuentas de nómina y financiamiento** (`/financiamiento`,
+  `pages/financiamiento/Financiamiento.tsx`, roles dirección/RH + admin):
+  Estudio (sueldo editable, desglose, Autorizar/Actualizar/Suspender),
+  Cuentas y cargos (préstamo/anticipo), Descuentos de la semana (por
+  empresa, CSV, "Marcar aplicado") y Reglas. Punto de venta: con el QR del
+  empleado aparece la forma de pago "Cuenta de nómina" en pagos semanales
+  (sube solo al mínimo legal); `fn_pv_cobrar` crea el cargo. El trabajador
+  ve "Mi cuenta de nómina" en `/personaje` → Mi QR.
+- Probado en producción en rollback (Fernando/RH, Jonathan Cáceres con
+  $4,000: línea de 20,000 rechazada por ley, 4,300 oro aceptada; $1,000 en
+  1 pago rechazado —máximo $538.42/semana—, en 2 aceptado; descuento
+  aplicado deja saldo 500; Jonathan no ve el estudio ni cuentas ajenas;
+  Alma crea cargo de punto de venta pero no préstamo).
+- **Ojo 18-oct**: solo 4 de 35 personas tienen sueldo (Fabricio, Jonathan
+  Cáceres, José Luis Del Castillo, Raúl Molina) y varias salen con 0 meses
+  de antigüedad (fecha de ingreso mal capturada): RH los corrige antes de
+  autorizar. Falta el pagaré/carta firmada de cada trabajador.
 
 ## Cumplimiento (18-oct-2026)
 - Mario mandó la imagen del curso "Domina Claude para responsables de

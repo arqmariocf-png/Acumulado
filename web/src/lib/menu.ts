@@ -145,6 +145,14 @@ export const SECCIONES: SeccionMenu[] = [
     proposito: "Personal, expedientes, nómina, checador y accesos al sistema.",
     entradas: [
       {
+        ruta: "/financiamiento",
+        etiqueta: "Cuentas de nómina y financiamiento",
+        descripcion: "estudio, líneas por trabajador y descuentos vía nómina",
+        uso: "Estudio por antigüedad, asistencia, tareas, cuidado de herramienta e historial de pago; autoriza la línea de cada trabajador (sin intereses, topes de ley), registra préstamos y anticipos y aplica los descuentos de cada viernes.",
+        visible: (p) => esAdmin(p) || p.rol === "direccion" || p.rol === "rh",
+        modulo: "rh",
+      },
+      {
         ruta: "/rh",
         etiqueta: "Recursos humanos",
         descripcion: "indicadores, personal, operación, vacantes y accesos",
