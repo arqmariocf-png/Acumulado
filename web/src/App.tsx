@@ -30,6 +30,7 @@ const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
 const Checador = lazy(() => import("./pages/Checador").then((m) => ({ default: m.Checador })));
+const Personaje = lazy(() => import("./pages/personaje/Personaje").then((m) => ({ default: m.Personaje })));
 import { Guia } from "./pages/Guia";
 import { Organigrama, Area, ConfigurarKpis } from "./pages/Organigrama";
 import { InicioSegunRol } from "./pages/InicioSegunRol";
@@ -187,6 +188,7 @@ function Enrutador() {
             <Route path="/pendientes" element={<Pendientes />} />
           </Route>
           <Route path="/checador" element={<Checador />} />
+          <Route path="/personaje" element={<Personaje />} />
           <Route path="/mis-documentos" element={<MisDocumentos />} />
           <Route path="/guia" element={<Guia />} />
 

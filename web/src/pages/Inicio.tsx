@@ -11,6 +11,7 @@ import { MisActividades } from "./tareas/MisActividades";
 import { Tesoreria } from "./finanzas/Tesoreria";
 import { esContabilidad, veTesoreriaEnInicio } from "../lib/puestos";
 import { AcumuladoContable } from "./finanzas/AcumuladoContable";
+import { PersonajeDelDia } from "../components/personaje/PersonajeDelDia";
 
 // Tablero de entrada: iconos grandes y, en cada uno, cuántas cosas hay
 // esperando ahí. La idea es abrirlo desde el celular y saber de un vistazo
@@ -457,6 +458,10 @@ export function Inicio() {
             : "No tienes nada pendiente."}
         </p>
       </div>
+
+      {/* Tu personaje (18-oct-2026): nivel, lo que te dice hoy y tus
+          misiones del día. */}
+      <PersonajeDelDia />
 
       {/* Tesorería (Delia, corporativo): semáforo de pagos de hoy por
           empresa antes que nada (29-sep-2026). */}

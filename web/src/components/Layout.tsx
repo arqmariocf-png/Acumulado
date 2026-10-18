@@ -15,6 +15,9 @@ import type { AppRol } from "../types/database";
 import { IrAlAncla } from "./FiltroDesdeTablero";
 import { ProblemaDesdeTablero } from "./ProblemaDesdeTablero";
 import { AvisoNotificaciones } from "./AvisoNotificaciones";
+import { AvatarPixel } from "./personaje/AvatarPixel";
+import { useMiAvatar } from "./personaje/datos";
+import { claseDe } from "../lib/personaje";
 
 export function Layout() {
   const { perfil, perfilReal, vistaComo, setVistaComo, grupo, alcanceOrganizacion, logoUrl, cerrarSesion, cambiarContrasena, eligeEmpresa, empresaActiva, setEmpresaActiva } = useAuth();
@@ -83,6 +86,7 @@ export function Layout() {
                 todas las pantallas se filtran por ella. */}
             {eligeEmpresa && !espectador && <SelectorEmpresa value={empresaActiva ?? ""} onChange={(v) => setEmpresaActiva(v || null)} compacto vacio="Todas" className="max-w-[140px] rounded border border-slate-300 px-2 py-1 text-xs" />}
             {perfilReal?.rol === "admin" && !espectador && <VerComo vistaComo={vistaComo} onCambiar={setVistaComo} />}
+            {perfilReal && !espectador && perfilReal.rol !== "pendiente" && <AvatarEncabezado />}
             <span className="hidden sm:inline">
               {perfil?.nombre} · <span className="text-slate-400">{perfil?.rol === "admin" && alcanceOrganizacion?.esMaestra ? "director general" : (perfil?.modulos ?? []).includes("contabilidad") ? "contabilidad" : (perfil?.modulos ?? []).includes("tesoreria") ? "tesorería" : perfil?.rol}</span>
             </span>
@@ -362,5 +366,17 @@ function BannerVistaComo({ vistaComo, onSalir }: { vistaComo: { rol: AppRol; emp
         Volver a mi vista
       </button>
     </div>
+  );
+}
+
+/** Avatar del personaje en el encabezado: lleva a "Mi personaje". */
+function AvatarEncabezado() {
+  const { perfilReal } = useAuth();
+  const avatar = useMiAvatar();
+  if (!perfilReal) return null;
+  return (
+    <NavLink to="/personaje" title="Mi personaje" className="shrink-0">
+      <AvatarPixel avatar={avatar.data?.avatar} nombre={perfilReal.nombre ?? ""} color={claseDe(perfilReal.rol, perfilReal.modulos ?? []).color} tamano={30} />
+    </NavLink>
   );
 }
