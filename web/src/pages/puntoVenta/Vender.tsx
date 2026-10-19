@@ -274,7 +274,7 @@ function Cobro({
     queryFn: async () => {
       const { data, error: e } = await supabase.rpc("fn_nomina_disponible", { p_profile: empleado!.profile_id });
       if (e) throw e;
-      return data as { tiene: boolean; nivel?: string; linea?: number; disponible?: number; atraso?: number; plazo_max_semanas?: number; descuento_maximo?: number };
+      return data as { tiene: boolean; nivel?: string; linea?: number; disponible?: number; atraso?: number; plazo_max_semanas?: number; descuento_maximo?: number; afiliado?: boolean };
     },
   });
 
@@ -424,7 +424,7 @@ function NominaPagos({
   pagos,
   onPagos,
 }: {
-  cuenta: { tiene: boolean; nivel?: string; disponible?: number; atraso?: number; plazo_max_semanas?: number; descuento_maximo?: number };
+  cuenta: { tiene: boolean; nivel?: string; disponible?: number; atraso?: number; plazo_max_semanas?: number; descuento_maximo?: number; afiliado?: boolean };
   monto: number;
   pagos: number;
   onPagos: (n: number) => void;
@@ -435,6 +435,9 @@ function NominaPagos({
   useEffect(() => {
     if (Number.isFinite(minimo) && pagos < minimo && minimo <= maximo) onPagos(minimo);
   }, [minimo, maximo, pagos, onPagos]);
+  if (!cuenta.afiliado) {
+    return <span className="text-xs text-red-700">Falta que firme su afiliación y consentimiento de descuento en su app (Mi personaje → Mi QR).</span>;
+  }
   if (!cuenta.tiene || !cuenta.disponible) {
     return <span className="text-xs text-red-700">{cuenta.atraso ? "Tiene descuentos atrasados." : "No tiene línea de nómina autorizada."}</span>;
   }

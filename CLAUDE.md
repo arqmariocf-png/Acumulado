@@ -1687,7 +1687,56 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
 - **Ojo 18-oct**: solo 4 de 35 personas tienen sueldo (Fabricio, Jonathan
   Cáceres, José Luis Del Castillo, Raúl Molina) y varias salen con 0 meses
   de antigüedad (fecha de ingreso mal capturada): RH los corrige antes de
-  autorizar. Falta el pagaré/carta firmada de cada trabajador.
+  autorizar.
+- **Firma digital y préstamos con intereses (19-oct-2026, Mario: "cada
+  trabajador que firme su pagaré, consentimiento y afiliación a crédito de
+  manera digital; una vez pasando esa parte serán préstamos con intereses ya
+  que será parte del negocio financiero")** (`20261019090000`, aplicada en
+  6 partes `credito_firma_1` … `_6_datos`):
+  - `credito_firmas` (afiliacion / consentimiento / pagare): texto tal cual
+    se mostró, firma dibujada (PNG), `hash` SHA-256 de texto + firma, fecha,
+    IP y navegador (de `request.headers`); **no se edita ni se borra**
+    (trigger `credito_firmas_inmutable`; solo `fn_credito_revocar`, sin
+    saldos, y nunca un pagaré). Firma solo la persona en su sesión
+    (`fn_credito_firmar`, definer); ven ella y RH/dirección/admin.
+  - Sin afiliación + consentimiento vigentes (`fn_credito_afiliado`,
+    revocada de authenticated) `fn_nomina_crear_cargo` no crea nada.
+    Préstamos/anticipos/otro nacen `por_firmar` (no se descuentan) y pasan a
+    `vigente` al firmar el pagaré; compras del mostrador quedan vigentes (las
+    cubre el consentimiento + ticket). `fn_nomina_cancelar_por_firmar`.
+  - **Intereses solo de la financiera** (art. 111 LFT):
+    `nomina_financiamiento_config.acreditante_empresa_id` + tasa ordinaria y
+    moratoria anual, IVA de intereses, `capacidad_pago_pct` (tope semanal, %
+    del sueldo) y `plazo_max_semanas_intereses`. Si la financiera es la misma
+    empresa del trabajador → error. Pagos semanales iguales (francés, tasa/52),
+    `nomina_cargos.interes/iva_interes/total` (generada)/`cat`/`acreditante_*`;
+    saldo, atraso y liquidación ya van sobre `total`. Anticipos y compras
+    siempre sin intereses. Al 19-oct no hay financiera configurada: todo sigue
+    sin intereses hasta que Mario/Laura la elijan en Reglas.
+  - `lib/creditoNomina.ts` (con pruebas; mismo cálculo que la base, probado
+    al centavo: $1,000 a 60 % en 4 pagos = 1,033.65, CAT 81.6 %) arma la
+    afiliación, el consentimiento y el pagaré (**borrador para los abogados**;
+    al cambiar textos sube `VERSION_DOCUMENTOS`), y el HTML imprimible con la
+    constancia. Datos de las partes: `fn_credito_datos_documentos(cargo)`
+    (definer; razón social/RFC/domicilio de `empresas` o
+    `empresas_perfil_legal`).
+  - Pantallas: el trabajador firma en `/personaje` → Mi QR ("Mis documentos
+    de crédito", `components/personaje/DocumentosCredito.tsx`,
+    `components/FirmaDigital.tsx`); RH ve "afiliación firmada" en el Estudio,
+    préstamos "espera firma del pagaré" con cancelar, vista previa de
+    intereses, pestaña **Documentos firmados** (ver/imprimir, revocar) y en
+    Reglas la financiera; el mostrador no cobra a la cuenta de nómina sin
+    afiliación.
+  - Probado en producción en rollback (Fernando/RH, Jonathan, financiera
+    ficticia AEP a 60 %): sin afiliación rechaza; firma doble rechaza;
+    préstamo queda por_firmar y no se descuenta; capacidad de pago rechaza
+    $3,000 en 2; Jonathan firma el pagaré → vigente; editar una firma no
+    cambia nada; descuento deja saldo 775.23; financiera = patrón rechaza.
+  - Pendiente legal (abogados): que la financiera sea SOFOM registrada
+    (CONDUSEF/REUS, contrato de adhesión en RECA, PLD), validez del pagaré
+    electrónico (firma simple; para juicio ejecutivo conviene constancia
+    NOM-151 o e.firma) y el interés moratorio (se escribe en el pagaré pero
+    el sistema todavía no lo calcula).
 
 ## Cumplimiento (18-oct-2026)
 - Mario mandó la imagen del curso "Domina Claude para responsables de
