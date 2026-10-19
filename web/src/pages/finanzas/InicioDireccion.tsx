@@ -33,10 +33,11 @@ export function InicioDireccion() {
   const { data: pend } = usePendientesDireccion();
   return (
     <div className="space-y-6">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Atajo to="/finanzas/por-autorizar" titulo="Órdenes por autorizar" valor={pend?.autorizar} alerta={(pend?.autorizar ?? 0) > 0} />
         <Atajo to="/finanzas/efectivo" titulo="Efectivo por confirmar" valor={pend?.efectivo} alerta={(pend?.efectivo ?? 0) > 0} />
         <Atajo to="/finanzas/historial-pagos" titulo="Base de pagos y comprobantes" valor={null} />
+        <Atajo to="/finanzas/obras" titulo="Físico-financiero de obras" valor={null} />
       </div>
       <PersonajeDelDia />
       <section>
