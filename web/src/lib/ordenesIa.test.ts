@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { etapaOrdenCompra, ordenEditable, partidasParaGuardar, partidaVacia, revisarOrden, totalesPartidas } from "./ordenesIa.ts";
+import { etapaOrdenCompra, ordenEditable, partidasParaGuardar, partidaVacia, revisarOrden, totalesPartidas, csvOrdenes } from "./ordenesIa.ts";
 
 test("totales sin IVA por partida, con y sin IVA", () => {
   const t = totalesPartidas([
@@ -36,4 +36,15 @@ test("etapa de la OC/OS y si se puede editar", () => {
   assert.equal(ordenEditable({ fuente: "acumulado", autorizacion: "autorizada" }), false);
   assert.equal(ordenEditable({ fuente: "api", autorizacion: "pendiente" }), false);
   assert.equal(ordenEditable({ fuente: "acumulado", cancelada: true }), false);
+});
+
+test("Excel de compras y servicios en un solo archivo", () => {
+  const csv = csvOrdenes([
+    { tipo: "OS", folio: "IA-OS-0004", fecha: "2026-10-19", empresa: "CSC", contraparte: "Fletes \"El Rayo\"", proyecto: "Parque Real 63", total: 1160, estado: "por autorizar", fuente: "acumulado" },
+    { tipo: "OC", folio: "41422", fecha: "2026-10-13", empresa: "MCF", contraparte: "Cemex", proyecto: null, total: null, estado: "pagada", fuente: "api" },
+  ]);
+  const lineas = csv.split("\n");
+  assert.equal(lineas[0], '"Folio","Tipo","Fecha","Empresa","Proveedor / cliente","Proyecto","Total c/IVA","Estado","Origen"');
+  assert.equal(lineas[1], '"IA-OS-0004","Servicio","2026-10-19","CSC","Fletes ""El Rayo""","Parque Real 63","1160.00","por autorizar","Acumulado"');
+  assert.equal(lineas[2], '"41422","Compra","2026-10-13","MCF","Cemex","","","pagada","backoffice"');
 });
