@@ -1476,6 +1476,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   lista de obras al capturar (`fn_ordenes_catalogo_captura` lo excluía a
   propósito; es el proyecto de lo que no es de obra en el backoffice: 301 OC
   en 7 empresas) (`20261020090000`).
+- **Efectivo que quedaba como transferencia (20-oct-2026, Laura: "las órdenes
+  de efectivo las está poniendo como transferencia al momento de
+  guardarlas")**: el editor traía "Transferencia" puesta de fábrica (de 33 OS
+  de Laura del 19-oct, 31 quedaron así) y, con Efectivo + Condición
+  "Contado", la OC no contaba como efectivo (los filtros solo miraban la forma
+  de pago con condición vacía y `fn_oc_programar_pago` la programaba como
+  transferencia). Ahora: Forma de pago sin valor de fábrica y obligatoria en
+  OC/OS (`revisarOrden` con `formaPago`); elegir Efectivo pone condición
+  efectivo; `fn_orden_ia_guardar` convierte Efectivo + contado/vacía en
+  'efectivo' y `fn_oc_programar_pago` programa en efectivo (sin cuenta) toda
+  OC con forma Efectivo (`20261020100000`; IA-OS-0035 e IA-OC-0007
+  corregidas). Regla única **efectivo = condición efectivo O forma de pago
+  Efectivo**: `esOcEfectivo`, `FILTRO_OC_EFECTIVO` / `FILTRO_OC_NO_EFECTIVO`
+  en `lib/pagosOc.ts` (Efectivo por confirmar, inicio de dirección, KPIs
+  banco/efectivo). Las OS ya guardadas como transferencia que en realidad
+  eran efectivo se corrigen editándolas (Laura dice cuáles).
 - Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
   `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
   producto del catálogo.

@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { esRolBasico } from "./modulos";
 import type { Profile } from "../types/database";
 import { avanceComprobantes } from "./comprobantesPago";
+import { FILTRO_OC_EFECTIVO, FILTRO_OC_NO_EFECTIVO } from "./pagosOc";
 import { INDICADORES_CONTABILIDAD, diasDesde, esContabilidad, lunesDeSemana } from "./puestos";
 
 /** Catálogo de indicadores / KPIs. Cada uno es una consulta ligera sobre
@@ -165,7 +166,7 @@ export const INDICADORES: Indicador[] = [
         .gt("saldo", 0.009)
         .eq("autorizacion", "autorizada")
         .eq("pagada_backoffice", false)
-        .or("condicion_pago.neq.efectivo,and(condicion_pago.is.null,or(tipo_pago_backoffice.is.null,tipo_pago_backoffice.not.ilike.efectivo*))")
+        .or(FILTRO_OC_NO_EFECTIVO)
         .limit(5000);
       if (error) throw error;
       const total = (data ?? []).reduce((s, r) => s + Number(r.saldo ?? 0), 0);
@@ -186,7 +187,7 @@ export const INDICADORES: Indicador[] = [
         .gt("saldo", 0.009)
         .neq("autorizacion", "rechazada")
         .eq("pagada_backoffice", false)
-        .or("condicion_pago.eq.efectivo,and(condicion_pago.is.null,tipo_pago_backoffice.ilike.efectivo*)")
+        .or(FILTRO_OC_EFECTIVO)
         .limit(5000);
       if (error) throw error;
       const total = (data ?? []).reduce((s, r) => s + Number(r.saldo ?? 0), 0);

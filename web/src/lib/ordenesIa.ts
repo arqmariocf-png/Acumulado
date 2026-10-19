@@ -48,10 +48,13 @@ export function totalesPartidas(p: PartidaCaptura[]): { subtotal: number; iva: n
 }
 
 /** Problemas que impiden guardar (vacío = se puede). */
-export function revisarOrden(o: { contraparte: string; empresaId: string; partidas: PartidaCaptura[] }, tipo: TipoOrden): string[] {
+export function revisarOrden(o: { contraparte: string; empresaId: string; partidas: PartidaCaptura[]; formaPago?: string }, tipo: TipoOrden): string[] {
   const errores: string[] = [];
   if (!o.empresaId) errores.push("Elige la empresa.");
   if (!o.contraparte.trim()) errores.push(`Escribe el ${infoTipo(tipo).contraparte.toLowerCase()}.`);
+  // Sin forma de pago de fábrica (20-oct-2026, Laura: las de efectivo se
+  // guardaban como transferencia porque venía puesta): en OC/OS se elige.
+  if (tipo !== "OV" && o.formaPago !== undefined && !o.formaPago.trim()) errores.push("Elige la forma de pago (efectivo, transferencia…).");
   const filas = partidasCapturadas(o.partidas);
   if (filas.length === 0) errores.push("Agrega al menos una partida.");
   filas.forEach((l, i) => {

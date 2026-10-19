@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
-import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, estadoPagoOc, etapaOc, porProgramarOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
+import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, esOcEfectivo, estadoPagoOc, etapaOc, porProgramarOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
@@ -49,8 +49,8 @@ export interface OcPago {
 /** Condición inicial cuando dirección aún no la capturó: lo que dice el
  * backoffice (efectivo) o crédito si el proveedor tiene línea. */
 function condicionInicialDe(oc: OcPago): CondicionPago {
+  if (esOcEfectivo(oc)) return "efectivo";
   if (oc.condicion_pago) return oc.condicion_pago;
-  if ((oc.tipo_pago_backoffice ?? "").toLowerCase().startsWith("efectivo")) return "efectivo";
   return oc.dias_credito != null ? "credito" : "contado";
 }
 
