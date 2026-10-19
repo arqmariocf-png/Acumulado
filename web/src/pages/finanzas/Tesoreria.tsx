@@ -115,6 +115,10 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
         .from("v_pagos_programados")
         .select("*")
         .or(`estatus.eq.pendiente,and(estatus.eq.pagado,pagado_en.eq.${hoy})`)
+        // El efectivo no es de tesorería (20-oct-2026, Mario: "a Delia no le
+        // tocaría ver y confirmar pagos en efectivo"): lo ve y confirma
+        // dirección en Efectivo por confirmar.
+        .neq("metodo", "efectivo")
         .order("fecha_programada")
         .order("beneficiario");
       if (err) throw err;
