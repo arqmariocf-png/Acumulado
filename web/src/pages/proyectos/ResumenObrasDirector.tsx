@@ -7,7 +7,7 @@ import type { EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { PuEstado } from "../../types/database";
 
 // Resumen físico-financiero de todas las obras para el director general y,
-// desde el 19-oct-2026, también para dirección/finanzas (Laura) (Mario, 6-oct:
+// desde el 19-oct-2026, también para dirección/finanzas (Laura) y desde el 20-oct para el rol empresa (Jorge, solo sus empresas) (Mario, 6-oct:
 // "el resumen por obra en tema físico-financiero"; 19-oct: "agrégalas [las
 // OC] y la mano de obra"). Una sola consulta (fn_resumen_obras_director) y el
 // mismo cálculo que la pestaña de cada obra (lib/resumenObra.ts).
