@@ -401,6 +401,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`lib/marcasPendientes.ts`, con pruebas): lo que ya está en el servidor
   (mismo tipo ±2 min) se borra del teléfono sin reenviar; lo rechazado no
   bloquea marcas nuevas ni se reenvía solo (solo con "Enviar ahora").
+  **Cada día empieza en "fuera" (19-oct-2026, Mario: "Lau no puede marcar
+  entrada")**: la secuencia entrada → salida se validaba contra la última
+  marca de TODA la historia; Laura tenía una entrada del 28-sep sin salida y
+  la pantalla la dejaba "Dentro" para siempre (y el servidor respondía 409 a
+  la entrada). Había 7 así (Laura, Delia, Eréndira, Belén, Valery, Mauro,
+  Arturo). Ahora la última marca solo cuenta si es del mismo día en hora de
+  México: `estadoChecador` en `lib/reporteChecador.ts` (con pruebas; aviso
+  "tu entrada del dd/mm quedó sin salida") y `checador-marcar` **v5**
+  (desplegada desde el código de producción v4 + `diaMx`; el repo también).
 - **SAT: descarga masiva automática (13-oct-2026)**: Belén subió la
   e.firma de las 8 empresas (AEP, CSC, ERG, LRT, MCC, MCF, QX, VBB). Edge
   `sat-descarga-masiva` (verify_jwt false: cron con `x-cron-secret` o sesión
@@ -1187,6 +1196,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   aplicado en nómina"). Reglas puras en `lib/comedor.ts` (con pruebas).
   Acceso rápido en el inicio y entrada en el menú; permiso "Comedor
   (cocina)" asignable desde RH → Accesos. Prueba `supabase/tests/comedor.sql`.
+- **Encargada de cocina (19-oct-2026, Mario: "Moni Moreno será la
+  encargada de comedor; únicamente va a ver las comidas que el personal
+  solicite")**: Monica Moreno Rojas (morenorojasmoni79@gmail.com, operativo,
+  con expediente) con `permisos_modulo` 'comedor': ve Pedir comida + Cocina
+  (pedidos, entregar, menú y platillos); no ve Descuento vía nómina ni nada de
+  finanzas (probado en rollback). Al 19-oct el comedor está vacío: 0
+  platillos, 0 menús, 0 pedidos; ella da de alta platillos y el menú del día.
 
 ## Director general (30-sep-2026)
 - Mario: "genera un rol de director general; debo poder editar absolutamente
@@ -1402,6 +1418,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   comparte el historial. Probado como Laura en rollback (COT-AEP-0001 →
   IA-OV-0001); `folio_ia_ov` reiniciado a 1 (las secuencias no se
   revierten con rollback).
+- **Serie única OC/OS (19-oct-2026, Mario: "Alma y Laura cada una tiene sus
+  órdenes de compra y de servicio, debiendo ser una serie global para
+  todos")**: OC y OS llevaban contador propio (IA-OC-0002 e IA-OS-0002 a la
+  vez) y las OC de requisiciones RQ-<emp>-0001. Ahora todas toman número de
+  `folio_ia_oc` y conservan su prefijo (la siguiente es la 0003, sea OC u
+  OS); `fn_orden_ia_guardar` y `fn_oc_desde_necesidades` reescritas por
+  reemplazo sobre su definición (`20261019110000`). Las ya emitidas no se
+  renumeraron; `folio_ia_os` queda sin uso.
 - Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
   `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
   producto del catálogo.

@@ -7,7 +7,7 @@ import { eliminarPendiente, esErrorDeRed, guardarPendiente, listarPendientes, nu
 import { pendientesPorEnviar, yaRegistrada } from "../lib/marcasPendientes";
 import { CamaraSelfie } from "../components/CamaraSelfie";
 import { rutaVerArchivo } from "../lib/verArchivo";
-import { fechaLocal } from "../lib/reporteChecador";
+import { estadoChecador, fechaLocal } from "../lib/reporteChecador";
 
 /** La foto tomada se respalda en sessionStorage (ya comprimida, ~100-200 KB)
  * para sobrevivir a que el navegador recargue la página mientras se pide
@@ -291,8 +291,7 @@ export function Checador() {
     }
     return ultimaGuardada ? { tipo: ultimaGuardada.tipo, created_at: ultimaGuardada.created_at, pendiente: false } : null;
   }, [registros, pendientes]);
-  const estado: "fuera" | "dentro" | "comida" =
-    !ultimoRegistro || ultimoRegistro.tipo === "salida" ? "fuera" : ultimoRegistro.tipo === "comida_inicio" ? "comida" : "dentro";
+  const { estado, abiertoDeOtroDia } = estadoChecador(ultimoRegistro, new Date().toISOString());
 
   // Envía en orden lo guardado sin señal. Un rechazo del servidor (no de
   // red) se anota en la marca para que la persona la vea y la descarte o
@@ -561,6 +560,11 @@ export function Checador() {
             </button>
           )}
         </div>
+        {abiertoDeOtroDia && (
+          <p className="mt-2 text-xs text-amber-700">
+            Tu entrada del {abiertoDeOtroDia.split("-").reverse().join("/")} quedó sin salida. Hoy marca tu entrada normal; si necesitas corregir ese día, avisa a RH.
+          </p>
+        )}
         {avisoFoto && <p className="mt-2 text-sm font-medium text-amber-700">{avisoFoto}</p>}
         {!foto && (estado === "fuera" || estado === "dentro") && !avisoFoto && (
           <p className="mt-2 text-xs text-amber-700">Al marcar {estado === "fuera" ? "entrada" : "salida"} se abre la cámara aquí mismo: toma tu foto y la marca se envía sola.</p>
