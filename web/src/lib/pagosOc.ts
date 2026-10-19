@@ -167,3 +167,15 @@ export function ordenarOcs<T extends OcOrdenable>(lista: T[], orden: OrdenOc): T
       return copia.sort((a, b) => porFolio(b, a));
   }
 }
+
+/** ¿Se paga en efectivo? La condición "efectivo" o la forma de pago Efectivo,
+ * diga lo que diga la condición (20-oct-2026: Efectivo + Contado se tomaba
+ * como transferencia). Misma regla que los filtros de abajo. */
+export function esOcEfectivo(o: { condicion_pago?: string | null; tipo_pago_backoffice?: string | null }): boolean {
+  return o.condicion_pago === "efectivo" || (o.tipo_pago_backoffice ?? "").trim().toLowerCase().startsWith("efectivo");
+}
+
+/** Filtro PostgREST (`.or(...)`) de las OC que se pagan en efectivo. */
+export const FILTRO_OC_EFECTIVO = "condicion_pago.eq.efectivo,tipo_pago_backoffice.ilike.efectivo*";
+/** Lo contrario: las que salen de banco (transferencia, tarjeta, cheque o sin forma). */
+export const FILTRO_OC_NO_EFECTIVO = "and(or(condicion_pago.is.null,condicion_pago.neq.efectivo),or(tipo_pago_backoffice.is.null,tipo_pago_backoffice.not.ilike.efectivo*))";

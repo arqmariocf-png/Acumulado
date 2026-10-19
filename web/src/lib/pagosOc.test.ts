@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc } from "./pagosOc.ts";
+import { esOcEfectivo, estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc } from "./pagosOc.ts";
 
 const oc = { total: 1160, pagado: 0, fecha_creacion: "2026-09-01", dias_credito: 30 };
 
@@ -88,4 +88,11 @@ test("porProgramarOc descuenta lo ya programado: no se programa dos veces", asyn
   assert.equal(montoPagoSugerido("contado", oc41074), 0);
   assert.equal(porProgramarOc({ ...oc41074, programado: 1000 }), 1383.4);
   assert.equal(porProgramarOc({ ...oc41074, programado: null }), 2383.4);
+});
+
+test("efectivo por forma de pago aunque la condición diga contado", () => {
+  assert.equal(esOcEfectivo({ condicion_pago: "contado", tipo_pago_backoffice: "Efectivo" }), true);
+  assert.equal(esOcEfectivo({ condicion_pago: "efectivo", tipo_pago_backoffice: "Transferencia electrónica de fondos" }), true);
+  assert.equal(esOcEfectivo({ condicion_pago: null, tipo_pago_backoffice: "Transferencia electrónica de fondos" }), false);
+  assert.equal(esOcEfectivo({ condicion_pago: "credito", tipo_pago_backoffice: null }), false);
 });

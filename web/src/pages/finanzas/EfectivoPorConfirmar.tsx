@@ -22,7 +22,8 @@ interface OcEfectivo {
   saldo: number;
 }
 
-export const FILTRO_OC_EFECTIVO = "condicion_pago.eq.efectivo,and(condicion_pago.is.null,tipo_pago_backoffice.ilike.efectivo*)";
+import { FILTRO_OC_EFECTIVO } from "../../lib/pagosOc";
+export { FILTRO_OC_EFECTIVO };
 
 function hoyIso(): string {
   const d = new Date();

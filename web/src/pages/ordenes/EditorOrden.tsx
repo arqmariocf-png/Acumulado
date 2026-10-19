@@ -54,7 +54,7 @@ export function EditorOrden({
     contraparte: "",
     proyecto: "",
     fecha: hoy(),
-    formaPago: tipo === "OV" ? "" : FORMAS_PAGO[0],
+    formaPago: "",
     condicion: "",
     fechaEntrega: "",
     lugarEntrega: "",
@@ -139,7 +139,7 @@ export function EditorOrden({
   }
 
   async function guardar() {
-    const problemas = revisarOrden({ contraparte: enc.contraparte, empresaId: enc.empresaId, partidas }, tipoOrden);
+    const problemas = revisarOrden({ contraparte: enc.contraparte, empresaId: enc.empresaId, partidas, formaPago: enc.formaPago }, tipoOrden);
     setErrores(problemas);
     if (problemas.length) return;
     setGuardando(true);
@@ -247,8 +247,17 @@ export function EditorOrden({
             </label>
             <label className="text-xs text-slate-600">
               Forma de pago
-              <select value={enc.formaPago} onChange={(e) => setEnc({ ...enc, formaPago: e.target.value })} className={`mt-1 ${campo}`}>
-                <option value="">—</option>
+              <select
+                value={enc.formaPago}
+                onChange={(e) => {
+                  const formaPago = e.target.value;
+                  // Efectivo lleva su condición, para que no se programe como transferencia.
+                  const condicion = tipo !== "OV" && formaPago.toLowerCase().startsWith("efectivo") && (enc.condicion === "" || enc.condicion === "contado") ? "efectivo" : enc.condicion;
+                  setEnc({ ...enc, formaPago, condicion });
+                }}
+                className={`mt-1 ${campo} ${tipo !== "OV" && !enc.formaPago ? "border-amber-400" : ""}`}
+              >
+                <option value="">{tipo === "OV" ? "—" : "Elige…"}</option>
                 {FORMAS_PAGO.map((f) => (
                   <option key={f} value={f}>
                     {f}
