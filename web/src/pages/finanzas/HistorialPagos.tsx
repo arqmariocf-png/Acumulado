@@ -75,7 +75,7 @@ export function HistorialPagos() {
     queryFn: async () => {
       let q = supabase
         .from("pagos_programados")
-        .select("id, empresa_id, beneficiario, concepto, monto, fecha_programada, pagado_en, metodo, referencia, comprobante_nombre, comprobante_path, confirmado_en, empresas(nombre), ordenes_compra(id_orden, proyecto)")
+        .select("id, empresa_id, beneficiario, concepto, monto, fecha_programada, pagado_en, metodo, referencia, comprobante_nombre, comprobante_path, confirmado_en, empresas(nombre), ordenes_compra!pagos_programados_orden_compra_id_fkey(id_orden, proyecto)")
         .eq("estatus", "pagado")
         .gte("pagado_en", rango.desde)
         .lte("pagado_en", rango.hasta)

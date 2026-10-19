@@ -50,12 +50,12 @@ export function ConfirmarPagos({
   const [error, setError] = useState<string | null>(null);
   const archivoRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: errorCarga } = useQuery({
     queryKey: ["pagos-programados", "confirmar", metodo, verConfirmados, empresaId ?? null],
     queryFn: async () => {
       let q = supabase
         .from("pagos_programados")
-        .select("id, beneficiario, concepto, monto, fecha_programada, estatus, pagado_en, metodo, empresa_id, comprobante_path, confirmado_en, ordenes_compra(id_orden, proyecto)")
+        .select("id, beneficiario, concepto, monto, fecha_programada, estatus, pagado_en, metodo, empresa_id, comprobante_path, confirmado_en, ordenes_compra!pagos_programados_orden_compra_id_fkey(id_orden, proyecto)")
         .eq("metodo", metodo)
         .neq("estatus", "cancelado")
         .order("fecha_programada", { ascending: false })
@@ -163,7 +163,8 @@ export function ConfirmarPagos({
 
       <div className="mt-3 overflow-x-auto">
         {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
-        {!isLoading && filas.length === 0 && <p className="text-sm text-slate-500">No hay pagos por confirmar.</p>}
+        {errorCarga && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">No se pudo cargar la lista: {(errorCarga as Error).message}</p>}
+        {!isLoading && !errorCarga && filas.length === 0 && <p className="text-sm text-slate-500">No hay pagos por confirmar.</p>}
         {filas.length > 0 && (
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-slate-500">
