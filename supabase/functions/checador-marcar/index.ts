@@ -72,13 +72,17 @@ Deno.serve(async (req) => {
     // marca offline se valida contra la última marca ANTERIOR a su hora.
     let consultaUltima = dbServicio
       .from("checador_registros")
-      .select("tipo")
+      .select("tipo, created_at")
       .eq("profile_id", perfil.id)
       .is("anulada_en", null)
       .order("created_at", { ascending: false })
       .limit(1);
     if (marcadaEn) consultaUltima = consultaUltima.lt("created_at", marcadaEn.toISOString());
-    const { data: ultima } = await consultaUltima.maybeSingle();
+    const { data: ultimaCruda } = await consultaUltima.maybeSingle();
+    // Cada día (hora de México) empieza de nuevo (19-oct-2026: Laura y 6 más
+    // dejaron una entrada sin salida otro día y ya no podían marcar entrada).
+    const diaMx = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+    const ultima = ultimaCruda && diaMx(new Date(ultimaCruda.created_at)) === diaMx(marcadaEn ?? new Date()) ? ultimaCruda : null;
     // Secuencia: entrada -> (comida_inicio -> comida_fin)* -> salida.
     const permitidos: Record<string, string[]> = {
       ninguna: ["entrada"],

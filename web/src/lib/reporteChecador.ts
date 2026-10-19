@@ -135,3 +135,19 @@ table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e2e8f0;
 </style></head><body><h1>Reporte del checador</h1><p>${esc(periodo)} · horas activas = salida − entrada − tiempo de comida</p>
 <table><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida a comer</th><th>Regreso de comer</th><th>Salida</th><th class="n">Horas activas</th><th>Falta</th></tr></thead>${bloques}</table></body></html>`;
 }
+
+/** Estado del checador con la última marca (19-oct-2026, Laura y 6 más
+ * atorados: una entrada sin salida de otro día dejaba la pantalla en
+ * "Dentro" para siempre y el servidor rechazaba la entrada nueva). Cada día
+ * (hora de México) empieza en "fuera"; el turno abierto de un día anterior
+ * queda incompleto y RH lo ve en ámbar. */
+export function estadoChecador(ultima: { tipo: string; created_at: string } | null, ahoraIso: string): {
+  estado: "fuera" | "dentro" | "comida";
+  abiertoDeOtroDia: string | null;
+} {
+  if (!ultima) return { estado: "fuera", abiertoDeOtroDia: null };
+  const otroDia = fechaLocal(ultima.created_at) !== fechaLocal(ahoraIso);
+  if (ultima.tipo === "salida") return { estado: "fuera", abiertoDeOtroDia: null };
+  if (otroDia) return { estado: "fuera", abiertoDeOtroDia: fechaLocal(ultima.created_at) };
+  return { estado: ultima.tipo === "comida_inicio" ? "comida" : "dentro", abiertoDeOtroDia: null };
+}

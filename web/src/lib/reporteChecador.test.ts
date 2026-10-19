@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { armarReporteChecador, csvReporteChecador, formatoHoras, htmlReporteChecador, totalesPorPersona, type MarcaReporte } from "./reporteChecador.ts";
+import { armarReporteChecador, csvReporteChecador, formatoHoras, htmlReporteChecador, totalesPorPersona, type MarcaReporte, estadoChecador } from "./reporteChecador.ts";
 
 // 9-oct-2026 en México = UTC-6.
 const m = (profile_id: string, nombre: string, tipo: MarcaReporte["tipo"], horaMx: string, fecha = "2026-10-09", anulada = false): MarcaReporte => ({
@@ -66,4 +66,16 @@ test("hoy sin salida está en turno, no cuenta como sin cerrar", () => {
   assert.equal(hoy.enTurno, true);
   assert.equal(ayer.enTurno, false);
   assert.equal(totalesPorPersona(filas).get("a")!.incompletos, 1);
+});
+
+test("estado del checador: cada día empieza fuera aunque haya quedado una entrada abierta", () => {
+  const ahora = "2026-10-19T16:30:00Z"; // 10:30 MX
+  assert.deepEqual(estadoChecador(null, ahora), { estado: "fuera", abiertoDeOtroDia: null });
+  // Laura: entrada del 28-sep sin salida.
+  assert.deepEqual(estadoChecador({ tipo: "entrada", created_at: "2026-09-28T16:08:34Z" }, ahora), { estado: "fuera", abiertoDeOtroDia: "2026-09-28" });
+  assert.deepEqual(estadoChecador({ tipo: "entrada", created_at: "2026-10-19T14:00:00Z" }, ahora), { estado: "dentro", abiertoDeOtroDia: null });
+  assert.deepEqual(estadoChecador({ tipo: "comida_inicio", created_at: "2026-10-19T16:00:00Z" }, ahora), { estado: "comida", abiertoDeOtroDia: null });
+  // Entrada a las 11 p. m. MX del día 18 (05:00 UTC del 19): es de otro día.
+  assert.equal(estadoChecador({ tipo: "entrada", created_at: "2026-10-19T05:00:00Z" }, ahora).estado, "fuera");
+  assert.equal(estadoChecador({ tipo: "salida", created_at: "2026-10-19T15:00:00Z" }, ahora).estado, "fuera");
 });
