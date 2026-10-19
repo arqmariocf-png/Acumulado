@@ -33,7 +33,8 @@ export function PagosSinComprobante({ compacto = false, empresaId = "" }: { comp
     queryKey: ["tesoreria", "comprobantes", empresaId],
     queryFn: async () => {
       const base = () => {
-        let q = supabase.from("pagos_programados").select("id", { count: "exact", head: true }).eq("estatus", "pagado");
+        // Solo transferencias y cheques: el efectivo lo comprueba dirección.
+        let q = supabase.from("pagos_programados").select("id", { count: "exact", head: true }).eq("estatus", "pagado").neq("metodo", "efectivo");
         if (empresaId) q = q.eq("empresa_id", empresaId);
         return q;
       };
@@ -41,6 +42,7 @@ export function PagosSinComprobante({ compacto = false, empresaId = "" }: { comp
         .from("v_pagos_programados")
         .select("id, beneficiario, monto, pagado_en, empresa_nombre, id_orden, comprobante_nombre")
         .eq("estatus", "pagado")
+        .neq("metodo", "efectivo")
         .is("comprobante_path", null)
         .order("pagado_en", { ascending: false })
         .limit(50);

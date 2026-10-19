@@ -891,6 +891,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   llave: `ordenes_compra!pagos_programados_orden_compra_id_fkey(…)` y
   `ConfirmarPagos` pinta el error de carga. **Embed entre pagos_programados
   y ordenes_compra → siempre con `!<fkey>`.**
+  **El efectivo no es de tesorería (20-oct-2026, Mario: "a Delia no le
+  tocaría ver y confirmar pagos en efectivo")**: Tesorería (lista, tarjetas
+  y "pagos sin comprobante") filtra `metodo <> 'efectivo'`; el efectivo lo ve
+  y confirma dirección en Efectivo por confirmar. Trigger
+  `pagos_programados_efectivo_guarda` (`20261020120000`): con usuario, solo
+  admin o dirección dejan un pago en efectivo como pagado o confirmado
+  (edge, `fn_oc_confirmar_pagadas` o update directo). Probado: Delia
+  bloqueada, Laura sí.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
