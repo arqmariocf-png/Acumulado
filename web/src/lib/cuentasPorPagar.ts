@@ -182,3 +182,59 @@ export function csvCxp(filas: FilaCxp[], nombreEmpresa: (id: string) => string):
   );
   return "\ufeff" + [enc.join(","), ...lineas].join("\r\n");
 }
+
+/** Una OC con saldo que vence hoy o ya venció (Laura, 20-oct-2026: "en mi
+ * inicio, en cuentas por pagar, el desglose empresa · proveedor que se vence
+ * ese día o estén vencidas"). Vence = fecha OC + días de crédito, o el pago
+ * programado pendiente más próximo; gana la más antigua. */
+export interface OcVencimiento {
+  id: string;
+  id_orden: string;
+  empresa_id: string;
+  proveedor: string | null;
+  proveedor_clave: string | null;
+  saldo: number | string | null;
+  vence: string | null;
+  proximo_pago: string | null;
+}
+
+export interface VencimientoProveedor {
+  empresa_id: string;
+  proveedor: string;
+  ocs: string[];
+  saldo: number;
+  /** La fecha más vieja de sus OC. */
+  desde: string;
+  dias: number;
+  estado: "hoy" | "vencida";
+}
+
+/** Fecha en que vence la OC para pagarla: la más antigua entre el crédito y el pago programado. */
+export function fechaVencimientoOc(o: Pick<OcVencimiento, "vence" | "proximo_pago">): string | null {
+  const f = [o.vence, o.proximo_pago].filter((x): x is string => !!x).map((x) => x.slice(0, 10)).sort();
+  return f[0] ?? null;
+}
+
+/** Agrupa por empresa y proveedor lo que vence hoy o está vencido; vencidas primero, luego por monto. */
+export function vencimientosPorProveedor(ocs: OcVencimiento[], hoy: string): VencimientoProveedor[] {
+  const m = new Map<string, VencimientoProveedor>();
+  for (const o of ocs) {
+    const saldo = Number(o.saldo || 0);
+    const f = fechaVencimientoOc(o);
+    if (!f || f > hoy || saldo <= 0.01) continue;
+    const nombre = (o.proveedor ?? "").trim() || "Sin proveedor";
+    const llave = `${o.empresa_id}|${o.proveedor_clave || normalizarTexto(nombre)}`;
+    const r = m.get(llave) ?? { empresa_id: o.empresa_id, proveedor: nombre, ocs: [], saldo: 0, desde: f, dias: 0, estado: "hoy" as const };
+    r.ocs.push(o.id_orden);
+    r.saldo = Math.round((r.saldo + saldo) * 100) / 100;
+    if (f < r.desde) r.desde = f;
+    m.set(llave, r);
+  }
+  const dia = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  return [...m.values()]
+    .map((r) => {
+      const dias = Math.round((dia(hoy) - dia(r.desde)) / 86400000);
+      return { ...r, ocs: [...r.ocs].sort((a, b) => b.localeCompare(a, "es", { numeric: true })), dias, estado: dias > 0 ? ("vencida" as const) : ("hoy" as const) };
+    })
+    .sort((a, b) => (a.estado === b.estado ? b.saldo - a.saldo : a.estado === "vencida" ? -1 : 1));
+}

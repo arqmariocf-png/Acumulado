@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { deudaCxp, semaforoCredito, type FilaCxp } from "../../lib/cuentasPorPagar";
+import { deudaCxp, semaforoCredito, vencimientosPorProveedor, type FilaCxp, type OcVencimiento } from "../../lib/cuentasPorPagar";
+import { fechaLocal } from "../../lib/reporteChecador";
 import { MisActividades } from "../tareas/MisActividades";
 import { SaldosEmpresas } from "./SaldosEmpresas";
 import { FILTRO_OC_EFECTIVO } from "./EfectivoPorConfirmar";
@@ -78,6 +79,23 @@ function ResumenCxp() {
     },
   });
   const nombre = useMemo(() => new Map((empresas ?? []).map((e) => [e.id, e.nombre])), [empresas]);
+  const hoy = fechaLocal(new Date().toISOString());
+  const { data: ocsVencen } = useQuery({
+    queryKey: ["pagos-programados", "vencen", hoy],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_oc_pagos")
+        .select("id, id_orden, empresa_id, proveedor, proveedor_clave, saldo, vence, proximo_pago")
+        .gt("saldo", 0.01)
+        .eq("pagada_backoffice", false)
+        .neq("autorizacion", "rechazada")
+        .or(`vence.lte.${hoy},proximo_pago.lte.${hoy}`);
+      if (error) throw error;
+      return (data ?? []) as OcVencimiento[];
+    },
+  });
+  const vencen = useMemo(() => vencimientosPorProveedor(ocsVencen ?? [], hoy), [ocsVencen, hoy]);
+  const totalVencen = vencen.reduce((s, v) => s + v.saldo, 0);
 
   const porEmpresa = useMemo(() => {
     const m = new Map<string, { deuda: number; saldoOc: number; rojos: number; conLinea: number }>();
@@ -112,6 +130,42 @@ function ResumenCxp() {
         </Link>
       </div>
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+      <div className="mb-4">
+        <p className="mb-1 text-xs uppercase text-slate-500">
+          Vence hoy o ya venció · {vencen.length} proveedor{vencen.length === 1 ? "" : "es"} · {moneda(totalVencen)}
+        </p>
+        {vencen.length === 0 ? (
+          <p className="text-sm text-slate-400">Nada vence hoy ni hay vencidas.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-1">Empresa</th>
+                  <th className="py-1">Proveedor</th>
+                  <th className="py-1">OC</th>
+                  <th className="py-1">Vence</th>
+                  <th className="py-1 text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vencen.map((v) => (
+                  <tr key={`${v.empresa_id}|${v.proveedor}`} className="border-t border-slate-100">
+                    <td className="py-1.5">{nombre.get(v.empresa_id) ?? "—"}</td>
+                    <td className="py-1.5">{v.proveedor}</td>
+                    <td className="py-1.5 text-xs text-slate-600">{v.ocs.slice(0, 4).join(", ")}{v.ocs.length > 4 ? ` y ${v.ocs.length - 4} más` : ""}</td>
+                    <td className={`py-1.5 text-xs ${v.estado === "vencida" ? "font-medium text-red-700" : "text-amber-700"}`}>
+                      {v.estado === "vencida" ? `vencida hace ${v.dias} día${v.dias === 1 ? "" : "s"}` : "hoy"}
+                    </td>
+                    <td className="py-1.5 text-right font-medium tabular-nums">{moneda(v.saldo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-1 text-xs text-slate-400">Vence = fecha de la OC + días de crédito del proveedor, o el pago ya programado si es antes. Para pagar: <Link to="/finanzas/pagos" className="underline">Programación de pagos</Link>.</p>
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase text-slate-500">

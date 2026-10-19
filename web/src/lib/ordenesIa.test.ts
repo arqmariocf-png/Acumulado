@@ -40,11 +40,12 @@ test("etapa de la OC/OS y si se puede editar", () => {
 
 test("Excel de compras y servicios en un solo archivo", () => {
   const csv = csvOrdenes([
-    { tipo: "OS", folio: "IA-OS-0004", fecha: "2026-10-19", empresa: "CSC", contraparte: "Fletes \"El Rayo\"", proyecto: "Parque Real 63", total: 1160, estado: "por autorizar", fuente: "acumulado" },
-    { tipo: "OC", folio: "41422", fecha: "2026-10-13", empresa: "MCF", contraparte: "Cemex", proyecto: null, total: null, estado: "pagada", fuente: "api" },
+    { tipo: "OS", folio: "IA-OS-0004", fecha: "2026-10-19", empresa: "CSC", contraparte: "Fletes \"El Rayo\"", forma_pago: "Transferencia", proyecto: "Parque Real 63", total: 1160, estado: "por autorizar" },
+    { tipo: "OC", folio: "41422", fecha: "2026-10-13", empresa: "MCF", contraparte: "Cemex", proyecto: null, total: null, estado: "pagada" },
   ]);
   const lineas = csv.split("\n");
-  assert.equal(lineas[0], '"Folio","Tipo","Fecha","Empresa","Proveedor / cliente","Proyecto","Total c/IVA","Estado","Origen"');
-  assert.equal(lineas[1], '"IA-OS-0004","Servicio","2026-10-19","CSC","Fletes ""El Rayo""","Parque Real 63","1160.00","por autorizar","Acumulado"');
-  assert.equal(lineas[2], '"41422","Compra","2026-10-13","MCF","Cemex","","","pagada","backoffice"');
+  // Orden de Laura: Empresa · Folio · Tipo · Proveedor · Tipo de pago · Proyecto · Monto · Fecha · Estatus.
+  assert.equal(lineas[0], '"Empresa","Folio","Tipo","Proveedor / cliente","Tipo de pago","Proyecto","Monto c/IVA","Fecha","Estatus"');
+  assert.equal(lineas[1], '"CSC","IA-OS-0004","Servicio","Fletes ""El Rayo""","Transferencia","Parque Real 63","1160.00","2026-10-19","por autorizar"');
+  assert.equal(lineas[2], '"MCF","41422","Compra","Cemex","","","","2026-10-13","pagada"');
 });

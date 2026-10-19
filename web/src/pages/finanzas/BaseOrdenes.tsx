@@ -45,14 +45,14 @@ export function BaseOrdenes({ desde, hasta, empresaId, nombreEmpresa }: { desde:
     queryFn: async () => {
       let q = supabase
         .from("v_oc_pagos")
-        .select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, pagado, programado, saldo, estatus_backoffice, pagada_backoffice, recepcion_estado, tipo_pago_backoffice")
+        .select("id, id_orden, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, pagado, programado, saldo, estatus_backoffice, pagada_backoffice, recepcion_estado, tipo_pago_backoffice, tipo")
         .gte("fecha_creacion", desde)
         .lte("fecha_creacion", hasta)
         .limit(2000);
       if (empresaId) q = q.eq("empresa_id", empresaId);
       const { data: ocs, error: err } = await q;
       if (err) throw err;
-      const lista = (ocs ?? []) as unknown as OcPago[];
+      const lista = (ocs ?? []) as unknown as (OcPago & { tipo?: string | null })[];
       const pagos = new Map<string, PagoOc[]>();
       const ids = lista.map((o) => o.id);
       for (let i = 0; i < ids.length; i += 200) {
@@ -82,17 +82,20 @@ export function BaseOrdenes({ desde, hasta, empresaId, nombreEmpresa }: { desde:
   const saldo = filas.reduce((s, o) => s + saldoOc(o), 0);
 
   function descargar() {
-    const enc = ["OC", "Fecha", "Empresa", "Proveedor", "Proyecto", "Estatus", "Backoffice", "Total", "Pagado", "Saldo", "Comprobantes"];
+    // Primeras columnas en el orden de Laura (20-oct-2026), igual que el Excel de Órdenes.
+    const enc = ["Empresa", "Folio", "Tipo", "Proveedor", "Tipo de pago", "Proyecto", "Monto c/IVA", "Fecha", "Estatus", "Estatus backoffice", "Pagado", "Saldo", "Comprobantes"];
     const lineas = filas.map((o) =>
       [
-        o.id_orden,
-        o.fecha_creacion ?? "",
         nombreEmpresa.get(o.empresa_id) ?? "",
+        o.id_orden,
+        o.tipo === "OS" ? "Servicio" : "Compra",
         o.proveedor ?? "",
+        o.tipo_pago_backoffice ?? "",
         o.proyecto ?? "",
+        Number(o.total ?? 0).toFixed(2),
+        o.fecha_creacion ?? "",
         ETIQUETA_ETAPA_OC[etapaOc(o)],
         o.estatus_backoffice ?? "",
-        Number(o.total ?? 0).toFixed(2),
         Number(o.pagado ?? 0).toFixed(2),
         saldoOc(o).toFixed(2),
         String((data?.pagos.get(o.id) ?? []).filter((p) => p.comprobante_path).length),

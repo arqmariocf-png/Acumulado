@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { csvCxp, estadoVencimiento, filtrarYOrdenar, llaveCxp, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
+import { csvCxp, estadoVencimiento, fechaVencimientoOc, vencimientosPorProveedor, filtrarYOrdenar, llaveCxp, semaforoCredito, totalesCxp, type FilaCxp } from "./cuentasPorPagar.ts";
 
 function fila(p: Partial<FilaCxp>): FilaCxp {
   return {
@@ -96,4 +96,28 @@ test("la deuda toma el saldo de OC aunque no esté facturado (Cemex por empresa)
   const t = totalesCxp([aep, erg]);
   assert.equal(t.deuda, 240_000);
   assert.equal(filtrarYOrdenar([erg, aep], "", "", "por_pagar", true)[0].empresa_id, "aep");
+});
+
+test("vencimientos del día por empresa y proveedor", () => {
+  const oc = (id_orden: string, empresa_id: string, proveedor: string, saldo: number, vence: string | null, proximo_pago: string | null = null) => ({ id: id_orden, id_orden, empresa_id, proveedor, proveedor_clave: proveedor.toUpperCase(), saldo, vence, proximo_pago });
+  const filas = vencimientosPorProveedor(
+    [
+      oc("41000", "AEP", "Cemex", 1000, "2026-10-15"),
+      oc("41010", "AEP", "Cemex", 500, "2026-10-20"),
+      oc("41020", "ERG", "Cemex", 300, null, "2026-10-20"),
+      oc("41030", "AEP", "Cruz Azul", 800, "2026-10-25"), // aún no vence
+      oc("41040", "AEP", "Cruz Azul", 200, "2026-10-25", "2026-10-18"), // el pago programado ya pasó
+      oc("41050", "AEP", "Truper", 0, "2026-10-01"), // sin saldo
+    ],
+    "2026-10-20",
+  );
+  assert.deepEqual(
+    filas.map((f) => [f.empresa_id, f.proveedor, f.saldo, f.estado, f.dias, f.ocs.join(",")]),
+    [
+      ["AEP", "Cemex", 1500, "vencida", 5, "41010,41000"],
+      ["AEP", "Cruz Azul", 200, "vencida", 2, "41040"],
+      ["ERG", "Cemex", 300, "hoy", 0, "41020"],
+    ],
+  );
+  assert.equal(fechaVencimientoOc({ vence: "2026-10-25", proximo_pago: "2026-10-18" }), "2026-10-18");
 });

@@ -1461,6 +1461,21 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `?tipo=OV` = pestaña de ventas) y "Descargar Excel" (`csvOrdenes` en
   `lib/ordenesIa.ts`, con pruebas). Menú: una entrada "Órdenes de compra y
   de servicio (OC / OS)" + la de OV.
+- **Tres de Laura (20-oct-2026, WhatsApp)**: (1) en su inicio, Cuentas por
+  pagar arranca con "Vence hoy o ya venció": empresa · proveedor · OC ·
+  días vencida · saldo (`vencimientosPorProveedor` en
+  `lib/cuentasPorPagar.ts`, con pruebas; vence = la más antigua entre
+  `v_oc_pagos.vence` —fecha OC + días de crédito— y `proximo_pago`; con
+  saldo, no rechazada, no pagada en el backoffice). Al 20-oct: 8
+  proveedores, ~$366 mil (Cruz Azul $221 mil desde el 8-ago). (2) Excel de
+  órdenes en su orden: **Empresa · Folio · Tipo · Proveedor · Tipo de pago ·
+  Proyecto · Monto · Fecha · Estatus** (`COLUMNAS_EXCEL_ORDENES`/`csvOrdenes`;
+  tipo de pago = `tipo_pago_backoffice` u `ordenes_venta.forma_pago`); la
+  Base de OC y pagos usa las mismas 9 primero y luego estatus backoffice,
+  pagado, saldo y comprobantes. (3) **"Proyecto X"** sale siempre en la
+  lista de obras al capturar (`fn_ordenes_catalogo_captura` lo excluía a
+  propósito; es el proyecto de lo que no es de obra en el backoffice: 301 OC
+  en 7 empresas) (`20261020090000`).
 - Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
   `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
   producto del catálogo.
