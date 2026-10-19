@@ -880,6 +880,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   en ámbar "sin RFC"; se captura en "editar" de los datos bancarios. Al
   20-oct solo 31 de 64 pagos pendientes lo tienen (fichas de proveedor: 0;
   CFDI recibidos con el mismo nombre: 1).
+  **"Confirmar varios pagos" vacío (20-oct-2026, Mario: "no se puede dar
+  click")**: la lista y la vista de pagos de la Base de OC embebían
+  `ordenes_compra(…)` desde `pagos_programados`, pero hay DOS llaves entre
+  esas tablas (`pagos_programados.orden_compra_id` y
+  `ordenes_compra.pago_programado_id`) y PostgREST respondía 300
+  (PGRST201, ambigua); la pantalla no mostraba el error y salía "No hay
+  pagos por confirmar". Delia acabó subiendo comprobantes uno por uno (8 el
+  19-oct) y ningún pago se había confirmado nunca. Ahora el embed lleva la
+  llave: `ordenes_compra!pagos_programados_orden_compra_id_fkey(…)` y
+  `ConfirmarPagos` pinta el error de carga. **Embed entre pagos_programados
+  y ordenes_compra → siempre con `!<fkey>`.**
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
