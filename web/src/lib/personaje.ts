@@ -338,3 +338,47 @@ export function recorteCentral(ancho: number, alto: number, zoom = 1): { x: numb
   const y = Math.max(0, Math.min(alto - lado, Math.round((alto - lado) / 2 - lado * 0.06)));
   return { x: Math.round((ancho - lado) / 2), y, lado };
 }
+
+// --- Retrato realista (18-oct-2026, Mario: "el avatar me gustaría más realista") ---------
+
+/** Retoque del retrato realista (lado × lado, RGBA): estira los niveles de
+ * luz (1 % más oscuro → negro, 1 % más claro → blanco, sin pasar de ×1.8
+ * para no amplificar ruido), aviva un poco el color y oscurece las esquinas
+ * como foto de estudio. Devuelve bytes nuevos, opacos. */
+export function retocarRetrato(datos: Uint8ClampedArray, lado: number, opciones: { saturacion?: number; vineta?: number } = {}): Uint8ClampedArray {
+  const saturacion = opciones.saturacion ?? 1.12;
+  const vineta = opciones.vineta ?? 0.3;
+  const n = lado * lado;
+  const hist = new Array<number>(256).fill(0);
+  const lum = (i: number) => Math.round(0.299 * datos[i] + 0.587 * datos[i + 1] + 0.114 * datos[i + 2]);
+  for (let p = 0; p < n; p++) hist[lum(p * 4)]++;
+  const corte = Math.max(1, Math.floor(n * 0.01));
+  let bajo = 0;
+  for (let acum = 0; bajo < 255 && acum + hist[bajo] < corte; bajo++) acum += hist[bajo];
+  let alto = 255;
+  for (let acum = 0; alto > 0 && acum + hist[alto] < corte; alto--) acum += hist[alto];
+  const rango = Math.max(alto - bajo, 255 / 1.8);
+  const centro = (bajo + alto) / 2;
+  const estira = (v: number) => (v - centro) * (255 / rango) + 127.5;
+  const sal = new Uint8ClampedArray(datos.length);
+  const c = (lado - 1) / 2;
+  for (let y = 0; y < lado; y++) {
+    for (let x = 0; x < lado; x++) {
+      const i = (y * lado + x) * 4;
+      let r = estira(datos[i]);
+      let g = estira(datos[i + 1]);
+      let b = estira(datos[i + 2]);
+      const gris = 0.299 * r + 0.587 * g + 0.114 * b;
+      r = gris + (r - gris) * saturacion;
+      g = gris + (g - gris) * saturacion;
+      b = gris + (b - gris) * saturacion;
+      const d = Math.hypot(x - c, y - c) / (lado / 2);
+      const f = 1 - vineta * Math.max(0, (d - 0.6) / 0.8) ** 2;
+      sal[i] = r * f;
+      sal[i + 1] = g * f;
+      sal[i + 2] = b * f;
+      sal[i + 3] = 255;
+    }
+  }
+  return sal;
+}
