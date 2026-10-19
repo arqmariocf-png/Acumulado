@@ -875,6 +875,11 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   filtra por `?empresa=<id>` (por pagar hoy, pagados y programados para
   después; resaltada, "ver todas") y baja a `#por-pagar`; en el inicio
   (compacto) liga a `/finanzas/tesoreria?empresa=<id>#por-pagar`.
+  **RFC en cada pago (20-oct-2026, Mario)**: bajo el proveedor sale "RFC …"
+  (`v_pagos_programados.rfc_proveedor`, de `proveedores_datos_bancarios`) o
+  en ámbar "sin RFC"; se captura en "editar" de los datos bancarios. Al
+  20-oct solo 31 de 64 pagos pendientes lo tienen (fichas de proveedor: 0;
+  CFDI recibidos con el mismo nombre: 1).
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
