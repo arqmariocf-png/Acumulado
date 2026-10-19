@@ -1,5 +1,5 @@
-/** Retrato pixel-art del personaje sobre el color de su clase; sin avatar,
- * sus iniciales. */
+/** Retrato del personaje (realista en JPEG o pixel-art en PNG) sobre el
+ * color de su clase; sin avatar, sus iniciales. */
 export function AvatarPixel({ avatar, nombre, color = "#475569", tamano = 64, nivel }: { avatar: string | null | undefined; nombre: string; color?: string; tamano?: number; nivel?: number }) {
   const iniciales = nombre
     .split(/\s+/)
@@ -14,7 +14,12 @@ export function AvatarPixel({ avatar, nombre, color = "#475569", tamano = 64, ni
         style={{ background: `linear-gradient(160deg, ${color}, ${color}cc)` }}
       >
         {avatar ? (
-          <img src={avatar} alt={nombre} className="h-full w-full" style={{ imageRendering: "pixelated" }} />
+          <img
+            src={avatar}
+            alt={nombre}
+            className="h-full w-full object-cover"
+            style={{ imageRendering: avatar.startsWith("data:image/png") ? "pixelated" : "auto" }}
+          />
         ) : (
           <span className="font-mono font-bold text-white" style={{ fontSize: tamano * 0.36 }}>
             {iniciales || "?"}

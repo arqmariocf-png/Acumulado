@@ -1578,6 +1578,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `pixelar` de `lib/personaje.ts`: contraste, paleta de 24 colores con tonos
   de piel, óvalo transparente y contorno de sprite). **La foto nunca se
   sube**: solo se guarda el PNG chico.
+  **Realista (19-oct-2026, Mario: "el avatar me gustaría más realista")**:
+  estilo por defecto "📸 Realista" (el pixel-art queda como "👾 Videojuego"):
+  retrato de 192 px con `retocarRetrato` (niveles 1-99 %, hasta ×1.8,
+  color +12 %, viñeta) guardado en JPEG (calidad 0.86 → 0.58 hasta caber en
+  60 KB); el check de `personajes.avatar` acepta png o jpeg
+  (`20261018130000`). Ojo: el realista sí es un retrato reconocible que ve la
+  organización (la foto original sigue sin subirse).
 - `20261018100000_personajes.sql` (aplicada): tabla `personajes`
   (profile_id, grupo por trigger, `avatar` data URL PNG ≤60 KB, título
   opcional); la ve su organización, la escribe solo su dueño (no pendiente);
@@ -1667,6 +1674,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   1 pago rechazado —máximo $538.42/semana—, en 2 aceptado; descuento
   aplicado deja saldo 500; Jonathan no ve el estudio ni cuentas ajenas;
   Alma crea cargo de punto de venta pero no préstamo).
+- **El sueldo lo fija RH (19-oct-2026, Mario: "en recursos humanos Raúl,
+  Eréndira y Fernando estipulan el salario de cada uno")**: trigger
+  `cuentas_nomina_antes` solo deja poner o cambiar `sueldo_semanal` a rol
+  rh o admin (dirección solo si es el mismo del contrato vigente) y guarda
+  `sueldo_por/_por_nombre/_en`; en el Estudio el campo está bloqueado para
+  dirección ("lo fijó RH" / "del contrato"). Dirección sigue autorizando
+  líneas. Probado en rollback: Raúl fija $3,500 a Brenda, Laura autoriza
+  la línea pero no puede cambiar el sueldo (`20261018130000`). El sueldo del
+  contrato (`contrataciones.sueldo_semanal`) solo existe para 4 personas:
+  las demás se capturan en el Estudio.
 - **Ojo 18-oct**: solo 4 de 35 personas tienen sueldo (Fabricio, Jonathan
   Cáceres, José Luis Del Castillo, Raúl Molina) y varias salen con 0 meses
   de antigüedad (fecha de ingreso mal capturada): RH los corrige antes de

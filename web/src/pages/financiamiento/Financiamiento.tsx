@@ -141,7 +141,9 @@ export function Financiamiento() {
 
 function Estudio() {
   const qc = useQueryClient();
-  const { soloConsulta } = useAuth();
+  const { soloConsulta, perfil } = useAuth();
+  // El sueldo lo fija Recursos Humanos (Mario, 18-oct-2026); dirección autoriza líneas.
+  const fijaSueldo = perfil?.rol === "rh" || perfil?.rol === "admin";
   const estudio = useEstudio();
   const config = useConfig();
   const [filtro, setFiltro] = useState<"todos" | "con_acceso" | "falta_sueldo">("todos");
@@ -180,6 +182,7 @@ function Estudio() {
             {k === "todos" ? "Todos" : k === "con_acceso" ? "Con acceso" : "Falta sueldo"}
           </button>
         ))}
+        {!fijaSueldo && <span className="text-xs text-amber-700">El sueldo semanal lo fija Recursos Humanos.</span>}
         <span className="text-xs text-slate-500">Puntaje: antigüedad 30 · asistencia 15 · cumplimiento 15 · cuidado de herramienta/EPP 10 · historial de pago 30.</span>
       </div>
       {guardar.error && <p className="text-sm text-red-600">{(guardar.error as Error).message}</p>}
@@ -219,7 +222,7 @@ function Estudio() {
                       <SueldoEditable
                         valor={f.sueldo_semanal}
                         origen={f.sueldo_origen}
-                        deshabilitado={soloConsulta}
+                        deshabilitado={soloConsulta || !fijaSueldo}
                         onGuardar={(v) => guardar.mutate({ profile_id: f.profile_id, sueldo_semanal: v })}
                       />
                     </td>
@@ -331,7 +334,7 @@ function SueldoEditable({ valor, origen, deshabilitado, onGuardar }: { valor: nu
           guardar
         </button>
       )}
-      {!cambiado && origen && <span className="text-[10px] text-slate-400">{origen}</span>}
+      {!cambiado && origen && <span className="text-[10px] text-slate-400">{origen === "captura" ? "lo fijó RH" : origen === "contrato" ? "del contrato" : origen}</span>}
     </span>
   );
 }

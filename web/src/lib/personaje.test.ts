@@ -9,6 +9,7 @@ import {
   nivelDe,
   oficios,
   pixelar,
+  retocarRetrato,
   rangoDe,
   recorteCentral,
   xpParaNivel,
@@ -108,4 +109,26 @@ test("pixel-art: óvalo transparente, paleta y contorno", () => {
   assert.deepEqual(px(5, 0), [20, 18, 24, 255]); // contorno arriba
   assert.deepEqual(recorteCentral(640, 480), { x: 80, y: 0, lado: 480 });
   assert.deepEqual(recorteCentral(480, 640, 1.25), { x: 48, y: 105, lado: 384 });
+});
+
+test("retrato realista: estira niveles, aviva color y oscurece esquinas", () => {
+  const lado = 20;
+  const datos = new Uint8ClampedArray(lado * lado * 4);
+  // Foto lavada: mitad 100, mitad 150 (poco contraste), con un tono cálido.
+  for (let p = 0; p < lado * lado; p++) {
+    const v = p < (lado * lado) / 2 ? 100 : 150;
+    datos.set([v + 10, v, v - 10, 255], p * 4);
+  }
+  const s = retocarRetrato(datos, lado, { vineta: 0 });
+  const px = (x: number, y: number) => Array.from(s.slice((y * lado + x) * 4, (y * lado + x) * 4 + 4));
+  const [r1, g1, b1, a1] = px(10, 2); // zona oscura
+  const [, g2] = px(10, 17); // zona clara
+  assert.equal(a1, 255);
+  assert.ok(g2 - g1 > 50 * 1.5, "el contraste sube");
+  assert.ok(r1 - b1 > 20, "el color se aviva");
+  const v = retocarRetrato(datos, lado);
+  const vx = (x: number, y: number) => v[(y * lado + x) * 4 + 1];
+  assert.equal(v[(10 * lado + 10) * 4 + 1], s[(10 * lado + 10) * 4 + 1]); // el centro no cambia
+  assert.ok(g2 - vx(10, 17) <= 3, "cerca del centro casi nada");
+  assert.ok(vx(0, 19) < g2, "la esquina se oscurece");
 });

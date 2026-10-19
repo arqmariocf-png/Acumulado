@@ -5,7 +5,7 @@ import { useAuth } from "../../lib/auth";
 import { claseDe } from "../../lib/personaje";
 import { CamaraSelfie } from "../CamaraSelfie";
 import { AvatarPixel } from "./AvatarPixel";
-import { generarAvatar } from "./datos";
+import { generarAvatar, type EstiloAvatar } from "./datos";
 
 const DETALLES = [
   { lado: 28, etiqueta: "Retro" },
@@ -13,7 +13,8 @@ const DETALLES = [
   { lado: 56, etiqueta: "Detallado" },
 ];
 
-/** Crear o cambiar el personaje: selfie de frente → pixel-art → guardar. */
+/** Crear o cambiar el personaje: selfie de frente → retrato realista o
+ * pixel-art → guardar. */
 export function CrearAvatar({ alTerminar }: { alTerminar?: () => void }) {
   const { perfilReal, soloConsulta } = useAuth();
   const qc = useQueryClient();
@@ -21,6 +22,7 @@ export function CrearAvatar({ alTerminar }: { alTerminar?: () => void }) {
   const [camara, setCamara] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [foto, setFoto] = useState<Blob | null>(null);
+  const [estilo, setEstilo] = useState<EstiloAvatar>("realista");
   const [lado, setLado] = useState(40);
   const [zoom, setZoom] = useState(1.5);
   const [vista, setVista] = useState<string | null>(null);
@@ -30,13 +32,13 @@ export function CrearAvatar({ alTerminar }: { alTerminar?: () => void }) {
   useEffect(() => {
     if (!foto) return;
     let vigente = true;
-    generarAvatar(foto, lado, zoom)
+    generarAvatar(foto, lado, zoom, estilo)
       .then((url) => vigente && setVista(url))
       .catch((e: Error) => vigente && setAviso(e.message));
     return () => {
       vigente = false;
     };
-  }, [foto, lado, zoom]);
+  }, [foto, lado, zoom, estilo]);
 
   const sinCamara = useCallback((motivo: string) => {
     setCamara(false);
@@ -61,8 +63,8 @@ export function CrearAvatar({ alTerminar }: { alTerminar?: () => void }) {
   return (
     <div className="space-y-3 rounded-lg border-2 border-slate-900 bg-amber-50 p-4">
       <p className="text-sm text-slate-700">
-        Tómate una foto <b>de frente</b>, con la cara al centro y buena luz. El sistema la convierte en tu personaje pixel-art; <b>la foto no se guarda</b>, solo
-        el muñequito.
+        Tómate una foto <b>de frente</b>, con la cara al centro y buena luz. Elige <b>realista</b> (un retrato chico y retocado, que verá tu equipo) o{" "}
+        <b>videojuego</b> (muñequito pixel-art). La foto original no se guarda, solo el retrato que elijas.
       </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" disabled={soloConsulta} className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={() => setCamara(true)}>
@@ -99,6 +101,18 @@ export function CrearAvatar({ alTerminar }: { alTerminar?: () => void }) {
           <AvatarPixel avatar={vista} nombre={perfilReal?.nombre ?? ""} color={clase.color} tamano={128} />
           <div className="space-y-2 text-sm">
             <div className="flex gap-1">
+              {(["realista", "pixel"] as const).map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setEstilo(e)}
+                  className={`rounded border px-2 py-1 ${estilo === e ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}
+                >
+                  {e === "realista" ? "📸 Realista" : "👾 Videojuego"}
+                </button>
+              ))}
+            </div>
+            <div className={`flex gap-1 ${estilo === "pixel" ? "" : "hidden"}`}>
               {DETALLES.map((d) => (
                 <button
                   key={d.lado}
