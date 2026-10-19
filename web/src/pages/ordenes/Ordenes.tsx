@@ -26,6 +26,7 @@ interface FilaOrden {
   folio: string;
   empresa_id: string;
   contraparte: string | null;
+  forma_pago: string | null;
   proyecto: string | null;
   total: number | null;
   fecha: string | null;
@@ -64,7 +65,7 @@ export function Ordenes() {
       if (vista === "OV") {
         let q = supabase
           .from("ordenes_venta")
-          .select("id, id_ov, empresa_id, cliente, proyecto, total, fecha_ov, fuente, creada_por, cancelada_en, created_at")
+          .select("id, id_ov, empresa_id, cliente, forma_pago, proyecto, total, fecha_ov, fuente, creada_por, cancelada_en, created_at")
           .order("fecha_ov", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(300);
@@ -80,6 +81,7 @@ export function Ordenes() {
             folio: o.id_ov as string,
             empresa_id: o.empresa_id as string,
             contraparte: o.cliente as string | null,
+            forma_pago: o.forma_pago as string | null,
             proyecto: o.proyecto as string | null,
             total: o.total as number | null,
             fecha: o.fecha_ov as string | null,
@@ -93,7 +95,7 @@ export function Ordenes() {
       }
       let q = supabase
         .from("v_oc_pagos")
-        .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice")
+        .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice, tipo_pago_backoffice")
         .in("tipo", filtro === "todas" ? ["OC", "OS"] : [filtro])
         .order("fecha_creacion", { ascending: false })
         .limit(300);
@@ -116,6 +118,7 @@ export function Ordenes() {
           folio: o.id_orden as string,
           empresa_id: o.empresa_id as string,
           contraparte: o.proveedor as string | null,
+          forma_pago: o.tipo_pago_backoffice as string | null,
           proyecto: o.proyecto as string | null,
           total: o.total as number | null,
           fecha: o.fecha_creacion as string | null,

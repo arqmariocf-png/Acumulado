@@ -107,12 +107,16 @@ export function ordenEditable(o: { fuente: string; autorizacion?: string | null;
 
 /** Excel (CSV) de la lista de órdenes: compras y servicios juntos en un solo
  * archivo (19-oct-2026). Más reciente primero, como en pantalla. */
-export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; proyecto: string | null; total: number | null; estado: string; fuente: string }[]): string {
+/** Columnas en el orden que pidió Laura (20-oct-2026): Empresa · Folio · Tipo ·
+ * Proveedor · Tipo de pago · Proyecto · Monto · Fecha · Estatus. */
+export const COLUMNAS_EXCEL_ORDENES = ["Empresa", "Folio", "Tipo", "Proveedor / cliente", "Tipo de pago", "Proyecto", "Monto c/IVA", "Fecha", "Estatus"];
+
+export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string }[]): string {
   const celda = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const tipoTexto: Record<TipoOrden, string> = { OC: "Compra", OS: "Servicio", OV: "Venta" };
-  const renglones = [["Folio", "Tipo", "Fecha", "Empresa", "Proveedor / cliente", "Proyecto", "Total c/IVA", "Estado", "Origen"]];
+  const renglones = [COLUMNAS_EXCEL_ORDENES];
   for (const o of filas) {
-    renglones.push([o.folio, tipoTexto[o.tipo], o.fecha ?? "", o.empresa, o.contraparte ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.estado, o.fuente === "api" ? "backoffice" : o.fuente === "acumulado" ? "Acumulado" : o.fuente]);
+    renglones.push([o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado]);
   }
   return renglones.map((r) => r.map(celda).join(",")).join("\n");
 }
