@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
@@ -83,7 +83,20 @@ function hoyIso(): string {
 export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
   const queryClient = useQueryClient();
   const hoy = hoyIso();
-  const [filtroEmpresa, setFiltroEmpresa] = useState("");
+  // ?empresa=<id> (20-oct-2026, Mario: "cuando doy click [en una empresa del
+  // semáforo] debe llevarme a los pagos por hacer de esa empresa").
+  const [params, setParams] = useSearchParams();
+  const filtroEmpresa = compacto ? "" : params.get("empresa") ?? "";
+  const setFiltroEmpresa = (id: string) => {
+    const p = new URLSearchParams(params);
+    if (id) p.set("empresa", id);
+    else p.delete("empresa");
+    setParams(p, { replace: true });
+  };
+  const irAPagos = (id: string) => {
+    setFiltroEmpresa(id);
+    requestAnimationFrame(() => document.getElementById("por-pagar")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
   const [aviso, setAviso] = useState<string | null>(null);
   const { data: saldos } = useSaldosDia(hoy);
   const { data: cuentas } = useQuery({
@@ -114,8 +127,8 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
         (saldos ?? []).map((s) => ({ empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre, saldo_final: Number(s.saldo_final), salidas: Number(s.salidas) })),
         pagos ?? [],
         hoy,
-      ).filter((e) => !filtroEmpresa || e.empresa_id === filtroEmpresa),
-    [saldos, pagos, hoy, filtroEmpresa],
+      ),
+    [saldos, pagos, hoy],
   );
   const cuentaTexto = useMemo(() => new Map((cuentas ?? []).map((c) => [c.id, `${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`])), [cuentas]);
 
@@ -193,8 +206,10 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
       <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {empresas.map((e) => {
           const s = semaforoTesoreria(e);
-          return (
-            <div key={e.empresa_id} className={`rounded border p-3 ${COLOR[s.color]}`}>
+          const elegida = filtroEmpresa === e.empresa_id;
+          const clase = `block rounded border p-3 text-left hover:shadow-sm ${COLOR[s.color]} ${elegida ? "ring-2 ring-slate-900" : ""} ${filtroEmpresa && !elegida ? "opacity-60" : ""}`;
+          const contenido = (
+            <>
               <div className="flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 rounded-full ${PUNTO[s.color]}`} />
                 <p className="truncate text-sm font-semibold text-slate-900">{e.empresa_nombre}</p>
@@ -216,7 +231,18 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
                 <dt className="font-medium text-slate-800">Saldo al cierre</dt>
                 <dd className={`text-right font-medium tabular-nums ${s.disponible < 0 ? "text-red-700" : "text-slate-900"}`}>{moneda(s.disponible)}</dd>
               </dl>
-            </div>
+              <p className="mt-1 text-[11px] text-slate-500 underline">{elegida ? "ver todas las empresas" : "ver sus pagos por hacer →"}</p>
+            </>
+          );
+          // Clic = los pagos por hacer de esa empresa (en el inicio lleva a Tesorería ya filtrada).
+          return compacto ? (
+            <Link key={e.empresa_id} to={`/finanzas/tesoreria?empresa=${e.empresa_id}#por-pagar`} className={clase}>
+              {contenido}
+            </Link>
+          ) : (
+            <button key={e.empresa_id} type="button" onClick={() => (elegida ? setFiltroEmpresa("") : irAPagos(e.empresa_id))} className={clase}>
+              {contenido}
+            </button>
           );
         })}
         {!isLoading && empresas.length === 0 && <p className="text-sm text-slate-400">Sin saldos ni pagos para hoy.</p>}
@@ -234,7 +260,15 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
         </p>
       ) : (
         <>
-          <Seccion titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
+          {filtroEmpresa && (
+            <p className="mb-2 text-sm text-slate-600">
+              Mostrando solo {empresas.find((e) => e.empresa_id === filtroEmpresa)?.empresa_nombre ?? "una empresa"} ·{" "}
+              <button type="button" onClick={() => setFiltroEmpresa("")} className="underline">
+                ver todas
+              </button>
+            </p>
+          )}
+          <Seccion id="por-pagar" titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
           <Seccion titulo="Pagados hoy" grupos={porEmpresa(pagadosHoy)} vacio="Todavía no se marca ningún pago hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
           <Seccion titulo="Programados a pago para después" grupos={porEmpresa(proximos)} vacio="Dirección no ha programado pagos para los próximos días." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
           <ConfirmarPagos
@@ -250,10 +284,10 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
   );
 }
 
-function Seccion({ titulo, grupos, vacio, render }: { titulo: string; grupos: [string, PagoVista[]][]; vacio: string; render: (p: PagoVista) => React.ReactNode }) {
+function Seccion({ id, titulo, grupos, vacio, render }: { id?: string; titulo: string; grupos: [string, PagoVista[]][]; vacio: string; render: (p: PagoVista) => React.ReactNode }) {
   const total = grupos.reduce((s, [, l]) => s + l.reduce((t, p) => t + Number(p.monto), 0), 0);
   return (
-    <div className="mb-4 rounded border border-slate-200 bg-white">
+    <div id={id} className="mb-4 scroll-mt-20 rounded border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
         <p className="text-sm font-semibold text-slate-700">{titulo}</p>
         <p className="text-sm tabular-nums text-slate-600">{total ? moneda(total) : ""}</p>
