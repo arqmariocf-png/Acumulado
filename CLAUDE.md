@@ -869,6 +869,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   sincronización desde el 29-sep 21:15 UTC; los trabajos de pg_cron fijan
   `set statement_timeout = '10min'` antes de llamar (`20260930130000`; un
   SET dentro de la función no sirve).
+  **Clic en la empresa (20-oct-2026, Mario: "en el reporte de tesorería de
+  Delia, cuando doy click, debe llevarme a los pagos por hacer de la empresa
+  específica")**: cada tarjeta del semáforo es clic: en `/finanzas/tesoreria`
+  filtra por `?empresa=<id>` (por pagar hoy, pagados y programados para
+  después; resaltada, "ver todas") y baja a `#por-pagar`; en el inicio
+  (compacto) liga a `/finanzas/tesoreria?empresa=<id>#por-pagar`.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
