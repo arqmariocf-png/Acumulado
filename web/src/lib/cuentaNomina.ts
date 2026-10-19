@@ -40,9 +40,34 @@ export interface ConfigFinanciamiento {
   salario_minimo_diario: number;
   pct_excedente: number;
   antiguedad_minima_meses: number;
+  /** Préstamos con intereses (19-oct-2026): los otorga la financiera, nunca
+   * el patrón (art. 111 LFT). Sin financiera o con tasa 0 no hay intereses. */
+  acreditante_empresa_id?: string | null;
+  tasa_anual_prestamos?: number;
+  tasa_moratoria_anual?: number;
+  iva_intereses?: number;
+  /** Tope del descuento semanal de un préstamo con intereses, % del sueldo. */
+  capacidad_pago_pct?: number;
+  plazo_max_semanas_intereses?: number;
 }
 
-export const CONFIG_LEY_2026: ConfigFinanciamiento = { salario_minimo_diario: 315.04, pct_excedente: 30, antiguedad_minima_meses: 3 };
+export const CONFIG_LEY_2026: ConfigFinanciamiento = {
+  salario_minimo_diario: 315.04,
+  pct_excedente: 30,
+  antiguedad_minima_meses: 3,
+  acreditante_empresa_id: null,
+  tasa_anual_prestamos: 0,
+  tasa_moratoria_anual: 0,
+  iva_intereses: 16,
+  capacidad_pago_pct: 30,
+  plazo_max_semanas_intereses: 26,
+};
+
+/** ¿Los préstamos de esta persona llevan intereses? Solo con financiera y
+ * tasa, y si la financiera no es su patrón. */
+export function prestamoConIntereses(c: ConfigFinanciamiento, empresaTrabajador: string | null | undefined): boolean {
+  return !!c.acreditante_empresa_id && (c.tasa_anual_prestamos ?? 0) > 0 && c.acreditante_empresa_id !== empresaTrabajador;
+}
 
 /** Topes de ley con el sueldo semanal. */
 export function topesLegales(sueldoSemanal: number | null | undefined, c: ConfigFinanciamiento = CONFIG_LEY_2026) {

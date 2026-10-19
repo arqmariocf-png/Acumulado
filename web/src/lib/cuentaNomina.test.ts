@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  CONFIG_LEY_2026,
   bloqueos,
   calendarioDescuentos,
   descuentoPorPago,
   dictamen,
   nivelPorClave,
   pagosMinimos,
+  prestamoConIntereses,
   proximoViernes,
   puntaje,
   topesLegales,
@@ -83,4 +85,12 @@ test("pagos y calendario de descuentos (viernes, sin intereses)", () => {
     { fecha: "2026-10-30", monto: 333.34 },
     { fecha: "2026-11-06", monto: 333.32 },
   ]);
+});
+
+test("intereses solo de la financiera, nunca del patrón (art. 111 LFT)", () => {
+  const c = { ...CONFIG_LEY_2026, acreditante_empresa_id: "fin", tasa_anual_prestamos: 60 };
+  assert.equal(prestamoConIntereses(c, "erg"), true);
+  assert.equal(prestamoConIntereses(c, "fin"), false);
+  assert.equal(prestamoConIntereses({ ...c, tasa_anual_prestamos: 0 }, "erg"), false);
+  assert.equal(prestamoConIntereses(CONFIG_LEY_2026, "erg"), false);
 });

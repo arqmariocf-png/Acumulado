@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { abrirParaImprimir } from "../../lib/imprimir";
+import { amortizar, htmlDocumentoFirmado, type FirmaGuardada } from "../../lib/creditoNomina";
 import {
   CONFIG_LEY_2026,
   NIVELES,
@@ -10,6 +12,7 @@ import {
   dictamen,
   nivelPorClave,
   pagosMinimos,
+  prestamoConIntereses,
   proximoViernes,
   type ConfigFinanciamiento,
   type FactoresEstudio,
@@ -65,6 +68,18 @@ interface Cargo {
   siguiente_descuento: number;
   ultimo_descuento: string | null;
   created_at: string;
+  total: number;
+  interes: number;
+  iva_interes: number;
+  tasa_anual: number;
+  cat: number | null;
+  acreditante: string | null;
+}
+
+interface FirmaRh extends FirmaGuardada {
+  id: string;
+  profile_id: string;
+  tipo: "afiliacion" | "consentimiento" | "pagare";
 }
 
 function useConfig() {
@@ -78,6 +93,38 @@ function useConfig() {
     },
     enabled: !!perfilReal?.grupo_id,
   });
+}
+
+function useEmpresas() {
+  return useQuery({
+    queryKey: ["empresas-financiamiento"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("empresas").select("id, nombre, codigo").order("nombre");
+      if (error) throw error;
+      return (data ?? []) as { id: string; nombre: string; codigo: string | null }[];
+    },
+  });
+}
+
+function useFirmas() {
+  return useQuery({
+    queryKey: ["credito-firmas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("credito_firmas")
+        .select("id, profile_id, tipo, titulo, contenido, firma, hash, firmante_nombre, firmado_en, ip, version, revocada_en, revocada_motivo")
+        .order("firmado_en", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as FirmaRh[];
+    },
+  });
+}
+
+/** ¿Firmó afiliación y consentimiento (sin revocar)? */
+function afiliados(firmas: FirmaRh[] | undefined): Set<string> {
+  const por = new Map<string, Set<string>>();
+  for (const f of firmas ?? []) if (!f.revocada_en) por.set(f.profile_id, new Set([...(por.get(f.profile_id) ?? []), f.tipo]));
+  return new Set([...por.entries()].filter(([, t]) => t.has("afiliacion") && t.has("consentimiento")).map(([id]) => id));
 }
 
 function useEstudio() {
@@ -106,6 +153,7 @@ const PESTANAS = [
   { clave: "estudio", titulo: "Estudio" },
   { clave: "cuentas", titulo: "Cuentas y cargos" },
   { clave: "descuentos", titulo: "Descuentos de la semana" },
+  { clave: "documentos", titulo: "Documentos firmados" },
   { clave: "reglas", titulo: "Reglas" },
 ];
 
@@ -116,8 +164,8 @@ export function Financiamiento() {
     <div className="mx-auto max-w-6xl">
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Cuentas de nómina y financiamiento</h1>
       <p className="mb-3 text-sm text-slate-500">
-        Línea de crédito por trabajador que crece con su antigüedad, comportamiento y pagos; compras en el mostrador, préstamos y anticipos se descuentan vía
-        nómina <b>sin intereses</b> y dentro de los topes de ley.
+        Línea de crédito por trabajador que crece con su antigüedad, comportamiento y pagos. Cada trabajador firma en su app su afiliación, su consentimiento de
+        descuento y el pagaré de cada préstamo. Compras y anticipos van <b>sin intereses</b>; los préstamos con intereses los otorga la financiera (Reglas).
       </p>
       <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
         {PESTANAS.map((p) => (
@@ -134,6 +182,7 @@ export function Financiamiento() {
       {actual === "estudio" && <Estudio />}
       {actual === "cuentas" && <Cuentas />}
       {actual === "descuentos" && <Descuentos />}
+      {actual === "documentos" && <Documentos />}
       {actual === "reglas" && <Reglas />}
     </div>
   );
@@ -146,6 +195,8 @@ function Estudio() {
   const fijaSueldo = perfil?.rol === "rh" || perfil?.rol === "admin";
   const estudio = useEstudio();
   const config = useConfig();
+  const firmas = useFirmas();
+  const conFirma = afiliados(firmas.data);
   const [filtro, setFiltro] = useState<"todos" | "con_acceso" | "falta_sueldo">("todos");
   const [abierto, setAbierto] = useState<string | null>(null);
   const filas = useMemo(
@@ -215,6 +266,9 @@ function Estudio() {
                       <div className="text-xs text-slate-500">
                         {f.puesto ?? "—"}
                         {f.empresa ? ` · ${f.empresa}` : ""}
+                      </div>
+                      <div className={`text-[11px] ${conFirma.has(f.profile_id) ? "text-emerald-700" : "text-slate-400"}`}>
+                        {conFirma.has(f.profile_id) ? "✍️ afiliación firmada" : "sin afiliación firmada"}
                       </div>
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap">{f.meses_antiguedad} m</td>
@@ -353,13 +407,29 @@ function Cuentas() {
   const { soloConsulta } = useAuth();
   const cargos = useCargos();
   const estudio = useEstudio();
+  const config = useConfig();
+  const empresas = useEmpresas();
+  const firmas = useFirmas();
+  const conFirma = afiliados(firmas.data);
   const [verTodos, setVerTodos] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState({ profile: "", origen: "prestamo", concepto: "", monto: "", pagos: "1" });
   const conLinea = (estudio.data ?? []).filter((f) => f.linea > 0 && f.estatus !== "suspendida");
   const elegido = conLinea.find((f) => f.profile_id === nuevo.profile);
   const monto = Number(nuevo.monto) || 0;
   const disponible = elegido ? Math.max(0, elegido.linea - elegido.saldo) : 0;
-  const minimo = elegido ? pagosMinimos(monto, elegido.descuento_maximo ?? 0) : 1;
+  const cfg = config.data ?? CONFIG_LEY_2026;
+  // La empresa del trabajador se compara por nombre (el estudio trae el nombre).
+  const empresaTrabajador = empresas.data?.find((e) => e.nombre === elegido?.empresa)?.id ?? null;
+  const conInteres = nuevo.origen === "prestamo" && !!elegido && prestamoConIntereses(cfg, empresaTrabajador);
+  const financiera = empresas.data?.find((e) => e.id === cfg.acreditante_empresa_id)?.nombre ?? "la financiera";
+  const viernes = proximoViernes(hoyMexico());
+  const tasa = conInteres ? (cfg.tasa_anual_prestamos ?? 0) : 0;
+  const ivaInt = cfg.iva_intereses ?? 16;
+  const tope = conInteres ? Math.round((elegido?.sueldo_semanal ?? 0) * (cfg.capacidad_pago_pct ?? 30)) / 100 : (elegido?.descuento_maximo ?? 0);
+  const plazoMax = conInteres ? (cfg.plazo_max_semanas_intereses ?? 26) : (elegido?.plazo_max_semanas ?? 1);
+  const minimo = elegido ? (conInteres ? (Array.from({ length: plazoMax }, (_, k) => k + 1).find((n) => amortizar(monto, tasa, ivaInt, n, viernes).descuentoPorPago <= tope + 0.005) ?? Infinity) : pagosMinimos(monto, tope)) : 1;
+  const plan = amortizar(monto, tasa, ivaInt, Number(nuevo.pagos) || 1, viernes);
 
   const crear = useMutation({
     mutationFn: async () => {
@@ -374,15 +444,27 @@ function Cuentas() {
         p_primer_descuento: null,
       });
       if (error) throw error;
+      return elegido.nombre;
     },
-    onSuccess: () => {
+    onSuccess: (nombre) => {
+      setAviso(`Listo. Queda esperando que ${nombre} firme su pagaré en su app (Mi personaje → Mi QR); no se descuenta nada hasta que firme.`);
       setNuevo({ profile: "", origen: "prestamo", concepto: "", monto: "", pagos: "1" });
       void qc.invalidateQueries({ queryKey: ["nomina-cargos"] });
       void qc.invalidateQueries({ queryKey: ["estudio-financiamiento"] });
     },
   });
 
-  const lista = (cargos.data ?? []).filter((c) => verTodos || c.estatus === "vigente");
+  const cancelar = useMutation({
+    mutationFn: async (c: Cargo) => {
+      const motivo = window.prompt(`¿Por qué se cancela el préstamo de ${c.trabajador_nombre}?`, "No lo firmó");
+      if (motivo == null) return;
+      const { error } = await supabase.rpc("fn_nomina_cancelar_por_firmar", { p_cargo: c.id, p_motivo: motivo });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["nomina-cargos"] }),
+  });
+
+  const lista = (cargos.data ?? []).filter((c) => verTodos || c.estatus === "vigente" || c.estatus === "por_firmar");
   return (
     <div className="space-y-4">
       {!soloConsulta && (
@@ -400,6 +482,7 @@ function Cuentas() {
               {conLinea.map((f) => (
                 <option key={f.profile_id} value={f.profile_id}>
                   {f.nombre} · disponible {dinero(Math.max(0, f.linea - f.saldo))}
+                  {conFirma.has(f.profile_id) ? "" : " · falta que firme su afiliación"}
                 </option>
               ))}
             </select>
@@ -419,9 +502,9 @@ function Cuentas() {
           <label className="text-sm">
             Pagos semanales
             <select className={`${campo} w-full`} value={nuevo.pagos} onChange={(e) => setNuevo({ ...nuevo, pagos: e.target.value })}>
-              {Array.from({ length: elegido?.plazo_max_semanas ?? 1 }, (_, k) => k + 1).map((n) => (
+              {Array.from({ length: plazoMax }, (_, k) => k + 1).map((n) => (
                 <option key={n} value={n} disabled={n < minimo}>
-                  {n} de {dinero(descuentoPorPago(monto, n))}
+                  {n} de {dinero(conInteres ? amortizar(monto, tasa, ivaInt, n, viernes).descuentoPorPago : descuentoPorPago(monto, n))}
                 </option>
               ))}
             </select>
@@ -437,15 +520,24 @@ function Cuentas() {
           </label>
           <p className="text-xs text-slate-500 sm:col-span-6">
             {elegido
-              ? `Disponible ${dinero(disponible)} · máximo ${dinero(elegido.descuento_maximo)} por semana · primer descuento el viernes ${proximoViernes(hoyMexico()).split("-").reverse().join("/")} · sin intereses (art. 111 LFT).`
+              ? `Disponible ${dinero(disponible)} · máximo ${dinero(tope)} por semana${conInteres ? ` (${cfg.capacidad_pago_pct} % del sueldo)` : ""} · primer descuento el viernes ${viernes.split("-").reverse().join("/")} · ${conInteres ? `lo presta ${financiera} a ${tasa} % anual` : "sin intereses (art. 111 LFT)"}.`
               : "Solo aparecen trabajadores con línea autorizada en el Estudio."}
+            {elegido && !conFirma.has(elegido.profile_id) && <span className="text-amber-700"> Falta que firme su afiliación y consentimiento en su app.</span>}
           </p>
+          {conInteres && monto > 0 && (
+            <p className="rounded bg-white p-2 text-xs text-slate-700 sm:col-span-6">
+              Capital {dinero(monto)} + interés {dinero(plan.interes)} + IVA {dinero(plan.iva)} = <b>{dinero(plan.total)}</b> en {plan.pagos} pago(s) de{" "}
+              {dinero(plan.descuentoPorPago)} · CAT {plan.cat} % sin IVA. El trabajador ve la tabla completa y firma el pagaré en su app.
+            </p>
+          )}
           {crear.error && <p className="text-sm text-red-600 sm:col-span-6">{(crear.error as Error).message}</p>}
+          {aviso && <p className="text-sm text-emerald-700 sm:col-span-6">{aviso}</p>}
         </form>
       )}
       <label className="flex items-center gap-1 text-sm text-slate-600">
         <input type="checkbox" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} /> ver también liquidados y cancelados
       </label>
+      {cancelar.error && <p className="text-sm text-red-600">{(cancelar.error as Error).message}</p>}
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -453,6 +545,7 @@ function Cuentas() {
               <th className="px-2 py-2">Trabajador</th>
               <th className="px-2 py-2">Concepto</th>
               <th className="px-2 py-2 text-right">Monto</th>
+              <th className="px-2 py-2 text-right">Total</th>
               <th className="px-2 py-2">Plan</th>
               <th className="px-2 py-2 text-right">Pagado</th>
               <th className="px-2 py-2 text-right">Saldo</th>
@@ -468,19 +561,40 @@ function Cuentas() {
                 </td>
                 <td className="px-2 py-1.5">{c.concepto}</td>
                 <td className="px-2 py-1.5 text-right">{dinero(c.monto)}</td>
+                <td className="px-2 py-1.5 text-right">
+                  {dinero(c.total)}
+                  {c.tasa_anual > 0 && (
+                    <div className="text-[11px] text-slate-500">
+                      {c.tasa_anual} % anual · {c.acreditante}
+                    </div>
+                  )}
+                </td>
                 <td className="px-2 py-1.5 text-xs">
                   {c.pagos} × {dinero(c.descuento_por_pago)} desde {c.primer_descuento.split("-").reverse().join("/")}
                 </td>
                 <td className="px-2 py-1.5 text-right">{dinero(c.pagado)}</td>
                 <td className="px-2 py-1.5 text-right">{dinero(c.saldo)}</td>
                 <td className="px-2 py-1.5 text-xs">
-                  {c.atraso > 0 ? <span className="text-red-700">atrasado {dinero(c.atraso)}</span> : c.estatus}
+                  {c.estatus === "por_firmar" ? (
+                    <span className="text-sky-700">
+                      espera firma del pagaré
+                      {!soloConsulta && (
+                        <button type="button" className="ml-1 text-red-600 underline" onClick={() => cancelar.mutate(c)}>
+                          cancelar
+                        </button>
+                      )}
+                    </span>
+                  ) : c.atraso > 0 ? (
+                    <span className="text-red-700">atrasado {dinero(c.atraso)}</span>
+                  ) : (
+                    c.estatus
+                  )}
                 </td>
               </tr>
             ))}
             {!lista.length && (
               <tr>
-                <td colSpan={7} className="px-2 py-4 text-center text-sm text-slate-400">
+                <td colSpan={8} className="px-2 py-4 text-center text-sm text-slate-400">
                   Sin cargos.
                 </td>
               </tr>
@@ -576,6 +690,7 @@ function Reglas() {
   const qc = useQueryClient();
   const { perfilReal, soloConsulta } = useAuth();
   const config = useConfig();
+  const empresas = useEmpresas();
   const [f, setF] = useState<ConfigFinanciamiento | null>(null);
   const v = f ?? config.data ?? CONFIG_LEY_2026;
   const puedeEditar = (perfilReal?.rol === "admin" || perfilReal?.rol === "direccion") && !soloConsulta;
@@ -595,14 +710,17 @@ function Reglas() {
         <p className="font-medium">Lo que manda la Ley Federal del Trabajo</p>
         <ul className="mt-1 list-disc pl-5">
           <li>
-            <b>Art. 111:</b> las deudas del trabajador con la empresa <b>no generan intereses</b>. Por eso todo plazo aquí es sin intereses.
+            <b>Art. 111:</b> las deudas del trabajador con la empresa que lo emplea <b>no generan intereses</b>: compras, anticipos y préstamos del patrón van sin intereses; los préstamos con intereses solo los da la financiera (abajo).
           </li>
           <li>
             <b>Art. 110-I:</b> lo que se le preste no puede pasar del <b>salario de un mes</b>, y cada descuento no puede ser mayor al <b>30 % del excedente del
             salario mínimo</b>. El sistema no deja autorizar ni cobrar por encima de eso.
           </li>
           <li>Quien gana el salario mínimo no puede tener descuentos de este tipo.</li>
-          <li>Conviene que cada trabajador firme su aceptación del descuento (pagaré o carta) al recibir su línea.</li>
+          <li>
+            Cada trabajador firma en su app su <b>afiliación</b>, su <b>consentimiento de descuento</b> y el <b>pagaré</b> de cada préstamo; sin esas firmas el
+            sistema no carga ni descuenta nada.
+          </li>
         </ul>
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
@@ -621,12 +739,127 @@ function Reglas() {
           <input type="number" min={0} disabled={!puedeEditar} className={`${campo} block w-full`} value={v.antiguedad_minima_meses} onChange={(e) => setF({ ...v, antiguedad_minima_meses: Number(e.target.value) })} />
         </label>
       </div>
+      <div className="rounded border border-slate-200 bg-white p-3">
+        <p className="font-medium text-slate-800">Préstamos con intereses (negocio financiero)</p>
+        <p className="mt-1 text-xs text-slate-600">
+          Por el art. 111 LFT la empresa que emplea al trabajador no le cobra intereses. Los préstamos con intereses los otorga la <b>financiera</b>: una empresa
+          del grupo distinta del patrón (de preferencia una SOFOM registrada; revisarlo con los abogados: registro ante CONDUSEF, contrato de adhesión, CAT y
+          prevención de lavado). A quien trabaja en la propia financiera no se le cobran intereses. Sin financiera o con tasa 0, todo sigue sin intereses.
+        </p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          <label>
+            Financiera que presta
+            <select disabled={!puedeEditar} className={`${campo} block w-full`} value={v.acreditante_empresa_id ?? ""} onChange={(e) => setF({ ...v, acreditante_empresa_id: e.target.value || null })}>
+              <option value="">— sin financiera (sin intereses) —</option>
+              {(empresas.data ?? []).map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Tasa ordinaria anual %
+            <input type="number" min={0} max={200} step="0.01" disabled={!puedeEditar} className={`${campo} block w-full`} value={v.tasa_anual_prestamos ?? 0} onChange={(e) => setF({ ...v, tasa_anual_prestamos: Number(e.target.value) })} />
+            <span className="text-xs text-slate-500">fija, sobre saldo insoluto, pagos semanales iguales</span>
+          </label>
+          <label>
+            Tasa moratoria anual %
+            <input type="number" min={0} max={200} step="0.01" disabled={!puedeEditar} className={`${campo} block w-full`} value={v.tasa_moratoria_anual ?? 0} onChange={(e) => setF({ ...v, tasa_moratoria_anual: Number(e.target.value) })} />
+            <span className="text-xs text-slate-500">va escrita en el pagaré</span>
+          </label>
+          <label>
+            IVA sobre intereses %
+            <input type="number" min={0} max={16} disabled={!puedeEditar} className={`${campo} block w-full`} value={v.iva_intereses ?? 16} onChange={(e) => setF({ ...v, iva_intereses: Number(e.target.value) })} />
+          </label>
+          <label>
+            Capacidad de pago (% del sueldo semanal)
+            <input type="number" min={1} max={50} disabled={!puedeEditar} className={`${campo} block w-full`} value={v.capacidad_pago_pct ?? 30} onChange={(e) => setF({ ...v, capacidad_pago_pct: Number(e.target.value) })} />
+            <span className="text-xs text-slate-500">tope del descuento de cada semana</span>
+          </label>
+          <label>
+            Plazo máximo (semanas)
+            <input type="number" min={1} max={52} disabled={!puedeEditar} className={`${campo} block w-full`} value={v.plazo_max_semanas_intereses ?? 26} onChange={(e) => setF({ ...v, plazo_max_semanas_intereses: Number(e.target.value) })} />
+          </label>
+        </div>
+      </div>
       {puedeEditar && f && (
         <button type="button" className={boton} disabled={guardar.isPending} onClick={() => guardar.mutate()}>
           Guardar reglas
         </button>
       )}
       {guardar.error && <p className="text-red-600">{(guardar.error as Error).message}</p>}
+    </div>
+  );
+}
+
+function Documentos() {
+  const qc = useQueryClient();
+  const { soloConsulta } = useAuth();
+  const firmas = useFirmas();
+  const [tipo, setTipo] = useState<"todos" | FirmaRh["tipo"]>("todos");
+  const lista = (firmas.data ?? []).filter((f) => tipo === "todos" || f.tipo === tipo);
+  const revocar = useMutation({
+    mutationFn: async (f: FirmaRh) => {
+      const motivo = window.prompt(`Motivo para revocar "${f.titulo}" de ${f.firmante_nombre}:`);
+      if (!motivo) return;
+      const { error } = await supabase.rpc("fn_credito_revocar", { p_firma: f.id, p_motivo: motivo });
+      if (error) throw error;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["credito-firmas"] }),
+  });
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1 text-sm">
+        {(["todos", "afiliacion", "consentimiento", "pagare"] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setTipo(t)} className={`rounded px-2 py-1 ${tipo === t ? "bg-slate-900 text-white" : "border border-slate-300"}`}>
+            {t === "todos" ? "Todos" : t === "afiliacion" ? "Afiliaciones" : t === "consentimiento" ? "Consentimientos" : "Pagarés"}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-slate-500">
+        Cada documento guarda el texto tal cual lo leyó el trabajador, su firma, fecha y hora, IP y una huella SHA-256; no se edita ni se borra. Los textos son
+        borrador: que los revisen los abogados antes de usarlos en un juicio.
+      </p>
+      {revocar.error && <p className="text-sm text-red-600">{(revocar.error as Error).message}</p>}
+      <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-2 py-2">Trabajador</th>
+              <th className="px-2 py-2">Documento</th>
+              <th className="px-2 py-2">Firmado</th>
+              <th className="px-2 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {lista.map((f) => (
+              <tr key={f.id} className="border-t border-slate-100">
+                <td className="px-2 py-1.5">{f.firmante_nombre}</td>
+                <td className={`px-2 py-1.5 ${f.revocada_en ? "text-slate-400 line-through" : ""}`}>{f.titulo}</td>
+                <td className="px-2 py-1.5 text-xs">{new Date(f.firmado_en).toLocaleString("es-MX", { timeZone: "America/Mexico_City" })}</td>
+                <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                  <button type="button" className="text-xs text-sky-700 underline" onClick={() => abrirParaImprimir(htmlDocumentoFirmado(f))}>
+                    ver / imprimir
+                  </button>
+                  {!soloConsulta && f.tipo !== "pagare" && !f.revocada_en && (
+                    <button type="button" className="ml-2 text-xs text-red-600 underline" onClick={() => revocar.mutate(f)}>
+                      revocar
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!lista.length && (
+              <tr>
+                <td colSpan={4} className="px-2 py-4 text-center text-sm text-slate-400">
+                  {firmas.isLoading ? "Cargando…" : "Todavía nadie ha firmado."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

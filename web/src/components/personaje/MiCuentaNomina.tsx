@@ -15,10 +15,13 @@ interface Disponible {
   atraso?: number;
   plazo_max_semanas?: number;
   descuento_maximo?: number;
+  afiliado?: boolean;
+  tasa_anual_prestamos?: number;
 }
 
 /** Mi cuenta de nómina (18-oct-2026): nivel, línea, disponible y mis
- * próximos descuentos. Estilo Mercado Pago, sin intereses. */
+ * próximos descuentos. Estilo Mercado Pago; compras y anticipos sin
+ * intereses, préstamos de la financiera con la tasa que se muestra. */
 export function MiCuentaNomina() {
   const { perfilReal } = useAuth();
   const disp = useQuery({
@@ -96,7 +99,9 @@ export function MiCuentaNomina() {
         </ul>
       )}
       <p className="mt-2 text-xs text-slate-500">
-        Úsala en el mostrador con tu QR. Hasta {d.plazo_max_semanas} pagos semanales, <b>sin intereses</b>.
+        Úsala en el mostrador con tu QR: hasta {d.plazo_max_semanas} pagos semanales, <b>sin intereses</b>.
+        {d.tasa_anual_prestamos ? ` Los préstamos de la financiera llevan ${d.tasa_anual_prestamos} % anual; antes de firmar ves cada pago.` : ""}
+        {!d.afiliado && " Primero firma tu afiliación aquí abajo."}
         {idx < NIVELES.length - 1 && ` Paga a tiempo, checa todos los días y termina tus tareas para subir a ${NIVELES[idx + 1].icono} ${NIVELES[idx + 1].nombre}.`}
       </p>
     </section>

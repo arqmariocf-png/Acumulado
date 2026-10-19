@@ -5,6 +5,7 @@ import { avanceDelDia, claseDe, habilidades, logros, misionesDelDia, nivelDe, of
 import { AvatarPixel } from "../../components/personaje/AvatarPixel";
 import { CrearAvatar } from "../../components/personaje/CrearAvatar";
 import { CredencialQr } from "../../components/personaje/CredencialQr";
+import { DocumentosCredito } from "../../components/personaje/DocumentosCredito";
 import { MiCuentaNomina } from "../../components/personaje/MiCuentaNomina";
 import { PersonajeDelDia } from "../../components/personaje/PersonajeDelDia";
 import { useEquipo, useMiAvatar, useMiPersonaje } from "../../components/personaje/datos";
@@ -52,8 +53,9 @@ export function Personaje() {
       {pestana === "qr" && (
         <div className="space-y-4">
           <CredencialQr />
-          <div className="mx-auto max-w-sm">
+          <div className="mx-auto max-w-sm space-y-3">
             <MiCuentaNomina />
+            <DocumentosCredito />
           </div>
         </div>
       )}
