@@ -8,6 +8,7 @@ import { SelectorEmpresa } from "../components/SelectorEmpresa";
 import { Semaforo } from "../components/Semaforo";
 import { MarcarSinFactura } from "../components/MarcarSinFactura";
 import { puedeMarcarSinFactura } from "../lib/sinFactura";
+import { TIPOS_PERIODO, etiquetaPeriodo, moverPeriodo, rangoPeriodo, type TipoPeriodo } from "../lib/periodoFiltro";
 import type { EstadoClasificacion, Movimiento } from "../types/database";
 
 const TAMANO_PAGINA = 50;
@@ -20,6 +21,10 @@ const ESTADOS: { valor: EstadoClasificacion | "todos"; etiqueta: string }[] = [
   { valor: "resuelto", etiqueta: "Resuelto" },
 ];
 
+
+function hoyMx(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
+}
 
 function formatoMoneda(valor: number | null): string {
   if (valor == null) return "—";
@@ -50,6 +55,20 @@ export function Movimientos() {
   const [soloDuplicados, setSoloDuplicados] = useState(verParam === "duplicados");
   const [cuentaReclasificando, setCuentaReclasificando] = useState<string | null>(null);
   const [pagina, setPagina] = useState(0);
+  // Periodo para revisar la conciliación (20-oct-2026, Mario): día, semana o
+  // mes con flechas; queda en la liga (?periodo=&fecha=).
+  const periodoParam = params.get("periodo");
+  const periodo: TipoPeriodo = periodoParam === "dia" || periodoParam === "semana" || periodoParam === "mes" ? periodoParam : "todo";
+  const fechaPeriodo = params.get("fecha") ?? hoyMx();
+  const rango = rangoPeriodo(periodo, fechaPeriodo);
+  const ponerParams = (cambios: Record<string, string | null>) => {
+    const p = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(cambios)) {
+      if (v) p.set(k, v);
+      else p.delete(k);
+    }
+    setParams(p, { replace: true });
+  };
   // Marcar "sin factura" con motivo (7-oct-2026): dirección, corporativo, admin.
   const marcaSinFactura = perfil?.rol === "admin" || perfil?.rol === "direccion" || perfil?.rol === "corporativo";
   const [marcando, setMarcando] = useState<string | null>(null);
@@ -62,10 +81,10 @@ export function Movimientos() {
   // solo trae 2 páginas) -- siempre se regresa a la primera.
   useEffect(() => {
     setPagina(0);
-  }, [empresaFiltro, cuentaId, estado, soloDuplicados]);
+  }, [empresaFiltro, cuentaId, estado, soloDuplicados, periodo, fechaPeriodo]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["movimientos", empresaFiltro, cuentaId, estado, soloDuplicados, pagina],
+    queryKey: ["movimientos", empresaFiltro, cuentaId, estado, soloDuplicados, pagina, rango?.desde ?? "", rango?.hasta ?? ""],
     queryFn: async () => {
       const desde = pagina * TAMANO_PAGINA;
       const hasta = desde + TAMANO_PAGINA - 1;
@@ -78,19 +97,47 @@ export function Movimientos() {
       if (cuentaId) query = query.eq("cuenta_id", cuentaId);
       if (estado !== "todos") query = query.eq("estado_clasificacion", estado);
       if (soloDuplicados) query = query.eq("posible_duplicado", true);
+      if (rango) query = query.gte("fecha_pago", rango.desde).lte("fecha_pago", rango.hasta);
       const { data, error, count } = await query;
       if (error) throw error;
       return { movimientos: data as Movimiento[], total: count ?? 0 };
     },
   });
 
-  const { data: cuenta } = useQuery({
-    queryKey: ["cuenta-bancaria", cuentaId],
-    enabled: !!cuentaId,
+  // Cuentas bancarias de la empresa elegida (o de todas) para el filtro.
+  const { data: cuentas } = useQuery({
+    queryKey: ["cuentas-bancarias-filtro", empresaFiltro],
     queryFn: async () => {
-      const { data, error } = await supabase.from("cuentas_bancarias").select("id, banco, ultimos_4, alias").eq("id", cuentaId).maybeSingle();
+      let q = supabase.from("cuentas_bancarias").select("id, empresa_id, banco, ultimos_4, alias, activo, empresas(codigo)").order("banco");
+      if (empresaFiltro) q = q.eq("empresa_id", empresaFiltro);
+      const { data, error } = await q;
       if (error) throw error;
-      return data;
+      return (data ?? []) as unknown as { id: string; empresa_id: string; banco: string; ultimos_4: string; alias: string | null; activo: boolean; empresas: { codigo: string } | null }[];
+    },
+  });
+  const textoCuenta = (c: { banco: string; ultimos_4: string; alias: string | null; empresas?: { codigo: string } | null }) =>
+    `${empresaFiltro ? "" : `${c.empresas?.codigo ?? ""} · `}${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`;
+
+  // Totales del periodo (todas las páginas) para cuadrar contra el estado de cuenta.
+  const { data: totales } = useQuery({
+    queryKey: ["movimientos", "totales", empresaFiltro, cuentaId, estado, soloDuplicados, rango?.desde ?? "", rango?.hasta ?? ""],
+    enabled: !!rango || !!cuentaId,
+    queryFn: async () => {
+      let q = supabase.from("movimientos").select("cargo_total, abono_total, estado_clasificacion").limit(10000);
+      if (empresaFiltro) q = q.eq("empresa_id", empresaFiltro);
+      if (cuentaId) q = q.eq("cuenta_id", cuentaId);
+      if (estado !== "todos") q = q.eq("estado_clasificacion", estado);
+      if (soloDuplicados) q = q.eq("posible_duplicado", true);
+      if (rango) q = q.gte("fecha_pago", rango.desde).lte("fecha_pago", rango.hasta);
+      const { data, error } = await q;
+      if (error) throw error;
+      const filas = data ?? [];
+      return {
+        cargos: filas.reduce((t, m) => t + Number(m.cargo_total ?? 0), 0),
+        abonos: filas.reduce((t, m) => t + Number(m.abono_total ?? 0), 0),
+        resueltos: filas.filter((m) => m.estado_clasificacion === "resuelto").length,
+        n: filas.length,
+      };
     },
   });
 
@@ -144,26 +191,69 @@ export function Movimientos() {
           <input type="checkbox" checked={soloDuplicados} onChange={(e) => setSoloDuplicados(e.target.checked)} />
           Solo posibles duplicados
         </label>
-        {cuentaId && (
-          <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-800">
-            Cuenta: {cuenta ? `${cuenta.banco} ${cuenta.ultimos_4}${cuenta.alias ? ` · ${cuenta.alias}` : ""}` : "…"}
-            <button
-              type="button"
-              onClick={() => {
-                params.delete("cuenta");
-                setParams(params, { replace: true });
-              }}
-              className="font-semibold hover:text-sky-950"
-              title="Quitar el filtro de cuenta"
-            >
-              ×
-            </button>
-          </span>
-        )}
+        <select
+          value={cuentaId}
+          onChange={(e) => ponerParams({ cuenta: e.target.value || null })}
+          className="rounded border border-slate-300 px-2 py-1.5 text-sm"
+          title="Cuenta bancaria"
+        >
+          <option value="">Todas las cuentas</option>
+          {(cuentas ?? [])
+            .filter((c) => c.activo || c.id === cuentaId)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {textoCuenta(c)}
+              </option>
+            ))}
+        </select>
+        <span className="inline-flex items-center gap-1 text-sm">
+          <select
+            value={periodo}
+            onChange={(e) => ponerParams({ periodo: e.target.value === "todo" ? null : e.target.value })}
+            className="rounded border border-slate-300 px-2 py-1.5 text-sm"
+            title="Periodo"
+          >
+            {TIPOS_PERIODO.map(([v, t]) => (
+              <option key={v} value={v}>
+                {t}
+              </option>
+            ))}
+          </select>
+          {periodo !== "todo" && (
+            <>
+              <button type="button" onClick={() => ponerParams({ fecha: moverPeriodo(periodo, fechaPeriodo, -1) })} className="rounded border border-slate-300 px-2 py-1" title="Periodo anterior">
+                ←
+              </button>
+              <input type="date" value={fechaPeriodo} onChange={(e) => e.target.value && ponerParams({ fecha: e.target.value })} className="rounded border border-slate-300 px-2 py-1" />
+              <button type="button" onClick={() => ponerParams({ fecha: moverPeriodo(periodo, fechaPeriodo, 1) })} className="rounded border border-slate-300 px-2 py-1" title="Periodo siguiente">
+                →
+              </button>
+              <span className="text-xs text-slate-500">{etiquetaPeriodo(periodo, fechaPeriodo)}</span>
+            </>
+          )}
+        </span>
         <Link to="/finanzas/saldos" className="text-xs text-slate-500 underline">
           Saldos por empresa
         </Link>
       </div>
+
+      {totales && (
+        <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 rounded border border-slate-200 bg-white px-3 py-2 text-sm">
+          <span className="text-slate-500">
+            {cuentaId && cuentas ? `${textoCuenta(cuentas.find((c) => c.id === cuentaId) ?? { banco: "", ultimos_4: "", alias: null })} · ` : ""}
+            {etiquetaPeriodo(periodo, fechaPeriodo)}
+          </span>
+          <span>
+            {totales.n} movimientos · <b>{totales.resueltos}</b> conciliados ({totales.n ? Math.round((totales.resueltos / totales.n) * 100) : 0} %)
+          </span>
+          <span>
+            Cargos <b className="tabular-nums">{formatoMoneda(totales.cargos)}</b>
+          </span>
+          <span>
+            Abonos <b className="tabular-nums">{formatoMoneda(totales.abonos)}</b>
+          </span>
+        </div>
+      )}
 
       {aviso && (
         <p className="mb-3 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">

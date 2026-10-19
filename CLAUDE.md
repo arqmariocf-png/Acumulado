@@ -140,6 +140,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   BANCARIA; `INTERES-CAPITAL DEL CREDITO` y `PAGO PARCIAL CREDITO` → N/A -
   PAGO A CREDITO; se aplicaron a 47 movimientos ya cargados (AEP, CSC, LRT,
   QX, VBB, MCC). Corrección de este tipo → regla nueva, no edición a mano.
+  **Filtro de periodo y cuenta (20-oct-2026, Mario: "en contabilidad,
+  movimientos, ponme un filtro de fecha por mes o semana o día para revisar
+  la conciliación, y por cuenta bancaria")**: Movimientos tiene selector de
+  cuenta (de la empresa elegida o de todas, `?cuenta=`) y Todo / Día /
+  Semana (lun-dom) / Mes con flechas y fecha (`?periodo=&fecha=`;
+  `lib/periodoFiltro.ts` con pruebas). Con periodo o cuenta sale arriba el
+  resumen: movimientos, conciliados (resuelto) y %, cargos y abonos del
+  periodo completo (no solo la página).
   **Botón "No lleva factura" (7-oct-2026, Mario: "sí")** en Movimientos
   (admin/dirección/corporativo; `components/MarcarSinFactura.tsx`,
   `lib/sinFactura.ts` con pruebas): motivo de la lista de reglas u otro, y
