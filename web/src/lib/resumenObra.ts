@@ -8,8 +8,14 @@ import type { PuEstado } from "../types/database";
 
 export interface DatosResumenObra {
   presupuesto: number;
+  /** Compras capturadas en el control de obra (sin OC ligada). */
   materiales: number;
+  /** Nómina capturada en el control de obra (lo que se decidió pagar). */
   nomina: number;
+  /** OC/OS del backoffice o de Acumulado con el nombre de la obra (19-oct-2026). */
+  oc?: number;
+  /** Mano de obra pagada según la API del backoffice; si hay, sustituye a la nómina capturada. */
+  manoObra?: number;
   tarjetas: number;
   hechas: number;
   requisiciones: { etapa: EtapaRequisicion; estado: string; avance_pct?: number | null }[];
@@ -18,6 +24,8 @@ export interface DatosResumenObra {
 
 export interface ResumenObraCalculado {
   ejercido: number;
+  /** De dónde sale lo ejercido. */
+  desglose: { compras: number; oc: number; manoObra: number; manoObraDe: "api" | "captura" };
   disponible: number;
   avanceFinanciero: number | null;
   avanceTareas: number | null;
@@ -29,7 +37,10 @@ export interface ResumenObraCalculado {
 }
 
 export function calcularResumenObra(d: DatosResumenObra): ResumenObraCalculado {
-  const ejercido = d.materiales + d.nomina;
+  const oc = d.oc ?? 0;
+  const manoObraApi = d.manoObra ?? 0;
+  const manoObra = manoObraApi > 0 ? manoObraApi : d.nomina;
+  const ejercido = d.materiales + oc + manoObra;
   const disponible = d.presupuesto - ejercido;
   const avanceFinanciero = d.presupuesto > 0 ? (100 * ejercido) / d.presupuesto : null;
   const avanceTareas = d.tarjetas > 0 ? (100 * d.hechas) / d.tarjetas : null;
@@ -38,7 +49,8 @@ export function calcularResumenObra(d: DatosResumenObra): ResumenObraCalculado {
   const fisicos = [avanceTareas, avanceSuministro, avancePu].filter((x): x is number => x !== null);
   const avanceFisico = fisicos.length > 0 ? fisicos.reduce((s, x) => s + x, 0) / fisicos.length : null;
   const desfase = avanceFisico !== null && avanceFinanciero !== null ? avanceFinanciero - avanceFisico : null;
-  return { ejercido, disponible, avanceFinanciero, avanceTareas, avanceSuministro, avancePu, avanceFisico, desfase };
+  const desglose = { compras: d.materiales, oc, manoObra, manoObraDe: manoObraApi > 0 ? ("api" as const) : ("captura" as const) };
+  return { ejercido, desglose, disponible, avanceFinanciero, avanceTareas, avanceSuministro, avancePu, avanceFisico, desfase };
 }
 
 /** Rojo si se gastó más de 10 puntos por encima del avance o se rebasó el presupuesto. */

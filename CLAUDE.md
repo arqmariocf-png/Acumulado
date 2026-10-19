@@ -509,6 +509,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   filas para cualquiera que no sea admin maestro) y el MISMO cálculo que la
   pestaña de cada obra (`lib/resumenObra.ts`, con pruebas; `ResumenObra.tsx`
   ya lo usa) (`20261006120000`).
+  **Con OC y mano de obra, y para Laura (19-oct-2026, Mario: "agrégalas y
+  también la parte del módulo de mano de obra… este reporte también
+  autorízalo a Laura como parte de finanzas")** (`20261019120000`):
+  `fn_obra_gasto_backoffice(proyecto|null)` (definer, revocada; CTE
+  *materialized*: sin eso unir `v_oc_pagos` con `ordenes_compra` tardaba
+  4.9 s, ahora 0.13 s) da por obra las OC/OS con el mismo nombre
+  (`normalizar_texto_sql`, misma organización, sin canceladas/rechazadas;
+  pagado = pagada en el backoffice o sin saldo) y la mano de obra pagada de
+  `api_MO_period_aut` por semana y por partida (las 30 obras de la API
+  empatan por nombre). Ejercido = OC + mano de obra API (si no hay, la nómina
+  capturada) + compras del control de obra **sin** OC ligada
+  (`calcularResumenObra` con `oc`/`manoObra` y `desglose`).
+  `fn_resumen_obras_director()` trae `oc_num/oc_total/oc_pagado/mo_total` y
+  lo ve el admin maestro **y dirección** en su alcance; `fn_obra_gasto(id)`
+  alimenta la pestaña de la obra (secciones OC y "Mano de obra pagada por
+  semana" + por partida). Menú Finanzas → **Físico-financiero de obras**
+  (`/finanzas/obras`, `finanzas/ObrasFisicoFinanciero.tsx`, dirección y
+  admin) y arriba de `/proyectos` para dirección. Probado como Laura: 55
+  obras en 0.15 s; Parque Real 63 = 97 OC $594,865.81 (pagado $238,968.19)
+  + mano de obra $314,369.71 en 14 semanas; Moni no ve nada.
+  **Presupuestos de mano de obra**: la API solo trae lo pagado; probados
+  api_MO_aut, _cat, _presupuesto, _presup, _project, _budget, _proyecto y
+  api_presupuesto_aut → 404. El presupuesto sale de Control de obra hasta que
+  Gonzalo exponga los autorizados.
 - **Precios unitarios en Proyectos (26-sep-2026)**: semáforo por análisis
   (`lib/puSemaforo.ts`, con pruebas) en la lista de proyectos, en Cotización y
   arriba de los tableros de Avance (`proyectos/SemaforoPreciosUnitarios.tsx`).

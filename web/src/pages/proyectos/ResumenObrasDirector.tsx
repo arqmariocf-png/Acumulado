@@ -6,10 +6,11 @@ import { calcularResumenObra, semaforoDesfase } from "../../lib/resumenObra";
 import type { EtapaRequisicion } from "../../lib/requisicionEtapa";
 import type { PuEstado } from "../../types/database";
 
-// Resumen físico-financiero de todas las obras, solo para el director general
-// (Mario, 6-oct-2026: "así como me aparecen mis actividades, el resumen por
-// obra en tema físico-financiero"). Una sola consulta (fn_resumen_obras_director)
-// y el mismo cálculo que la pestaña de cada obra (lib/resumenObra.ts).
+// Resumen físico-financiero de todas las obras para el director general y,
+// desde el 19-oct-2026, también para dirección/finanzas (Laura) (Mario, 6-oct:
+// "el resumen por obra en tema físico-financiero"; 19-oct: "agrégalas [las
+// OC] y la mano de obra"). Una sola consulta (fn_resumen_obras_director) y el
+// mismo cálculo que la pestaña de cada obra (lib/resumenObra.ts).
 
 interface FilaObra {
   proyecto_id: string;
@@ -24,6 +25,10 @@ interface FilaObra {
   hechas: number;
   requisiciones: { etapa: EtapaRequisicion; estado: string; avance_pct: number | null }[];
   pu: { estado: PuEstado; cliente_autorizado_en: string | null }[];
+  oc_num: number;
+  oc_total: number;
+  oc_pagado: number;
+  mo_total: number;
 }
 
 const mxn = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -52,7 +57,14 @@ export function ResumenObrasDirector() {
 
   const filas = useMemo(() => {
     const lista = (data ?? []).map((o) => {
-      const datos = { ...o, presupuesto: Number(o.presupuesto), materiales: Number(o.materiales), nomina: Number(o.nomina) };
+      const datos = {
+        ...o,
+        presupuesto: Number(o.presupuesto),
+        materiales: Number(o.materiales),
+        nomina: Number(o.nomina),
+        oc: Number(o.oc_total),
+        manoObra: Number(o.mo_total),
+      };
       const r = calcularResumenObra(datos);
       return { o: datos, r, semaforo: semaforoDesfase(r, datos.presupuesto) };
     });
@@ -130,7 +142,14 @@ export function ResumenObrasDirector() {
                       </div>
                     </td>
                     <td className="pr-2 text-right tabular-nums">{o.presupuesto > 0 ? mxn.format(o.presupuesto) : "—"}</td>
-                    <td className="pr-2 text-right tabular-nums">{r.ejercido > 0 ? mxn.format(r.ejercido) : "—"}</td>
+                    <td className="pr-2 text-right tabular-nums" title={`OC ${mxn.format(r.desglose.oc)} · mano de obra ${mxn.format(r.desglose.manoObra)} · otras compras ${mxn.format(r.desglose.compras)}`}>
+                      {r.ejercido > 0 ? mxn.format(r.ejercido) : "—"}
+                      {r.ejercido > 0 && (
+                        <div className="text-[10px] text-slate-500">
+                          OC {mxn.format(r.desglose.oc)} · MO {mxn.format(r.desglose.manoObra)}
+                        </div>
+                      )}
+                    </td>
                     <td className={`pr-2 text-right tabular-nums ${o.presupuesto > 0 && r.disponible < 0 ? "text-red-700" : ""}`}>{o.presupuesto > 0 ? mxn.format(r.disponible) : "—"}</td>
                     <td className={`pr-2 text-right tabular-nums ${semaforo === "rojo" ? "text-red-700" : semaforo === "ambar" ? "text-amber-700" : ""}`}>
                       {r.desfase === null ? "—" : `${r.desfase > 0 ? "+" : ""}${Math.round(r.desfase)} pts`}
@@ -141,7 +160,10 @@ export function ResumenObrasDirector() {
             </table>
           )}
           <p className="mt-2 text-[11px] text-slate-400">
-            Físico = promedio de tareas hechas, suministro de requerimientos y precios unitarios. Financiero = ejercido (compras + nómina de los controles de obra) entre presupuesto. Desfase en rojo: se ha gastado más de 10 puntos por encima de lo avanzado o se rebasó el presupuesto.
+            Físico = promedio de tareas hechas, suministro de requerimientos y precios unitarios. Ejercido = órdenes de compra y de servicio de la obra (sin
+            canceladas) + mano de obra pagada por semana (backoffice) + compras capturadas en el control de obra sin OC. Financiero = ejercido entre el
+            presupuesto de los controles de obra (sin presupuesto capturado no hay %). Desfase en rojo: se ha gastado más de 10 puntos por encima de lo
+            avanzado o se rebasó el presupuesto.
           </p>
         </div>
       )}
