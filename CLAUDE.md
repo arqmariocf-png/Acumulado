@@ -929,6 +929,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   checador, tarea, plano, pago, cotizacion, gasto), que pide una liga nueva
   cada vez que carga y muestra imagen o PDF. **Visor nuevo de archivo →
   agregarlo a `FUENTES_ARCHIVO`, nunca `window.open(json.url)`.**
+  **Descargar de verdad (20-oct-2026, Mario: "permite a los supervisores
+  bajar archivos de los adjuntos en las tarjetas")**: el servidor ya les
+  daba el archivo (RLS de `tarjeta_archivos` = la de `tarjetas`; edge
+  `tareas-archivos` con 200), pero el visor solo lo mostraba y en el celular
+  no se podía guardar. Ahora `rutaVerArchivo(fuente, id, { descargar:
+  nombre })` → `/archivo?…&descargar=` y la página redirige a la liga
+  firmada con `download=` (`urlDescarga`, Content-Disposition attachment);
+  botón "Descargar" en cada archivo de la tarjeta (`TarjetaPanel`) y en el
+  encabezado del visor para cualquier fuente.
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
   abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
   (móvil). QR con `qrcode` (import dinámico).

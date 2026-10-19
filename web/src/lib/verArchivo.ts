@@ -21,9 +21,19 @@ export function esFuenteArchivo(v: string | null | undefined): v is FuenteArchiv
   return !!v && Object.prototype.hasOwnProperty.call(FUENTES_ARCHIVO, v);
 }
 
-/** Ruta de la app que muestra el archivo (lo que se abre en la pestaña nueva). */
-export function rutaVerArchivo(fuente: FuenteArchivo, id: string): string {
-  return `/archivo?f=${fuente}&id=${encodeURIComponent(id)}`;
+/** Ruta de la app que muestra el archivo (lo que se abre en la pestaña nueva).
+ * Con `descargar` (el nombre con el que se guarda; "" = el del almacén) la
+ * página no lo muestra: lo baja al equipo (20-oct-2026, Mario: "permite a los
+ * supervisores bajar los archivos adjuntos en las tarjetas"). */
+export function rutaVerArchivo(fuente: FuenteArchivo, id: string, opciones?: { descargar?: string }): string {
+  const base = `/archivo?f=${fuente}&id=${encodeURIComponent(id)}`;
+  return opciones?.descargar === undefined ? base : `${base}&descargar=${encodeURIComponent(opciones.descargar)}`;
+}
+
+/** La liga firmada de Storage con `download`: el navegador guarda el archivo
+ * en vez de abrirlo (Content-Disposition: attachment). */
+export function urlDescarga(url: string, nombre = ""): string {
+  return `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(nombre)}`;
 }
 
 /** Ruta (relativa a functions/v1) que devuelve { url } firmada y fresca. */
