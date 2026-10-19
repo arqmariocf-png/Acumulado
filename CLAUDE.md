@@ -533,6 +533,11 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   api_MO_aut, _cat, _presupuesto, _presup, _project, _budget, _proyecto y
   api_presupuesto_aut → 404. El presupuesto sale de Control de obra hasta que
   Gonzalo exponga los autorizados.
+  **Rol empresa (20-oct-2026, Mario: "agrega la pestaña de proyectos a
+  Jorge")**: Jorge ya tenía Proyectos y cada obra; el resumen de todas las
+  obras arriba de `/proyectos` ahora también lo ve el rol empresa en sus
+  empresas (`fn_resumen_obras_director`, `20261020110000`; Jorge: 20 obras de
+  ERG).
 - **Precios unitarios en Proyectos (26-sep-2026)**: semáforo por análisis
   (`lib/puSemaforo.ts`, con pruebas) en la lista de proyectos, en Cotización y
   arriba de los tableros de Avance (`proyectos/SemaforoPreciosUnitarios.tsx`).

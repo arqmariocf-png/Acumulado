@@ -80,7 +80,7 @@ export function Proyectos() {
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Proyectos</h1>
 
       {/* Solo el director general: resumen físico-financiero de todas las obras. */}
-      {(esAdminGlobal || perfil?.rol === "direccion") && <ResumenObrasDirector />}
+      {(esAdminGlobal || perfil?.rol === "direccion" || perfil?.rol === "empresa") && <ResumenObrasDirector />}
 
       <div className="mb-4 flex flex-wrap gap-3">
         {eligeEmpresa && !soloAsignadas && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}
