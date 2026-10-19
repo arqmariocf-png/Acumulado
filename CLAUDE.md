@@ -1585,6 +1585,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   60 KB); el check de `personajes.avatar` acepta png o jpeg
   (`20261018130000`). Ojo: el realista sí es un retrato reconocible que ve la
   organización (la foto original sigue sin subirse).
+  **Personaje IA (19-oct-2026, Mario eligió "personaje de videojuego
+  generado por IA")**: estilo por defecto "✨ Personaje IA". Con casilla de
+  consentimiento, la selfie (768 px) va a la edge **`personaje-avatar-ia`**
+  (verify_jwt; sesión, no pendiente/espectador/solo consulta; helpers en
+  línea) que la manda a un servicio externo de imágenes con un prompt fijo
+  (mismo rostro, personaje AAA, atuendo según el ROL que lee el servidor:
+  casco y chaleco para supervisor, mandil de herrero para producción…, fondo
+  del color de su clase) y regresa el retrato; el navegador lo reduce a 192
+  px JPEG y se guarda como cualquier avatar. No se guarda la selfie. Secrets:
+  **`IMAGENES_IA_API_KEY`** (obligatoria; sin ella responde 503 "falta la
+  llave"), `IMAGENES_IA_PROVEEDOR` (`openai` | `gemini`; si falta se deduce:
+  llave `AIza…` = Gemini) y `IMAGENES_IA_MODELO` (por defecto `gpt-image-1`
+  con `input_fidelity=high`, o `gemini-2.5-flash-image`). Límite 5 intentos
+  por persona por día en `personajes_ia_usos` (la escribe la edge; cada quien
+  ve los suyos; `20261019100000`). Al 19-oct la llave **no está dada de
+  alta**: la pone Mario en Supabase → Edge Functions → Secrets. Probado solo
+  que arranca y pide sesión (401); falta la primera generación real.
 - `20261018100000_personajes.sql` (aplicada): tabla `personajes`
   (profile_id, grupo por trigger, `avatar` data URL PNG ≤60 KB, título
   opcional); la ve su organización, la escribe solo su dueño (no pendiente);
