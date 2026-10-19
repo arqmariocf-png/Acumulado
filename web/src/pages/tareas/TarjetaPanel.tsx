@@ -512,6 +512,9 @@ export function TarjetaPanel({
                 <button onClick={() => onDescargarArchivo(a.id)} className="truncate text-left text-slate-700 hover:underline">
                   {a.nombre_original}
                 </button>
+                <button onClick={() => window.open(rutaVerArchivo("tarea", a.id, { descargar: a.nombre_original }), "_blank")} className="ml-2 shrink-0 text-xs text-slate-600 hover:underline" title="Bajar el archivo al equipo">
+                  Descargar
+                </button>
                 <button onClick={() => onBorrarArchivo(a.id)} className="ml-2 shrink-0 text-xs text-slate-400 hover:text-red-600">
                   Quitar
                 </button>
