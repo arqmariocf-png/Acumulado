@@ -9,27 +9,39 @@ import type { Proyecto, ProyectoControl, PuEstado, Tablero, TableroColumna, Tarj
 // principal para el rol empresa hacia arriba; los supervisores no la ven.
 // Físico = tareas hechas en los tableros del proyecto, suministro de
 // requerimientos y circuito de precios unitarios. Financiero = presupuesto
-// contratado de los controles de obra contra lo ejercido (compras + nómina).
+// contratado de los controles de obra contra lo ejercido: OC/OS de la obra +
+// mano de obra pagada por semana (backoffice, 19-oct-2026) + compras
+// capturadas sin OC (fn_obra_gasto).
 
 const mxn = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 const pct = (n: number | null) => (n === null ? "—" : `${Math.round(n)}%`);
+
+interface GastoObra {
+  oc_num: number;
+  oc_total: number;
+  oc_pagado: number;
+  mo_total: number;
+  mo_semanas: { anio: number; semana: number; inicio: string; fin: string; monto: number }[];
+  mo_partidas: { partida: string; monto: number }[];
+}
 
 function useResumenObra(proyectoId: string) {
   return useQuery({
     queryKey: ["resumen-obra", proyectoId],
     queryFn: async () => {
-      const [controles, tableros, pu, req] = await Promise.all([
+      const [controles, tableros, pu, req, gasto] = await Promise.all([
         supabase.from("proyecto_controles").select("*").eq("proyecto_id", proyectoId).order("created_at"),
         supabase.from("tableros").select("*").eq("proyecto_id", proyectoId).eq("archivado", false),
         supabase.from("pu_analisis").select("estado, cliente_autorizado_en").eq("proyecto_id", proyectoId),
         supabase.from("requisiciones").select("id, etapa, estado").eq("proyecto_id", proyectoId),
+        supabase.rpc("fn_obra_gasto", { p_proyecto: proyectoId }),
       ]);
-      for (const r of [controles, tableros, pu, req]) if (r.error) throw r.error;
+      for (const r of [controles, tableros, pu, req, gasto]) if (r.error) throw r.error;
       const ctrl = (controles.data ?? []) as ProyectoControl[];
       const ids = ctrl.map((c) => c.id);
       const [compras, nomina] = ids.length
         ? await Promise.all([
-            supabase.from("proyecto_control_compras").select("control_id, importe, estatus").in("control_id", ids),
+            supabase.from("proyecto_control_compras").select("control_id, importe, estatus, orden_compra_id").in("control_id", ids),
             supabase.from("proyecto_control_nomina").select("control_id, sueldo, semana").in("control_id", ids),
           ])
         : [{ data: [], error: null }, { data: [], error: null }];
@@ -50,7 +62,8 @@ function useResumenObra(proyectoId: string) {
       const avancePct = new Map((av ?? []).map((a) => [a.requisicion_id as string, Number(a.avance_pct)]));
       return {
         controles: ctrl,
-        compras: (compras.data ?? []) as { control_id: string; importe: number; estatus: "pagado" | "pendiente" }[],
+        compras: (compras.data ?? []) as { control_id: string; importe: number; estatus: "pagado" | "pendiente"; orden_compra_id: string | null }[],
+        gasto: ((gasto.data ?? []) as GastoObra[])[0] ?? null,
         nomina: (nomina.data ?? []) as { control_id: string; sueldo: number; semana: number }[],
         tableros: tabs,
         columnas: (columnas.data ?? []) as TableroColumna[],
@@ -71,16 +84,21 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
   // Financiero y físico: misma regla que el panel del director general (lib/resumenObra.ts).
   const presupuesto = d.controles.reduce((s, c) => s + Number(c.presupuesto), 0);
   const materiales = d.compras.reduce((s, c) => s + Number(c.importe), 0);
+  // Las compras ligadas a una OC ya cuentan en las OC de la obra.
+  const comprasSinOc = d.compras.filter((c) => !c.orden_compra_id).reduce((s, c) => s + Number(c.importe), 0);
+  const g = d.gasto;
   const materialesPagados = d.compras.filter((c) => c.estatus === "pagado").reduce((s, c) => s + Number(c.importe), 0);
   const nominaTotal = d.nomina.reduce((s, n) => s + Number(n.sueldo), 0);
   const ultimaColumna = new Map<string, string>();
   for (const c of d.columnas) ultimaColumna.set(c.tablero_id, c.id);
   const hechas = d.tarjetas.filter((t) => ultimaColumna.get(t.tablero_id) === t.columna_id).length;
   const conteoPu = contarSemaforoPu(d.pu);
-  const { ejercido, disponible, avanceFinanciero, avanceTareas, avanceSuministro, avancePu, avanceFisico, desfase } = calcularResumenObra({
+  const { ejercido, desglose, disponible, avanceFinanciero, avanceTareas, avanceSuministro, avancePu, avanceFisico, desfase } = calcularResumenObra({
     presupuesto,
-    materiales,
+    materiales: comprasSinOc,
     nomina: nominaTotal,
+    oc: Number(g?.oc_total ?? 0),
+    manoObra: Number(g?.mo_total ?? 0),
     tarjetas: d.tarjetas.length,
     hechas,
     requisiciones: d.requisiciones,
@@ -101,7 +119,11 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tarjeta etiqueta="Presupuesto contratado" valor={mxn.format(presupuesto)} detalle={`${d.controles.length} control(es) de obra`} />
-        <Tarjeta etiqueta="Ejercido" valor={mxn.format(ejercido)} detalle={`materiales ${mxn.format(materiales)} · nómina ${mxn.format(nominaTotal)}`} />
+        <Tarjeta
+          etiqueta="Ejercido"
+          valor={mxn.format(ejercido)}
+          detalle={`OC ${mxn.format(desglose.oc)} · mano de obra ${mxn.format(desglose.manoObra)}${desglose.compras ? ` · otras compras ${mxn.format(desglose.compras)}` : ""}`}
+        />
         <Tarjeta etiqueta="Disponible" valor={mxn.format(disponible)} detalle={presupuesto > 0 ? `margen ${pct((100 * disponible) / presupuesto)}` : "sin presupuesto capturado"} tono={disponible < 0 ? "text-red-700" : ""} />
         <Tarjeta etiqueta="Físico vs financiero" valor={desfase === null ? "—" : `${desfase > 0 ? "+" : ""}${Math.round(desfase)} pts`} detalle={desfase === null ? "faltan datos" : desfase > 0 ? "se ha gastado más de lo avanzado" : "gasto por debajo del avance"} tono={tonoDesfase} />
       </div>
@@ -123,6 +145,64 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
           ))}
         </ul>
       </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="rounded border border-slate-200 bg-white p-4">
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Órdenes de compra y de servicio</h3>
+          {g && g.oc_num > 0 ? (
+            <div className="text-sm text-slate-700">
+              <p>
+                <b>{g.oc_num}</b> orden(es) por <b>{mxn.format(Number(g.oc_total))}</b>
+              </p>
+              <p className="text-xs text-slate-500">
+                pagado {mxn.format(Number(g.oc_pagado))} · por pagar {mxn.format(Number(g.oc_total) - Number(g.oc_pagado))}
+              </p>
+              <div className="mt-2 h-2.5 w-full rounded bg-slate-100">
+                <div className="h-2.5 rounded bg-emerald-500" style={{ width: `${Number(g.oc_total) > 0 ? Math.min(100, (100 * Number(g.oc_pagado)) / Number(g.oc_total)) : 0}%` }} />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">Las que en el backoffice o aquí llevan el nombre de esta obra; sin canceladas.</p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">No hay órdenes con el nombre de esta obra.</p>
+          )}
+        </section>
+        <section className="rounded border border-slate-200 bg-white p-4">
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Mano de obra pagada por semana</h3>
+          {g && g.mo_semanas.length > 0 ? (
+            <>
+              <p className="text-sm text-slate-700">
+                <b>{mxn.format(Number(g.mo_total))}</b> en {g.mo_semanas.length} semana(s)
+              </p>
+              <div className="mt-2 max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {g.mo_semanas.map((w) => (
+                      <tr key={`${w.anio}-${w.semana}`} className="border-t border-slate-100">
+                        <td className="py-0.5 pr-2">Sem {w.semana}</td>
+                        <td className="py-0.5 pr-2 text-slate-500">
+                          {w.inicio?.split("-").reverse().join("/")} – {w.fin?.split("-").reverse().join("/")}
+                        </td>
+                        <td className="py-0.5 text-right tabular-nums">{mxn.format(Number(w.monto))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <h4 className="mt-3 text-xs font-semibold uppercase text-slate-500">Por partida</h4>
+              <ul className="text-xs">
+                {g.mo_partidas.map((x) => (
+                  <li key={x.partida} className="flex justify-between border-t border-slate-100 py-0.5">
+                    <span>{x.partida}</span>
+                    <span className="tabular-nums">{mxn.format(Number(x.monto))}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="text-sm text-slate-400">El módulo de mano de obra del backoffice no tiene pagos para esta obra.</p>
+          )}
+        </section>
+      </div>
 
       <section className="rounded border border-slate-200 bg-white p-4">
         <h3 className="mb-2 text-sm font-semibold text-slate-700">Por control de obra</h3>
