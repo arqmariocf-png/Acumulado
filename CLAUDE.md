@@ -1450,6 +1450,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   OS); `fn_orden_ia_guardar` y `fn_oc_desde_necesidades` reescritas por
   reemplazo sobre su definición (`20261019110000`). Las ya emitidas no se
   renumeraron; `folio_ia_os` queda sin uso.
+- **Una serie y una lista para OC y OS (19-oct-2026, Mario: "Alma y Laura
+  tienen cada una sus órdenes de compra y de servicio, debiendo ser una
+  serie global"; "OC y OS dentro del mismo menú para revisarlo en un solo
+  archivo")**: OC, OS y las OC de requisiciones toman el número de la
+  secuencia `folio_ia_oc` y conservan su prefijo (IA-OC-0003, IA-OS-0004…;
+  ya no RQ-…); `folio_ia_os` sin uso (`20261019110000`). En `/ordenes` la
+  pestaña "Compras y servicios (OC / OS)" lista las dos juntas con columna
+  Tipo, filtro Todas / Compras / Servicios (`?tipo=OC|OS` solo filtra;
+  `?tipo=OV` = pestaña de ventas) y "Descargar Excel" (`csvOrdenes` en
+  `lib/ordenesIa.ts`, con pruebas). Menú: una entrada "Órdenes de compra y
+  de servicio (OC / OS)" + la de OV.
 - Pendiente: que las vistas de avance de OV (`avance_embarque_ov`,
   `v_ov_lineas_avance`, Match) ignoren las OV canceladas; liga de partida a
   producto del catálogo.

@@ -7,7 +7,7 @@ import { SelectorEmpresa, useEmpresasAlcance } from "../../components/SelectorEm
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { BotonVerOv } from "./VerOrdenVenta";
 import { EditorOrden } from "./EditorOrden";
-import { TIPOS_ORDEN, etapaOrdenCompra, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
+import { csvOrdenes, etapaOrdenCompra, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
 
 const dinero = (n: number | null | undefined) =>
   n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
@@ -22,6 +22,7 @@ const TONOS: Record<string, string> = {
 
 interface FilaOrden {
   id: string;
+  tipo: TipoOrden;
   folio: string;
   empresa_id: string;
   contraparte: string | null;
@@ -36,10 +37,17 @@ interface FilaOrden {
 }
 
 /** Órdenes propias OC / OS / OV con folio IA (10-oct-2026). Conviven con las
- * del backoffice: lo autorizado, pagado y recibido sigue en sus pantallas. */
+ * del backoffice: lo autorizado, pagado y recibido sigue en sus pantallas.
+ * Compras y servicios van en UNA lista (19-oct-2026, Mario: "órdenes de
+ * compra y órdenes de servicio dentro del mismo menú para revisarlo en un solo
+ * archivo"): ?tipo=OC u OS solo filtra; ?tipo=OV es la pestaña de ventas. */
 export function Ordenes() {
   const [params, setParams] = useSearchParams();
-  const tipo = (["OC", "OS", "OV"].includes(params.get("tipo") ?? "") ? params.get("tipo") : "OC") as TipoOrden;
+  const tipoParam = params.get("tipo");
+  const vista: "compras" | "OV" = tipoParam === "OV" ? "OV" : "compras";
+  const filtro: "todas" | "OC" | "OS" = tipoParam === "OC" || tipoParam === "OS" ? tipoParam : "todas";
+  // Tipo con el que abre "+ Nueva" (en el editor se cambia entre OC y OS).
+  const tipo: TipoOrden = vista === "OV" ? "OV" : filtro === "OS" ? "OS" : "OC";
   const [empresaId, setEmpresaId] = useEmpresaFiltro();
   const { perfil } = useAuth();
   const { data: empresas } = useEmpresasAlcance();
@@ -51,9 +59,9 @@ export function Ordenes() {
   const esDireccion = !!perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol);
 
   const lista = useQuery({
-    queryKey: ["ordenes-ia", tipo, empresaId, verBackoffice],
+    queryKey: ["ordenes-ia", vista, filtro, empresaId, verBackoffice],
     queryFn: async (): Promise<FilaOrden[]> => {
-      if (tipo === "OV") {
+      if (vista === "OV") {
         let q = supabase
           .from("ordenes_venta")
           .select("id, id_ov, empresa_id, cliente, proyecto, total, fecha_ov, fuente, creada_por, cancelada_en, created_at")
@@ -68,6 +76,7 @@ export function Ordenes() {
           const cancelada = !!o.cancelada_en;
           return {
             id: o.id as string,
+            tipo: "OV" as TipoOrden,
             folio: o.id_ov as string,
             empresa_id: o.empresa_id as string,
             contraparte: o.cliente as string | null,
@@ -85,7 +94,7 @@ export function Ordenes() {
       let q = supabase
         .from("v_oc_pagos")
         .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice")
-        .eq("tipo", tipo)
+        .in("tipo", filtro === "todas" ? ["OC", "OS"] : [filtro])
         .order("fecha_creacion", { ascending: false })
         .limit(300);
       if (!verBackoffice) q = q.eq("fuente", "acumulado");
@@ -99,9 +108,11 @@ export function Ordenes() {
         for (const x of c ?? []) creadores.set(x.id as string, x.creada_por as string | null);
       }
       return (data ?? []).map((o) => {
-        const etapa = etapaOrdenCompra(o as never, tipo as "OC" | "OS");
+        const tipoFila = (o.tipo === "OS" ? "OS" : "OC") as "OC" | "OS";
+        const etapa = etapaOrdenCompra(o as never, tipoFila);
         return {
           id: o.id as string,
+          tipo: tipoFila,
           folio: o.id_orden as string,
           empresa_id: o.empresa_id as string,
           contraparte: o.proveedor as string | null,
@@ -132,11 +143,21 @@ export function Ordenes() {
   const info = infoTipo(tipo);
   const puedeTocar = (o: FilaOrden) => esDireccion || o.creada_por === perfil?.id;
 
+  function descargar() {
+    const csv = csvOrdenes(filas.map((o) => ({ ...o, empresa: codigo(o.empresa_id), estado: o.etapa.etiqueta })));
+    const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${vista === "OV" ? "ordenes-venta" : "ordenes-compra-y-servicio"}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function cancelar(o: FilaOrden) {
     const motivo = window.prompt(`¿Por qué se cancela ${o.folio}?`);
     if (!motivo?.trim()) return;
     setError(null);
-    const { error: e } = await supabase.rpc("fn_orden_ia_cancelar", { p_id: o.id, p_venta: tipo === "OV", p_motivo: motivo });
+    const { error: e } = await supabase.rpc("fn_orden_ia_cancelar", { p_id: o.id, p_venta: o.tipo === "OV", p_motivo: motivo });
     if (e) setError(e.message);
     queryClient.invalidateQueries({ queryKey: ["ordenes-ia"] });
   }
@@ -145,26 +166,38 @@ export function Ordenes() {
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Órdenes OC / OS / OV</h1>
-          <p className="text-xs text-slate-500">Folio propio IA-OC, IA-OS e IA-OV. Las OC y OS van a "Por autorizar" de dirección y de ahí a pagos y recepción como las del backoffice.</p>
+          <h1 className="text-xl font-semibold text-slate-900">{vista === "OV" ? "Órdenes de venta (OV)" : "Órdenes de compra y de servicio (OC / OS)"}</h1>
+          <p className="text-xs text-slate-500">
+            {vista === "OV"
+              ? "Folio propio IA-OV; almacén surte la salida contra la OV."
+              : "Compras y servicios en una sola lista y una sola serie de folios. Van a \"Por autorizar\" de dirección y de ahí a pagos y recepción como las del backoffice."}
+          </p>
         </div>
-        <button type="button" onClick={() => setEditor({ id: null })} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
-          + Nueva {tipo}
-        </button>
+        <div className="flex gap-2">
+          <button type="button" onClick={descargar} disabled={!filas.length} className="rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            Descargar Excel
+          </button>
+          <button type="button" onClick={() => setEditor({ id: null })} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+            + Nueva {vista === "OV" ? "OV" : "OC u OS"}
+          </button>
+        </div>
       </div>
 
       <div className="mb-3 flex gap-1 overflow-x-auto border-b border-slate-200">
-        {TIPOS_ORDEN.map((t) => (
+        {([
+          { clave: "compras", etiqueta: "Compras y servicios (OC / OS)", params: {} },
+          { clave: "OV", etiqueta: "Ventas (OV)", params: { tipo: "OV" } },
+        ] as const).map((t) => (
           <button
-            key={t.tipo}
+            key={t.clave}
             type="button"
             onClick={() => {
-              setParams({ tipo: t.tipo });
+              setParams(t.params);
               setEditor(null);
             }}
-            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm ${tipo === t.tipo ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm ${vista === t.clave ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
           >
-            {t.corto}
+            {t.etiqueta}
           </button>
         ))}
       </div>
@@ -182,6 +215,20 @@ export function Ordenes() {
 
       <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
         <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />
+        {vista === "compras" && (
+          <div className="flex gap-1 rounded border border-slate-300 p-0.5">
+            {(["todas", "OC", "OS"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setParams(f === "todas" ? {} : { tipo: f })}
+                className={`rounded px-2 py-1 text-xs ${filtro === f ? "bg-slate-900 text-white" : "text-slate-600"}`}
+              >
+                {f === "todas" ? "Todas" : f === "OC" ? "Compras" : "Servicios"}
+              </button>
+            ))}
+          </div>
+        )}
         <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={`Buscar folio, ${info.contraparte.toLowerCase()} u obra`} className="w-64 rounded border border-slate-300 px-2 py-1.5" />
         <label className="flex items-center gap-1 text-slate-600">
           <input type="checkbox" checked={verBackoffice} onChange={(e) => setVerBackoffice(e.target.checked)} />
@@ -198,6 +245,7 @@ export function Ordenes() {
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-3 py-2">Folio</th>
+                {vista === "compras" && <th className="px-3 py-2">Tipo</th>}
                 <th className="px-3 py-2">Fecha</th>
                 <th className="px-3 py-2">Empresa</th>
                 <th className="px-3 py-2">{info.contraparte}</th>
@@ -210,8 +258,8 @@ export function Ordenes() {
             <tbody>
               {filas.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-slate-500">
-                    Todavía no hay {info.corto.toLowerCase()} con folio IA. Usa "+ Nueva {tipo}".
+                  <td colSpan={9} className="px-3 py-6 text-center text-slate-500">
+                    Todavía no hay órdenes con folio IA. Usa "+ Nueva {vista === "OV" ? "OV" : "OC u OS"}".
                   </td>
                 </tr>
               )}
@@ -221,6 +269,11 @@ export function Ordenes() {
                     {o.folio}
                     {o.fuente !== "acumulado" && <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 font-sans text-[10px] font-normal uppercase text-slate-500">{o.fuente === "api" ? "backoffice" : o.fuente}</span>}
                   </td>
+                  {vista === "compras" && (
+                    <td className="px-3 py-2 text-xs">
+                      <span className={`rounded px-1.5 py-0.5 ${o.tipo === "OS" ? "bg-violet-100 text-violet-800" : "bg-sky-100 text-sky-800"}`}>{o.tipo === "OS" ? "servicio" : "compra"}</span>
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-xs">{o.fecha ?? "—"}</td>
                   <td className="px-3 py-2 text-xs">{codigo(o.empresa_id)}</td>
                   <td className="px-3 py-2">{o.contraparte ?? "—"}</td>
@@ -231,7 +284,7 @@ export function Ordenes() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
-                      {tipo === "OV" ? <BotonVerOv ovId={o.id} /> : <BotonVerOc ocId={o.id} />}
+                      {o.tipo === "OV" ? <BotonVerOv ovId={o.id} /> : <BotonVerOc ocId={o.id} />}
                       {o.editable && puedeTocar(o) && (
                         <button type="button" onClick={() => setEditor({ id: o.id })} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
                           Editar

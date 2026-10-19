@@ -104,3 +104,15 @@ export function ordenEditable(o: { fuente: string; autorizacion?: string | null;
   if (o.cancelada) return false;
   return o.autorizacion == null || o.autorizacion === "pendiente";
 }
+
+/** Excel (CSV) de la lista de órdenes: compras y servicios juntos en un solo
+ * archivo (19-oct-2026). Más reciente primero, como en pantalla. */
+export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; proyecto: string | null; total: number | null; estado: string; fuente: string }[]): string {
+  const celda = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const tipoTexto: Record<TipoOrden, string> = { OC: "Compra", OS: "Servicio", OV: "Venta" };
+  const renglones = [["Folio", "Tipo", "Fecha", "Empresa", "Proveedor / cliente", "Proyecto", "Total c/IVA", "Estado", "Origen"]];
+  for (const o of filas) {
+    renglones.push([o.folio, tipoTexto[o.tipo], o.fecha ?? "", o.empresa, o.contraparte ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.estado, o.fuente === "api" ? "backoffice" : o.fuente === "acumulado" ? "Acumulado" : o.fuente]);
+  }
+  return renglones.map((r) => r.map(celda).join(",")).join("\n");
+}
