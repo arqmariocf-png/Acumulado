@@ -36,6 +36,7 @@ interface PagoVista {
   clabe: string | null;
   cuenta_proveedor: string | null;
   rfc_proveedor: string | null;
+  tipo?: string | null;
   correo_proveedor: string | null;
   comprobante_nombre: string | null;
   /** Cómo se paga según la OC del backoffice (Tipo_pago). */
@@ -315,6 +316,16 @@ function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta:
     <tr key={p.id} className={`border-t border-slate-100 ${p.estatus === "pagado" ? "text-slate-500" : ""}`}>
       <td className="px-3 py-2 align-top">
         <div className="font-medium text-slate-900">{p.beneficiario}</div>
+        {/* RFC del proveedor (20-oct-2026, Mario: "en los pagos muéstrale a Delia el RFC"). */}
+        {p.tipo === "proveedor" || p.tipo == null ? (
+          <div className="text-xs">
+            {p.rfc_proveedor ? (
+              <span className="font-mono text-slate-700">RFC {p.rfc_proveedor}</span>
+            ) : (
+              <span className="text-amber-700">sin RFC (se captura en "editar" de los datos bancarios)</span>
+            )}
+          </div>
+        ) : null}
         <div className="text-xs text-slate-500">
           {p.concepto}
           {p.id_orden && (
