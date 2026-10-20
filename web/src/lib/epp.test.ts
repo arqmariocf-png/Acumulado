@@ -60,3 +60,21 @@ test("responsiva: solo lo entregado, con valor y vigencia, y escapa texto", () =
   assert.match(html, /artículo 110/);
   assert.match(html, /\$900\.00/);
 });
+
+test("solicitud de EPP: limpia renglones y revisa", async () => {
+  const { limpiarPiezasSolicitud, revisarSolicitudEpp } = await import("./epp.ts");
+  const piezas = limpiarPiezasSolicitud([
+    { descripcion: " Casco ", talla: "", cantidad: "" },
+    { descripcion: "", talla: "M", cantidad: "3" },
+    { descripcion: "Botas", talla: "27", cantidad: "1,5" },
+  ]);
+  assert.deepEqual(piezas, [
+    { descripcion: "Casco", talla: null, cantidad: 1, unidad: "pza" },
+    { descripcion: "Botas", talla: "27", cantidad: 1.5, unidad: "pza" },
+  ]);
+  assert.equal(revisarSolicitudEpp("p1", piezas), null);
+  assert.match(revisarSolicitudEpp("", piezas) ?? "", /persona/);
+  assert.match(revisarSolicitudEpp("p1", []) ?? "", /al menos una/);
+  assert.match(revisarSolicitudEpp("p1", [{ descripcion: "Guantes", talla: null, cantidad: 0, unidad: "pza" }]) ?? "", /Guantes/);
+  assert.match(revisarSolicitudEpp("p1", limpiarPiezasSolicitud([{ descripcion: "Lentes", talla: "", cantidad: "dos" }])) ?? "", /Lentes/);
+});

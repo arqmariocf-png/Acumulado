@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { ETIQUETA_ESTADO_EPP, htmlResponsivaEpp, porDescontar, semaforoVigencia, valorEnPoder, type LineaEpp } from "../../lib/epp";
+import { SolicitudesEppPorAtender } from "./SolicitudesEppPorAtender";
 
 // Equipo de protección personal (Mario con Raúl, 5-oct-2026): RH entrega a
 // cada trabajador, con cargo a la obra que elija; lo que no hay en bodega se
@@ -234,6 +235,15 @@ export function EquipoProteccion() {
           {aviso}
         </p>
       )}
+
+      <SolicitudesEppPorAtender
+        obras={obras ?? []}
+        nombrePersona={(id) => nombrePersona.get(id)?.nombre ?? "—"}
+        onAtendida={(m) => {
+          setError(null);
+          setAviso(m);
+        }}
+      />
 
       {nueva && (
         <div className="space-y-3 rounded border border-slate-200 bg-white p-4">

@@ -172,12 +172,14 @@ export function ProyectoDetalle() {
         )}
       </div>
 
-      <div className="mb-4 flex gap-2 border-b border-slate-200">
+      {/* Pestañas fijas debajo de la barra de la sección (top-11): se cambia
+          de pestaña sin regresar hasta arriba (Mario, 21-oct-2026). */}
+      <div className="sticky top-11 z-20 -mx-4 mb-4 flex gap-2 overflow-x-auto border-b border-slate-200 bg-slate-50/95 px-4 backdrop-blur [scrollbar-width:none]">
         {TABS.map((t) => (
           <button
             key={t.clave}
             onClick={() => setTab(t.clave)}
-            className={`border-b-2 px-3 py-2 text-sm ${tabActual === t.clave ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+            className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm ${tabActual === t.clave ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
           >
             {t.etiqueta}
           </button>
