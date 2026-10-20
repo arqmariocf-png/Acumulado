@@ -147,3 +147,48 @@ se descuente vía nómina, en los términos del artículo 110 de la Ley Federal 
 </div>
 </body></html>`;
 }
+
+// Solicitud de EPP desde obra (21-oct-2026): supervisores, responsables y RH
+// piden equipo para su gente; RH la atiende como una entrega más.
+
+export type EstadoSolicitudEpp = "pendiente" | "atendida" | "rechazada";
+
+export const ETIQUETA_SOLICITUD_EPP: Record<EstadoSolicitudEpp, string> = {
+  pendiente: "Esperando a RH",
+  atendida: "Atendida por RH",
+  rechazada: "Rechazada",
+};
+
+export interface PiezaSolicitud {
+  descripcion: string;
+  talla: string;
+  cantidad: string;
+}
+
+export interface PiezaSolicitudLimpia {
+  descripcion: string;
+  talla: string | null;
+  cantidad: number;
+  unidad: string;
+}
+
+/** Quita renglones vacíos y normaliza; la cantidad vacía cuenta como 1. */
+export function limpiarPiezasSolicitud(filas: PiezaSolicitud[]): PiezaSolicitudLimpia[] {
+  return filas
+    .filter((f) => f.descripcion.trim())
+    .map((f) => ({
+      descripcion: f.descripcion.trim(),
+      talla: f.talla.trim() || null,
+      cantidad: f.cantidad.trim() === "" ? 1 : Number(f.cantidad.replace(",", ".")),
+      unidad: "pza",
+    }));
+}
+
+export function revisarSolicitudEpp(personalId: string, piezas: PiezaSolicitudLimpia[]): string | null {
+  if (!personalId) return "Elige a la persona que necesita el equipo.";
+  if (piezas.length === 0) return "Agrega al menos una pieza (casco, chaleco, botas…).";
+  if (piezas.length > 30) return "Máximo 30 piezas por solicitud.";
+  const mala = piezas.find((p) => !Number.isFinite(p.cantidad) || p.cantidad <= 0);
+  if (mala) return `La cantidad de "${mala.descripcion}" debe ser mayor a cero.`;
+  return null;
+}
