@@ -20,7 +20,8 @@ const DETALLE: Record<string, { responsable: string | null; color: string }> = {
   sistemas: { responsable: "Mario Contreras", color: "bg-zinc-700" },
 };
 
-export const AREAS: AreaOrganigrama[] = SECCIONES.map((s) => ({ ...s, ...(DETALLE[s.clave] ?? { responsable: null, color: "bg-slate-600" }) }));
+// Catálogos es sección del menú, no un departamento.
+export const AREAS: AreaOrganigrama[] = SECCIONES.filter((s) => s.clave !== "catalogos").map((s) => ({ ...s, ...(DETALLE[s.clave] ?? { responsable: null, color: "bg-slate-600" }) }));
 
 export function areaDeClave(clave: string | undefined): AreaOrganigrama | undefined {
   return AREAS.find((a) => a.clave === clave);

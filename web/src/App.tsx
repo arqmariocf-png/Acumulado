@@ -42,6 +42,8 @@ const Ordenes = lazy(() => import("./pages/ordenes/Ordenes").then((m) => ({ defa
 const Cotizador = lazy(() => import("./pages/cotizador/Cotizador").then((m) => ({ default: m.Cotizador })));
 const CatalogoCompras = lazy(() => import("./pages/compras/CatalogoCompras").then((m) => ({ default: m.CatalogoCompras })));
 const CatalogoItems = lazy(() => import("./pages/compras/CatalogoItems").then((m) => ({ default: m.CatalogoItems })));
+const CatalogoEmpresas = lazy(() => import("./pages/catalogos/CatalogoEmpresas").then((m) => ({ default: m.CatalogoEmpresas })));
+const CatalogoClientes = lazy(() => import("./pages/catalogos/CatalogoClientes").then((m) => ({ default: m.CatalogoClientes })));
 const Crm = lazy(() => import("./pages/crm/Crm").then((m) => ({ default: m.Crm })));
 const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
 const RespaldoDropbox = lazy(() => import("./pages/admin/RespaldoDropbox").then((m) => ({ default: m.RespaldoDropbox })));
@@ -178,6 +180,13 @@ function Enrutador() {
             <Route path="/ordenes" element={<Ordenes />} />
             <Route path="/compras/catalogo" element={<CatalogoCompras />} />
             <Route path="/compras/items" element={<CatalogoItems />} />
+          </Route>
+          {/* Catálogos (21-oct-2026): empresas para dirección; clientes para quien los lee o cotiza. */}
+          <Route element={<ProtectedRoute roles={["direccion"]} />}>
+            <Route path="/catalogos/empresas" element={<CatalogoEmpresas />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion", "empresa", "produccion"]} oPermiso={(p) => (p.modulos ?? []).some((m) => m === "compras" || m === "cotizador" || m === "legal")} />}>
+            <Route path="/catalogos/clientes" element={<CatalogoClientes />} />
           </Route>
           {/* Legal: permiso por persona ('legal') sin cambiar el rol; dirección entra a crédito y contratos. */}
           <Route element={<ProtectedRoute roles={["direccion"]} oPermiso={(p) => (p.modulos ?? []).includes("legal")} />}>
