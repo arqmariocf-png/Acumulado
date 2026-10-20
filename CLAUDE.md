@@ -2043,6 +2043,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   a todos ahora". 17-oct: el primer recordatorio llegó a Mario (4
   dispositivos).
 
+- **Respaldo en Dropbox de los proyectos a cotizar (21-oct-2026, Mario: "la
+  biblioteca de archivos en Dropbox como respaldo… para que pueda leerse desde
+  otras secciones de Claude"; luego "únicamente por ahora de los proyectos a
+  cotizar, para hacer más rápido esta dinámica")**: Sistemas → **Respaldo en
+  Dropbox** (`/admin/respaldo-dropbox`, `pages/admin/RespaldoDropbox.tsx`,
+  `lib/respaldoDropbox.ts` con pruebas; solo director general). Mario crea una
+  app propia en dropbox.com/developers (App folder, permisos
+  files.content.write/read), pega App key + secret y el código de
+  autorización; la edge **`respaldo-dropbox`** (verify_jwt false: x-cron-secret
+  o sesión de `auth_admin_global`; acciones estado/conectar/desconectar/
+  respaldar) guarda app key, secret y refresh token en `config_sistema`. pg_cron
+  `respaldo-dropbox-horario` (minuto 25, `disparar_respaldo_dropbox()`, no hace
+  nada sin conexión): cada tabla de `fn_respaldo_tablas()` (lista CERRADA:
+  proyectos, proyecto_planos, proyecto_presupuesto_cliente, pu_analisis/_items,
+  pu_insumos, pu_insumo_precios, pu_factores, pu_precios_cliente,
+  pu_aprobaciones, cotizaciones_produccion/_lineas, empresas, clientes; solo
+  LOMA) va una vez al día a `<ruta>/Tablas/<tabla>.csv` si cambió (hash), luego
+  `LEEME.md` (índice para Claude) y los archivos de `planos/`
+  (`fn_respaldo_archivos`, `archivoRespaldable`) a `<ruta>/Archivos/`; bitácora
+  `respaldos_dropbox` y estado por renglón `respaldo_dropbox_items`
+  (`20261021090000`; parte pura `respaldo-dropbox/respaldo.ts`, pruebas en
+  `_shared/respaldo/`). **Ampliar = agregar a la lista de `fn_respaldo_tablas` y,
+  si son archivos, a `archivoRespaldable`**; nunca RH, bancos ni secretos sin
+  que Mario lo pida. Al 21-oct falta que Mario conecte su Dropbox.
 - Carpeta `/Acumulado · Claude` en el Dropbox de Mario (MCP de Dropbox):
   `01 Documentos base` (lo que Mario deja: formatos, Excel de referencia,
   logos), `02 Consultas` (lo que Claude prepara a pedido, nombre

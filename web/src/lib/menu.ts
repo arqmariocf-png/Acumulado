@@ -286,6 +286,7 @@ export const SECCIONES: SeccionMenu[] = [
     entradas: [
       { ruta: "/admin", etiqueta: "Admin", descripcion: "usuarios, roles, cuentas, reglas y proyectos", uso: "Solo el administrador: dar rol a una cuenta, altas de cuentas bancarias y reglas del motor.", visible: esAdmin , personal: true },
       { ruta: "/admin/mensaje-semana", etiqueta: "Mensaje de la semana", descripcion: "tu agradecimiento al equipo, sábados 1 p. m.", uso: "Solo el director general: elige o escribe la frase, pruébala contigo y queda programada para el sábado.", visible: esAdmin },
+      { ruta: "/admin/respaldo-dropbox", etiqueta: "Respaldo en Dropbox", descripcion: "proyectos a cotizar, para leerlos desde Claude", uso: "Solo el director general: conecta tu Dropbox una vez y cada noche se copian proyectos, planos, precios unitarios y cotizaciones (CSV con su índice) para cotizar más rápido desde Claude.", visible: esAdmin },
       { ruta: "/organigrama/configurar", etiqueta: "KPIs del organigrama", descripcion: "qué indicadores y umbrales lleva cada área", uso: "Solo dirección: elige los puntos de color de cada área del organigrama.", visible: esAdmin },
       { ruta: "/guia", etiqueta: "Guía de uso", descripcion: "qué hace cada módulo y cuándo usarlo", uso: "Cuando alguien nuevo entra al sistema o no sabe a dónde ir.", visible: () => true , personal: true },
     ],
