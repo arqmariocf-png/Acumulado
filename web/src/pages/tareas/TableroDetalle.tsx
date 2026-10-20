@@ -139,8 +139,10 @@ function TarjetaCard({ tarjeta, nombreAsignado, nombreSupervisor, onClick, onDra
   );
 }
 
-export function TableroDetalle() {
-  const { tableroId } = useParams<{ tableroId: string }>();
+/** `tableroId` por prop: Tareas por área (`TareasArea`) muestra el tablero del área sin cambiar de ruta. */
+export function TableroDetalle({ tableroId: idDelArea }: { tableroId?: string } = {}) {
+  const { tableroId: idDeRuta } = useParams<{ tableroId: string }>();
+  const tableroId = idDelArea ?? idDeRuta;
   const navigate = useNavigate();
   const { perfil } = useAuth();
   const queryClient = useQueryClient();

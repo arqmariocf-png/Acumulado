@@ -87,6 +87,7 @@ const PreciosCatalogo = lazy(() => import("./pages/precios/Catalogo").then((m) =
 const PreciosDetalle = lazy(() => import("./pages/precios/Detalle").then((m) => ({ default: m.Detalle })));
 const Tableros = lazy(() => import("./pages/tareas/Tableros").then((m) => ({ default: m.Tableros })));
 const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((m) => ({ default: m.TableroDetalle })));
+const TareasArea = lazy(() => import("./pages/tareas/TareasArea").then((m) => ({ default: m.TareasArea })));
 const BbvaMantenimiento = lazy(() => import("./pages/bbva/BbvaMantenimiento").then((m) => ({ default: m.BbvaMantenimiento })));
 const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ default: m.ManoDeObra })));
 const VerArchivo = lazy(() => import("./pages/VerArchivo").then((m) => ({ default: m.VerArchivo })));
@@ -274,6 +275,7 @@ function Enrutador() {
 
           <Route element={<ProtectedRoute modulo="tareas" />}>
             <Route path="/tareas" element={<Tableros />} />
+            <Route path="/tareas/area/:area" element={<TareasArea />} />
             <Route path="/tareas/:tableroId" element={<TableroDetalle />} />
           </Route>
 

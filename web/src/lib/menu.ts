@@ -1,5 +1,6 @@
 import { esRhDirectivo, esRolBasico } from "./modulos.ts";
 import { esContabilidad } from "./puestos.ts";
+import { esAreaTareas, rutaTareasArea, type AreaTareas } from "./tareasArea.ts";
 import type { ModuloClave, Profile } from "../types/database";
 
 /** Catálogo único de módulos, por área, con orientación de uso. Lo consumen
@@ -292,6 +293,32 @@ export const SECCIONES: SeccionMenu[] = [
     ],
   },
 ];
+
+// Tareas por área (21-oct-2026, Mario: "agrega una barra de tareas a cada una
+// de las áreas… para que sea más fácil llevar el control en su propio menú").
+// Cada sección lleva al final "Tareas de <área>" con el tablero del área
+// (fn_tablero_area); la visibilidad es la de quien trabaja en esa área.
+const VE_TAREAS_AREA: Record<AreaTareas, (p: Profile) => boolean> = {
+  finanzas: esFinanzas,
+  contabilidad: (p) => veFinanzasCompleto(p) || esContabilidad(p),
+  legal: (p) => esAdmin(p) || p.rol === "direccion" || (p.modulos ?? []).some((m) => m === "legal" || m === "cumplimiento"),
+  rh: (p) => p.rol === "rh" || p.rol === "rh_documentos" || esAdmin(p),
+  almacen: (p) => veInventario(p) || veOrdenes(p),
+  compras: veOrdenes,
+  logistica: veInventario,
+  mantenimiento: (p) => esFinanzas(p) || bbva(p) || p.rol === "supervisor_bbva" || modulo("bbva")(p),
+  operacion: (p) => veOperacion(p) || modulo("proyectos")(p),
+};
+for (const seccion of SECCIONES) {
+  if (!esAreaTareas(seccion.clave)) continue;
+  seccion.entradas.push({
+    ruta: rutaTareasArea(seccion.clave),
+    etiqueta: `Tareas de ${seccion.titulo.toLowerCase()}`,
+    descripcion: "el tablero de actividades del área",
+    uso: "Las actividades y pendientes del área en un solo tablero: quién lo tiene, para cuándo y en qué columna va.",
+    visible: VE_TAREAS_AREA[seccion.clave],
+  });
+}
 
 /** Alcance de la organización de quien mira. `null` = todavía no cargó, y
  * entonces no se esconde nada por módulo (manda RLS, esto es comodidad). */

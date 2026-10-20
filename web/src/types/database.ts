@@ -794,6 +794,8 @@ export interface Tablero {
   creado_por: string;
   /** Proyecto al que da seguimiento este tablero (avance en Proyectos). */
   proyecto_id: string | null;
+  /** Sección del menú (lib/menu.ts) en la que sale como "Tareas de <área>". */
+  area?: string | null;
   created_at: string;
   updated_at: string;
 }
