@@ -4,11 +4,12 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { RUTA_RESPALDO_DEFAULT, revisarConexion, tamano, urlAutorizacion } from "../../lib/respaldoDropbox";
 
-// Respaldo del sistema en Dropbox (21-oct-2026, Mario: "la biblioteca de
-// archivos en Dropbox como respaldo de todo lo que hay en el sistema, para que
-// puedan leerse desde otras secciones de Claude"). Se conecta una vez con una
-// app de Dropbox; luego la edge `respaldo-dropbox` copia cada noche las tablas
-// (CSV + LEEME.md) y los archivos. Solo el director general.
+// Respaldo en Dropbox de los proyectos a cotizar (21-oct-2026, Mario: "la
+// biblioteca de archivos en Dropbox… para que puedan leerse desde otras
+// secciones de Claude"; "únicamente por ahora de los proyectos a cotizar").
+// Se conecta una vez con una app de Dropbox; luego la edge `respaldo-dropbox`
+// copia cada noche proyectos, planos, precios unitarios y cotizaciones (CSV +
+// LEEME.md). Solo el director general.
 
 interface Estado {
   conectado: boolean;
@@ -103,13 +104,12 @@ function RespaldoDirector() {
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Respaldo en Dropbox</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          Cada noche el sistema copia a tu Dropbox todas las tablas (un CSV por tabla, con un <b>LEEME.md</b> que explica qué hay en cada una) y los archivos
-          subidos: estados de cuenta, CFDI y descargas del SAT, comprobantes, planos, notas y archivos de tareas. Desde cualquier conversación de Claude con el
-          conector de Dropbox puedes pedir "lee el LEEME del respaldo de Acumulado" y trabajar con esos datos.
+          Por ahora solo lo que sirve para <b>cotizar obras</b>: cada noche el sistema copia a tu Dropbox los proyectos, sus planos, el presupuesto del
+          cliente, los precios unitarios (análisis, insumos, precios y factores) y las cotizaciones, en CSV con un <b>LEEME.md</b> que explica cada archivo.
+          Desde cualquier conversación de Claude con el conector de Dropbox puedes pedir "lee el LEEME del respaldo de Acumulado y ayúdame a cotizar…".
         </p>
         <p className="mt-1 max-w-3xl text-xs text-slate-500">
-          No se copian: contraseñas ni llaves, la e.firma del SAT, expedientes y datos personales de RH (personal, contratos, sueldos, nómina, checador y sus
-          fotos), cuentas de nómina y firmas de crédito, datos bancarios de proveedores ni perfiles de usuario.
+          No se copia nada más: ni bancos, facturas, órdenes de compra, inventario, RH, contraseñas ni llaves.
         </p>
       </div>
 

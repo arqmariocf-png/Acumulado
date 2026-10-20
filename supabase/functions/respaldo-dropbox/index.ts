@@ -1,6 +1,8 @@
-// Respaldo diario del sistema en Dropbox (21-oct-2026, Mario: "la biblioteca
-// de archivos en Dropbox como respaldo de todo lo que hay en el sistema, para
-// que puedan leerse desde otras secciones de Claude").
+// Respaldo diario en Dropbox de lo que sirve para cotizar obras (21-oct-2026,
+// Mario: "la biblioteca de archivos en Dropbox… para que puedan leerse desde
+// otras secciones de Claude"; "únicamente por ahora de los proyectos a
+// cotizar"). Qué tablas van lo dice fn_respaldo_tablas() y qué archivos,
+// archivoRespaldable (solo planos).
 //
 // POST { accion }
 //   - "respaldar": pg_cron (disparar_respaldo_dropbox, minuto 25) con

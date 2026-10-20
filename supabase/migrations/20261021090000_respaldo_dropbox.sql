@@ -1,7 +1,8 @@
--- Respaldo diario del sistema en Dropbox (21-oct-2026, Mario: "la biblioteca
--- de archivos en Dropbox como respaldo de todo lo que hay en el sistema, para
--- que pueda leerse desde otras secciones de Claude"; eligió "automático
--- diario" y "todo menos lo sensible").
+-- Respaldo en Dropbox de lo que sirve para cotizar obras (21-oct-2026,
+-- Mario: "la biblioteca de archivos en Dropbox como respaldo, para que pueda
+-- leerse desde otras secciones de Claude"; luego "lo haría únicamente por
+-- ahora de los proyectos a cotizar, para poder hacer más rápido esta
+-- dinámica").
 --
 -- La edge `respaldo-dropbox` (cron cada hora, minuto 25, o el director
 -- general con "Respaldar ahora") escribe en la carpeta de Dropbox que se
@@ -11,16 +12,16 @@
 --   * LEEME.md: índice para que Claude sepa qué hay en cada archivo.
 --   * Archivos/<ruta en Storage>: los archivos del bucket `cargas`, nuevos o
 --     cambiados, hasta donde alcance el tiempo de cada corrida.
--- Fuera: secretos y llaves (config_sistema, e.firma del SAT .cer/.key),
--- expedientes y datos personales de RH (personal, documentos, contratos,
--- sueldos y nómina por persona, checador y sus selfies, cuentas de nómina y
--- firmas de crédito), datos bancarios de proveedores, perfiles, avatares y
--- bitácoras internas. Solo datos de la organización maestra (LOMA) en tablas
--- con empresa_id o grupo_id.
+-- Solo va lo de cotizar: proyectos, sus planos (tabla y archivos `planos/`),
+-- presupuesto del cliente, precios unitarios (análisis, partidas, insumos,
+-- precios, factores, aprobaciones), cotizaciones y los catálogos de empresas y
+-- clientes, de la organización maestra (LOMA). Nada de bancos, CFDI, OC/OV,
+-- inventario, RH ni secretos; para agregar algo se suma a la lista de
+-- fn_respaldo_tablas y, si son archivos, a archivoRespaldable de la edge.
 --
 -- La llave de Dropbox (app key, app secret y refresh token) vive en
 -- config_sistema (solo service_role). Ya aplicado en producción
--- (respaldo_dropbox).
+-- (respaldo_dropbox y respaldo_dropbox_solo_cotizar).
 
 create table if not exists public.respaldo_dropbox_items (
   id uuid primary key default gen_random_uuid(),
@@ -73,7 +74,7 @@ begin
   end loop;
 end $$;
 
--- Qué tablas van al respaldo y cómo se acotan a la organización maestra.
+-- Qué tablas van al respaldo (lista cerrada) y cómo se acotan a la organización maestra.
 create or replace function public.fn_respaldo_tablas()
 returns table (tabla text, filtro text, llave text, columnas text[], descripcion text)
 language sql stable security definer set search_path = public as $$
@@ -92,24 +93,24 @@ language sql stable security definer set search_path = public as $$
          obj_description(format('public.%I', t.table_name)::regclass, 'pg_class')
     from information_schema.tables t
    where t.table_schema = 'public' and t.table_type = 'BASE TABLE'
-     and t.table_name !~ '^_'
-     and t.table_name !~ '^(personal|documentos_personal|tipos_documento_personal|contrataciones|vacante|perfiles_jornada|checador_|nomina_|cuentas_nomina|credito_|credenciales_|personajes|epp_|comedor_pedido|respaldo)'
-     and t.table_name not in ('config_sistema', 'audit_log', 'eventos_pasarela', 'push_subscripciones', 'sat_efirmas',
-                              'profiles', 'profile_empresas', 'socios_organizacion', 'permisos_modulo',
-                              'proveedores_datos_bancarios', 'solicitudes_firma', 'suscripciones', 'pagos',
-                              'planes', 'plan_escalones', 'proyecto_control_nomina', 'proyecto_costeo_imss')
+     and t.table_name in ('proyectos', 'proyecto_planos', 'proyecto_presupuesto_cliente',
+                          'pu_analisis', 'pu_analisis_items', 'pu_insumos', 'pu_insumo_precios',
+                          'pu_factores', 'pu_precios_cliente', 'pu_aprobaciones',
+                          'cotizaciones_produccion', 'cotizaciones_produccion_lineas',
+                          'empresas', 'clientes')
    order by t.table_name;
 $$;
 revoke all on function public.fn_respaldo_tablas() from public, anon, authenticated;
 
--- Archivos del bucket `cargas` (la edge decide cuáles van con archivoRespaldable).
+-- Archivos de planos del bucket `cargas` (la edge vuelve a filtrar con archivoRespaldable).
 create or replace function public.fn_respaldo_archivos()
 returns table (nombre text, tam bigint, actualizado text)
 language sql stable security definer set search_path = public, storage as $$
-  select o.name, coalesce((o.metadata->>'size')::bigint, 0), coalesce(o.updated_at, o.created_at)::text
+  select o.name, coalesce((to_jsonb(o)->'metadata'->>'size')::bigint, 0),
+         coalesce(to_jsonb(o)->>'updated_at', to_jsonb(o)->>'created_at', '')
     from storage.objects o
-   where o.bucket_id = 'cargas' and o.name is not null
-   order by o.created_at;
+   where o.bucket_id = 'cargas' and o.name like 'planos/%'
+   order by o.name;
 $$;
 revoke all on function public.fn_respaldo_archivos() from public, anon, authenticated;
 

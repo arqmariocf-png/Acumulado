@@ -27,14 +27,13 @@ test("header de Dropbox en ASCII y rutas", () => {
   assert.equal(rutaDropbox("Respaldo", "Archivos/estados-cuenta//a.pdf"), "/Respaldo/Archivos/estados-cuenta/a.pdf");
 });
 
-test("archivos que no van al respaldo", () => {
-  assert.equal(archivoRespaldable("estados-cuenta/aep/sep.pdf"), true);
-  assert.equal(archivoRespaldable("sat/abc/descargas/recibido/X_01.zip"), true);
-  assert.equal(archivoRespaldable("sat/abc/1791914020078-efirma.cer"), false);
-  assert.equal(archivoRespaldable("sat/abc/123-efirma.KEY"), false);
-  assert.equal(archivoRespaldable("checador/u1/foto.jpg"), false);
+test("por ahora solo van los planos", () => {
+  assert.equal(archivoRespaldable("planos/p1/1792-plano.pdf"), true);
+  assert.equal(archivoRespaldable("planos/p1/llave.key"), false);
+  assert.equal(archivoRespaldable("estados-cuenta/aep/sep.pdf"), false);
+  assert.equal(archivoRespaldable("sat/abc/descargas/recibido/X_01.zip"), false);
   assert.equal(archivoRespaldable("rh/p1/ine.pdf"), false);
-  assert.equal(archivoRespaldable("pagos/x/comprobante.pdf"), true);
+  assert.equal(archivoRespaldable("checador/u1/foto.jpg"), false);
 });
 
 test("día en hora de México e índice", () => {
