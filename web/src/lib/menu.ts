@@ -310,7 +310,7 @@ export const SECCIONES: SeccionMenu[] = [
 
 // Tareas por área (21-oct-2026, Mario: "agrega una barra de tareas a cada una
 // de las áreas… para que sea más fácil llevar el control en su propio menú").
-// Cada sección lleva al final "Tareas de <área>" con el tablero del área
+// Cada sección lleva primero "Tareas de <área>" con el tablero del área
 // (fn_tablero_area); la visibilidad es la de quien trabaja en esa área.
 const VE_TAREAS_AREA: Record<AreaTareas, (p: Profile) => boolean> = {
   finanzas: esFinanzas,
@@ -323,9 +323,11 @@ const VE_TAREAS_AREA: Record<AreaTareas, (p: Profile) => boolean> = {
   mantenimiento: (p) => esFinanzas(p) || bbva(p) || p.rol === "supervisor_bbva" || modulo("bbva")(p),
   operacion: (p) => veOperacion(p) || modulo("proyectos")(p),
 };
+// Van primero (21-oct-2026, Mario: "dentro del menú pon como primera opción
+// de cada área las tareas porque de ahí se organiza todo lo demás").
 for (const seccion of SECCIONES) {
   if (!esAreaTareas(seccion.clave)) continue;
-  seccion.entradas.push({
+  seccion.entradas.unshift({
     ruta: rutaTareasArea(seccion.clave),
     etiqueta: `Tareas de ${seccion.titulo.toLowerCase()}`,
     descripcion: "el tablero de actividades del área",
