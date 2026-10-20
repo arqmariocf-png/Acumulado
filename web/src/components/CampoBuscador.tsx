@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
 export interface OpcionBuscador {
   clave: string;
@@ -18,6 +18,9 @@ export function CampoBuscador({
   className,
   vacio,
   autoFocus,
+  inputRef,
+  onKeyDown,
+  enterKeyHint,
 }: {
   value: string;
   onChange: (texto: string) => void;
@@ -28,11 +31,16 @@ export function CampoBuscador({
   /** Texto cuando no hay coincidencias (no se muestra si no se pasa). */
   vacio?: string;
   autoFocus?: boolean;
+  /** Para enfocar el campo desde fuera (requisiciones: tras agregar un renglón). */
+  inputRef?: RefObject<HTMLInputElement | null>;
+  /** Teclas que la lista no usó (p. ej. Enter sin sugerencias abiertas = agregar). */
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  enterKeyHint?: "enter" | "done" | "go" | "next" | "previous" | "search" | "send";
 }) {
   const [abierta, setAbierta] = useState(false);
   const [activa, setActiva] = useState(0);
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLInputElement | null>(null);
 
   const reubicar = () => {
     const r = ref.current?.getBoundingClientRect();
@@ -67,7 +75,11 @@ export function CampoBuscador({
   return (
     <>
       <input
-        ref={ref}
+        ref={(el) => {
+          ref.current = el;
+          if (inputRef) (inputRef as { current: HTMLInputElement | null }).current = el;
+        }}
+        enterKeyHint={enterKeyHint}
         value={value}
         autoFocus={autoFocus}
         placeholder={placeholder}
@@ -94,6 +106,9 @@ export function CampoBuscador({
             elegir(activa);
           } else if (e.key === "Escape") {
             setAbierta(false);
+            onKeyDown?.(e);
+          } else {
+            onKeyDown?.(e);
           }
         }}
         className={className}

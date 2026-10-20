@@ -11,6 +11,9 @@ import { BotonImprimirRequisicion } from "./ImprimirRequisicion";
 import { AvisoFiltro, useVer } from "../../components/FiltroDesdeTablero";
 import { Link } from "react-router-dom";
 import { CLASE_SOLICITUD, ETIQUETA_SOLICITUD, type EstadoSolicitudHerramienta } from "../../lib/herramientas";
+import { CampoBuscador } from "../../components/CampoBuscador";
+import { etiquetaCategoria, sugerirItems } from "../../lib/catalogoItems";
+import { useItemsCompra } from "../compras/useItemsCompra";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
  * catálogo, como Ergodinova, 28-sep-2026). */
@@ -112,6 +115,9 @@ export function MisRequisiciones() {
   const [libreUnidad, setLibreUnidad] = useState("pza");
   const [libreCantidad, setLibreCantidad] = useState("1");
   const descripcionRef = useRef<HTMLInputElement>(null);
+  // Catálogo propio de items (21-oct-2026): sugiere al escribir; el texto libre sigue valiendo.
+  const { data: catalogoItems } = useItemsCompra();
+  const sugeridosCatalogo = useMemo(() => sugerirItems(catalogoItems ?? [], libreDescripcion, 8), [catalogoItems, libreDescripcion]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -329,15 +335,29 @@ export function MisRequisiciones() {
               <div className="mb-3">
                 <label className="mb-1 block text-xs font-medium text-slate-600">{esHerramienta ? "Herramienta o equipo que necesitas" : "Material o servicio que necesitas"}</label>
                 <div className="flex flex-wrap gap-2">
-                  <input
-                    ref={descripcionRef}
-                    value={libreDescripcion}
-                    onChange={(e) => setLibreDescripcion(e.target.value)}
-                    onKeyDown={enterAgrega}
-                    enterKeyHint="enter"
-                    placeholder={esHerramienta ? "Ej. Rotomartillo, andamio tubular, nivel láser…" : "Ej. Cemento gris 50 kg, varilla 3/8, flete…"}
-                    className="min-w-[12rem] flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                  />
+                  <div className="min-w-[12rem] flex-1">
+                    <CampoBuscador
+                      inputRef={descripcionRef}
+                      value={libreDescripcion}
+                      onChange={setLibreDescripcion}
+                      onKeyDown={enterAgrega}
+                      enterKeyHint="enter"
+                      opciones={sugeridosCatalogo.map((i) => ({
+                        clave: i.id,
+                        titulo: i.descripcion,
+                        detalle: `${i.clave} · ${etiquetaCategoria(i.categoria)}${i.unidad ? ` · ${i.unidad}` : ""}`,
+                      }))}
+                      onElegir={(id) => {
+                        const i = (catalogoItems ?? []).find((x) => x.id === id);
+                        if (!i) return;
+                        setLibreDescripcion(i.descripcion);
+                        const u = (i.unidad ?? "").toLowerCase();
+                        if (UNIDADES_LIBRES.includes(u)) setLibreUnidad(u);
+                      }}
+                      placeholder={esHerramienta ? "Ej. Rotomartillo, andamio tubular, nivel láser…" : "Ej. Cemento gris 50 kg, varilla 3/8, flete…"}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    />
+                  </div>
                   <input type="number" min={esHerramienta ? "1" : "0.001"} step={esHerramienta ? "1" : "0.001"} value={libreCantidad} onChange={(e) => setLibreCantidad(e.target.value)} onKeyDown={enterAgrega} enterKeyHint="enter" className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" aria-label="Cantidad" />
                   {esHerramienta ? (
                     <span className="self-center text-sm text-slate-500">pza</span>

@@ -6,6 +6,9 @@ import { CampoBuscador } from "../../components/CampoBuscador";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 import { compararPrecios, detalleItem, fechaCortaCatalogo, filtrarContrapartes, filtrarItems, type ContraparteCatalogo, type ItemCatalogo } from "../../lib/buscadorCaptura";
 import { csvHistorico, resumenPorConcepto, totalesHistorico, type CompraHistorico } from "../../lib/historicoCostos";
+import { etiquetaCategoria, sugerirItems } from "../../lib/catalogoItems";
+import { normalizarBusqueda } from "../../lib/buscadorCaptura";
+import { useItemsCompra } from "./useItemsCompra";
 
 const dinero = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }));
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -274,6 +277,9 @@ function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado
 function ArticulosProveedor({ proveedorId, nombre, items, soloConsulta }: { proveedorId: string | null; nombre: string; items: ItemCatalogo[]; soloConsulta: boolean }) {
   const queryClient = useQueryClient();
   const [nueva, setNueva] = useState({ descripcion: "", unidad: "", precio: "", iva: true });
+  // Item del catálogo propio (21-oct-2026): el precio del proveedor queda ligado.
+  const [itemId, setItemId] = useState<string | null>(null);
+  const catalogoItems = useItemsCompra();
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const lista = useQuery({
@@ -295,11 +301,17 @@ function ArticulosProveedor({ proveedorId, nombre, items, soloConsulta }: { prov
       if (!nueva.descripcion.trim()) throw new Error("Escribe el artículo o servicio.");
       const precio = nueva.precio === "" ? null : Number(nueva.precio);
       if (precio != null && !(precio >= 0)) throw new Error("El precio no es válido.");
-      const { error } = await supabase.from("proveedor_articulos").insert({ proveedor_id: proveedorId, descripcion: nueva.descripcion.trim(), unidad: nueva.unidad.trim() || null, precio, iva: nueva.iva });
+      // Si no se eligió, se liga solo al item con la misma descripción.
+      const n = normalizarBusqueda(nueva.descripcion);
+      const ligado = itemId ?? (catalogoItems.data ?? []).find((i) => i.activo && normalizarBusqueda(i.descripcion) === n)?.id ?? null;
+      const { error } = await supabase
+        .from("proveedor_articulos")
+        .insert({ proveedor_id: proveedorId, descripcion: nueva.descripcion.trim(), unidad: nueva.unidad.trim() || null, precio, iva: nueva.iva, item_id: ligado });
       if (error) throw new Error(/duplicate key|unique/i.test(error.message) ? "Ese artículo ya está en la lista de este proveedor." : error.message);
     },
     onSuccess: () => {
       setNueva({ descripcion: "", unidad: "", precio: "", iva: true });
+      setItemId(null);
       setAviso(null);
       invalidar();
     },
@@ -323,6 +335,8 @@ function ArticulosProveedor({ proveedorId, nombre, items, soloConsulta }: { prov
   });
   // Al escribir, sugiere lo que ya se le ha comprado (con su último precio).
   const sugeridas = buscando ? filtrarItems(items, nueva.descripcion, nombre, 10, true) : [];
+  // …y los items del catálogo propio que coincidan.
+  const delCatalogo = buscando ? sugerirItems(catalogoItems.data ?? [], nueva.descripcion, 6) : [];
 
   return (
     <div className="rounded border border-slate-200 bg-white p-4">
@@ -380,15 +394,32 @@ function ArticulosProveedor({ proveedorId, nombre, items, soloConsulta }: { prov
                       value={nueva.descripcion}
                       onChange={(d) => {
                         setBuscando(true);
+                        setItemId(null);
                         setNueva({ ...nueva, descripcion: d });
                       }}
-                      opciones={sugeridas.map((x, k) => ({ clave: String(k), titulo: x.descripcion, detalle: detalleItem(x, false) }))}
+                      opciones={[
+                        ...delCatalogo.map((i) => ({
+                          clave: `c:${i.id}`,
+                          titulo: i.descripcion,
+                          detalle: `Catálogo ${i.clave} · ${etiquetaCategoria(i.categoria)}${i.unidad ? ` · ${i.unidad}` : ""}${i.precio_referencia != null ? ` · ref. ${dinero(i.precio_referencia)} s/IVA` : ""}`,
+                        })),
+                        ...sugeridas.map((x, k) => ({ clave: String(k), titulo: x.descripcion, detalle: detalleItem(x, false) })),
+                      ]}
                       onElegir={(k) => {
+                        if (k.startsWith("c:")) {
+                          const i = (catalogoItems.data ?? []).find((x) => x.id === k.slice(2));
+                          if (i) {
+                            setItemId(i.id);
+                            setNueva({ descripcion: i.descripcion, unidad: nueva.unidad || i.unidad || "", precio: nueva.precio || (i.precio_referencia != null ? String(i.precio_referencia) : ""), iva: i.iva });
+                          }
+                          setBuscando(false);
+                          return;
+                        }
                         const x = sugeridas[Number(k)];
                         if (x) setNueva({ descripcion: x.descripcion, unidad: nueva.unidad || x.unidad || "", precio: nueva.precio || (x.precio != null ? String(x.precio) : ""), iva: x.iva ?? true });
                         setBuscando(false);
                       }}
-                      placeholder="Nuevo artículo (o elige uno ya comprado)"
+                      placeholder="Nuevo artículo (del catálogo de items o ya comprado)"
                       className="w-full min-w-[16rem] rounded border border-slate-300 px-1.5 py-1"
                     />
                   </td>

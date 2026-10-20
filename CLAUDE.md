@@ -1484,6 +1484,30 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   casilla "buscar partidas de todos"), aviso si no tiene, y liga a dar de
   alta. **Mario negó** agregar `clave` al JSON del catálogo por MCP: la
   ficha se busca con `rpc fn_proveedor_clave` desde la pantalla.
+- **Catálogo propio de items (21-oct-2026, Mario: "para compras, un módulo
+  para agregar nuevos items"; eligió "catálogo propio de items", sin
+  proveedor)**: tabla `compras_items` (por organización: clave única —en blanco
+  = IT-0001 consecutiva por trigger `compras_items_antes`—, descripción única
+  sin acentos/mayúsculas, unidad, categoría material/consumible/herramienta/
+  equipo/servicio/otro, IVA, `precio_referencia` s/IVA, notas, activo). La lee
+  cualquiera de la organización que no sea pendiente (requisiciones la
+  sugieren); alta y edición `auth_captura_ordenes()` o `auth_opera_cotizador()`;
+  borrar solo admin/dirección (en pantalla se desactiva). Frontera, espectador,
+  director_general y solo_consulta. `proveedor_articulos.item_id` liga el precio
+  de un proveedor al item; `fn_item_ultimas_compras(descripcion)` (invoker,
+  ~0.2 s) = últimas 20 partidas de OC con la misma descripción, precio s/IVA;
+  `fn_ordenes_catalogo_captura` suma los items activos (buscador de OC/OS)
+  (`20261021110000`). Pantalla Compras → **Catálogo de items**
+  (`/compras/items`, `pages/compras/CatalogoItems.tsx`, misma ruta protegida
+  que Proveedores y artículos; `lib/catalogoItems.ts` con pruebas): buscador,
+  categoría, alta/edición con aviso de duplicado o parecidos, desactivar,
+  detalle con precio por proveedor ("ligar al item") y últimas compras. En
+  Proveedores y artículos el alta de artículo ofrece los items del catálogo y
+  guarda `item_id` (o liga solo por descripción igual); en requisiciones la
+  descripción sugiere items (`CampoBuscador` ahora acepta `inputRef`/
+  `onKeyDown` para que Enter siga agregando el renglón). Probado en producción
+  en rollback: Laura da de alta (IT-0001), edita y sale en el buscador de OC;
+  Alma da de alta; Jonathan (supervisor) lee pero no da de alta.
 - **Cancelar, impresión completa y clientes registrados (15-oct-2026,
   Mario)**: (1) `fn_orden_ia_cancelar` ya cancela CUALQUIER OC/OS
   (backoffice, Excel, RQ: solo admin/corporativo/dirección; IA también
