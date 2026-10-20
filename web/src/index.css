@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+/* Lo que se busca con #ancla no queda tapado por la barra fija de la
+   sección ni por las pestañas fijas de una obra (21-oct-2026). */
+[id] {
+  scroll-margin-top: 6.5rem;
+}
