@@ -119,7 +119,7 @@ export function Vender({ empresaId, turno, supervisa }: { empresaId: string; tur
       </div>
 
       <div className="lg:col-span-2">
-        <div className="sticky top-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="sticky top-14 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-800">Venta actual</h3>
             {carrito.length > 0 && (

@@ -31,7 +31,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="relative z-40 border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2 sm:gap-6">
             {/* Cada organización se ve a sí misma: su logotipo si lo subió, si

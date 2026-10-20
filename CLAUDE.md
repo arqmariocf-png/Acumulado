@@ -773,6 +773,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `index.css` da `scroll-margin-top` a todo `[id]` para que los `#ancla` no
   queden tapados. **Toda pantalla nueva entra a una sección de `lib/menu.ts` y
   sale sola en la barra.**
+  **Choque con lo que se despliega (21-oct, Mario: "el menú que pusiste arriba
+  choca con las ventanas que se despliegan")**: el encabezado no tenía capa
+  propia y sus menús (z-20/z-30) quedaban debajo de la barra (z-30); ahora el
+  `<header>` es `relative z-40`. Regla de capas: barra z-30, pestañas/sticky de
+  página ≤ z-20 y debajo de la barra (`top-11` o más), modales fixed z-40/50,
+  listas de `CampoBuscador` z-60.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
