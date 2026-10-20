@@ -1572,6 +1572,26 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `onKeyDown` para que Enter siga agregando el renglón). Probado en producción
   en rollback: Laura da de alta (IT-0001), edita y sale en el buscador de OC;
   Alma da de alta; Jonathan (supervisor) lee pero no da de alta.
+- **Sección Catálogos (21-oct-2026, Mario: "genera la sección de catálogos:
+  empresas, proveedores, ítems, clientes; que puedan ser fácilmente
+  manipulables por el área de Laura: agregar, quitar y editar")**: sección
+  nueva del menú `catalogos` (no es área del organigrama ni de tareas):
+  **Empresas** (`/catalogos/empresas`, `pages/catalogos/CatalogoEmpresas.tsx`,
+  admin y dirección: nombre, código, RFC, razón social, domicilio fiscal,
+  teléfono, correo, banco, sucursal, cuenta y CLABE con dígito verificador;
+  no se borran, se desactivan), **Proveedores y artículos** y **Items** (las
+  mismas pantallas `/compras/catalogo` y `/compras/items`, movidas de Compras
+  a Catálogos) y **Clientes** (`/catalogos/clientes`,
+  `pages/catalogos/CatalogoClientes.tsx`: los mismos de cotizador/OV/punto de
+  venta/CRM/crédito; desactivar, y borrar solo si no se usó —llaves de
+  cotizaciones, remisiones, crédito, contratos, ventas, CRM—). Validación en
+  `lib/catalogos.ts` (con pruebas: RFC, CLABE, C.P., correo, duplicados por
+  RFC o nombre). Base (`20261021130000`): dirección inserta y edita
+  `empresas` de su organización (antes solo admin); trigger
+  `empresas_guarda_codigo`: el código solo lo cambia el admin y nadie salvo
+  el admin maestro pasa una empresa a otra organización; `clientes` se borra
+  por admin/dirección. Probado como Laura en rollback (alta, edición, cambio
+  de código bloqueado, alta y borrado de cliente); Delia no edita empresas.
 - **Cancelar, impresión completa y clientes registrados (15-oct-2026,
   Mario)**: (1) `fn_orden_ia_cancelar` ya cancela CUALQUIER OC/OS
   (backoffice, Excel, RQ: solo admin/corporativo/dirección; IA también

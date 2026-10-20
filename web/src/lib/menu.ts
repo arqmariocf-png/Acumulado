@@ -64,6 +64,9 @@ const veInventario = (p: Profile) => veOperacion(p) || modulo("inventario")(p);
 const veOrdenes = (p: Profile) => esAdmin(p) || ["almacen", "corporativo", "direccion", "empresa"].includes(p.rol) || (p.modulos ?? []).includes("compras");
 // Herramienta y equipo (17-oct-2026): almacén la administra; los supervisores
 // y responsables la piden para sus obras.
+// Clientes: los mismos roles que leen `clientes` (clientes_select) y quien cotiza.
+const veClientes = (p: Profile) =>
+  veOrdenes(p) || p.rol === "produccion" || (p.modulos ?? []).some((m) => m === "cotizador" || m === "legal");
 const veHerramienta = (p: Profile) =>
   esAdmin(p) || ["almacen", "corporativo", "empresa", "direccion", "responsable", "supervisor", "administrativo", "directivo"].includes(p.rol) || (p.modulos ?? []).includes("herramienta");
 const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || modulo("produccion")(p);
@@ -244,8 +247,17 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/ordenes?tipo=OV", etiqueta: "Órdenes de venta (OV)", descripcion: "folio IA-OV: venta a cliente", uso: "Captura cliente y partidas; almacén surte la salida contra la OV.", visible: veOrdenes, modulo: "inventario" },
       { ruta: "/cotizador", etiqueta: "Cotizador", descripcion: "cotizaciones a clientes de cualquier empresa", uso: "Cotiza con los productos de la empresa y los clientes registrados; el margen solo lo ves tú; aceptada, se convierte en orden de venta.", visible: (p) => veOrdenes(p) || p.rol === "produccion" || (p.modulos ?? []).includes("cotizador"), modulo: "inventario" },
       { ruta: "/ventas/crm", etiqueta: "CRM de ventas", descripcion: "WhatsApp y redes: contactos, cotización automática y seguimiento", uso: "Pega lo que escribió el cliente; el sistema arma la cotización con los productos de la empresa, la revisas y la mandas por WhatsApp; ganada, se vuelve orden de venta.", visible: (p) => veOrdenes(p) || p.rol === "produccion" || (p.modulos ?? []).includes("cotizador"), modulo: "inventario" },
-      { ruta: "/compras/items", etiqueta: "Catálogo de items", descripcion: "materiales, consumibles, herramienta y servicios sin proveedor", uso: "Da de alta cada item una vez (clave, unidad, categoría, IVA y precio de referencia s/IVA); sale en el buscador de órdenes y requisiciones y cada proveedor liga su precio.", visible: veOrdenes, modulo: "inventario" },
+    ],
+  },
+  {
+    clave: "catalogos",
+    titulo: "Catálogos",
+    proposito: "Empresas, proveedores, items y clientes: alta, edición y baja en un solo lugar.",
+    entradas: [
+      { ruta: "/catalogos/empresas", etiqueta: "Empresas", descripcion: "razón social, RFC, domicilio y cuenta para depósito", uso: "Dirección da de alta y corrige las empresas del grupo con los datos que salen impresos en órdenes y cotizaciones; las que ya no operan se desactivan.", visible: (p) => esAdmin(p) || p.rol === "direccion", modulo: "inventario" },
       { ruta: "/compras/catalogo", etiqueta: "Proveedores y artículos", descripcion: "alta, precios de lista e histórico de costos", uso: "Da de alta proveedores y lo que te venden con su precio s/IVA; ve cuánto les has pagado por cada cosa y compara precios entre proveedores.", visible: veOrdenes, modulo: "inventario" },
+      { ruta: "/compras/items", etiqueta: "Items", descripcion: "materiales, consumibles, herramienta y servicios sin proveedor", uso: "Da de alta cada item una vez (clave, unidad, categoría, IVA y precio de referencia s/IVA); sale en el buscador de órdenes y requisiciones y cada proveedor liga su precio.", visible: veOrdenes, modulo: "inventario" },
+      { ruta: "/catalogos/clientes", etiqueta: "Clientes", descripcion: "datos fiscales y de contacto", uso: "Alta y corrección de clientes; salen en el cotizador, las OV, el punto de venta, el CRM y crédito. Si ya se usó, se desactiva en vez de borrarse.", visible: veClientes, modulo: "inventario" },
     ],
   },
   {
