@@ -162,8 +162,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   corporativo en su alcance; misma empresa): referencia, proyecto y nombre si
   faltaban, CFDI por monto como el motor (varios → el del mismo proveedor);
   con factura → resuelto, sin ella → `pendiente_esperado` "falta factura"
-  (`20261020130000`). Ojo: "Reclasificar" corre el motor desplegado, que
-  conserva la referencia pero regresa a revisión lo que siga sin CFDI.
+  (`20261020130000`). **Y solo, sin clic** (`20261020140000`):
+  `fn_movimientos_ligar_por_concepto()` (definer, revocada; pg_cron
+  `movimientos-ligar-por-concepto` minuto 50) liga los de revisión/ambiguo
+  cuyo concepto o comentarios nombran UNA sola orden de la misma empresa
+  (regex `OC|OS|OV|O.C.|ORDEN` + 4-6 dígitos; OC no rechazada/cancelada, OV no
+  cancelada) con `fn_movimiento_ligar_orden_aplicar` (la misma lógica del
+  botón). Primera corrida 20-oct: 267 (154 conciliados con su CFDI, 113
+  esperando factura; AEP 98, CSC 75, ERG 62, MCF 20, MCC 6, VBB 6). También
+  re-liga lo que "Reclasificar" (motor desplegado) regresa a revisión.
   **Botón "No lleva factura" (7-oct-2026, Mario: "sí")** en Movimientos
   (admin/dirección/corporativo; `components/MarcarSinFactura.tsx`,
   `lib/sinFactura.ts` con pruebas): motivo de la lista de reglas u otro, y
@@ -455,6 +462,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Inválido"** (el SAT rechaza esa e.firma: revocada o sustituida; pedir a
   Belén la vigente). Pendiente: marcar cancelados posteriores (solicitud
   Metadata) y ver carga en Perfil fiscal/conciliación con datos reales.
+  **"Al día hasta" por empresa (20-oct-2026, Mario: "cada cuándo se
+  actualiza, para que pongas la última actualización")**: en e.firma del
+  SAT cada empresa dice "CFDI del SAT al día hasta el <día>" (el menor de
+  emitidos y recibidos entre solicitudes descargada/vacía), última consulta
+  y, en rojo, atrasada (> 2 días) o el rechazo del SAT (QX: 305 → subir la
+  e.firma vigente); `resumenDescargaSat` en `lib/efirmaSat.ts` (con pruebas).
+  Texto arriba: cada hora al minuto 40 baja lo listo y ≈ 12:40 a. m. pide lo
+  del día anterior; lo facturado hoy aparece mañana.
 - **e.firma del SAT por empresa (7-oct-2026, Mario: "haz la pantalla para
   subirlas y dale acceso a Belén")**: Contabilidad → "e.firma del SAT"
   (`/contabilidad/efirmas-sat`, `finanzas/EfirmasSat.tsx`,
