@@ -7,6 +7,7 @@ import { SelectorEmpresa, useEmpresasAlcance } from "../../components/SelectorEm
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { BotonVerOv } from "./VerOrdenVenta";
 import { EditorOrden } from "./EditorOrden";
+import { VentaInterempresa } from "./VentaInterempresa";
 import { csvOrdenes, etapaOrdenCompra, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
 
 const dinero = (n: number | null | undefined) =>
@@ -54,6 +55,7 @@ export function Ordenes() {
   const { data: empresas } = useEmpresasAlcance();
   const queryClient = useQueryClient();
   const [editor, setEditor] = useState<{ id: string | null } | null>(null);
+  const [interempresa, setInterempresa] = useState<string | null>(null);
   const [verBackoffice, setVerBackoffice] = useState(false);
   const [texto, setTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -216,6 +218,15 @@ export function Ordenes() {
         />
       )}
 
+      {interempresa && (
+        <VentaInterempresa
+          key={interempresa}
+          ocId={interempresa}
+          onCerrar={() => setInterempresa(null)}
+          onGuardada={() => queryClient.invalidateQueries({ queryKey: ["ordenes-ia"] })}
+        />
+      )}
+
       <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
         <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />
         {vista === "compras" && (
@@ -288,6 +299,20 @@ export function Ordenes() {
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
                       {o.tipo === "OV" ? <BotonVerOv ovId={o.id} /> : <BotonVerOc ocId={o.id} />}
+                      {o.tipo !== "OV" && o.etapa.etiqueta !== "cancelada" && o.etapa.etiqueta !== "rechazada" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditor(null);
+                            setInterempresa(o.id);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          title="Copiar esta orden como base: venta a otra empresa del grupo y su compra, con comisión"
+                          className="rounded border border-indigo-200 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-50"
+                        >
+                          Inter empresa
+                        </button>
+                      )}
                       {o.editable && puedeTocar(o) && (
                         <button type="button" onClick={() => setEditor({ id: o.id })} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
                           Editar

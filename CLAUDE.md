@@ -136,8 +136,9 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Contabilidad · Actividades y CONTABILIDAD → contabilidad; BBVA
   Mantenimiento · Actividades → mantenimiento; los 18 de obras y de ERG
   (con Ergodinova) → operacion. No se movieron tarjetas ni ids (recurrentes y
-  cierres automáticos siguen igual). Cada sección del menú trae al final
-  "Tareas de <área>" (`VE_TAREAS_AREA` en `lib/menu.ts`) → `/tareas/area/<clave>`
+  cierres automáticos siguen igual). Cada sección del menú trae **primero**
+  (21-oct, Mario: "como primera opción de cada área las tareas porque de ahí
+  se organiza todo lo demás") "Tareas de <área>" (`VE_TAREAS_AREA` en `lib/menu.ts`) → `/tareas/area/<clave>`
   (`pages/tareas/TareasArea.tsx`): un tablero → se abre directo
   (`TableroDetalle` acepta `tableroId` por prop); varios (Operación) → lista
   con avance y "solo donde tengo actividades". `fn_tablero_area(area)`
@@ -1572,6 +1573,24 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `onKeyDown` para que Enter siga agregando el renglón). Probado en producción
   en rollback: Laura da de alta (IT-0001), edita y sale en el buscador de OC;
   Alma da de alta; Jonathan (supervisor) lee pero no da de alta.
+- **Venta inter empresa desde una OC/OS (21-oct-2026, Mario: "Aceros compra
+  a proveedor material y esto se lo vende a Mario, sin embargo Mario también
+  necesita comprárselo a Aceros; es un triple movimiento con la misma
+  información o con muy pequeña variación")**: botón "Inter empresa" en cada
+  OC/OS de `/ordenes` (también las del backoffice; no canceladas/rechazadas)
+  → `pages/ordenes/VentaInterempresa.tsx`: copia las partidas (costo s/IVA:
+  las api/excel traen el costo con IVA y se divide entre 1.16), comisión % sobre
+  el costo, precio corregible y casilla por partida, forma de pago, condición,
+  obra y notas. "Generar" → `fn_orden_interempresa(origen, empresa_compradora,
+  lineas, comision, proyecto, forma_pago, condicion, notas)` (definer; en una
+  transacción llama dos veces a `fn_orden_ia_guardar`, cuyas guardas aplican):
+  **OV** de la empresa de la OC a la otra (cliente = razón social o nombre) y
+  **OC/OS** de la otra a la primera (proveedor = su razón social), mismo
+  precio; notas "Inter empresa: base OC … · comisión N %"; las dos con
+  `interempresa_origen_id` = la OC original (`20261021140000`;
+  `lib/interempresa.ts` con pruebas). Probado como Laura en rollback (AEP →
+  CSC, IA-OV-0001 e IA-OC-0048 por $1,334); consecutivos regresados (OC 47,
+  OV sin usar).
 - **Sección Catálogos (21-oct-2026, Mario: "genera la sección de catálogos:
   empresas, proveedores, ítems, clientes; que puedan ser fácilmente
   manipulables por el área de Laura: agregar, quitar y editar")**: sección
