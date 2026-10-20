@@ -44,6 +44,7 @@ const CatalogoCompras = lazy(() => import("./pages/compras/CatalogoCompras").the
 const Crm = lazy(() => import("./pages/crm/Crm").then((m) => ({ default: m.Crm })));
 const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
 const RespaldoDropbox = lazy(() => import("./pages/admin/RespaldoDropbox").then((m) => ({ default: m.RespaldoDropbox })));
+const SolicitarEpp = lazy(() => import("./pages/rh/SolicitarEpp").then((m) => ({ default: m.SolicitarEpp })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
@@ -151,6 +152,10 @@ function Enrutador() {
           </Route>
           <Route element={<ProtectedRoute roles={["supervisor", "responsable", "directivo", "administrativo", "corporativo", "direccion", "empresa"]} />}>
             <Route path="/gastos" element={<Gastos />} />
+          </Route>
+          {/* Solicitud de EPP: supervisores, responsables de obra y RH (quién puede, lo decide auth_solicita_epp). */}
+          <Route element={<ProtectedRoute roles={["supervisor", "responsable", "rh", "directivo", "administrativo"]} />}>
+            <Route path="/epp/solicitar" element={<SolicitarEpp />} />
           </Route>
           {/* Comedor: cualquiera con cuenta pide; cocina y nómina se deciden en la base. */}
           <Route path="/comedor" element={<Comedor />} />

@@ -1258,6 +1258,29 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   cambia). Operan RH y admin (`auth_opera_epp`); almacén solo ve
   (`20261006100000`, prueba `supabase/tests/epp.sql`). Pendiente: salida de
   inventario de bodega ligada a la entrega.
+  **Solicitud de EPP (21-oct-2026, Mario: "da de alta a los supervisores y
+  revisa que Christian tenga habilitada la solicitud de EPP"; eligió "que
+  pidan EPP")**: menú RH → **Solicitar EPP** (`/epp/solicitar`,
+  `pages/rh/SolicitarEpp.tsx`; visible a supervisor, responsable —Christian
+  incluido— y RH): persona (de `fn_epp_personas_para_solicitar()`: personal
+  activo de la organización, solo id/nombre/puesto/empresa, primero la gente
+  a cargo por `supervisor_profile_id`), obra opcional, piezas (talla,
+  cantidad) y nota → `fn_epp_solicitar` (folio SE-<emp>-0001; sin empresa
+  conocida SE-0001 por organización); abajo "Mis solicitudes" con estado y
+  motivo de rechazo. Puede pedir `auth_solicita_epp()`: rh/admin, supervisor,
+  responsable o jefe directo de alguien; nunca pendiente/espectador (Alma no).
+  En Equipo de protección (EPP) de RH, arriba, "Solicitudes por atender"
+  (`pages/rh/SolicitudesEppPorAtender.tsx`): Atender (elige obra si no
+  venía) → `fn_epp_atender_solicitud` crea la entrega EPP-… con sus piezas
+  por surtir (luego bodega o "Pedir a compras" como siempre); Rechazar con
+  motivo → `fn_epp_rechazar_solicitud`. Tablas `epp_solicitudes` /
+  `_lineas` (frontera por grupo_id; quien pidió ve las suyas, RH todas; se
+  escribe solo por las funciones) (`20261021100000`; validación en
+  `lib/epp.ts` `limpiarPiezasSolicitud`/`revisarSolicitudEpp`, con pruebas).
+  Probado en producción en rollback: Christian ve 44 personas (5 a su cargo)
+  y pide SE-CSC-0001; Brenda (sin empresa) SE-0001; cada quien ve solo la
+  suya; Fernando ve las dos, atiende la de Christian en BBVA Mantenimiento
+  (EPP-CSC-0001 con 2 piezas) y rechaza la de Brenda; Alma no puede pedir.
 - **Backoffice congelado (5-oct-2026, Delia/Laura)**: `api_ocs_aut` devolvió
   la última OC 41146 (2-oct 17:35); nada del fin de semana ni del lunes. No
   es de Acumulado: la sincronización corre bien y guarda lo que la API
