@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { administraProyectosDe } from "../../lib/modulos";
+import { AREAS_TAREAS, agruparPorArea } from "../../lib/tareasArea";
 import type { Tablero } from "../../types/database";
 import { MisActividades } from "./MisActividades";
 
@@ -56,7 +57,7 @@ export function Tableros() {
   const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "corporativo" || soloSuEmpresa;
 
   const crear = useMutation({
-    mutationFn: async (payload: { nombre: string; descripcion: string; empresaId: string }) => {
+    mutationFn: async (payload: { nombre: string; descripcion: string; empresaId: string; area: string }) => {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
       if (!userId) throw new Error("Sesión expirada, vuelve a iniciar sesión.");
@@ -67,6 +68,7 @@ export function Tableros() {
           nombre: payload.nombre,
           descripcion: payload.descripcion || null,
           empresa_id: payload.empresaId || null,
+          area: payload.area || null,
           creado_por: userId,
         })
         .select("id")
@@ -94,6 +96,7 @@ export function Tableros() {
       nombre: String(fd.get("nombre") ?? "").trim(),
       descripcion: String(fd.get("descripcion") ?? "").trim(),
       empresaId: soloSuEmpresa ? (perfil.empresa_id ?? "") : String(fd.get("empresa_id") ?? ""),
+      area: String(fd.get("area") ?? ""),
     });
   }
 
@@ -131,6 +134,18 @@ export function Tableros() {
               ))}
             </select>
           </div>
+          <div className="mb-3">
+            <label className={etiquetaCampo}>Área (opcional)</label>
+            <select name="area" className={campoTexto} defaultValue="">
+              <option value="">Sin área</option>
+              {AREAS_TAREAS.map((a) => (
+                <option key={a.clave} value={a.clave}>
+                  {a.nombre}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">Con área, el tablero sale también en "Tareas de …" de esa sección del menú.</p>
+          </div>
           <button type="submit" disabled={crear.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
             {crear.isPending ? "Creando…" : "Crear tablero"}
           </button>
@@ -140,16 +155,22 @@ export function Tableros() {
 
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tableros?.map((t) => (
-          <Link key={t.id} to={`/tareas/${t.id}`} className="block rounded border border-slate-200 bg-white p-4 hover:border-slate-400 hover:shadow-sm">
-            <h2 className="font-semibold text-slate-900">{t.nombre}</h2>
-            <p className="mt-1 text-xs text-slate-500">{t.empresas?.nombre ?? "Corporativo · todas las empresas"}</p>
-            {t.descripcion && <p className="mt-2 text-sm text-slate-600">{t.descripcion}</p>}
-          </Link>
-        ))}
-        {tableros?.length === 0 && !isLoading && <p className="text-sm text-slate-400">No hay tableros todavía.</p>}
-      </div>
+      {/* Agrupados por área del menú (21-oct-2026): cada área también los ve en su "Tareas de …". */}
+      {agruparPorArea(tableros ?? []).map((g) => (
+        <section key={g.area ?? "sin-area"} className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{g.nombre}</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {g.tableros.map((t) => (
+              <Link key={t.id} to={`/tareas/${t.id}`} className="block rounded border border-slate-200 bg-white p-4 hover:border-slate-400 hover:shadow-sm">
+                <h3 className="font-semibold text-slate-900">{t.nombre}</h3>
+                <p className="mt-1 text-xs text-slate-500">{t.empresas?.nombre ?? "Corporativo · todas las empresas"}</p>
+                {t.descripcion && <p className="mt-2 text-sm text-slate-600">{t.descripcion}</p>}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
+      {tableros?.length === 0 && !isLoading && <p className="text-sm text-slate-400">No hay tableros todavía.</p>}
     </div>
   );
 }

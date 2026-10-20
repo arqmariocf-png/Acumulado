@@ -128,6 +128,28 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   del mes; mes corto → último día) o única (fecha; luego se desactiva).
   Cualquiera que vea el tablero las da de alta; las pausa/borra quien la
   creó o admin (`20261006200000`).
+- **Tareas por área (21-oct-2026, Mario: "agrega una barra de tareas a cada
+  una de las áreas… muévelas para que sea más fácil para las áreas llevar el
+  control en su propio menú")**: `tableros.area` = clave de la sección de
+  `lib/menu.ts` (finanzas, contabilidad, legal, rh, almacen, compras,
+  logistica, mantenimiento, operacion). Asignados: RH · Actividades → rh;
+  Contabilidad · Actividades y CONTABILIDAD → contabilidad; BBVA
+  Mantenimiento · Actividades → mantenimiento; los 18 de obras y de ERG
+  (con Ergodinova) → operacion. No se movieron tarjetas ni ids (recurrentes y
+  cierres automáticos siguen igual). Cada sección del menú trae al final
+  "Tareas de <área>" (`VE_TAREAS_AREA` en `lib/menu.ts`) → `/tareas/area/<clave>`
+  (`pages/tareas/TareasArea.tsx`): un tablero → se abre directo
+  (`TableroDetalle` acepta `tableroId` por prop); varios (Operación) → lista
+  con avance y "solo donde tengo actividades". `fn_tablero_area(area)`
+  (definer; no pendiente/espectador; tableros del área en la organización —
+  los sin empresa por la organización de quien los creó—) y si no hay, crea
+  "<Área> · Actividades" con Por hacer / En progreso / Hecho
+  (`20261021120000`). En `/tareas` los tableros salen agrupados por área y al
+  crear uno se elige el área (`lib/tareasArea.ts`, con pruebas). **Área nueva
+  en el menú → agregarla a `AREAS_TAREAS`, a `VE_TAREAS_AREA` y al `case` de
+  `fn_tablero_area`.** Ojo: los tableros sin empresa siguen visibles para
+  cualquier organización por la frontera de `tableros` (`empresa_id is null`);
+  no se cambió aquí.
 - **Ojo RLS al crear con `insert … select`**: la policy de select se evalúa
   sobre la fila nueva y un arreglo calculado al inicio de la sentencia no
   la trae → "new row violates row-level security policy" (Timoteo, 6-oct,
