@@ -20,6 +20,7 @@ interface Props {
     cargo_total: number | null;
     abono_total: number | null;
     nombre_razon_social: string | null;
+    comentarios: string | null;
   };
   onListo: (mensaje: string) => void;
   onCancelar: () => void;
@@ -44,7 +45,8 @@ export function LigarOrdenMovimiento({ movimiento, onListo, onCancelar }: Props)
   const [texto, setTexto] = useState("");
   const [buscar, setBuscar] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const enConcepto = useMemo(() => numerosEnConcepto(movimiento.nombre_razon_social), [movimiento.nombre_razon_social]);
+  const concepto = `${movimiento.nombre_razon_social ?? ""} ${movimiento.comentarios ?? ""}`;
+  const enConcepto = useMemo(() => numerosEnConcepto(concepto), [concepto]);
 
   // Las de la fecha del pago (4 meses antes, 2 semanas después), las que nombra
   // el concepto y, si se escribe, las que coincidan en todo el histórico.
@@ -111,10 +113,10 @@ export function LigarOrdenMovimiento({ movimiento, onListo, onCancelar }: Props)
   const lista = useMemo(
     () =>
       filtrarCandidatas(
-        ordenarCandidatas(ordenes ?? [], { monto, fecha: movimiento.fecha_pago, concepto: movimiento.nombre_razon_social }),
+        ordenarCandidatas(ordenes ?? [], { monto, fecha: movimiento.fecha_pago, concepto }),
         texto,
       ).slice(0, MAXIMO),
-    [ordenes, texto, monto, movimiento.fecha_pago, movimiento.nombre_razon_social],
+    [ordenes, texto, monto, movimiento.fecha_pago, concepto],
   );
 
   const ligar = useMutation({

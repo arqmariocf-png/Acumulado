@@ -2,7 +2,15 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { DescargasSat } from "./DescargasSat";
-import { diasParaVencer, estadoEfirma, ETIQUETA_ESTADO, revisarArchivos, type EstadoEfirma } from "../../lib/efirmaSat";
+import {
+  diasParaVencer,
+  estadoEfirma,
+  ETIQUETA_ESTADO,
+  resumenDescargaSat,
+  revisarArchivos,
+  type EstadoEfirma,
+  type SolicitudSat,
+} from "../../lib/efirmaSat";
 
 // e.firma del SAT por empresa (Mario, 7-oct-2026: "haz la pantalla para
 // subirlas y dale acceso a Belén"). La usa la descarga masiva automática de
@@ -36,6 +44,18 @@ const COLOR: Record<EstadoEfirma, string> = {
   vigente: "bg-emerald-100 text-emerald-800",
 };
 
+function hoyMx(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
+}
+
+function diaCorto(dia: string): string {
+  return new Date(`${dia}T12:00:00Z`).toLocaleDateString("es-MX", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
+}
+
+function fechaHora(iso: string): string {
+  return new Date(iso).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
 function fecha(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
@@ -62,13 +82,24 @@ export function EfirmasSat() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["sat-efirmas"],
     queryFn: async () => {
-      const [emp, ef] = await Promise.all([
+      const desde = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const [emp, ef, sol] = await Promise.all([
         supabase.from("empresas").select("id, codigo, nombre, rfc, activo").eq("activo", true).order("codigo"),
         supabase.from("sat_efirmas").select("empresa_id, rfc, titular, numero_certificado, vigente_hasta, subido_por_nombre, updated_at, ultima_descarga_en, ultimo_error"),
+        supabase.from("sat_descargas").select("empresa_id, tipo, estado, fecha_final, mensaje, created_at").gte("created_at", desde).limit(1000),
       ]);
       if (emp.error) throw emp.error;
       if (ef.error) throw ef.error;
-      return { empresas: (emp.data ?? []) as Empresa[], efirmas: new Map(((ef.data ?? []) as Efirma[]).map((e) => [e.empresa_id, e])) };
+      if (sol.error) throw sol.error;
+      const solicitudes = new Map<string, SolicitudSat[]>();
+      for (const r of (sol.data ?? []) as (SolicitudSat & { empresa_id: string })[]) {
+        solicitudes.set(r.empresa_id, [...(solicitudes.get(r.empresa_id) ?? []), r]);
+      }
+      return {
+        empresas: (emp.data ?? []) as Empresa[],
+        efirmas: new Map(((ef.data ?? []) as Efirma[]).map((e) => [e.empresa_id, e])),
+        solicitudes,
+      };
     },
   });
 
@@ -125,6 +156,11 @@ export function EfirmasSat() {
           <b>contraseña de la llave privada</b>. Se revisa que sea la e.firma (no el sello de facturas), que esté vigente, que la contraseña abra la llave y que el
           RFC sea el de la empresa. La contraseña se guarda cifrada: nadie la puede volver a ver, ni aquí ni en la base.
         </p>
+        <p className="mt-1 max-w-3xl text-sm text-slate-600">
+          <b>Se actualiza sola:</b> cada hora (al minuto 40) revisa con el SAT y baja lo que ya está listo, y una vez al día (≈ 12:40 a. m.) pide lo del día
+          anterior. Por eso lo normal es estar al día hasta ayer: lo facturado hoy aparece mañana. La e.firma no se renueva aquí; se cambia solo cuando el SAT la
+          renueva (dura 4 años).
+        </p>
         <p className="mt-1 text-sm text-slate-500">
           {conEfirma} de {empresas.length} empresas con e.firma.
         </p>
@@ -137,6 +173,7 @@ export function EfirmasSat() {
           const ef = efirmas.get(emp.id);
           const estado = estadoEfirma(ef?.vigente_hasta);
           const dias = ef?.vigente_hasta ? diasParaVencer(ef.vigente_hasta) : null;
+          const sat = ef ? resumenDescargaSat(data?.solicitudes.get(emp.id) ?? [], hoyMx()) : null;
           return (
             <div key={emp.id} className="p-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -167,8 +204,20 @@ export function EfirmasSat() {
               {ef && (
                 <p className="mt-1 text-xs text-slate-500 sm:pl-[3.75rem]">
                   {ef.titular ?? "—"} · certificado {ef.numero_certificado ?? "—"} · subió {ef.subido_por_nombre ?? "—"} el {fecha(ef.updated_at)}
-                  {ef.ultima_descarga_en ? ` · última descarga ${fecha(ef.ultima_descarga_en)}` : ""}
                   {ef.ultimo_error ? <span className="text-red-700"> · {ef.ultimo_error}</span> : null}
+                </p>
+              )}
+              {sat && (
+                <p className={`mt-1 text-xs sm:pl-[3.75rem] ${sat.error || sat.atrasada ? "text-red-700" : "text-emerald-800"}`}>
+                  {sat.alDiaHasta ? (
+                    <>
+                      <b>CFDI del SAT al día hasta el {diaCorto(sat.alDiaHasta)}</b> (emitidos y recibidos)
+                    </>
+                  ) : (
+                    <b>Todavía no hay descarga completa del SAT</b>
+                  )}
+                  {sat.ultimaSolicitud ? ` · última consulta al SAT ${fechaHora(ef?.ultima_descarga_en && ef.ultima_descarga_en > sat.ultimaSolicitud ? ef.ultima_descarga_en : sat.ultimaSolicitud)}` : ""}
+                  {sat.error ? ` · el SAT rechaza la solicitud: ${sat.error}${/305|certificado/i.test(sat.error) ? " — sube aquí la e.firma vigente de esta empresa" : ""}` : sat.atrasada ? " · atrasada: revisa abajo el detalle" : ""}
                 </p>
               )}
               {abierta === emp.id && (
