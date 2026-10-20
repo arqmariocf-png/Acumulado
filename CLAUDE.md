@@ -148,6 +148,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `lib/periodoFiltro.ts` con pruebas). Con periodo o cuenta sale arriba el
   resumen: movimientos, conciliados (resuelto) y %, cargos y abonos del
   periodo completo (no solo la página).
+  **Ligar a su OC/OS/OV (20-oct-2026, Mario: "una vez que el estatus está
+  en revisión tendría que abrir la lista de OC/OV por número para hacerlo en
+  automático")**: en cada renglón no conciliado (revisión, ambiguo,
+  esperado), "Ligar OC/OS" (cargo) u "Ligar OV" (abono) abre
+  `components/LigarOrdenMovimiento.tsx`: órdenes de la misma empresa de 4
+  meses antes a 2 semanas después del pago + las que nombra el concepto +
+  búsqueda en todo el histórico; primero la que dice el concepto del banco
+  ("…0191026OC 41492 CSC": 158 de 1,554 cargos en revisión lo traen), luego
+  las del mismo monto (total o saldo ±$1) y la fecha más cercana
+  (`lib/ligarOrden.ts`, con pruebas). "Ligar" →
+  `fn_movimiento_ligar_orden(mov, tipo, orden)` (definer; admin/dirección/
+  corporativo en su alcance; misma empresa): referencia, proyecto y nombre si
+  faltaban, CFDI por monto como el motor (varios → el del mismo proveedor);
+  con factura → resuelto, sin ella → `pendiente_esperado` "falta factura"
+  (`20261020130000`). Ojo: "Reclasificar" corre el motor desplegado, que
+  conserva la referencia pero regresa a revisión lo que siga sin CFDI.
   **Botón "No lleva factura" (7-oct-2026, Mario: "sí")** en Movimientos
   (admin/dirección/corporativo; `components/MarcarSinFactura.tsx`,
   `lib/sinFactura.ts` con pruebas): motivo de la lista de reglas u otro, y
