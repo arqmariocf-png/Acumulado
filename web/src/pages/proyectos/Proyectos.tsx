@@ -74,13 +74,33 @@ export function Proyectos() {
   });
   const { data: semaforos } = useSemaforoProyectos((proyectos ?? []).map((p) => p.id));
   const { data: reqPorProyecto } = useRequisicionesPorProyecto((proyectos ?? []).map((p) => p.id));
+  const veResumenObras = esAdminGlobal || perfil?.rol === "direccion" || perfil?.rol === "empresa";
+  // Atajos a los bloques de la página (Mario, 21-oct-2026: "para no tener que
+  // hacer scroll para ir a las ventanas correctas").
+  const atajos = [
+    ...(veResumenObras ? [{ id: "resumen-obras", etiqueta: "Resumen de obras" }] : []),
+    { id: "requerimientos-por-obra", etiqueta: "Requerimientos por obra" },
+    { id: "lista-obras", etiqueta: "Lista de obras" },
+  ];
+  const irA = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Proyectos</h1>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h1 className="mr-2 text-xl font-semibold text-slate-900">Proyectos</h1>
+        {atajos.map((a) => (
+          <button key={a.id} type="button" onClick={() => irA(a.id)} className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100">
+            {a.etiqueta} ↓
+          </button>
+        ))}
+      </div>
 
       {/* Solo el director general: resumen físico-financiero de todas las obras. */}
-      {(esAdminGlobal || perfil?.rol === "direccion" || perfil?.rol === "empresa") && <ResumenObrasDirector />}
+      {veResumenObras && (
+        <div id="resumen-obras">
+          <ResumenObrasDirector />
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-3">
         {eligeEmpresa && !soloAsignadas && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}
@@ -103,11 +123,13 @@ export function Proyectos() {
 
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
-      {proyectos && reqPorProyecto && (
-        <AlmacenPorProyecto proyectos={proyectos.map((p) => ({ id: p.id, nombre: p.nombre, empresa: veTodasLasEmpresas ? p.empresas?.nombre : null }))} porProyecto={reqPorProyecto} />
-      )}
+      <div id="requerimientos-por-obra">
+        {proyectos && reqPorProyecto && (
+          <AlmacenPorProyecto proyectos={proyectos.map((p) => ({ id: p.id, nombre: p.nombre, empresa: veTodasLasEmpresas ? p.empresas?.nombre : null }))} porProyecto={reqPorProyecto} />
+        )}
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div id="lista-obras" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {proyectos?.map((p) => (
           <div key={p.id} className={`relative rounded border bg-white p-4 hover:border-slate-400 hover:shadow-sm ${p.activo ? "border-slate-200" : "border-dashed border-slate-300 opacity-70"}`}>
             <Link to={`/proyectos/${p.id}`} className="block">
