@@ -8,6 +8,8 @@ import { SelectorEmpresa } from "../components/SelectorEmpresa";
 import { Semaforo } from "../components/Semaforo";
 import { MarcarSinFactura } from "../components/MarcarSinFactura";
 import { puedeMarcarSinFactura } from "../lib/sinFactura";
+import { LigarOrdenMovimiento } from "../components/LigarOrdenMovimiento";
+import { puedeLigarOrden } from "../lib/ligarOrden";
 import { TIPOS_PERIODO, etiquetaPeriodo, moverPeriodo, rangoPeriodo, type TipoPeriodo } from "../lib/periodoFiltro";
 import type { EstadoClasificacion, Movimiento } from "../types/database";
 
@@ -72,6 +74,8 @@ export function Movimientos() {
   // Marcar "sin factura" con motivo (7-oct-2026): dirección, corporativo, admin.
   const marcaSinFactura = perfil?.rol === "admin" || perfil?.rol === "direccion" || perfil?.rol === "corporativo";
   const [marcando, setMarcando] = useState<string | null>(null);
+  // Ligar a su OC/OS/OV desde la lista (20-oct-2026, Mario): mismos roles.
+  const [ligando, setLigando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
   const empresaFiltro = veTodasLasEmpresas ? empresaId : (perfil?.empresa_id ?? "");
@@ -290,8 +294,21 @@ export function Movimientos() {
                   <td className="px-3 py-2">{m.nombre_razon_social ?? <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2 text-right">{formatoMoneda(m.cargo_total)}</td>
                   <td className="px-3 py-2 text-right">{formatoMoneda(m.abono_total)}</td>
-                  <td className="px-3 py-2">
+                  <td className="whitespace-nowrap px-3 py-2">
                     {m.referencia_tipo ? `${m.referencia_tipo} ${m.referencia_numero}` : "—"}
+                    {marcaSinFactura && puedeLigarOrden(m.estado_clasificacion) && ligando !== m.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAviso(null);
+                          setMarcando(null);
+                          setLigando(m.id);
+                        }}
+                        className="block text-xs text-sky-700 underline"
+                      >
+                        {m.referencia_tipo ? "Cambiar orden" : m.abono_total != null && m.cargo_total == null ? "Ligar OV" : "Ligar OC/OS"}
+                      </button>
+                    )}
                   </td>
                   <td className="max-w-xs px-3 py-2" title={m.factura ?? undefined}>
                     <span className="block truncate">{m.factura ?? <span className="text-slate-400">—</span>}</span>
@@ -300,6 +317,7 @@ export function Movimientos() {
                         type="button"
                         onClick={() => {
                           setAviso(null);
+                          setLigando(null);
                           setMarcando(m.id);
                         }}
                         className="text-xs text-sky-700 underline"
@@ -321,6 +339,20 @@ export function Movimientos() {
                     {m.posible_duplicado && <span className="ml-1 text-xs text-orange-600">dup.</span>}
                   </td>
                 </tr>
+                {ligando === m.id && (
+                  <tr>
+                    <td colSpan={8} className="px-3 pb-3">
+                      <LigarOrdenMovimiento
+                        movimiento={m}
+                        onListo={(msg) => {
+                          setLigando(null);
+                          setAviso(msg);
+                        }}
+                        onCancelar={() => setLigando(null)}
+                      />
+                    </td>
+                  </tr>
+                )}
                 {marcando === m.id && (
                   <tr>
                     <td colSpan={8} className="px-3 pb-3">
