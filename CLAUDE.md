@@ -738,6 +738,19 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `useVer()`, `AvisoFiltro` ("Mostrando solo… · Ver todo") e `IrAlAncla`
   (en el Layout: baja y resalta la sección). `rutaPermitida` ignora `?`/`#`.
   **KPI o mosaico nuevo con conteo → su ruta lleva el filtro.**
+- **Barra de la sección en cada pantalla (21-oct-2026, Mario: "en el menú
+  proyectos, ponle el menú básico de las áreas que puede dirigirnos, para no
+  tener que hacer scroll; aplícalo para todos")**: `components/MenuSeccion.tsx`
+  en el Layout, fija arriba (`sticky top-0`, 44 px = `h-11`), con las demás
+  entradas de la sección del menú a la que pertenece la ruta actual
+  (`seccionDeRuta`/`muestraBarra` en `lib/menuSeccion.ts`, con pruebas; usa
+  `seccionesPara`, así que respeta rol, módulo, permisos y "Ver como"); no sale
+  en el inicio, con una sola entrada, para espectador ni pendiente. Lo que deba
+  quedar fijo debajo usa `top-11` (pestañas del detalle de obra). Proyectos
+  trae atajos a Resumen de obras / Requerimientos por obra / Lista de obras;
+  `index.css` da `scroll-margin-top` a todo `[id]` para que los `#ancla` no
+  queden tapados. **Toda pantalla nueva entra a una sección de `lib/menu.ts` y
+  sale sola en la barra.**
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y

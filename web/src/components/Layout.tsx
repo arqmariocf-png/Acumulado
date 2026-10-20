@@ -14,6 +14,7 @@ import { ETIQUETA_ROL, NIVELES_ROLES } from "../lib/accesosRoles";
 import type { AppRol } from "../types/database";
 import { IrAlAncla } from "./FiltroDesdeTablero";
 import { ProblemaDesdeTablero } from "./ProblemaDesdeTablero";
+import { MenuSeccion } from "./MenuSeccion";
 import { AvisoNotificaciones } from "./AvisoNotificaciones";
 import { AvatarPixel } from "./personaje/AvatarPixel";
 import { useMiAvatar } from "./personaje/datos";
@@ -104,6 +105,7 @@ export function Layout() {
       <AvisoSuscripcion />
       <AvisoVersion />
       <BorradorFormularios />
+      {!espectador && <MenuSeccion secciones={secciones} />}
       <main className="mx-auto max-w-7xl px-4 py-6">
         {/* Espectador (2-oct-2026, Mario): solo la barra y los menús, ninguna
             pantalla con información. La base tampoco le devuelve datos
