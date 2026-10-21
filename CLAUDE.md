@@ -1081,6 +1081,19 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   admin o dirección dejan un pago en efectivo como pagado o confirmado
   (edge, `fn_oc_confirmar_pagadas` o update directo). Probado: Delia
   bloqueada, Laura sí.
+  **Quitar comprobante equivocado (21-oct-2026, Mario: "en la de Delia hay
+  una orden de compra en efectivo; ella subió un comprobante que no
+  corresponde y se quedó atorada")**: la OC 41381 de AEP (El Lobo, $5,750,
+  forma Efectivo) tenía su pago como transferencia (de antes de la regla del
+  20-oct) y Delia le confirmó el comprobante del SAT de CSC (OS 0009-0010):
+  quedó confirmada pero pendiente. Era el único caso. "quitar" en
+  `ComprobantePago` → `fn_pago_quitar_comprobante(pago, motivo)` (definer;
+  admin/dirección/corporativo en su alcance; motivo obligatorio): quita
+  comprobante y confirmación (el archivo se queda en Storage), anota el
+  motivo en notas y, si sigue pendiente y la OC es en efectivo, lo pasa a
+  método efectivo sin cuenta (sale de Tesorería → Efectivo por confirmar)
+  (`20261021260000`). La corrección de la 41381 por SQL se quedó esperando
+  autorización del MCP (UPDATE de datos): la hace Delia o Laura con el botón.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
