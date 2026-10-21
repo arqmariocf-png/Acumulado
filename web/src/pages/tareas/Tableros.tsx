@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { administraProyectosDe } from "../../lib/modulos";
-import { AREAS_TAREAS, agruparPorArea } from "../../lib/tareasArea";
+import { AREAS_TAREAS, agruparPorArea, sinObrasVacias } from "../../lib/tareasArea";
 import type { Tablero } from "../../types/database";
 import { MisActividades } from "./MisActividades";
 
@@ -47,6 +47,19 @@ export function Tableros() {
   const queryClient = useQueryClient();
   const { data: empresas } = useEmpresas();
   const { data: tableros, isLoading } = useTableros();
+  // Tableros de obra con actividades: los vacíos no se listan aquí (cada
+  // obra tiene el suyo desde el 21-oct-2026 y se abre desde Proyectos).
+  const [verObras, setVerObras] = useState(false);
+  const { data: conActividades } = useQuery({
+    queryKey: ["tableros-con-actividades"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("tarjetas").select("tablero_id").eq("archivada", false).is("eliminada_en", null).limit(10000);
+      if (error) throw error;
+      return new Set((data ?? []).map((t) => t.tablero_id as string));
+    },
+  });
+  const sinVacias = sinObrasVacias(tableros ?? [], conActividades ?? new Set());
+  const listados = verObras ? (tableros ?? []) : sinVacias.visibles;
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,7 +169,13 @@ export function Tableros() {
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
       {/* Agrupados por área del menú (21-oct-2026): cada área también los ve en su "Tareas de …". */}
-      {agruparPorArea(tableros ?? []).map((g) => (
+      {sinVacias.ocultas > 0 && (
+        <label className="mb-3 flex items-center gap-1 text-xs text-slate-500">
+          <input type="checkbox" checked={verObras} onChange={(e) => setVerObras(e.target.checked)} /> ver también {sinVacias.ocultas} tablero(s) de obra sin actividades
+          (cada obra abre el suyo en Proyectos)
+        </label>
+      )}
+      {agruparPorArea(listados).map((g) => (
         <section key={g.area ?? "sin-area"} className="mb-6">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{g.nombre}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

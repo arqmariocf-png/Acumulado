@@ -37,7 +37,8 @@ test("dentro de una obra sale su tablero de seguimiento junto a precios unitario
   const [a] = atajosDeRuta(`/proyectos/${id}`, "");
   assert.equal(a.ruta, `/proyectos/${id}?tab=avance`);
   assert.equal(a.despuesDe, "/precios");
-  assert.equal(a.activo, false);
+  assert.equal(a.activo, true);
+  assert.equal(atajosDeRuta(`/proyectos/${id}`, "?tab=planos")[0].activo, false);
   assert.equal(atajosDeRuta(`/proyectos/${id}/`, "?tab=avance")[0].activo, true);
   assert.deepEqual(atajosDeRuta("/proyectos", ""), []);
   assert.deepEqual(atajosDeRuta("/precios", ""), []);

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { agruparPorArea, avancePorTablero, esAreaTareas, nombreArea, rutaTareasArea } from "./tareasArea.ts";
+import { agruparPorArea, avancePorTablero, esAreaTareas, nombreArea, rutaTareasArea, sinObrasVacias } from "./tareasArea.ts";
 
 test("áreas y rutas", () => {
   assert.equal(esAreaTareas("rh"), true);
@@ -46,4 +46,15 @@ test("avance: hechas = última columna; las mías por responsable, supervisor o 
   const r = avancePorTablero(columnas, [t("a3"), t("a1", { asignado_a: "yo" }), t("a2", { corresponsables: ["yo"] }), t("a3", { supervisor_id: "otro" })], "yo");
   assert.deepEqual(r.get("A"), { total: 4, hechas: 2, mias: 2, pct: 50 });
   assert.equal(r.get("B"), undefined);
+});
+
+test("los tableros de obra sin actividades se esconden de la lista", () => {
+  const t = [
+    { id: "a", proyecto_id: null },
+    { id: "b", proyecto_id: "obra1" },
+    { id: "c", proyecto_id: "obra2" },
+  ];
+  const r = sinObrasVacias(t, new Set(["c"]));
+  assert.deepEqual(r.visibles.map((x) => x.id), ["a", "c"]);
+  assert.equal(r.ocultas, 1);
 });

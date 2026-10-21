@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
-import { avancePorTablero, esAreaTareas, nombreArea, type TarjetaAvance } from "../../lib/tareasArea";
+import { avancePorTablero, esAreaTareas, nombreArea, sinObrasVacias, type TarjetaAvance } from "../../lib/tareasArea";
 import { TableroDetalle } from "./TableroDetalle";
 
 // Tareas por área (21-oct-2026, Mario: "agrega una barra de tareas a cada una
@@ -25,6 +25,7 @@ export function TareasArea() {
   const { area } = useParams<{ area: string }>();
   const { perfil } = useAuth();
   const [soloMios, setSoloMios] = useState(false);
+  const [verObras, setVerObras] = useState(false);
   const valida = esAreaTareas(area);
 
   const tableros = useQuery({
@@ -62,7 +63,8 @@ export function TareasArea() {
   const lista = tableros.data ?? [];
   if (lista.length === 1) return <TableroDetalle key={lista[0].id} tableroId={lista[0].id} />;
 
-  const visibles = soloMios ? lista.filter((t) => (avance.data?.get(t.id)?.mias ?? 0) > 0) : lista;
+  const sinVacias = sinObrasVacias(lista, new Set(avance.data?.keys() ?? []));
+  const visibles = soloMios ? lista.filter((t) => (avance.data?.get(t.id)?.mias ?? 0) > 0) : verObras ? lista : sinVacias.visibles;
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -71,6 +73,12 @@ export function TareasArea() {
           <input type="checkbox" checked={soloMios} onChange={(e) => setSoloMios(e.target.checked)} /> solo donde tengo actividades
         </label>
       </div>
+      {!soloMios && sinVacias.ocultas > 0 && (
+        <label className="mb-3 flex items-center gap-1 text-xs text-slate-500">
+          <input type="checkbox" checked={verObras} onChange={(e) => setVerObras(e.target.checked)} /> ver también {sinVacias.ocultas} tablero(s) de obra sin actividades
+          (cada obra abre el suyo en Proyectos)
+        </label>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visibles.map((t) => {
           const a = avance.data?.get(t.id);

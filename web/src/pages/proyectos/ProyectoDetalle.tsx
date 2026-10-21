@@ -141,18 +141,21 @@ export function ProyectoDetalle() {
   const puedeDesactivar = !!perfil && (perfil.rol === "admin" || perfil.rol === "corporativo" || (perfil.rol === "empresa" && perfil.empresa_id === proyecto.empresa_id));
 
   const TABS: { clave: Tab; etiqueta: string }[] = [
+    // Primera: con ella abre la obra (21-oct-2026).
+    { clave: "avance", etiqueta: "Tablero de seguimiento" },
     ...(veResumen ? [{ clave: "resumen" as Tab, etiqueta: "Resumen físico-financiero" }] : []),
     // Costeo y pronóstico: solo el director general (Mario, 30-sep-2026).
     ...(perfil?.rol === "admin" ? [{ clave: "costeo" as Tab, etiqueta: "Costeo (director general)" }] : []),
     { clave: "planos", etiqueta: "Planos" },
     { clave: "catalogo", etiqueta: "Catálogo" },
     { clave: "precios", etiqueta: "Precios unitarios" },
-    { clave: "avance", etiqueta: "Tablero de seguimiento" },
     { clave: "control", etiqueta: "Control de obra" },
     { clave: "supervision", etiqueta: "Supervisión IA" },
   ];
-  // Una pestaña de la liga que esta persona no tiene (resumen, costeo) cae a la de siempre.
-  const tabActual: Tab = tab && TABS.some((t) => t.clave === tab) ? tab : veResumen ? "resumen" : "planos";
+  // Abre en el tablero de seguimiento (Mario, 21-oct-2026: "a todas las
+  // obras ábrele el tablero por default"); una pestaña de la liga que esta
+  // persona no tiene (resumen, costeo) también cae ahí.
+  const tabActual: Tab = tab && TABS.some((t) => t.clave === tab) ? tab : "avance";
 
   return (
     <div>

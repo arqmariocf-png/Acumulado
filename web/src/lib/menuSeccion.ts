@@ -56,11 +56,12 @@ export interface AtajoBarra {
 /**
  * Dentro de una obra, el tablero de seguimiento de ESA obra junto a Precios
  * unitarios (Mario, 21-oct-2026: "arriba de cada proyecto pon el tablero de
- * seguimiento junto a precios unitarios").
+ * seguimiento junto a precios unitarios"). Es la pestaña con la que abre la
+ * obra, así que sin ?tab= también está activo.
  */
 export function atajosDeRuta(pathname: string, search = ""): AtajoBarra[] {
   const m = /^\/proyectos\/([0-9a-f-]{8,})\/?$/i.exec(base(pathname));
   if (!m) return [];
   const tab = new URLSearchParams(search).get("tab");
-  return [{ etiqueta: "Tablero de seguimiento", ruta: `/proyectos/${m[1]}?tab=avance`, activo: tab === "avance", despuesDe: "/precios" }];
+  return [{ etiqueta: "Tablero de seguimiento", ruta: `/proyectos/${m[1]}?tab=avance`, activo: !tab || tab === "avance", despuesDe: "/precios" }];
 }
