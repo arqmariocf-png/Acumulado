@@ -27,6 +27,7 @@ const CuentasPorPagar = lazy(() => import("./pages/finanzas/CuentasPorPagar").th
 const OrdenesPorAutorizarPagina = lazy(() => import("./pages/finanzas/OrdenesPorAutorizarPagina").then((m) => ({ default: m.OrdenesPorAutorizarPagina })));
 const EfectivoPorConfirmar = lazy(() => import("./pages/finanzas/EfectivoPorConfirmar").then((m) => ({ default: m.EfectivoPorConfirmar })));
 const LineasCredito = lazy(() => import("./pages/finanzas/LineasCredito").then((m) => ({ default: m.LineasCredito })));
+const DeudaFinanciera = lazy(() => import("./pages/finanzas/DeudaFinanciera").then((m) => ({ default: m.DeudaFinanciera })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
 const Pendientes = lazy(() => import("./pages/Pendientes").then((m) => ({ default: m.Pendientes })));
@@ -260,6 +261,11 @@ function Enrutador() {
               vencimiento. Admin siempre pasa. */}
           <Route element={<ProtectedRoute roles={["direccion"]} />}>
             <Route path="/finanzas/lineas-credito" element={<LineasCredito />} />
+          </Route>
+          {/* Deuda financiera (21-oct-2026): dirección y admin capturan; tesorería
+              (Delia) también y contabilidad (Belén) consulta, por permiso. */}
+          <Route element={<ProtectedRoute roles={["direccion"]} oPermiso={(p) => (p.modulos ?? []).some((m) => m === "tesoreria" || m === "contabilidad")} />}>
+            <Route path="/finanzas/deuda" element={<DeudaFinanciera />} />
           </Route>
 
           {/* Sin roles restringidos aquí a propósito: además de admin/corporativo/
