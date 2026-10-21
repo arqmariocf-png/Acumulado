@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
@@ -20,6 +21,7 @@ interface OcEfectivo {
   proyecto: string | null;
   fecha_creacion: string | null;
   saldo: number;
+  autorizacion: string;
 }
 
 import { FILTRO_OC_EFECTIVO } from "../../lib/pagosOc";
@@ -54,7 +56,7 @@ export function EfectivoPorConfirmar() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("v_oc_pagos")
-        .select("id, id_orden, empresa_id, proveedor, proyecto, fecha_creacion, saldo")
+        .select("id, id_orden, empresa_id, proveedor, proyecto, fecha_creacion, saldo, autorizacion")
         .gt("saldo", 0.009)
         .neq("autorizacion", "rechazada")
         .eq("pagada_backoffice", false)
@@ -70,7 +72,7 @@ export function EfectivoPorConfirmar() {
     const t = texto.trim().toLowerCase();
     return (ocs ?? []).filter((o) => (!empresaId || o.empresa_id === empresaId) && (!t || `${o.id_orden} ${o.proveedor ?? ""} ${o.proyecto ?? ""}`.toLowerCase().includes(t)));
   }, [ocs, texto, empresaId]);
-  const elegidas = useMemo(() => (ocs ?? []).filter((o) => sel.has(o.id)), [ocs, sel]);
+  const elegidas = useMemo(() => (ocs ?? []).filter((o) => sel.has(o.id) && o.autorizacion === "autorizada"), [ocs, sel]);
   const suma = elegidas.reduce((s, o) => s + Number(o.saldo), 0);
   const total = lista.reduce((s, o) => s + Number(o.saldo), 0);
 
@@ -144,8 +146,8 @@ export function EfectivoPorConfirmar() {
                   <input
                     type="checkbox"
                     aria-label="Elegir todas"
-                    checked={lista.length > 0 && lista.every((o) => sel.has(o.id))}
-                    onChange={(e) => setSel(e.target.checked ? new Set(lista.map((o) => o.id)) : new Set())}
+                    checked={lista.some((o) => o.autorizacion === "autorizada") && lista.filter((o) => o.autorizacion === "autorizada").every((o) => sel.has(o.id))}
+                    onChange={(e) => setSel(e.target.checked ? new Set(lista.filter((o) => o.autorizacion === "autorizada").map((o) => o.id)) : new Set())}
                   />
                 </th>
                 <th className="px-3 py-2">OC</th>
@@ -159,7 +161,7 @@ export function EfectivoPorConfirmar() {
               {lista.map((o) => (
                 <tr key={o.id} className={`border-t border-slate-100 ${sel.has(o.id) ? "bg-emerald-50/60" : ""}`}>
                   <td className="px-3 py-2">
-                    <input type="checkbox" checked={sel.has(o.id)} onChange={() => alternar(o.id)} aria-label={`Elegir ${o.id_orden}`} />
+                    <input type="checkbox" checked={sel.has(o.id)} disabled={o.autorizacion !== "autorizada"} onChange={() => alternar(o.id)} aria-label={`Elegir ${o.id_orden}`} />
                   </td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-900">{o.id_orden}</div>
@@ -176,6 +178,12 @@ export function EfectivoPorConfirmar() {
                     <BotonVerOc ocId={o.id} className="text-xs text-sky-700 underline" />
                   </td>
                   <td className="px-3 py-2">
+                    {o.autorizacion !== "autorizada" ? (
+                      // 21-oct-2026, Laura: "solo órdenes autorizadas se pueden completar como pagadas".
+                      <Link to="/finanzas/por-autorizar" className="rounded bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 underline">
+                        por autorizar: primero autorizar y programar
+                      </Link>
+                    ) : (
                     <button
                       type="button"
                       onClick={() => {
@@ -186,6 +194,7 @@ export function EfectivoPorConfirmar() {
                     >
                       Confirmar y subir comprobante
                     </button>
+                    )}
                   </td>
                 </tr>
               ))}
