@@ -809,6 +809,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `<header>` es `relative z-40`. Regla de capas: barra z-30, pestañas/sticky de
   página ≤ z-20 y debajo de la barra (`top-11` o más), modales fixed z-40/50,
   listas de `CampoBuscador` z-60.
+  **Tablero de seguimiento de la obra en la barra (21-oct, Mario: "arriba de
+  cada proyecto pon el tablero de seguimiento junto a precios unitarios")**:
+  dentro de `/proyectos/<id>` la barra de Obras trae, después de Precios
+  unitarios, "Tablero de seguimiento" → `/proyectos/<id>?tab=avance`
+  (`atajosDeRuta` en `lib/menuSeccion.ts`, con pruebas; atajos de pantalla que
+  no son entradas del menú). La pestaña del detalle de obra va en la liga
+  (`?tab=`; una que la persona no tiene cae a la de siempre) y "Avance" se
+  llama ahora "Tablero de seguimiento".
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y

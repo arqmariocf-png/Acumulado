@@ -42,3 +42,25 @@ export function seccionDeRuta(secciones: SeccionMenu[], pathname: string): Secci
 export function muestraBarra(actual: SeccionActual | null): actual is SeccionActual {
   return !!actual && actual.seccion.entradas.length > 1;
 }
+
+/** Atajo extra de la barra para la pantalla actual (no es una entrada del menú). */
+export interface AtajoBarra {
+  etiqueta: string;
+  ruta: string;
+  /** La pestaña o filtro que lo marca como activo. */
+  activo: boolean;
+  /** Va justo después de la entrada con esta ruta. */
+  despuesDe: string;
+}
+
+/**
+ * Dentro de una obra, el tablero de seguimiento de ESA obra junto a Precios
+ * unitarios (Mario, 21-oct-2026: "arriba de cada proyecto pon el tablero de
+ * seguimiento junto a precios unitarios").
+ */
+export function atajosDeRuta(pathname: string, search = ""): AtajoBarra[] {
+  const m = /^\/proyectos\/([0-9a-f-]{8,})\/?$/i.exec(base(pathname));
+  if (!m) return [];
+  const tab = new URLSearchParams(search).get("tab");
+  return [{ etiqueta: "Tablero de seguimiento", ruta: `/proyectos/${m[1]}?tab=avance`, activo: tab === "avance", despuesDe: "/precios" }];
+}

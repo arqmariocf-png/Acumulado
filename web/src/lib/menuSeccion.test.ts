@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { muestraBarra, seccionDeRuta } from "./menuSeccion.ts";
+import { atajosDeRuta, muestraBarra, seccionDeRuta } from "./menuSeccion.ts";
 import type { EntradaMenu, SeccionMenu } from "./menu.ts";
 
 const e = (ruta: string, etiqueta = ruta): EntradaMenu => ({ ruta, etiqueta, descripcion: "", uso: "", visible: () => true });
@@ -30,4 +30,15 @@ test("sin barra en el inicio, en rutas fuera del menú y en secciones de una sol
   assert.equal(muestraBarra(seccionDeRuta(secciones, "/guia")), false);
   assert.equal(muestraBarra(seccionDeRuta(secciones, "/finanzas/tesoreria")), true);
   assert.equal(muestraBarra(null), false);
+});
+
+test("dentro de una obra sale su tablero de seguimiento junto a precios unitarios", () => {
+  const id = "6f5a3ec0-8e10-4bcf-ba09-c38e12098bbf";
+  const [a] = atajosDeRuta(`/proyectos/${id}`, "");
+  assert.equal(a.ruta, `/proyectos/${id}?tab=avance`);
+  assert.equal(a.despuesDe, "/precios");
+  assert.equal(a.activo, false);
+  assert.equal(atajosDeRuta(`/proyectos/${id}/`, "?tab=avance")[0].activo, true);
+  assert.deepEqual(atajosDeRuta("/proyectos", ""), []);
+  assert.deepEqual(atajosDeRuta("/precios", ""), []);
 });
