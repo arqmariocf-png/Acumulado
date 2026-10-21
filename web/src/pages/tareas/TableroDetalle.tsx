@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useState, type DragEvent, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
@@ -146,7 +146,7 @@ export function TableroDetalle({ tableroId: idDelArea }: { tableroId?: string } 
   const navigate = useNavigate();
   const { perfil } = useAuth();
   const queryClient = useQueryClient();
-  const { data: tablero } = useTablero(tableroId!);
+  const { data: tablero, error: errorTablero } = useTablero(tableroId!);
   const { data: columnas } = useColumnas(tableroId!);
   const { data: tarjetas } = useTarjetas(tableroId!);
   const { data: directorio } = useDirectorio();
@@ -154,6 +154,11 @@ export function TableroDetalle({ tableroId: idDelArea }: { tableroId?: string } 
   // ?tarjeta=<id> abre directo el panel (desde "Mis actividades" y los avisos).
   const [params] = useSearchParams();
   const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState<string | null>(params.get("tarjeta"));
+  // Otra liga con ?tarjeta= sin salir del tablero también abre su panel.
+  const tarjetaDeLiga = params.get("tarjeta");
+  useEffect(() => {
+    if (tarjetaDeLiga) setTarjetaSeleccionada(tarjetaDeLiga);
+  }, [tarjetaDeLiga]);
   const [verArchivadas, setVerArchivadas] = useState(false);
   const { data: archivadas, isLoading: cargandoArchivadas } = useTarjetasArchivadas(tableroId ?? "", verArchivadas && !!tableroId);
   const [nuevaColumna, setNuevaColumna] = useState(false);
@@ -278,6 +283,16 @@ export function TableroDetalle({ tableroId: idDelArea }: { tableroId?: string } 
     if (nombre) crearColumna.mutate(nombre);
   }
 
+  // Antes se quedaba en "Cargando…" para siempre si el tablero no se podía leer.
+  if (errorTablero)
+    return (
+      <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Este tablero no existe o no tienes acceso a él.{" "}
+        <Link to="/tareas#mis-actividades" className="underline">
+          Ir a mis actividades
+        </Link>
+      </div>
+    );
   if (!tablero || !columnas) return <p className="text-sm text-slate-500">Cargando…</p>;
 
   return (

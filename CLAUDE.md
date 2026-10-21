@@ -109,6 +109,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Eliminar ya no borra: `tarjetas.eliminada_en/_por` (+ archivada) y el
   tablero tiene "Ver archivadas y eliminadas" para reabrir/restaurar
   (`20261006170000`).
+- **Quien está etiquetado ve su tarjeta (21-oct-2026, Mario: "etiqueté a
+  Fernanda en una tarea en un proyecto que ella no participa; debería salirle
+  como pendiente"; "cuando dan click a sus pendientes no los redirige")**:
+  `tableros_select` solo abre tableros de la empresa de la persona; Maria
+  Fernanda (MCF) era responsable de "Subir proyecto" en Abarrotes Neto Rio
+  Frio (CSC) y no la veía (ni en Mis actividades; su misión del día abría un
+  tablero que se quedaba en "Cargando…"). Policies permisivas extra con
+  `auth_tarjetas_etiquetado()` / `auth_tableros_etiquetado()` (definer,
+  uuid[], una vez por consulta): ve, mueve, comenta y sube archivos SOLO en
+  las tarjetas donde es responsable, supervisor o corresponsable, más el
+  tablero y sus columnas para abrirlas (no las demás tarjetas)
+  (`20261021200000`). `TableroDetalle` ya no se queda en "Cargando…" si no
+  puede leer el tablero ("no existe o no tienes acceso" + liga a Mis
+  actividades) y abre el panel aunque la liga ?tarjeta= cambie dentro del
+  mismo tablero. **Si cambia quién ve tarjetas, revisar también estos
+  helpers.**
 - **Cumplimiento de RH con todas las tareas (6-oct-2026)**: RH →
   Actividades (`rh/Actividades.tsx`) y el KPI `fn_rh_kpi_actividades()`
   cuentan las tarjetas de TODOS los tableros activos de la organización
