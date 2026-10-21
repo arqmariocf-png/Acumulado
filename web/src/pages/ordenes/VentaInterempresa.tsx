@@ -4,7 +4,7 @@ import { useEmpresasAlcance } from "../../components/SelectorEmpresa";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { BotonVerOv } from "./VerOrdenVenta";
 import { FORMAS_PAGO, partidasParaGuardar } from "../../lib/ordenesIa";
-import { partidasDesdeOrigen, partidasVenta, precioPartida, resumenInterempresa, revisarInterempresa, type PartidaInterempresa } from "../../lib/interempresa";
+import { interempresaCompleta, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioPartida, resumenInterempresa, revisarInterempresa, type PartidaInterempresa } from "../../lib/interempresa";
 
 const dinero = (n: number) => n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -41,12 +41,14 @@ export function VentaInterempresa({ ocId, onCerrar, onGuardada }: { ocId: string
   const [errores, setErrores] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [completa, setCompleta] = useState(false);
 
   useEffect(() => {
     let vivo = true;
     (async () => {
       const { data: o, error } = await supabase.from("ordenes_compra").select("id_orden, tipo, empresa_id, proveedor, proyecto, fuente, tipo_pago_backoffice").eq("id", ocId).maybeSingle();
-      const { data: l } = await supabase.from("ordenes_compra_lineas").select("item, unidad, cantidad, costo, iva").eq("orden_compra_id", ocId).order("numero");
+      // Partidas con lo que falta por vender inter empresa (lo ya generado no se repite).
+      const { data: l } = await supabase.rpc("fn_interempresa_restante", { p_origen: ocId });
       if (!vivo) return;
       if (error || !o) {
         setErrores([error?.message ?? "No encontré la orden."]);
@@ -55,6 +57,7 @@ export function VentaInterempresa({ ocId, onCerrar, onGuardada }: { ocId: string
       setOrigen(o as Origen);
       setProyecto(o.proyecto ?? "");
       setPartidas(partidasDesdeOrigen(l ?? [], o.fuente as string));
+      setCompleta(interempresaCompleta(l ?? []));
     })();
     return () => {
       vivo = false;
@@ -86,6 +89,7 @@ export function VentaInterempresa({ ocId, onCerrar, onGuardada }: { ocId: string
       p_forma_pago: formaPago,
       p_condicion: condicion || null,
       p_notas: notas.trim() || null,
+      p_partidas_origen: partidasOrigen(partidas),
     });
     setGuardando(false);
     if (error) {
@@ -139,6 +143,10 @@ export function VentaInterempresa({ ocId, onCerrar, onGuardada }: { ocId: string
       </div>
       {!origen ? (
         <p className="text-sm text-slate-500">{errores[0] ?? "Cargando…"}</p>
+      ) : completa ? (
+        <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          {origen.id_orden} ya tiene su venta y compra inter empresa completas: no se vuelve a generar. Si hay que rehacerla, primero cancela esa OV.
+        </p>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

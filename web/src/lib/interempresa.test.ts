@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { costoSinIva, partidasDesdeOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarInterempresa } from "./interempresa.ts";
+import { costoSinIva, interempresaCompleta, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarInterempresa } from "./interempresa.ts";
 
 test("costo sin IVA: backoffice trae IVA en la partida, las propias no", () => {
   assert.equal(costoSinIva({ costo: 116, iva: true }, "api"), 100);
@@ -55,4 +55,21 @@ test("revisarInterempresa", () => {
   assert.match(revisarInterempresa({ empresaVende: "a", empresaCompra: "b", formaPago: "", partidas: ps })[0], /forma de pago/);
   ps[0].incluir = false;
   assert.match(revisarInterempresa({ empresaVende: "a", empresaCompra: "b", formaPago: "x", partidas: ps })[0], /partida/);
+});
+
+test("solo lo que falta por vender inter empresa; completa sin partidas pendientes", () => {
+  const lineas = [
+    { linea_id: "l1", restante: 0, item: "Varilla", unidad: "pza", cantidad: 10, costo: 100, iva: true },
+    { linea_id: "l2", restante: 3, item: "Cemento", unidad: "bulto", cantidad: 5, costo: 200, iva: true },
+  ];
+  const ps = partidasDesdeOrigen(lineas, "acumulado");
+  assert.equal(ps.length, 1);
+  assert.equal(ps[0].cantidad, "3");
+  assert.equal(ps[0].maximo, 3);
+  assert.deepEqual(partidasOrigen(ps), [{ linea: "l2", cantidad: 3 }]);
+  ps[0].cantidad = "4";
+  assert.match(revisarInterempresa({ empresaVende: "a", empresaCompra: "b", formaPago: "x", partidas: ps })[0], /solo faltan 3/);
+  assert.equal(interempresaCompleta(lineas), false);
+  assert.equal(interempresaCompleta(lineas.map((l) => ({ ...l, restante: 0 }))), true);
+  assert.equal(interempresaCompleta([]), false);
 });
