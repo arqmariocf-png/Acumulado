@@ -128,6 +128,35 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   del mes; mes corto → último día) o única (fecha; luego se desactiva).
   Cualquiera que vea el tablero las da de alta; las pausa/borra quien la
   creó o admin (`20261006200000`).
+- **Deber ser: 7 grupos, 22 menús (21-oct-2026, Excel "Acumulado deber ser"
+  de Mario en `docs/deber-ser/Acumulado_deber_ser.xlsx`: "toda la lógica de
+  ventanas, menús y orden del sistema así como los roles y acomodos"; eligió
+  "reacomodo + tablero de avance", tareas "como el Excel" y roles "con tu
+  propuesta de equivalencias", validándolas antes de quitar nada)**:
+  `lib/menu.ts`: `GRUPOS_MENU` (Mi día · Dirección · Comercial · Finanzas ·
+  Operación · Nómina y mano de obra · Administración) y `SECCIONES` = los 22
+  menús con `grupo` y `area` (departamento del organigrama/KPIs/tableros);
+  máximo 7 opciones por menú; menús sin opciones todavía (Presupuestos,
+  Fletes) no se pintan. La barra superior pinta un desplegable por grupo con
+  sus menús; la barra de la sección muestra las opciones del menú actual; el
+  inicio agrupa los mosaicos por grupo; la guía dice "Grupo › Menú".
+  `lib/organigrama.ts` ya no sale del menú: lista propia de departamentos
+  (mismas claves de siempre) y sus opciones = los menús con ese `area`.
+  **Tareas como el Excel**: se quitó "Tareas de <área>" de cada menú; Mi día
+  › **Mis tareas** (`/tareas`, para todos menos pendiente) y Mis actividades
+  con filtro por área (`tableros.area`); `/tareas/area/<clave>` sigue
+  funcionando. **Mi perfil** = `/personaje` con pestaña "Mis documentos"
+  (`/mis-documentos` redirige). **Roles por puesto**: `lib/rolesDeberSer.ts`
+  (con pruebas; matriz "Roles x menús" + equivalencias con los roles de hoy y
+  permisos por persona) filtra los menús en `seccionesPara`, pero
+  `APLICAR_ROLES_DEBER_SER = false` hasta que Mario valide la tabla persona
+  por persona en Configuración › Plan del sistema › "Roles por puesto"
+  (`pages/admin/RolesDeberSer.tsx`). Rol empresa (Jorge) no tiene puesto en el
+  Excel: se queda como hoy. Excepción: Laura con Catálogos.
+  **Plan del sistema** (`/admin/plan-sistema`, admin y dirección): las 100
+  opciones del Excel con estatus, fase, responsable, fecha y avance
+  (`plan_sistema`, `20261021150000`). **Opción nueva → al menú de su grupo
+  (`SECCIONES`) y su renglón del plan a 'Hecho'.**
 - **Tareas por área (21-oct-2026, Mario: "agrega una barra de tareas a cada
   una de las áreas… muévelas para que sea más fácil para las áreas llevar el
   control en su propio menú")**: `tableros.area` = clave de la sección de
@@ -772,8 +801,8 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   quedar fijo debajo usa `top-11` (pestañas del detalle de obra). Proyectos
   trae atajos a Resumen de obras / Requerimientos por obra / Lista de obras;
   `index.css` da `scroll-margin-top` a todo `[id]` para que los `#ancla` no
-  queden tapados. **Toda pantalla nueva entra a una sección de `lib/menu.ts` y
-  sale sola en la barra.**
+  queden tapados. **Toda pantalla nueva entra a un menú (`SECCIONES`) de su grupo en
+  `lib/menu.ts` y sale sola en la barra.**
   **Choque con lo que se despliega (21-oct, Mario: "el menú que pusiste arriba
   choca con las ventanas que se despliegan")**: el encabezado no tenía capa
   propia y sus menús (z-20/z-30) quedaban debajo de la barra (z-30); ahora el

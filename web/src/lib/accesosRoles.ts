@@ -1,4 +1,4 @@
-import { SECCIONES } from "./menu.ts";
+import { GRUPOS_MENU, SECCIONES } from "./menu.ts";
 import { MODULOS_ASIGNABLES, MODULOS_BASE, ROLES_BASICOS, esRolBasico } from "./modulos.ts";
 import type { AppRol, Profile } from "../types/database";
 
@@ -138,7 +138,7 @@ export function accesosDelRol(rol: AppRol): AccesoRuta[] {
       const veBase = e.visible(base);
       const veConModulo = !veBase && e.visible(todos);
       if (!veBase && !veConModulo) continue;
-      lista.push({ ruta: e.ruta, etiqueta: e.etiqueta, seccion: s.titulo, conModulo: veConModulo, edita: EDITA[e.ruta.split(/[?#]/)[0]]?.[rol] ?? null });
+      lista.push({ ruta: e.ruta, etiqueta: e.etiqueta, seccion: `${GRUPOS_MENU.find((g) => g.clave === s.grupo)?.titulo ?? ""} › ${s.titulo}`, conModulo: veConModulo, edita: EDITA[e.ruta.split(/[?#]/)[0]]?.[rol] ?? null });
     }
   }
   return lista;

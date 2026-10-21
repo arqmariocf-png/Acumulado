@@ -98,7 +98,7 @@ export const INDICADORES: Indicador[] = [
   {
     clave: "firmas_pendientes",
     etiqueta: "Documentos por firmar",
-    ruta: "/mis-documentos",
+    ruta: "/personaje?tab=documentos",
     visible: (_p, ctx) => ctx.tienePersonal,
     consulta: async () => {
       const n = await contar(supabase.from("solicitudes_firma").select("*", { count: "exact", head: true }).eq("estatus", "pendiente"));
