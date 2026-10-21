@@ -828,6 +828,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (primera pestaña). En Tareas y "Tareas de Operación" los tableros de obra
   sin actividades se esconden (`sinObrasVacias` en `lib/tareasArea.ts`) con
   casilla "ver también N tableros de obra sin actividades".
+  **Solo obras activas (21-oct, Mario: "únicamente obras activas")**:
+  `fn_proyecto_asegurar_tablero` no crea tablero a obras desactivadas y el
+  trigger `proyectos_tablero_sigue_activo` archiva los tableros de la obra al
+  desactivarla y los regresa (o crea) al reactivarla (`20261021190000`). Al
+  21-oct las 144 obras estaban activas aunque 93 no tienen OC, requisición ni
+  tarea: se desactivan con "Desactivar proyecto" en el encabezado de la obra.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
