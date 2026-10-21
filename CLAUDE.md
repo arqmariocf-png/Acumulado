@@ -1742,6 +1742,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   de pagos: "Programar a pago N" abre un panel con el monto de cada OC
   (parcial; en blanco = todo lo pendiente) y el formulario por OC dice
   "parcial o total".
+- **Solo las autorizadas se pagan (21-oct-2026, Laura: "FLUJO COMPRAS -
+  SERVICIOS: autorizar / programación a pago - finanzas / comprobante -
+  tesorería / almacén - recepción. Solo órdenes autorizadas se pueden
+  completar como pagadas")**: `fn_oc_confirmar_pagadas` ya no autoriza sola
+  una OC pendiente (antes lo hacía): la rechaza con "no está autorizada".
+  Trigger `pagos_programados_requiere_autorizada` (con usuario): un pago
+  ligado a OC no pasa a 'pagado' si la OC está rechazada/cancelada o sin
+  autorizar (misma regla que `v_oc_pagos.autorizacion`) (`20261021170000`).
+  Programar a pago sigue autorizando internamente, así que el flujo es
+  autorizar o programar → pagar. "Confirmar pagadas N" y Efectivo por
+  confirmar solo toman autorizadas (las pendientes dicen "por autorizar").
+  Al aplicarla: 0 pagos pagados o pendientes sobre OC sin autorizar.
 - **Efectivo que quedaba como transferencia (20-oct-2026, Laura: "las órdenes
   de efectivo las está poniendo como transferencia al momento de
   guardarlas")**: el editor traía "Transferencia" puesta de fábrica (de 33 OS

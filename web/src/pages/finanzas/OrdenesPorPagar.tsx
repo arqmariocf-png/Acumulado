@@ -167,7 +167,10 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
   // (Mario, 30-sep-2026: "que no pare el flujo").
   const programables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && porProgramarOc(o) > 0 && !o.pagada_backoffice);
   // Lo que se pagó y no se marcó en el backoffice (Mario con Laura, 6-oct-2026).
-  const confirmables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && saldoOc(o) > 0.01);
+  // Solo autorizadas (21-oct-2026, Laura: "solo órdenes autorizadas se pueden
+  // completar como pagadas"; la base también lo exige).
+  const confirmables = seleccionadas.filter((o) => o.autorizacion === "autorizada" && saldoOc(o) > 0.01);
+  const sinAutorizarSel = seleccionadas.filter((o) => o.autorizacion === "pendiente").length;
   const [verConfirmar, setVerConfirmar] = useState(false);
 
   // Montos del lote (21-oct-2026, Laura: "en la programación de pagos falta
@@ -280,6 +283,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
             <button type="button" onClick={() => setVerConfirmar((v) => !v)} disabled={confirmables.length === 0} className="rounded border border-emerald-700 bg-white px-2.5 py-1 font-medium text-emerald-800 disabled:opacity-50" title="Ya se pagaron (aunque no se marcó en el backoffice): quedan pagadas y confirmadas aquí">
               {`Confirmar pagadas ${confirmables.length}`}
             </button>
+            {sinAutorizarSel > 0 && <span className="text-amber-800">{sinAutorizarSel} sin autorizar: se autorizan y programan antes de confirmarlas pagadas</span>}
             <button type="button" onClick={() => setSeleccion(new Set())} className="underline">
               quitar selección
             </button>
