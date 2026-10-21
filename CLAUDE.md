@@ -1857,9 +1857,28 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`creditosDesdeTabla`: encabezados libres, empresa por código, revisión por
   fila; plantilla descargable). Probado en producción en rollback: Laura da de
   alta DF-AEP-0001 y registra pago (saldo 820,000 − 25,000 = 795,000), Belén y
-  Delia ven, Belén no captura, Alma no ve. Pendiente: marcar "Créditos
-  bancarios" del Plan del sistema como Hecho (el update se quedó esperando
-  confirmación); programar pagos de deuda en la hoja de pagos del día.
+  Delia ven, Belén no captura, Alma no ve. "Créditos bancarios" del Plan del
+  sistema quedó en Hecho.
+  **Diseño "Deuda financiera del grupo" y pagos a Programación (21-oct-2026,
+  captura de pantalla de Mario)** (`20261021230000`, aplicada como
+  `deuda_programacion_pagos`; prueba `supabase/tests/deuda_financiera.sql`):
+  pestañas Resumen / Calendario de pagos / Registrar crédito (`?vista=`);
+  tarjetas deuda total, pagos 30 días (con vencidos), tasa ponderada y vence
+  en 12 meses (% corto plazo); tabla de créditos con barra de pagado; saldo
+  por empresa con nota de avales cruzados (`deuda_creditos.aval_empresa_id`,
+  `destino`); panel de amortización con estatus por renglón
+  (`estatusRenglones`), "Registrar pago N · $X" (`deuda_pagos.numero`, único
+  por crédito) y "Deshacer último pago". **Ida y vuelta con Programación de
+  pagos**: al abrir la pantalla (quien captura) los pagos vencidos y de los
+  próximos 60 días (`pagosParaProgramar`) van con `fn_deuda_enviar_pagos` a
+  `pagos_programados` tipo **'prestamo'** (`deuda_credito_id`,
+  `deuda_numero`, `deuda_detalle`; sin duplicar; corrige los pendientes si
+  cambia el crédito). Triggers: tesorería lo marca pagado → se registra el
+  pago en el crédito; registrar en el crédito → su programado queda pagado;
+  deshacer → regresa a pendiente (si ya tiene comprobante, no se deja);
+  regresar a pendiente un programado ya registrado → error "deshazlo allá";
+  crédito liquidado/cancelado → sus pendientes se cancelan. Pendiente: que la
+  hoja de pagos del día los muestre como cargo de la empresa.
 - **Efectivo que quedaba como transferencia (20-oct-2026, Laura: "las órdenes
   de efectivo las está poniendo como transferencia al momento de
   guardarlas")**: el editor traía "Transferencia" puesta de fábrica (de 33 OS
