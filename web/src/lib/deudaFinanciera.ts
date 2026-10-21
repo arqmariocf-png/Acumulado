@@ -155,39 +155,75 @@ export function tablaAmortizacion(c: CreditoBase): RenglonAmortizacion[] {
   return filas;
 }
 
+export type EstatusRenglon = "pagado" | "vencido" | "programado" | "pendiente";
+
+export interface CreditoConSaldo extends CreditoBase {
+  saldo: number | string;
+  estatus?: EstatusCredito;
+  /** Números de pago ya registrados en el crédito. */
+  numeros_pagados?: number[] | null;
+  /** Números de pago que están pendientes en Programación de pagos. */
+  numeros_programados?: number[] | null;
+  /** Fecha del saldo del estado de cuenta: lo de antes ya está pagado. */
+  saldo_corte_al?: string | null;
+}
+
+/**
+ * Estatus de cada pago de la tabla: pagado si se registró con su número, si su
+ * fecha es de antes del corte del estado de cuenta, o si el capital ya se
+ * cubrió (lo amortizado = monto − saldo real); vencido si su fecha pasó;
+ * programado si ya está en Programación de pagos; si no, pendiente.
+ */
+export function estatusRenglones(c: CreditoConSaldo, hoy: string): { renglon: RenglonAmortizacion; estatus: EstatusRenglon }[] {
+  const tabla = tablaAmortizacion(c);
+  const pagados = new Set(c.numeros_pagados ?? []);
+  const programados = new Set(c.numeros_programados ?? []);
+  const cerrado = !!c.estatus && c.estatus !== "vigente";
+  const saldo = Number(c.saldo) || 0;
+  const amortizado = (Number(c.monto) || 0) - saldo;
+  return tabla.map((t) => {
+    const cubierto =
+      pagados.has(t.numero) ||
+      cerrado ||
+      saldo <= 0.5 ||
+      (!!c.saldo_corte_al && t.fecha <= c.saldo_corte_al) ||
+      (t.capital > 0 && t.capitalAcumulado <= amortizado + 0.5);
+    const estatus: EstatusRenglon = cubierto ? "pagado" : t.fecha < hoy ? "vencido" : programados.has(t.numero) ? "programado" : "pendiente";
+    return { renglon: t, estatus };
+  });
+}
+
 export interface EstadoPago {
   proximo: RenglonAmortizacion | null;
   vencidos: number;
   montoVencido: number;
+  pagosHechos: number;
+  totalPagos: number;
 }
 
-/**
- * Próximo pago y vencidos contra el saldo real: lo amortizado hasta hoy es
- * monto − saldo (incluye lo pagado antes del corte del estado de cuenta). Un
- * pago está vencido si su fecha ya pasó y su capital acumulado aún no se cubre.
- * Con solo intereses, el próximo es la siguiente fecha (no hay capital que
- * medir hasta el final).
- */
-export function estadoPagos(c: CreditoBase & { saldo: number | string; estatus?: EstatusCredito }, hoy: string): EstadoPago {
-  if (c.estatus && c.estatus !== "vigente") return { proximo: null, vencidos: 0, montoVencido: 0 };
-  const saldo = Number(c.saldo) || 0;
-  if (saldo <= 0.5) return { proximo: null, vencidos: 0, montoVencido: 0 };
-  const tabla = tablaAmortizacion(c);
-  if (!tabla.length) return { proximo: null, vencidos: 0, montoVencido: 0 };
-  if (c.amortizacion === "al_vencimiento") {
-    const proximo = tabla.find((t) => t.fecha >= hoy) ?? null;
-    const final = tabla[tabla.length - 1];
-    const vencido = final.fecha < hoy;
-    return { proximo: proximo ?? (vencido ? final : null), vencidos: vencido ? 1 : 0, montoVencido: vencido ? r2(saldo) : 0 };
-  }
-  const amortizado = (Number(c.monto) || 0) - saldo;
-  const pendientes = tabla.filter((t) => t.capitalAcumulado > amortizado + 0.5);
-  const vencidas = pendientes.filter((t) => t.fecha < hoy);
+/** Próximo pago (el primero sin pagar, aunque esté vencido) y lo vencido. */
+export function estadoPagos(c: CreditoConSaldo, hoy: string): EstadoPago {
+  const filas = estatusRenglones(c, hoy);
+  const sinPagar = filas.filter((f) => f.estatus !== "pagado");
+  const vencidas = sinPagar.filter((f) => f.estatus === "vencido");
   return {
-    proximo: pendientes[0] ?? null,
+    proximo: sinPagar[0]?.renglon ?? null,
     vencidos: vencidas.length,
-    montoVencido: r2(vencidas.reduce((s, t) => s + t.pago, 0)),
+    montoVencido: r2(vencidas.reduce((s, f) => s + f.renglon.pago, 0)),
+    pagosHechos: filas.length - sinPagar.length,
+    totalPagos: filas.length,
   };
+}
+
+/** Pagos sin pagar con fecha hasta `dias` adelante (y los vencidos), para
+ * mandarlos a Programación de pagos (fn_deuda_enviar_pagos). */
+export function pagosParaProgramar(c: CreditoConSaldo, hoy: string, dias = 60): { numero: number; de: number; fecha: string; capital: number; interes: number; iva: number; total: number }[] {
+  if (c.estatus && c.estatus !== "vigente") return [];
+  const limite = aIso(new Date(aFecha(hoy).getTime() + dias * 86400000));
+  const filas = estatusRenglones(c, hoy);
+  return filas
+    .filter((f) => f.estatus !== "pagado" && f.renglon.fecha <= limite)
+    .map((f) => ({ numero: f.renglon.numero, de: filas.length, fecha: f.renglon.fecha, capital: f.renglon.capital, interes: f.renglon.interes, iva: f.renglon.iva, total: f.renglon.pago }));
 }
 
 export interface CreditoResumen {
@@ -227,6 +263,107 @@ export function resumenDeuda(creditos: CreditoResumen[]): {
     porMoneda: [...monedas.entries()].map(([moneda, m]) => ({ moneda, saldo: r2(m.saldo), creditos: m.creditos, tasaPonderada: m.conTasa > 0 ? r2(m.tasaXSaldo / m.conTasa) : null })),
     porEmpresa: [...empresas.values()].map((e) => ({ ...e, saldo: r2(e.saldo) })).sort((a, b) => b.saldo - a.saldo),
   };
+}
+
+export interface CreditoGrupo extends CreditoConSaldo {
+  id: string;
+  folio: string;
+  acreedor: string;
+  tipo: TipoCredito;
+  empresa_id: string;
+  empresa_codigo?: string | null;
+  empresa_nombre?: string | null;
+  moneda: string;
+  estatus: EstatusCredito;
+  aval_empresa_id?: string | null;
+}
+
+function sumarDias(iso: string, dias: number): string {
+  return aIso(new Date(aFecha(iso).getTime() + dias * 86400000));
+}
+
+/**
+ * Lo de arriba de la pantalla (en MXN; otras monedas aparte): deuda total,
+ * pagos de los próximos 30 días (con los vencidos), tasa ponderada por saldo,
+ * capital que vence en 12 meses y su % (corto plazo), saldo por empresa y
+ * cuántos créditos tienen aval de otra empresa del grupo.
+ */
+export function resumenGrupo(creditos: CreditoGrupo[], hoy: string) {
+  const vivos = creditos.filter((c) => c.estatus === "vigente" && Number(c.saldo) > 0.5);
+  const mxn = vivos.filter((c) => c.moneda === "MXN");
+  const deuda = r2(mxn.reduce((s, c) => s + Number(c.saldo), 0));
+  const en30 = sumarDias(hoy, 30);
+  const en365 = sumarDias(hoy, 365);
+  let pagos30 = 0;
+  let n30 = 0;
+  let vencidos = 0;
+  let vence12 = 0;
+  let conTasa = 0;
+  let tasaXSaldo = 0;
+  const empresas = new Map<string, { empresa: string; saldo: number }>();
+  for (const c of mxn) {
+    const filas = estatusRenglones(c, hoy).filter((f) => f.estatus !== "pagado");
+    for (const f of filas) {
+      if (f.renglon.fecha <= en30) {
+        pagos30 += f.renglon.pago;
+        n30++;
+        if (f.estatus === "vencido") vencidos++;
+      }
+      if (f.renglon.fecha <= en365) vence12 += f.renglon.capital;
+    }
+    if (!filas.length && c.fecha_vencimiento && c.fecha_vencimiento <= en365) vence12 += Number(c.saldo);
+    if (c.tasa_anual != null && c.tasa_anual !== "") {
+      conTasa += Number(c.saldo);
+      tasaXSaldo += Number(c.saldo) * Number(c.tasa_anual);
+    }
+    const e = empresas.get(c.empresa_id) ?? { empresa: c.empresa_nombre || c.empresa_codigo || c.empresa_id, saldo: 0 };
+    e.saldo += Number(c.saldo);
+    empresas.set(c.empresa_id, e);
+  }
+  vence12 = r2(Math.min(vence12, deuda));
+  const otras = new Map<string, number>();
+  for (const c of vivos.filter((x) => x.moneda !== "MXN")) otras.set(c.moneda, r2((otras.get(c.moneda) ?? 0) + Number(c.saldo)));
+  return {
+    deuda,
+    creditos: mxn.length,
+    pagos30: r2(pagos30),
+    n30,
+    vencidos,
+    tasaPonderada: conTasa > 0 ? r2(tasaXSaldo / conTasa) : null,
+    vence12,
+    cortoPlazoPct: deuda > 0 ? Math.round((vence12 / deuda) * 1000) / 10 : 0,
+    porEmpresa: [...empresas.values()].map((e) => ({ ...e, saldo: r2(e.saldo) })).sort((a, b) => b.saldo - a.saldo),
+    avalesCruzados: vivos.filter((c) => c.aval_empresa_id && c.aval_empresa_id !== c.empresa_id).length,
+    otrasMonedas: [...otras.entries()].map(([moneda, saldo]) => ({ moneda, saldo })),
+  };
+}
+
+export interface MesCalendario {
+  mes: string;
+  renglones: { credito: CreditoGrupo; renglon: RenglonAmortizacion; estatus: EstatusRenglon }[];
+  total: number;
+}
+
+/** Pagos sin pagar de todos los créditos vigentes (vencidos incluidos) hasta
+ * `meses` adelante, por mes y por fecha. */
+export function calendarioPagos(creditos: CreditoGrupo[], hoy: string, meses = 12): MesCalendario[] {
+  const limite = sumarPeriodos(hoy, "mensual", meses);
+  const todos: MesCalendario["renglones"] = [];
+  for (const c of creditos.filter((x) => x.estatus === "vigente")) {
+    for (const f of estatusRenglones(c, hoy)) {
+      if (f.estatus !== "pagado" && f.renglon.fecha <= limite) todos.push({ credito: c, renglon: f.renglon, estatus: f.estatus });
+    }
+  }
+  todos.sort((a, b) => a.renglon.fecha.localeCompare(b.renglon.fecha) || a.credito.acreedor.localeCompare(b.credito.acreedor, "es"));
+  const porMes = new Map<string, MesCalendario>();
+  for (const r of todos) {
+    const mes = r.renglon.fecha.slice(0, 7);
+    const m = porMes.get(mes) ?? { mes, renglones: [], total: 0 };
+    m.renglones.push(r);
+    m.total = r2(m.total + r.renglon.pago);
+    porMes.set(mes, m);
+  }
+  return [...porMes.values()];
 }
 
 // ── Carga desde Excel / CSV ──────────────────────────────────────────────

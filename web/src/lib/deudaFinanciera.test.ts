@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { creditosDesdeTabla, csvPlantilla, estadoPagos, fechaDeTexto, numeroDeTexto, numeroPagos, resumenDeuda, sumarPeriodos, tablaAmortizacion, type CreditoBase } from "./deudaFinanciera.ts";
+import { calendarioPagos, creditosDesdeTabla, csvPlantilla, estadoPagos, estatusRenglones, fechaDeTexto, numeroDeTexto, numeroPagos, pagosParaProgramar, resumenDeuda, resumenGrupo, sumarPeriodos, tablaAmortizacion, type CreditoBase, type CreditoGrupo } from "./deudaFinanciera.ts";
 
 const base: CreditoBase = {
   monto: 120000,
@@ -127,4 +127,62 @@ test("la plantilla se puede volver a leer", () => {
   assert.equal(creditos.length, 1);
   assert.deepEqual(creditos[0].errores, []);
   assert.equal(creditos[0].tasa_tipo, "variable");
+});
+
+test("estatus por pago: registrado, corte del estado de cuenta, programado y vencido", () => {
+  const t = tablaAmortizacion(base);
+  const c = { ...base, saldo: 120000 - t[0].capital, estatus: "vigente" as const, numeros_pagados: [1], numeros_programados: [3] };
+  const e = estatusRenglones(c, "2026-03-20").map((f) => f.estatus);
+  assert.deepEqual(e.slice(0, 4), ["pagado", "vencido", "programado", "pendiente"]);
+  // Solo intereses: lo de antes del corte se toma por pagado aunque no tenga número.
+  const si = { ...base, amortizacion: "al_vencimiento" as const, saldo: 120000, estatus: "vigente" as const, saldo_corte_al: "2026-03-31" };
+  assert.deepEqual(estatusRenglones(si, "2026-04-20").slice(0, 4).map((f) => f.estatus), ["pagado", "pagado", "vencido", "pendiente"]);
+  const est = estadoPagos(c, "2026-03-20");
+  assert.equal(est.pagosHechos, 1);
+  assert.equal(est.totalPagos, 12);
+});
+
+test("pagos para Programación: sin pagar, vencidos incluidos, hasta 60 días", () => {
+  const t = tablaAmortizacion(base);
+  const c = { ...base, saldo: 120000 - t[0].capital, estatus: "vigente" as const, numeros_pagados: [1] };
+  const p = pagosParaProgramar(c, "2026-03-20");
+  assert.deepEqual(p.map((x) => x.numero), [2, 3, 4]); // mar-15 vencido, abr-15 y may-15 (≤ 19-may)
+  assert.equal(p[0].de, 12);
+  assert.equal(p[0].total, t[1].pago);
+  assert.deepEqual(pagosParaProgramar({ ...c, estatus: "liquidado" }, "2026-03-20"), []);
+});
+
+test("resumen del grupo y calendario", () => {
+  const cred = (id: string, empresa: string, extra: Partial<CreditoGrupo>): CreditoGrupo => ({
+    ...base,
+    id,
+    folio: id,
+    acreedor: id,
+    tipo: "simple",
+    empresa_id: empresa,
+    empresa_nombre: empresa,
+    moneda: "MXN",
+    estatus: "vigente",
+    saldo: 120000,
+    ...extra,
+  });
+  const cs = [
+    cred("a", "CSC", { aval_empresa_id: "AEP", tasa_anual: 12 }),
+    cred("b", "AEP", { saldo: 60000, tasa_anual: 18, amortizacion: "personalizado", fecha_vencimiento: "2026-12-31" }),
+    cred("c", "LRT", { moneda: "USD", saldo: 5000 }),
+    cred("d", "LRT", { estatus: "liquidado" }),
+  ];
+  const r = resumenGrupo(cs, "2026-01-20");
+  assert.equal(r.deuda, 180000);
+  assert.equal(r.creditos, 2);
+  assert.equal(r.tasaPonderada, 14);
+  assert.equal(r.avalesCruzados, 1);
+  assert.deepEqual(r.otrasMonedas, [{ moneda: "USD", saldo: 5000 }]);
+  assert.equal(r.n30, 1); // el 15-feb del crédito a (≤ 19-feb); el personalizado no tiene tabla
+  assert.equal(r.vence12, 180000); // todo vence antes de 20-ene-2027
+  assert.equal(r.cortoPlazoPct, 100);
+  assert.equal(r.porEmpresa[0].empresa, "CSC");
+  const cal = calendarioPagos(cs, "2026-01-20", 3);
+  assert.deepEqual(cal.map((m) => m.mes), ["2026-02", "2026-03", "2026-04"]);
+  assert.equal(cal[0].renglones.length, 1); // solo a: c (USD) ya amortizó casi todo, d está liquidado y b no tiene tabla
 });
