@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { seccionesPara } from "../lib/menu";
+import { GRUPOS_MENU, seccionesPara } from "../lib/menu";
 
 /** Guía de uso: qué hace cada módulo que esta persona puede ver y cuándo
  * usarlo. Misma fuente que el menú (lib/menu.ts). */
@@ -15,7 +15,10 @@ export function Guia() {
       </p>
       {secciones.map((s) => (
         <section key={s.clave} className="mb-6">
-          <h2 className="text-base font-semibold text-slate-900">{s.titulo}</h2>
+          <h2 className="text-base font-semibold text-slate-900">
+            <span className="text-slate-400">{GRUPOS_MENU.find((g) => g.clave === s.grupo)?.titulo} › </span>
+            {s.titulo}
+          </h2>
           <p className="mb-2 text-sm text-slate-500">{s.proposito}</p>
           <div className="divide-y divide-slate-100 rounded border border-slate-200 bg-white">
             {s.entradas.map((e) => (

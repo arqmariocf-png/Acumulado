@@ -9,13 +9,17 @@ import { DocumentosCredito } from "../../components/personaje/DocumentosCredito"
 import { MiCuentaNomina } from "../../components/personaje/MiCuentaNomina";
 import { PersonajeDelDia } from "../../components/personaje/PersonajeDelDia";
 import { useEquipo, useMiAvatar, useMiPersonaje } from "../../components/personaje/datos";
+import { MisDocumentos } from "../MisDocumentos";
 
-/** Mi personaje (18-oct-2026): hoja con nivel, habilidades, oficios, logros,
- * misiones del día y el equipo de la organización. */
+/** Mi perfil (antes "Mi personaje", 18-oct-2026): hoja con nivel,
+ * habilidades, oficios, logros, misiones del día, credencial QR, el equipo y
+ * (21-oct-2026, deber ser: "personaje, QR, contrato y documentos por firmar en
+ * una sola pantalla") los documentos de la persona. */
 export function Personaje() {
   const { perfilReal } = useAuth();
   const [params, setParams] = useSearchParams();
-  const pestana = params.get("tab") === "equipo" ? "equipo" : params.get("tab") === "qr" ? "qr" : "yo";
+  const tab = params.get("tab");
+  const pestana = tab === "equipo" || tab === "qr" || tab === "documentos" ? tab : "yo";
   const [crear, setCrear] = useState(params.get("crear") === "1");
   const hoja = useMiPersonaje();
   const avatar = useMiAvatar();
@@ -27,11 +31,11 @@ export function Personaje() {
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-slate-900">Mi personaje</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Mi perfil</h1>
         <div className="flex gap-1 rounded border border-slate-300 p-0.5 text-sm">
-          {(["yo", "qr", "equipo"] as const).map((p) => (
+          {(["yo", "qr", "documentos", "equipo"] as const).map((p) => (
             <button key={p} type="button" onClick={() => setParams(p === "yo" ? {} : { tab: p })} className={`rounded px-3 py-1 ${pestana === p ? "bg-slate-900 text-white" : "text-slate-600"}`}>
-              {p === "yo" ? "Yo" : p === "qr" ? "🪪 Mi QR" : "Equipo"}
+              {p === "yo" ? "Yo" : p === "qr" ? "🪪 Mi QR" : p === "documentos" ? "Mis documentos" : "Equipo"}
             </button>
           ))}
         </div>
@@ -59,6 +63,8 @@ export function Personaje() {
           </div>
         </div>
       )}
+
+      {pestana === "documentos" && <MisDocumentos />}
 
       {pestana === "equipo" && (
         <div>

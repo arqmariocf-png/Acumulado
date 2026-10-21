@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { clasificar, type EstadoCumplimiento } from "../../lib/cumplimiento";
+import { AREAS_TAREAS, esAreaTareas } from "../../lib/tareasArea";
 import type { Tarjeta } from "../../types/database";
 
 // Panel personal de tareas (Mario, 26-sep-2026): lo que tengo asignado como
@@ -19,6 +20,7 @@ const COLOR_PAPEL: Record<Papel, string> = { responsable: "bg-slate-100 text-sla
 interface Fila {
   tarjeta: Tarjeta;
   tablero: string;
+  area: string | null;
   columna: string;
   papel: Papel;
   estado: EstadoCumplimiento;
@@ -39,9 +41,9 @@ function useMisTarjetas(profileId: string | undefined) {
       if (error) throw error;
       const lista = (tarjetas ?? []) as Tarjeta[];
       const tableroIds = [...new Set(lista.map((t) => t.tablero_id))];
-      if (tableroIds.length === 0) return { tarjetas: lista, tableros: [] as { id: string; nombre: string }[], columnas: [] as { id: string; tablero_id: string; nombre: string; orden: number }[] };
+      if (tableroIds.length === 0) return { tarjetas: lista, tableros: [] as { id: string; nombre: string; area: string | null }[], columnas: [] as { id: string; tablero_id: string; nombre: string; orden: number }[] };
       const [{ data: tableros }, { data: columnas }] = await Promise.all([
-        supabase.from("tableros").select("id, nombre").in("id", tableroIds),
+        supabase.from("tableros").select("id, nombre, area").in("id", tableroIds),
         supabase.from("tablero_columnas").select("id, tablero_id, nombre, orden").in("tablero_id", tableroIds).order("orden"),
       ]);
       return { tarjetas: lista, tableros: tableros ?? [], columnas: columnas ?? [] };
@@ -58,12 +60,16 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
   const q = useMisTarjetas(perfil?.id);
   const [verHechas, setVerHechas] = useState(false);
   const [papelFiltro, setPapelFiltro] = useState<Papel | "">("");
+  // Una sola lista con filtro por área (21-oct-2026, deber ser: "Mis tareas,
+  // una sola lista de actividades con filtro por área").
+  const [areaFiltro, setAreaFiltro] = useState<string>("");
   const [nuevaPropia, setNuevaPropia] = useState(false);
   const hoy = new Date().toISOString().slice(0, 10);
 
   const filas: Fila[] = useMemo(() => {
     if (!q.data || !perfil) return [];
     const nombreTablero = new Map(q.data.tableros.map((t) => [t.id, t.nombre]));
+    const areaTablero = new Map(q.data.tableros.map((t) => [t.id, t.area ?? null]));
     const columnaNombre = new Map(q.data.columnas.map((c) => [c.id, c.nombre]));
     const ultimaColumna = new Map<string, string>();
     for (const c of q.data.columnas) ultimaColumna.set(c.tablero_id, c.id); // vienen ordenadas: la última gana
@@ -71,11 +77,12 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
       const hecha = ultimaColumna.get(t.tablero_id) === t.columna_id;
       const papel: Papel = t.asignado_a === perfil.id ? "responsable" : t.supervisor_id === perfil.id ? "supervisor" : "corresponsable";
       const estado = clasificar({ id: t.id, titulo: t.titulo, asignado_a: t.asignado_a, fecha_limite: t.fecha_limite, hecha, hecha_en: hecha ? t.updated_at : null, created_at: t.created_at }, hoy);
-      return { tarjeta: t, tablero: nombreTablero.get(t.tablero_id) ?? "Tablero", columna: columnaNombre.get(t.columna_id) ?? "", papel, estado };
+      return { tarjeta: t, tablero: nombreTablero.get(t.tablero_id) ?? "Tablero", area: areaTablero.get(t.tablero_id) ?? null, columna: columnaNombre.get(t.columna_id) ?? "", papel, estado };
     });
   }, [q.data, perfil, hoy]);
 
-  const mias = filas.filter((f) => !papelFiltro || f.papel === papelFiltro);
+  const areasConTareas = AREAS_TAREAS.filter((a) => filas.some((f) => f.area === a.clave));
+  const mias = filas.filter((f) => (!papelFiltro || f.papel === papelFiltro) && (!areaFiltro || (areaFiltro === "sin" ? !esAreaTareas(f.area) : f.area === areaFiltro)));
   const propias = filas.filter((f) => f.papel !== "supervisor");
   const resumen = {
     total: propias.length,
@@ -104,6 +111,17 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
           <p className="text-xs text-slate-500">Lo que tienes como responsable, supervisor a cargo o corresponsable. Tu cumplimiento cuenta las de responsable y corresponsable.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          {areasConTareas.length > 0 && (
+            <select value={areaFiltro} onChange={(e) => setAreaFiltro(e.target.value)} className="rounded border border-slate-300 px-2 py-1">
+              <option value="">Todas las áreas</option>
+              {areasConTareas.map((a) => (
+                <option key={a.clave} value={a.clave}>
+                  {a.nombre}
+                </option>
+              ))}
+              {filas.some((f) => !esAreaTareas(f.area)) && <option value="sin">Sin área</option>}
+            </select>
+          )}
           <select value={papelFiltro} onChange={(e) => setPapelFiltro(e.target.value as Papel | "")} className="rounded border border-slate-300 px-2 py-1">
             <option value="">Todos los papeles</option>
             <option value="responsable">Como responsable</option>

@@ -46,6 +46,7 @@ const CatalogoEmpresas = lazy(() => import("./pages/catalogos/CatalogoEmpresas")
 const CatalogoClientes = lazy(() => import("./pages/catalogos/CatalogoClientes").then((m) => ({ default: m.CatalogoClientes })));
 const Crm = lazy(() => import("./pages/crm/Crm").then((m) => ({ default: m.Crm })));
 const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
+const PlanSistemaPagina = lazy(() => import("./pages/admin/PlanSistemaPagina").then((m) => ({ default: m.PlanSistemaPagina })));
 const RespaldoDropbox = lazy(() => import("./pages/admin/RespaldoDropbox").then((m) => ({ default: m.RespaldoDropbox })));
 const SolicitarEpp = lazy(() => import("./pages/rh/SolicitarEpp").then((m) => ({ default: m.SolicitarEpp })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
@@ -53,7 +54,6 @@ const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) =
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
 const Financiamiento = lazy(() => import("./pages/financiamiento/Financiamiento").then((m) => ({ default: m.Financiamiento })));
 const Cumplimiento = lazy(() => import("./pages/cumplimiento/Cumplimiento").then((m) => ({ default: m.Cumplimiento })));
-const MisDocumentos = lazy(() => import("./pages/MisDocumentos").then((m) => ({ default: m.MisDocumentos })));
 const FoliosCuadrilla = lazy(() => import("./pages/bbva/FoliosCuadrilla").then((m) => ({ default: m.FoliosCuadrilla })));
 const Equilibrio = lazy(() => import("./pages/bbva/Equilibrio").then((m) => ({ default: m.Equilibrio })));
 const AsistenciaEquipo = lazy(() => import("./pages/bbva/AsistenciaEquipo").then((m) => ({ default: m.AsistenciaEquipo })));
@@ -181,6 +181,10 @@ function Enrutador() {
             <Route path="/compras/catalogo" element={<CatalogoCompras />} />
             <Route path="/compras/items" element={<CatalogoItems />} />
           </Route>
+          {/* Plan del sistema (21-oct-2026): dirección consulta y da seguimiento; los roles solo el director general. */}
+          <Route element={<ProtectedRoute roles={["direccion"]} />}>
+            <Route path="/admin/plan-sistema" element={<PlanSistemaPagina />} />
+          </Route>
           {/* Catálogos (21-oct-2026): empresas para dirección; clientes para quien los lee o cotiza. */}
           <Route element={<ProtectedRoute roles={["direccion"]} />}>
             <Route path="/catalogos/empresas" element={<CatalogoEmpresas />} />
@@ -214,7 +218,7 @@ function Enrutador() {
           </Route>
           <Route path="/checador" element={<Checador />} />
           <Route path="/personaje" element={<Personaje />} />
-          <Route path="/mis-documentos" element={<MisDocumentos />} />
+          <Route path="/mis-documentos" element={<Navigate to="/personaje?tab=documentos" replace />} />
           <Route path="/guia" element={<Guia />} />
 
           <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} oPermiso={(p) => p.bbva_mantenimiento} modulo="bbva" />}>

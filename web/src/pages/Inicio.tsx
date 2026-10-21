@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useMiPersonal } from "./MisDocumentos";
 import { useAuth } from "../lib/auth";
 import { esRolBasico } from "../lib/modulos";
-import { SECCIONES, rutaPermitida, seccionDeRuta } from "../lib/menu";
+import { GRUPOS_MENU, rutaPermitida, seccionDeRuta } from "../lib/menu";
 import { Indicadores } from "../components/Indicadores";
 import { MisActividades } from "./tareas/MisActividades";
 import { Tesoreria } from "./finanzas/Tesoreria";
@@ -346,7 +346,7 @@ export function Inicio() {
       icono: ICONOS.panel,
     },
     !!miPersonal && {
-      a: "/mis-documentos",
+      a: "/personaje?tab=documentos",
       etiqueta: "Mis documentos",
       descripcion: "mi contrato, el aviso de privacidad y documentos por firmar",
       icono: ICONOS.rh,
@@ -487,15 +487,14 @@ export function Inicio() {
           arriba. */}
       {!esContabilidad(perfil) && <MisActividades compacto />}
 
-      {/* Agrupado por área (misma clasificación que el menú y la guía) para
-          que el inicio también oriente: qué hay en cada bloque y para qué. */}
-      {[...SECCIONES, { clave: "otros", titulo: "Otros", proposito: "", entradas: [] }].map((s) => {
-        const del = mosaicosVisibles.filter((m) => (seccionDeRuta(m.a)?.clave ?? "otros") === s.clave);
+      {/* Agrupado por los 7 grupos de la barra superior (misma clasificación
+          que el menú y la guía) para que el inicio también oriente. */}
+      {[...GRUPOS_MENU, { clave: "otros", titulo: "Otros" }].map((s) => {
+        const del = mosaicosVisibles.filter((m) => (seccionDeRuta(m.a)?.grupo ?? "otros") === s.clave);
         if (del.length === 0) return null;
         return (
           <section key={s.clave} className="mb-6">
-            <h2 className="text-sm font-semibold text-slate-900">{s.titulo}</h2>
-            {s.proposito && <p className="mb-2 text-xs text-slate-500">{s.proposito}</p>}
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">{s.titulo}</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {del.map((m) => (
                 <Mosaico key={m.a} {...m} />

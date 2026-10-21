@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { seccionesPara, type NivelMenu, type SeccionMenu } from "../lib/menu";
+import { GRUPOS_MENU, seccionesPara, type NivelMenu, type SeccionMenu } from "../lib/menu";
 import { useEsSocio } from "../lib/socio";
 import { AvisoVersion } from "./AvisoVersion";
 import { BorradorFormularios } from "./BorradorFormularios";
@@ -63,18 +63,11 @@ export function Layout() {
                   Socio
                 </NavLink>
               )}
-              {/* Comedor a la vista (Mario, 30-sep-2026): dentro de Recursos
-                  humanos quedaba al fondo y no se encontraba. */}
-              {secciones.some((s) => s.entradas.some((e) => e.ruta === "/comedor")) && (
-                <NavLink to="/comedor" className={({ isActive }) => `rounded px-2 py-1 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
-                  Comedor
-                </NavLink>
-              )}
-              {/* Escritorio: un submenú por área. Celular: un solo "Módulos"
-                  agrupado, porque no caben siete botones. */}
+              {/* Escritorio: los 7 grupos del deber ser (21-oct-2026), cada uno
+                  con sus menús y opciones. Celular: un solo "Módulos". */}
               <div className="hidden items-center gap-1 lg:flex">
-                {secciones.map((s) => (
-                  <MenuModulos key={s.clave} secciones={[s]} titulo={s.titulo} />
+                {GRUPOS_MENU.map((g) => (
+                  <MenuModulos key={g.clave} secciones={secciones.filter((s) => s.grupo === g.clave)} titulo={g.titulo} />
                 ))}
               </div>
               <div className="lg:hidden">
