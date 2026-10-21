@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { htmlTicket, type MetodoPago } from "../../lib/puntoVenta";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 export interface ProductoVenta {
   id: string;
@@ -166,7 +167,8 @@ export async function imprimirTicket(ventaId: string, ventana?: Window | null) {
   if (l.error) throw l.error;
   if (p.error) throw p.error;
   const venta = v.data as VentaPv & { requiere_factura: boolean };
-  const { data: emp } = await supabase.from("empresas").select("razon_social, nombre, rfc").eq("id", venta.empresa_id).maybeSingle();
+  const { data: emp } = await supabase.from("empresas").select("razon_social, nombre, rfc, codigo").eq("id", venta.empresa_id).maybeSingle();
+  const logo = await logoDeEmpresa(emp?.codigo as string | null);
   const html = htmlTicket({
     empresa: (emp?.razon_social as string) || (emp?.nombre as string) || venta.empresa_nombre,
     rfc: (emp?.rfc as string | null) ?? null,
@@ -179,6 +181,7 @@ export async function imprimirTicket(ventaId: string, ventana?: Window | null) {
     cambio: Number(venta.cambio),
     requiereFactura: venta.requiere_factura,
     cancelada: venta.estado === "cancelada",
+    logo,
   });
   abrirParaImprimir(html, ventana);
 }

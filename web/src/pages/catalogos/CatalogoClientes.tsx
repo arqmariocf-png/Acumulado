@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { useEmpresasAlcance } from "../../components/SelectorEmpresa";
 import { duplicado, filtrarPorTexto, mensajeBorrado, revisarCliente, type FormCliente } from "../../lib/catalogos";
+import { BotonImportarBackoffice } from "../../components/BotonImportarBackoffice";
 
 // Catálogo de clientes (21-oct-2026, Mario: "que puedan ser fácilmente
 // manipulables por el área de Laura: agregar, quitar y editar"). Son los
@@ -101,9 +102,12 @@ export function CatalogoClientes() {
           <input type="checkbox" checked={inactivos} onChange={(e) => setInactivos(e.target.checked)} /> ver desactivados
         </label>
         {!soloConsulta && (
-          <button type="button" onClick={() => setEditando("nuevo")} className="ml-auto rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
-            + Nuevo cliente
-          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <BotonImportarBackoffice funcion="fn_clientes_importar_backoffice" que="clientes" invalidar={["catalogo-clientes", "cotizador-datos", "ordenes-ia-catalogo", "clientes"]} />
+            <button type="button" onClick={() => setEditando("nuevo")} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
+              + Nuevo cliente
+            </button>
+          </div>
         )}
       </div>
 

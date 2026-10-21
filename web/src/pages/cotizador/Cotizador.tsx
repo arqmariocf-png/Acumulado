@@ -10,6 +10,7 @@ import { buscarProductos, detalleProducto, lineasParaOrdenVenta, type ProductoCo
 import { detalleContraparte, filtrarContrapartes, normalizarBusqueda, type ContraparteCatalogo } from "../../lib/buscadorCaptura";
 import { BotonVerOv } from "../ordenes/VerOrdenVenta";
 import { useCatalogoCotizador, useEmpresaCotizadora } from "./datosCotizador";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiqueta = "mb-1 block text-xs font-medium text-slate-700";
@@ -116,7 +117,7 @@ export function Cotizador() {
     return filtrarContrapartes([...registrados, ...otros], cliente, 40).filter((c) => normalizarBusqueda(c.nombre) !== normalizarBusqueda(cliente) || cliente === "");
   }, [catalogo, cliente, empresaId]);
 
-  const imprimir = (c: Pick<CotizacionFila, "folio" | "fecha" | "contraparte" | "obra" | "vigencia_dias" | "condicion_pago" | "dias_credito" | "notas" | "cliente_id" | "created_by_nombre">, ls: LineaCotizacionPlanta[], ventana: Window | null) => {
+  const imprimir = async (c: Pick<CotizacionFila, "folio" | "fecha" | "contraparte" | "obra" | "vigencia_dias" | "condicion_pago" | "dias_credito" | "notas" | "cliente_id" | "created_by_nombre">, ls: LineaCotizacionPlanta[], ventana: Window | null) => {
     const cli = catalogo?.clientes.find((x) => x.id === c.cliente_id) ?? catalogo?.clientes.find((x) => normalizarBusqueda(x.razon_social) === normalizarBusqueda(c.contraparte));
     const html = htmlCotizacionPlanta(
       {
@@ -130,7 +131,7 @@ export function Cotizador() {
         cliente_domicilio: cli ? [cli.domicilio, cli.codigo_postal ? `C.P. ${cli.codigo_postal}` : null].filter(Boolean).join(", ") || null : null,
       },
       ls,
-      empresa?.codigo ? `${window.location.origin}/logos/${empresa.codigo.toLowerCase()}.png` : null,
+      await logoDeEmpresa(empresa?.codigo),
     );
     if (!abrirParaImprimir(html, ventana)) {
       cerrarVentanaImpresion(ventana);

@@ -3,6 +3,7 @@ import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlRequisicion, type LineaRequisicionDoc, type ModoRequisicionImpresa } from "../../lib/requisicionImpresa";
 import { seguimientoLinea, type EventoLinea } from "../../lib/seguimientoLinea";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 const ETIQUETA: Record<ModoRequisicionImpresa, string> = {
   requisicion: "Imprimir / PDF",
@@ -53,7 +54,7 @@ export function BotonImprimirRequisicion({ requisicionId, modo, etiqueta, classN
         { folio: r.folio, fecha: r.fecha, empresa_nombre: r.empresas?.nombre ?? "", empresa_rfc: r.empresas?.rfc ?? null, proyecto: r.proyectos?.nombre ?? null, solicitante: r.solicitante_nombre ?? null, estado: r.estado ?? null, comentario: r.comentario ?? null, impreso },
         filas,
         modo,
-        codigo ? `${window.location.origin}/logos/${codigo.toLowerCase()}.png` : null,
+        await logoDeEmpresa(codigo),
       );
       if (!abrirParaImprimir(html, ventana)) setError("El navegador bloqueó la ventana. Permite ventanas emergentes.");
     } catch (e) {

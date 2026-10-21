@@ -20,7 +20,14 @@ const campo = "rounded border border-slate-300 px-2 py-1 text-xs";
  * correo) para que tesorería pague sin buscar en otro lado (Delia,
  * 29-sep-2026). Se guardan por clave de proveedor (fn_proveedor_clave), la
  * misma de líneas de crédito. Nunca datos de tarjeta. */
-export function DatosBancariosProveedor({ datos, compacto = false }: { datos: DatosBancarios; compacto?: boolean }) {
+export function DatosBancariosProveedor({ datos: datosProp, compacto = false }: { datos: DatosBancarios; compacto?: boolean }) {
+  // Lo recién guardado se muestra de inmediato aunque la consulta de la
+  // pantalla todavía no se refresque (Laura, 21-oct-2026: "no se guardan los
+  // datos bancarios": sí se guardaban, pero el catálogo seguía diciendo "sin
+  // datos bancarios").
+  const [guardado, setGuardado] = useState<Partial<DatosBancarios> | null>(null);
+  const datos: DatosBancarios = guardado ? { ...datosProp, ...guardado } : datosProp;
+  const [aviso, setAviso] = useState<string | null>(null);
   const { perfil } = useAuth();
   const queryClient = useQueryClient();
   const puedeEditar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "direccion";
@@ -43,11 +50,21 @@ export function DatosBancariosProveedor({ datos, compacto = false }: { datos: Da
         { onConflict: "clave" },
       );
       if (err) throw err;
+      return {
+        beneficiario_bancario: beneficiario.trim() || null,
+        banco_proveedor: banco.trim() || null,
+        clabe: clabeLimpia || null,
+        cuenta_proveedor: cuenta.trim() || null,
+        rfc_proveedor: rfc.trim().toUpperCase() || null,
+        correo_proveedor: correo.trim() || null,
+      };
     },
-    onSuccess: () => {
+    onSuccess: (nuevos) => {
+      setGuardado(nuevos);
       setEditando(false);
       setError(null);
-      for (const k of [["oc-pagos"], ["pagos-programados"], ["tesoreria"], ["cxp-proveedores"]]) queryClient.invalidateQueries({ queryKey: k });
+      setAviso("guardado");
+      for (const k of [["oc-pagos"], ["pagos-programados"], ["tesoreria"], ["cxp-proveedores"], ["proveedor-ficha"], ["v-pagos-programados"]]) queryClient.invalidateQueries({ queryKey: k });
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -62,6 +79,7 @@ export function DatosBancariosProveedor({ datos, compacto = false }: { datos: Da
     setRfc(datos.rfc_proveedor ?? "");
     setCorreo(datos.correo_proveedor ?? "");
     setError(null);
+    setAviso(null);
     setEditando(true);
   };
 
@@ -85,6 +103,7 @@ export function DatosBancariosProveedor({ datos, compacto = false }: { datos: Da
             {tiene ? "editar" : "capturar"}
           </button>
         )}
+        {aviso && <span className="text-emerald-700">✓ {aviso}</span>}
       </span>
     );
   }

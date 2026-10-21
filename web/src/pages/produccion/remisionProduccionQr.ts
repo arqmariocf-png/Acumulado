@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlRemisionProduccion, urlRemisionProduccion, type LineaRemisionProduccion, type RemisionProduccionDoc } from "../../lib/remisionProduccion";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 export interface RemisionProduccionFila extends RemisionProduccionDoc {
   id: string;
@@ -44,7 +45,7 @@ export async function imprimirRemisionProduccion(id: string): Promise<boolean> {
     const { remision, lineas } = await cargarRemisionProduccion(id);
     const url = urlRemisionProduccion(window.location.origin, id);
     const svg = await qrSvg(url);
-    const logo = `/logos/${remision.empresa_codigo.toLowerCase()}.png`;
+    const logo = await logoDeEmpresa(remision.empresa_codigo);
     return abrirParaImprimir(htmlRemisionProduccion(remision, lineas, svg, url, logo), ventana);
   } catch (err) {
     cerrarVentanaImpresion(ventana);

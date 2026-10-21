@@ -1735,6 +1735,27 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   el admin maestro pasa una empresa a otra organización; `clientes` se borra
   por admin/dirección. Probado como Laura en rollback (alta, edición, cambio
   de código bloqueado, alta y borrado de cliente); Delia no edita empresas.
+  **Pendientes de Laura (21-oct-2026, WhatsApp)** (`20261021250000`, aplicada
+  como `logo_empresa_e_importar_backoffice`): (1) **Logo por empresa**:
+  `empresas.logo` (data URL png/jpeg/webp ≤ 400 mil caracteres; el navegador
+  la ajusta a 600×240) se sube en Catálogos › Empresas › editar; los
+  documentos lo piden al imprimir con `logoDeEmpresa(codigo)`
+  (`lib/logoEmpresaCargar.ts`; si no hay, `/logos/<codigo>.png`;
+  `lib/logoEmpresa.ts` con pruebas): cotizador, cotizador de planta, CRM, OC/OS
+  y OV impresas, requisición, remisión de planta y ticket del punto de venta.
+  **Documento impreso nuevo con logo → `logoDeEmpresa`, no la ruta fija.**
+  (2) **Importar del backoffice**: `fn_clientes_importar_backoffice()` (clientes
+  de las OV api que no existan en esa empresa por `fn_proveedor_clave`; la API
+  no trae RFC ni domicilio) y `fn_items_importar_backoffice()` (partidas de OC/OS
+  api que no existan por `normalizar_texto_sql`: unidad más usada, último costo
+  s/IVA, servicio si salió sobre todo en OS, claves IT- consecutivas); botón
+  "Importar del backoffice" en Clientes e Items (`BotonImportarBackoffice`);
+  repetir solo agrega lo nuevo. Primera corrida 21-oct: 56 clientes (59 en
+  total) y 1,358 items (1,360). `useItemsCompra` ya pagina de 1,000 en 1,000
+  (PostgREST no regresa más) y Catálogo de items pinta 300 con aviso.
+  (3) "No se guardan los datos bancarios" (INMOBILIARIA COMATSE): sí se
+  guardaban (16:51 UTC); el catálogo no refrescaba. `DatosBancariosProveedor`
+  muestra lo guardado al momento ("✓ guardado") e invalida `proveedor-ficha`.
 - **Cancelar, impresión completa y clientes registrados (15-oct-2026,
   Mario)**: (1) `fn_orden_ia_cancelar` ya cancela CUALQUIER OC/OS
   (backoffice, Excel, RQ: solo admin/corporativo/dirección; IA también

@@ -21,6 +21,7 @@ import {
   type EtapaCrm,
 } from "../../lib/crmVentas";
 import { useCatalogoCotizador, useEmpresaCotizadora } from "../cotizador/datosCotizador";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 // CRM de ventas por WhatsApp y redes (17-oct-2026, Mario: "un CRM de atención
 // que genere las cotizaciones de manera automática"; la cotización la revisa
@@ -333,12 +334,12 @@ function Detalle({ prospecto }: { prospecto: Prospecto }) {
     onError: (e: Error) => setError(e.message),
   });
 
-  const imprimir = (c: CotizacionCrm, ventana: Window | null) => {
+  const imprimir = async (c: CotizacionCrm, ventana: Window | null) => {
     const ls = [...c.cotizaciones_produccion_lineas].sort((a, b) => a.orden - b.orden);
     const html = htmlCotizacionPlanta(
       { ...c, empresa_nombre: empresa?.nombre ?? "", empresa_rfc: empresa?.rfc ?? null, elaboro: c.created_by_nombre, firma_nombre: c.created_by_nombre, membrete: empresa?.membrete ?? null },
       ls,
-      empresa?.codigo ? `${window.location.origin}/logos/${empresa.codigo.toLowerCase()}.png` : null,
+      await logoDeEmpresa(empresa?.codigo),
     );
     if (!abrirParaImprimir(html, ventana)) {
       cerrarVentanaImpresion(ventana);

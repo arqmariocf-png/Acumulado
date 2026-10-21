@@ -3,6 +3,7 @@ import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlOrdenCompra, type LineaOrdenCompra } from "../../lib/ordenCompraRq";
 import { datosCliente, membreteEmpresa } from "./datosImpresion";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 /** Orden de venta imprimible (mismo formato que la OC, con cliente y sin
  * sello de autorización). La pestaña se abre durante el clic (móvil). */
@@ -61,7 +62,7 @@ export function BotonVerOv({ ovId, etiqueta = "Ver orden" }: { ovId: string; eti
           importes: o.subtotal != null ? { subtotal: Number(o.subtotal), iva: Number(o.iva ?? 0), total: Number(o.total ?? 0) } : null,
         },
         (lineas ?? []).map((l) => ({ item: l.concepto, unidad: l.unidad, cantidad: l.cantidad, costo: l.precio_base, iva: l.iva ?? true })) as LineaOrdenCompra[],
-        codigo ? `${window.location.origin}/logos/${codigo.toLowerCase()}.png` : null,
+        await logoDeEmpresa(codigo),
       );
       if (!abrirParaImprimir(html, ventana)) setError("El navegador bloqueó la ventana. Permite ventanas emergentes.");
     } catch (e) {
