@@ -72,3 +72,16 @@ export function avancePorTablero(
   }
   return res;
 }
+
+/**
+ * Cada obra tiene su tablero desde el 21-oct-2026 (Mario: "a todas las obras
+ * ábrele el tablero por default"); en las listas de tableros los de obra sin
+ * actividades se esconden para no tapar lo demás (se abren desde la obra).
+ */
+export function sinObrasVacias<T extends { id: string; proyecto_id?: string | null }>(
+  tableros: T[],
+  conActividades: Set<string>,
+): { visibles: T[]; ocultas: number } {
+  const visibles = tableros.filter((t) => !t.proyecto_id || conActividades.has(t.id));
+  return { visibles, ocultas: tableros.length - visibles.length };
+}

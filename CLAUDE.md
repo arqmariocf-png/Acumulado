@@ -817,6 +817,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   no son entradas del menú). La pestaña del detalle de obra va en la liga
   (`?tab=`; una que la persona no tiene cae a la de siempre) y "Avance" se
   llama ahora "Tablero de seguimiento".
+  **Toda obra con tablero, y abre en él (21-oct, Mario: "a todas las obras
+  ábrele el tablero por default")**: `fn_proyecto_asegurar_tablero(obra)`
+  (definer, revocada) crea el tablero de la obra si no tiene (nombre de la
+  obra, su empresa, área operacion, Por hacer / En progreso / Hecho; creador =
+  sesión, si no el responsable, si no el admin de la organización); trigger
+  `proyectos_tablero_por_default` al dar de alta una obra (también las que
+  trae el backoffice) y relleno: 136 nuevos, 144 de 144 obras activas
+  (`20261021180000`). El detalle de obra abre en "Tablero de seguimiento"
+  (primera pestaña). En Tareas y "Tareas de Operación" los tableros de obra
+  sin actividades se esconden (`sinObrasVacias` en `lib/tareasArea.ts`) con
+  casilla "ver también N tableros de obra sin actividades".
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
