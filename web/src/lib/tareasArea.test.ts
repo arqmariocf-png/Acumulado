@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { agruparPorArea, avancePorTablero, esAreaTareas, nombreArea, rutaTareasArea, sinObrasVacias } from "./tareasArea.ts";
+import { agruparPorArea, avancePorTablero, esAreaTareas, nombreArea, buscarTableros, rutaTareasArea, tablerosDondeParticipa } from "./tareasArea.ts";
 
 test("áreas y rutas", () => {
   assert.equal(esAreaTareas("rh"), true);
@@ -48,13 +48,28 @@ test("avance: hechas = última columna; las mías por responsable, supervisor o 
   assert.equal(r.get("B"), undefined);
 });
 
-test("los tableros de obra sin actividades se esconden de la lista", () => {
-  const t = [
-    { id: "a", proyecto_id: null },
-    { id: "b", proyecto_id: "obra1" },
-    { id: "c", proyecto_id: "obra2" },
+test("solo los tableros donde la persona está activa", () => {
+  const tableros = [
+    { id: "rh", nombre: "RH · Actividades", creado_por: "mario" },
+    { id: "obra1", nombre: "Parque Real 63", creado_por: "mario", proyecto_id: "p1", obra_encargados: ["miguel", null] },
+    { id: "obra2", nombre: "Rio Frio", creado_por: "mario", proyecto_id: "p2", obra_encargados: [] },
+    { id: "mio", nombre: "Mi tablero", creado_por: "ana" },
   ];
-  const r = sinObrasVacias(t, new Set(["c"]));
-  assert.deepEqual(r.visibles.map((x) => x.id), ["a", "c"]);
-  assert.equal(r.ocultas, 1);
+  const tarjetas = [
+    { tablero_id: "rh", asignado_a: "ana", supervisor_id: null, corresponsables: null },
+    { tablero_id: "obra2", asignado_a: "luis", supervisor_id: null, corresponsables: ["ana"] },
+  ];
+  assert.deepEqual([...tablerosDondeParticipa(tableros, tarjetas, "ana")].sort(), ["mio", "obra2", "rh"]);
+  assert.deepEqual([...tablerosDondeParticipa(tableros, tarjetas, "miguel")], ["obra1"]);
+  // El creador automático de un tablero de obra no cuenta como activo en él.
+  assert.deepEqual([...tablerosDondeParticipa(tableros, tarjetas, "mario")], ["rh"]);
+  assert.equal(tablerosDondeParticipa(tableros, tarjetas, null).size, 0);
+});
+
+test("buscador de tableros por proyecto, sin acentos y por palabras", () => {
+  const t = [{ n: "Abarrotes Neto Río Frío", e: "CSC" }, { n: "Parque Real 63", e: "MCF" }, { n: "RH · Actividades", e: "" }];
+  const de = (x: { n: string; e: string }) => `${x.n} ${x.e}`;
+  assert.deepEqual(buscarTableros(t, "rio frio", de).map((x) => x.n), ["Abarrotes Neto Río Frío"]);
+  assert.deepEqual(buscarTableros(t, "real mcf", de).map((x) => x.n), ["Parque Real 63"]);
+  assert.equal(buscarTableros(t, "  ", de).length, 3);
 });

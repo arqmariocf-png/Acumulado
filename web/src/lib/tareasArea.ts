@@ -73,15 +73,56 @@ export function avancePorTablero(
   return res;
 }
 
+/** Lo que dice si alguien está activo en un tablero. */
+export interface TableroParticipable {
+  id: string;
+  nombre: string;
+  creado_por?: string | null;
+  proyecto_id?: string | null;
+  /** Encargados de la obra (responsable y supervisor/comprador). */
+  obra_encargados?: (string | null)[] | null;
+}
+
+export interface TarjetaParticipante {
+  tablero_id: string;
+  asignado_a: string | null;
+  supervisor_id: string | null;
+  corresponsables: string[] | null;
+  creado_por?: string | null;
+}
+
 /**
- * Cada obra tiene su tablero desde el 21-oct-2026 (Mario: "a todas las obras
- * ábrele el tablero por default"); en las listas de tableros los de obra sin
- * actividades se esconden para no tapar lo demás (se abren desde la obra).
+ * Tableros en los que la persona está activa (21-oct-2026, Mario: "a todos
+ * solamente muéstrales los tableros en los que estén activos"): tiene una
+ * tarjeta como responsable, supervisor, corresponsable o quien la creó; o es
+ * encargado de la obra del tablero; o creó un tablero que no es de obra (los
+ * de obra se crean solos y quien aparece como creador no participa por eso).
  */
-export function sinObrasVacias<T extends { id: string; proyecto_id?: string | null }>(
-  tableros: T[],
-  conActividades: Set<string>,
-): { visibles: T[]; ocultas: number } {
-  const visibles = tableros.filter((t) => !t.proyecto_id || conActividades.has(t.id));
-  return { visibles, ocultas: tableros.length - visibles.length };
+export function tablerosDondeParticipa(tableros: TableroParticipable[], tarjetas: TarjetaParticipante[], persona: string | null | undefined): Set<string> {
+  const res = new Set<string>();
+  if (!persona) return res;
+  for (const t of tarjetas) {
+    if (t.asignado_a === persona || t.supervisor_id === persona || t.creado_por === persona || (t.corresponsables ?? []).includes(persona)) res.add(t.tablero_id);
+  }
+  for (const t of tableros) {
+    if (t.proyecto_id ? (t.obra_encargados ?? []).includes(persona) : t.creado_por === persona) res.add(t.id);
+  }
+  return res;
+}
+
+function sinAcentos(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+/** Buscador por proyecto: todas las palabras en el nombre del tablero, de la obra o de la empresa. */
+export function buscarTableros<T>(tableros: T[], texto: string, textoDe: (t: T) => string): T[] {
+  const palabras = sinAcentos(texto).split(/\s+/).filter(Boolean);
+  if (!palabras.length) return tableros;
+  return tableros.filter((t) => {
+    const h = sinAcentos(textoDe(t));
+    return palabras.every((p) => h.includes(p));
+  });
 }
