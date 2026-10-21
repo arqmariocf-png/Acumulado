@@ -97,27 +97,14 @@ function ResumenCxp() {
   const vencen = useMemo(() => vencimientosPorProveedor(ocsVencen ?? [], hoy), [ocsVencen, hoy]);
   const totalVencen = vencen.reduce((s, v) => s + v.saldo, 0);
 
-  const porEmpresa = useMemo(() => {
-    const m = new Map<string, { deuda: number; saldoOc: number; rojos: number; conLinea: number }>();
-    for (const f of filas ?? []) {
-      const r = m.get(f.empresa_id) ?? { deuda: 0, saldoOc: 0, rojos: 0, conLinea: 0 };
-      r.deuda += deudaCxp(f);
-      r.saldoOc += Number(f.saldo_oc || 0);
-      if (f.linea_credito != null && Number(f.linea_credito) > 0) r.conLinea += 1;
-      if (semaforoCredito(deudaCxp(f), f.linea_credito).color === "rojo") r.rojos += 1;
-      m.set(f.empresa_id, r);
-    }
-    return [...m.entries()].filter(([, r]) => r.deuda > 0.01).sort((a, b) => b[1].deuda - a[1].deuda);
-  }, [filas]);
-
-  const apretados = useMemo(
+  // Laura (21-oct-2026): "cuentas por pagar solo son proveedores con línea de
+  // crédito"; el "se debe" por empresa sumaba a todos y no servía.
+  const conLinea = useMemo(
     () =>
       (filas ?? [])
         .filter((f) => f.linea_credito != null && Number(f.linea_credito) > 0)
         .map((f) => ({ f, s: semaforoCredito(deudaCxp(f), f.linea_credito) }))
-        .filter((x) => x.s.color === "rojo" || x.s.color === "ambar")
-        .sort((a, b) => (b.s.pctUsado ?? 0) - (a.s.pctUsado ?? 0))
-        .slice(0, 8),
+        .sort((a, b) => (b.s.pctUsado ?? 0) - (a.s.pctUsado ?? 0)),
     [filas],
   );
 
@@ -166,52 +153,42 @@ function ResumenCxp() {
         )}
         <p className="mt-1 text-xs text-slate-400">Vence = fecha de la OC + días de crédito del proveedor, o el pago ya programado si es antes. Para pagar: <Link to="/finanzas/pagos" className="underline">Programación de pagos</Link>.</p>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="py-1">Empresa</th>
-              <th className="py-1 text-right">Se debe</th>
-              <th className="py-1 text-right">Saldo de OC</th>
-              <th className="py-1 text-right">En rojo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {porEmpresa.map(([id, r]) => (
-              <tr key={id} className="border-t border-slate-100">
-                <td className="py-1.5">{nombre.get(id) ?? "—"}</td>
-                <td className="py-1.5 text-right font-medium tabular-nums">{moneda(r.deuda)}</td>
-                <td className="py-1.5 text-right tabular-nums text-slate-600">{moneda(r.saldoOc)}</td>
-                <td className={`py-1.5 text-right tabular-nums ${r.rojos > 0 ? "text-red-700" : "text-slate-400"}`}>{r.rojos || "—"}</td>
-              </tr>
-            ))}
-            {!isLoading && porEmpresa.length === 0 && (
+      <p className="mb-1 text-xs uppercase text-slate-500">Proveedores con línea de crédito · se debe {moneda(conLinea.reduce((t, x) => t + deudaCxp(x.f), 0))}</p>
+      {!isLoading && conLinea.length === 0 && <p className="text-sm text-slate-400">No hay líneas de crédito capturadas.</p>}
+      {conLinea.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-slate-500">
               <tr>
-                <td colSpan={4} className="py-3 text-center text-slate-400">
-                  Nada por pagar.
-                </td>
+                <th className="py-1">Proveedor</th>
+                <th className="py-1">Empresa</th>
+                <th className="py-1 text-right">Línea</th>
+                <th className="py-1 text-right">Se debe</th>
+                <th className="py-1 text-right">Disponible</th>
+                <th className="py-1">Uso</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-        <div>
-          <p className="mb-1 text-xs uppercase text-slate-500">Líneas de crédito más apretadas</p>
-          {apretados.length === 0 && <p className="text-sm text-slate-400">Ninguna línea al límite.</p>}
-          <ul className="space-y-1 text-sm">
-            {apretados.map(({ f, s }) => (
-              <li key={`${f.empresa_id}|${f.clave}`} className="flex items-center gap-2">
-                <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.color === "rojo" ? "bg-red-500" : "bg-amber-400"}`} />
-                <span className="flex-1 truncate">
-                  {f.proveedor} <span className="text-xs text-slate-400">· {nombre.get(f.empresa_id) ?? ""}</span>
-                </span>
-                <span className="tabular-nums text-xs text-slate-600">
-                  {s.pctUsado} % de {moneda(Number(f.linea_credito))}
-                </span>
-              </li>
-            ))}
-          </ul>
+            </thead>
+            <tbody>
+              {conLinea.map(({ f, s }) => (
+                <tr key={`${f.empresa_id}|${f.clave}`} className="border-t border-slate-100">
+                  <td className="py-1.5">{f.proveedor}</td>
+                  <td className="py-1.5 text-xs text-slate-600">{nombre.get(f.empresa_id) ?? "—"}</td>
+                  <td className="py-1.5 text-right tabular-nums">{moneda(Number(f.linea_credito))}</td>
+                  <td className="py-1.5 text-right font-medium tabular-nums">
+                    {moneda(deudaCxp(f))}
+                    {f.saldo_proveedor != null && f.saldo_proveedor_al && <div className="text-[11px] font-normal text-slate-400">edo. de cuenta {f.saldo_proveedor_al.split("-").reverse().join("/")}</div>}
+                  </td>
+                  <td className={`py-1.5 text-right tabular-nums ${Number(f.linea_credito) - deudaCxp(f) < 0 ? "text-red-700" : ""}`}>{moneda(Number(f.linea_credito) - deudaCxp(f))}</td>
+                  <td className="py-1.5 text-xs">
+                    <span className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${s.color === "rojo" ? "bg-red-500" : s.color === "ambar" ? "bg-amber-400" : "bg-emerald-500"}`} />
+                    {s.pctUsado ?? 0} %
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      )}
     </section>
   );
 }

@@ -22,12 +22,21 @@ export interface FilaCxp {
   ultima_factura: string | null;
   ultimo_pago: string | null;
   empresas: string[] | null;
-  /** Lo que se debe para la línea: facturado sin pagar o saldo de las OC, lo mayor. */
+  /** Lo que se debe para la línea (21-oct-2026): el saldo del estado de
+   * cuenta del proveedor si se capturó (± lo pagado y las OC después del
+   * corte); si manda complementos o sus pagos se ven en el banco, facturado −
+   * pagado; si no, el saldo de las OC. */
   deuda: number;
   /** Pagado por OC: pagos registrados aquí o la OC completa si el backoffice ya la da por pagada. */
   pagado_oc: number;
   saldo_oc: number;
   n_oc_por_pagar: number;
+  pagado_detectado?: number;
+  /** Saldo según el estado de cuenta del proveedor y su fecha de corte. */
+  saldo_proveedor?: number | null;
+  saldo_proveedor_al?: string | null;
+  pagado_desde_corte?: number;
+  oc_desde_corte?: number;
 }
 
 /** Llave única de la fila (la misma clave de proveedor se repite en cada empresa). */

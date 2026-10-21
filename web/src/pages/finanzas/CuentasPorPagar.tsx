@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { moneda } from "../../lib/saldosEmpresas";
-import { csvCxp, deudaCxp, filtrarYOrdenar, llaveCxp, semaforoCredito, tieneLinea, totalesCxp, type ColorCredito, type FilaCxp, type FiltroLinea, type OrdenCxp } from "../../lib/cuentasPorPagar";
+import { csvCxp, deudaCxp, filtrarYOrdenar, llaveCxp, semaforoCredito, totalesCxp, type ColorCredito, type FilaCxp, type FiltroLinea, type OrdenCxp } from "../../lib/cuentasPorPagar";
 
 const PUNTO: Record<ColorCredito, string> = {
   gris: "bg-slate-300",
@@ -46,9 +46,9 @@ export function CuentasPorPagar() {
   const [empresaId, setEmpresaId] = useState("");
   const [orden, setOrden] = useState<OrdenCxp>("por_pagar");
   const [soloConSaldo, setSoloConSaldo] = useState(true);
-  // Laura (28-sep-2026): por defecto solo los que tienen línea de crédito;
-  // los que no, se ven aparte para trabajarlos con otra área.
-  const [filtroLinea, setFiltroLinea] = useState<FiltroLinea>("con_linea");
+  // Laura (21-oct-2026): "cuentas por pagar solo son proveedores con línea de
+  // crédito"; los demás ya no se listan aquí.
+  const filtroLinea: FiltroLinea = "con_linea";
   const [abierto, setAbierto] = useState<string | null>(null);
 
   const { data: filas, isLoading, error } = useQuery({
@@ -61,11 +61,6 @@ export function CuentasPorPagar() {
   });
 
   const lista = useMemo(() => filtrarYOrdenar(filas ?? [], texto, empresaId, orden, soloConSaldo, filtroLinea), [filas, texto, empresaId, orden, soloConSaldo, filtroLinea]);
-  const conteoLinea = useMemo(() => {
-    const base = filtrarYOrdenar(filas ?? [], texto, empresaId, orden, soloConSaldo, "todos");
-    const con = base.filter(tieneLinea).length;
-    return { con, sin: base.length - con };
-  }, [filas, texto, empresaId, orden, soloConSaldo]);
   const totales = useMemo(() => totalesCxp(lista), [lista]);
   const nombreEmpresa = useMemo(() => new Map((empresas ?? []).map((e) => [e.id, e.codigo || e.nombre])), [empresas]);
 
@@ -97,27 +92,13 @@ export function CuentasPorPagar() {
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <Tarjeta etiqueta="Comprometido en OC" valor={totales.comprometido} />
-        <Tarjeta etiqueta="Facturado" valor={totales.facturado} />
-        <Tarjeta etiqueta="Pagado" valor={totales.pagado} />
-        <Tarjeta etiqueta="Se debe" valor={totales.deuda} destacado nota={`por pagar ${moneda(totales.por_pagar)} · saldo OC ${moneda(totales.saldo_oc)}`} />
-        <Tarjeta etiqueta="Proveedores en rojo" valor={totales.rojos} entero nota={`${totales.con_linea} con línea capturada`} />
+        <Tarjeta etiqueta="Líneas de crédito" valor={lista.reduce((t, f) => t + Number(f.linea_credito ?? 0), 0)} nota={`${lista.length} proveedores`} />
+        <Tarjeta etiqueta="Se debe" valor={totales.deuda} destacado nota={`${lista.filter((f) => f.saldo_proveedor != null).length} con saldo del estado de cuenta`} />
+        <Tarjeta etiqueta="Disponible" valor={lista.reduce((t, f) => t + (f.linea_credito != null ? Number(f.linea_credito) - deudaCxp(f) : 0), 0)} />
+        <Tarjeta etiqueta="Proveedores en rojo" valor={totales.rojos} entero />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <div className="inline-flex overflow-hidden rounded border border-slate-300 text-sm">
-          {(
-            [
-              ["con_linea", `Con línea (${conteoLinea.con})`],
-              ["sin_linea", `Sin línea (${conteoLinea.sin})`],
-              ["todos", "Todos"],
-            ] as [FiltroLinea, string][]
-          ).map(([v, etiqueta]) => (
-            <button key={v} type="button" onClick={() => setFiltroLinea(v)} className={`px-3 py-1.5 ${filtroLinea === v ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}>
-              {etiqueta}
-            </button>
-          ))}
-        </div>
         <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar proveedor…" className="w-56 rounded border border-slate-300 px-2 py-1.5 text-sm" />
         <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1.5 text-sm">
           <option value="">Todas las empresas</option>
@@ -141,16 +122,6 @@ export function CuentasPorPagar() {
           Descargar lista (CSV)
         </button>
       </div>
-      {filtroLinea === "sin_linea" && (
-        <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Proveedores sin línea de crédito capturada: esta es la lista para negociar o registrar con la otra área. Las líneas se capturan en{" "}
-          <Link to="/finanzas/lineas-credito" className="underline">
-            Líneas de crédito
-          </Link>
-          .
-        </p>
-      )}
-
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{(error as Error).message}</p>}
       {isLoading && <p className="text-sm text-slate-400">Cargando proveedores…</p>}
 
@@ -178,7 +149,7 @@ export function CuentasPorPagar() {
               {lista.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-slate-400">
-                    {filtroLinea === "con_linea" ? "Ningún proveedor tiene línea de crédito capturada todavía. Captúralas en Líneas de crédito o cambia a \"Sin línea\"." : "Sin proveedores para este filtro."}
+                    Sin proveedores con línea de crédito para este filtro. Las líneas se capturan en Líneas de crédito.
                   </td>
                 </tr>
               )}
@@ -195,7 +166,7 @@ export function CuentasPorPagar() {
         </div>
       )}
       <p className="mt-2 text-xs text-slate-400">
-        Una fila por empresa y proveedor: cada empresa tiene su propia línea y vencimiento. Pagado = lo pagado por OC (pagos registrados aquí, confirmados, o la OC que el backoffice ya da por pagada) o lo detectado en complementos y bancos, lo mayor. Por pagar = facturado − pagado. Saldo de OC = OC comprometidas − pagado por OC; si una OC ya se pagó y no se marcó, confírmala en Programación de pagos ("Confirmar pagadas"). El semáforo y el disponible usan lo mayor entre por pagar y saldo de OC. La línea de crédito la captura dirección
+        Solo proveedores con línea de crédito, una fila por empresa. Saldo registrado: si capturaste el saldo del estado de cuenta del proveedor, ese saldo menos lo pagado aquí después de esa fecha más las OC nuevas; si no, facturado − pagado cuando el proveedor manda complementos de pago (o sus pagos se ven en el banco), y si no, el saldo de las OC. La línea y el saldo del estado de cuenta los captura dirección
         {puedeEditar ? " dando clic en la fila" : ""}.
       </p>
     </div>
@@ -240,7 +211,12 @@ function FilaProveedor({
           </div>
         </td>
         <td className="px-3 py-2 text-right tabular-nums">{f.linea_credito != null ? moneda(f.linea_credito) : <span className="text-slate-400">sin línea</span>}</td>
-        <td className="px-3 py-2 text-right font-semibold tabular-nums">{moneda(deudaCxp(f))}</td>
+        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+          {moneda(deudaCxp(f))}
+          <div className="text-[11px] font-normal text-slate-400">
+            {f.saldo_proveedor != null && f.saldo_proveedor_al ? `estado de cuenta al ${f.saldo_proveedor_al.split("-").reverse().join("/")}` : Number(f.pagado_detectado ?? 0) > 0 ? "facturas − complementos" : "saldo de OC"}
+          </div>
+        </td>
         <td className={`px-3 py-2 text-right tabular-nums ${disponible != null && disponible < 0 ? "text-red-700" : ""}`}>{disponible != null ? moneda(disponible) : <span className="text-slate-400">—</span>}</td>
         <td className="whitespace-nowrap px-3 py-2">
           <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
@@ -267,6 +243,10 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
   const [dias, setDias] = useState(f.dias_credito != null ? String(f.dias_credito) : "");
   const [notas, setNotas] = useState(f.notas ?? "");
   const [vencimiento, setVencimiento] = useState(f.vencimiento ?? "");
+  // Saldo según el estado de cuenta del proveedor (21-oct-2026, Laura: "saldo
+  // de Bodega Cruz Azul para que lo suba"): manda sobre lo calculado.
+  const [saldoEdo, setSaldoEdo] = useState(f.saldo_proveedor != null ? String(f.saldo_proveedor) : "");
+  const [saldoAl, setSaldoAl] = useState(f.saldo_proveedor_al ?? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date()));
   const [aviso, setAviso] = useState<string | null>(null);
 
   const { data: detalle, isLoading } = useQuery({
@@ -284,7 +264,14 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
       const diasNum = dias.trim() === "" ? 0 : Number(dias);
       if (!Number.isFinite(lineaNum) || lineaNum < 0) throw new Error("La línea de crédito debe ser un número mayor o igual a cero.");
       if (!Number.isInteger(diasNum) || diasNum < 0) throw new Error("Los días de crédito deben ser un entero.");
-      const { error } = await supabase.from("proveedores_credito").upsert({ empresa_id: f.empresa_id, clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, notas: notas.trim() || null, vencimiento: vencimiento || null }, { onConflict: "empresa_id,clave" });
+      const saldoTxt = saldoEdo.trim().replace(/[^0-9.-]/g, "");
+      const saldoNum = saldoTxt === "" ? null : Number(saldoTxt);
+      if (saldoNum != null && (!Number.isFinite(saldoNum) || saldoNum < 0)) throw new Error("El saldo del estado de cuenta debe ser un número mayor o igual a cero.");
+      if (saldoNum != null && !saldoAl) throw new Error("Pon la fecha del estado de cuenta.");
+      const { error } = await supabase.from("proveedores_credito").upsert(
+        { empresa_id: f.empresa_id, clave: f.clave, nombre: f.proveedor, linea_credito: lineaNum, dias_credito: diasNum, notas: notas.trim() || null, vencimiento: vencimiento || null, saldo_proveedor: saldoNum, saldo_proveedor_al: saldoNum == null ? null : saldoAl },
+        { onConflict: "empresa_id,clave" },
+      );
       if (error) throw error;
     },
     onSuccess: () => {
@@ -321,13 +308,30 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
               <span className="text-xs text-slate-500">Vence el</span>
               <input type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5" />
             </label>
+            <div className="rounded border border-sky-200 bg-sky-50 p-2">
+              <p className="mb-1 text-xs font-medium text-sky-900">Saldo según el estado de cuenta del proveedor</p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="text-xs text-slate-500">Saldo (MXN)</span>
+                  <input value={saldoEdo} onChange={(e) => setSaldoEdo(e.target.value)} inputMode="decimal" placeholder="sin capturar" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5" />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-slate-500">Al día</span>
+                  <input type="date" value={saldoAl} onChange={(e) => setSaldoAl(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5" />
+                </label>
+              </div>
+              <p className="mt-1 text-[11px] text-sky-800">
+                Con este saldo, lo que se debe = saldo − lo que se pague aquí después de esa fecha + las OC nuevas. Déjalo en blanco para que se calcule solo.
+                {f.saldo_proveedor != null && ` Hoy: ${moneda(Number(f.saldo_proveedor))} − pagado ${moneda(Number(f.pagado_desde_corte ?? 0))} + OC nuevas ${moneda(Number(f.oc_desde_corte ?? 0))}.`}
+              </p>
+            </div>
             <label className="block">
               <span className="text-xs text-slate-500">Notas (condiciones, contacto)</span>
               <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5" />
             </label>
             <div className="flex items-center gap-2">
               <button type="submit" disabled={guardar.isPending} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-                {guardar.isPending ? "Guardando…" : "Guardar línea"}
+                {guardar.isPending ? "Guardando…" : "Guardar línea y saldo"}
               </button>
               {aviso && <span className={`text-xs ${aviso === "Guardado." ? "text-emerald-700" : "text-red-700"}`}>{aviso}</span>}
             </div>
