@@ -7,6 +7,8 @@ import { FechaCompromiso } from "./FechaCompromiso";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, TableroColumna, Tarjeta, TarjetaActividad, TarjetaArchivo, TarjetaComentario } from "../../types/database";
 import { rutaVerArchivo } from "../../lib/verArchivo";
+import { TextoConEnlaces } from "../../components/TextoConEnlaces";
+import { ligasDe } from "../../lib/enlaces";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiquetaCampo = "mb-1 block text-xs font-medium text-slate-700";
@@ -466,6 +468,16 @@ export function TarjetaPanel({
             rows={3}
             className={campoTexto}
           />
+          {ligasDe(tarjeta.descripcion).length > 0 && (
+            <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <span className="text-slate-500">Abrir:</span>
+              {ligasDe(tarjeta.descripcion).map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="break-all text-sky-700 underline">
+                  {url.replace(/^https?:\/\//, "").slice(0, 60)}
+                </a>
+              ))}
+            </p>
+          )}
         </div>
 
         {tarjeta.eliminada_en && (
@@ -538,7 +550,9 @@ export function TarjetaPanel({
                 <p className="text-xs font-medium text-slate-600">
                   {nombrePorId.get(c.autor_id) ?? "…"} <span className="font-normal text-slate-400">· {fechaHora(c.created_at)}</span>
                 </p>
-                <p className="text-slate-800">{c.texto}</p>
+                <p className="whitespace-pre-wrap break-words text-slate-800">
+                  <TextoConEnlaces texto={c.texto} />
+                </p>
               </div>
             ))}
             {comentarios?.length === 0 && <p className="text-xs text-slate-400">Sin comentarios todavía.</p>}
