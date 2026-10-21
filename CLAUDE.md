@@ -825,9 +825,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `proyectos_tablero_por_default` al dar de alta una obra (también las que
   trae el backoffice) y relleno: 136 nuevos, 144 de 144 obras activas
   (`20261021180000`). El detalle de obra abre en "Tablero de seguimiento"
-  (primera pestaña). En Tareas y "Tareas de Operación" los tableros de obra
-  sin actividades se esconden (`sinObrasVacias` en `lib/tareasArea.ts`) con
-  casilla "ver también N tableros de obra sin actividades".
+  (primera pestaña).
+  **Cada quien ve sus tableros + buscador (21-oct, Mario: "a todos solamente
+  muéstrales los tableros en los que estén activos; en los tableros ponme un
+  buscador por proyecto")**: en Tareas (`Tableros.tsx`) y "Tareas de <área>"
+  (`TareasArea.tsx`) solo salen los tableros donde la persona está activa
+  (`tablerosDondeParticipa` en `lib/tareasArea.ts`, con pruebas: tarjeta como
+  responsable, supervisor, corresponsable o creador; encargado de la obra; o
+  creador de un tablero que no es de obra —el creador automático de los de
+  obra no cuenta—), con casilla "ver también los tableros donde no tengo
+  actividades (N)" y buscador por proyecto/obra/empresa sin acentos
+  (`buscarTableros`). Es filtro de pantalla: RLS no cambió. Al 21-oct: Mario
+  18 tableros, Jorge 7, Timoteo 5, Jonathan Cáceres 4.
   **Solo obras activas (21-oct, Mario: "únicamente obras activas")**:
   `fn_proyecto_asegurar_tablero` no crea tablero a obras desactivadas y el
   trigger `proyectos_tablero_sigue_activo` archiva los tableros de la obra al

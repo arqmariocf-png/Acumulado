@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { administraProyectosDe } from "../../lib/modulos";
-import { AREAS_TAREAS, agruparPorArea, sinObrasVacias } from "../../lib/tareasArea";
+import { AREAS_TAREAS, agruparPorArea, buscarTableros, tablerosDondeParticipa, type TarjetaParticipante } from "../../lib/tareasArea";
 import type { Tablero } from "../../types/database";
 import { MisActividades } from "./MisActividades";
 
@@ -33,11 +33,11 @@ function useTableros() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tableros")
-        .select("*, empresas(nombre)")
+        .select("*, empresas(nombre), proyectos(nombre, responsable_id, comprador_id)")
         .eq("archivado", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as (Tablero & { empresas: { nombre: string } | null })[];
+      return data as (Tablero & { empresas: { nombre: string } | null; proyectos: { nombre: string; responsable_id: string | null; comprador_id: string | null } | null })[];
     },
   });
 }
@@ -47,19 +47,30 @@ export function Tableros() {
   const queryClient = useQueryClient();
   const { data: empresas } = useEmpresas();
   const { data: tableros, isLoading } = useTableros();
-  // Tableros de obra con actividades: los vacíos no se listan aquí (cada
-  // obra tiene el suyo desde el 21-oct-2026 y se abre desde Proyectos).
-  const [verObras, setVerObras] = useState(false);
-  const { data: conActividades } = useQuery({
-    queryKey: ["tableros-con-actividades"],
+  // Cada quien ve los tableros donde está activo (Mario, 21-oct-2026: "a todos
+  // solamente muéstrales los tableros en los que estén activos"); la casilla
+  // "ver todos" enseña el resto de lo que ya le deja ver la base.
+  const [verTodos, setVerTodos] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const { data: tarjetasMias } = useQuery({
+    queryKey: ["tableros-participacion"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("tarjetas").select("tablero_id").eq("archivada", false).is("eliminada_en", null).limit(10000);
+      const { data, error } = await supabase
+        .from("tarjetas")
+        .select("tablero_id, asignado_a, supervisor_id, corresponsables, creado_por")
+        .eq("archivada", false)
+        .is("eliminada_en", null)
+        .limit(10000);
       if (error) throw error;
-      return new Set((data ?? []).map((t) => t.tablero_id as string));
+      return (data ?? []) as TarjetaParticipante[];
     },
   });
-  const sinVacias = sinObrasVacias(tableros ?? [], conActividades ?? new Set());
-  const listados = verObras ? (tableros ?? []) : sinVacias.visibles;
+  const participables = (tableros ?? []).map((t) => ({ ...t, obra_encargados: [t.proyectos?.responsable_id ?? null, t.proyectos?.comprador_id ?? null] }));
+  const mios = tablerosDondeParticipa(participables, tarjetasMias ?? [], perfil?.id);
+  const textoTablero = (t: (typeof participables)[number]) => `${t.nombre} ${t.proyectos?.nombre ?? ""} ${t.empresas?.nombre ?? ""}`;
+  const base = verTodos ? participables : participables.filter((t) => mios.has(t.id));
+  const listados = buscarTableros(base, busqueda, textoTablero);
+  const fueraDeLosMios = verTodos ? 0 : buscarTableros(participables, busqueda, textoTablero).length - listados.length;
   const [mostrarForm, setMostrarForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,11 +180,24 @@ export function Tableros() {
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
       {/* Agrupados por área del menú (21-oct-2026): cada área también los ve en su "Tareas de …". */}
-      {sinVacias.ocultas > 0 && (
-        <label className="mb-3 flex items-center gap-1 text-xs text-slate-500">
-          <input type="checkbox" checked={verObras} onChange={(e) => setVerObras(e.target.checked)} /> ver también {sinVacias.ocultas} tablero(s) de obra sin actividades
-          (cada obra abre el suyo en Proyectos)
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar tablero por proyecto u obra…"
+          className="w-full max-w-sm rounded border border-slate-300 px-3 py-1.5 text-sm"
+        />
+        <label className="flex items-center gap-1 text-xs text-slate-500">
+          <input type="checkbox" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} /> ver también los tableros donde no tengo actividades
+          {fueraDeLosMios > 0 ? ` (${fueraDeLosMios})` : ""}
         </label>
+      </div>
+      {!isLoading && listados.length === 0 && (
+        <p className="mb-4 text-sm text-slate-400">
+          {busqueda.trim() ? "Ningún tablero tuyo coincide con la búsqueda." : "Todavía no tienes actividades en ningún tablero."}
+          {fueraDeLosMios > 0 && " Marca \"ver también…\" para buscar en los demás."}
+        </p>
       )}
       {agruparPorArea(listados).map((g) => (
         <section key={g.area ?? "sin-area"} className="mb-6">
@@ -189,7 +213,6 @@ export function Tableros() {
           </div>
         </section>
       ))}
-      {tableros?.length === 0 && !isLoading && <p className="text-sm text-slate-400">No hay tableros todavía.</p>}
     </div>
   );
 }
