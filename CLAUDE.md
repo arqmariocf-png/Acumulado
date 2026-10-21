@@ -834,6 +834,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   desactivarla y los regresa (o crea) al reactivarla (`20261021190000`). Al
   21-oct las 144 obras estaban activas aunque 93 no tienen OC, requisición ni
   tarea: se desactivan con "Desactivar proyecto" en el encabezado de la obra.
+  Mario eligió desactivar las que no tienen nada: revisando TODO (OC/OS/OV por
+  nombre en cualquier empresa, tarjetas, requisiciones, planos, control de
+  obra, PU, costeo, presupuesto, EPP, herramienta, gastos, producción, IA) y
+  sin encargado asignado quedaron **77 desactivadas** (21-oct; Parque Real 42 se
+  quedó activa por tener encargado). Quedan 67 obras activas, cada una con su
+  tablero; las 77 tienen el tablero archivado. Se reactivan desde la obra.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
