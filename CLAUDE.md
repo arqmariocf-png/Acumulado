@@ -239,6 +239,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   botón). Primera corrida 20-oct: 267 (154 conciliados con su CFDI, 113
   esperando factura; AEP 98, CSC 75, ERG 62, MCF 20, MCC 6, VBB 6). También
   re-liga lo que "Reclasificar" (motor desplegado) regresa a revisión.
+  **Elegir factura / folio fiscal (21-oct-2026, Mario: "así como pusiste un
+  botón para elegir OV/OC/OS, poner uno para elegir factura o folio
+  fiscal")**: en la columna FACTURA de Movimientos, "Elegir factura / folio
+  fiscal" (no conciliados, o "Cambiar factura" si ya es F-/FM-) abre
+  `components/LigarFacturaMovimiento.tsx`: CFDI de la misma empresa (cargo →
+  recibidos, abono → emitidos) de 4 meses antes a mes y medio después, los del
+  mismo monto de cualquier fecha y búsqueda en todo el histórico por número,
+  UUID, RFC o nombre; primero mismo monto, luego mismo nombre, luego fecha
+  (`lib/ligarFactura.ts`, con pruebas); marca complementos de pago y las ya
+  usadas en otro movimiento. "Elegir" → `fn_movimiento_ligar_factura(mov,
+  cfdi)` (definer; admin/dirección/corporativo en su alcance): FACTURA =
+  **"FM- <folio>"** (a mano; el motor respeta lo que no empieza con "F- " ni
+  "N/A -", así que Reclasificar no la borra) y resuelto; avisa si el monto
+  difiere o la factura ya estaba en otro movimiento (`20261021240000`).
+  Probado como Laura en rollback (liga, cambia, rechaza emitida en un cargo;
+  Alma bloqueada).
   **Botón "No lleva factura" (7-oct-2026, Mario: "sí")** en Movimientos
   (admin/dirección/corporativo; `components/MarcarSinFactura.tsx`,
   `lib/sinFactura.ts` con pruebas): motivo de la lista de reglas u otro, y
