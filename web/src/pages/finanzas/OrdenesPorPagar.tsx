@@ -170,24 +170,38 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
   const confirmables = seleccionadas.filter((o) => o.autorizacion !== "rechazada" && saldoOc(o) > 0.01);
   const [verConfirmar, setVerConfirmar] = useState(false);
 
+  // Montos del lote (21-oct-2026, Laura: "en la programación de pagos falta
+  // agregar, si es parcial, el monto de la OC a pagar"): cada orden con su
+  // monto editable; en blanco = todo lo que falta por programar.
+  const [verLote, setVerLote] = useState(false);
+  const [montosLote, setMontosLote] = useState<Record<string, string>>({});
+  const montoLote = (o: OcPago) => {
+    const t = (montosLote[o.id] ?? "").trim();
+    return t === "" ? porProgramarOc(o) : Number(t);
+  };
+
   const programarLote = useMutation({
     mutationFn: async () => {
       if (programables.length === 0) throw new Error("Ninguna de las seleccionadas se puede programar (ya programadas, rechazadas, sin saldo o pagadas en el backoffice).");
-      if (!window.confirm(`¿Programar a pago ${programables.length} orden(es) por ${moneda(programables.reduce((s, o) => s + porProgramarOc(o), 0))}? Cada una con su condición (crédito si el proveedor tiene línea, efectivo si el backoffice lo dice, si no contado) y la fecha sugerida.`)) return null;
+      for (const o of programables) {
+        const m = montoLote(o);
+        if (!(m > 0) || m > porProgramarOc(o) + 0.005) throw new Error(`${o.id_orden}: el monto debe ser mayor a 0 y no pasar de ${moneda(porProgramarOc(o))}.`);
+      }
       const errores: string[] = [];
       let n = 0;
       for (const o of programables) {
         const c = condicionInicialDe(o);
-        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: porProgramarOc(o), p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: null, p_notas: null });
+        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: Math.round(montoLote(o) * 100) / 100, p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: null, p_notas: null });
         if (err) errores.push(`${o.id_orden}: ${err.message}`);
         else n += 1;
       }
       return { n, errores };
     },
     onSuccess: (r) => {
-      if (!r) return;
       setAviso(`Programadas a pago ${r.n} orden(es).${r.errores.length ? ` No se pudieron: ${r.errores.join(" · ")}` : ""}`);
       setSeleccion(new Set());
+      setVerLote(false);
+      setMontosLote({});
       for (const k of [["oc-pagos"], ["oc-indicadores"], ["pagos-programados"], ["cxp-proveedores"], ["tesoreria"]]) queryClient.invalidateQueries({ queryKey: k });
     },
     onError: (e: Error) => setAviso(e.message),
@@ -260,8 +274,8 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
         {seleccionadas.length > 0 && (
           <span className="flex w-full flex-wrap items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-900">
             {seleccionadas.length} seleccionada(s) · suma <b className="tabular-nums">{moneda(totalSeleccion)}</b>
-            <button type="button" onClick={() => programarLote.mutate()} disabled={programarLote.isPending || programables.length === 0} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
-              {programarLote.isPending ? "Programando…" : `Programar a pago ${programables.length}`}
+            <button type="button" onClick={() => setVerLote((v) => !v)} disabled={programables.length === 0} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
+              {`Programar a pago ${programables.length}`}
             </button>
             <button type="button" onClick={() => setVerConfirmar((v) => !v)} disabled={confirmables.length === 0} className="rounded border border-emerald-700 bg-white px-2.5 py-1 font-medium text-emerald-800 disabled:opacity-50" title="Ya se pagaron (aunque no se marcó en el backoffice): quedan pagadas y confirmadas aquí">
               {`Confirmar pagadas ${confirmables.length}`}
@@ -270,6 +284,58 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
               quitar selección
             </button>
           </span>
+        )}
+        {verLote && programables.length > 0 && (
+          <div className="w-full rounded border border-emerald-300 bg-white p-2 text-xs">
+            <p className="mb-1 font-medium text-emerald-900">Programar a pago · monto de cada orden (parcial si pones menos del saldo)</p>
+            <table className="w-full">
+              <thead className="text-left text-[11px] uppercase text-slate-500">
+                <tr>
+                  <th className="py-1">OC</th>
+                  <th className="py-1">Proveedor</th>
+                  <th className="py-1 text-right">Por programar</th>
+                  <th className="py-1 text-right">Monto a pagar</th>
+                  <th className="py-1">Fecha sugerida</th>
+                </tr>
+              </thead>
+              <tbody>
+                {programables.map((o) => {
+                  const c = condicionInicialDe(o);
+                  return (
+                    <tr key={o.id} className="border-t border-slate-100">
+                      <td className="py-1 font-mono">{o.id_orden}</td>
+                      <td className="py-1">{o.proveedor ?? "—"}</td>
+                      <td className="py-1 text-right tabular-nums">{moneda(porProgramarOc(o))}</td>
+                      <td className="py-1 text-right">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          max={porProgramarOc(o)}
+                          value={montosLote[o.id] ?? ""}
+                          placeholder={porProgramarOc(o).toFixed(2)}
+                          onChange={(e) => setMontosLote((m) => ({ ...m, [o.id]: e.target.value }))}
+                          className="w-28 rounded border border-slate-300 px-1.5 py-0.5 text-right"
+                        />
+                      </td>
+                      <td className="py-1 text-slate-600">
+                        {fechaPagoSugerida(c, o, hoy)} · {ETIQUETA_CONDICION[c].toLowerCase()}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => programarLote.mutate()} disabled={programarLote.isPending} className="rounded bg-emerald-700 px-3 py-1 font-medium text-white disabled:opacity-50">
+                {programarLote.isPending ? "Programando…" : `Programar ${moneda(programables.reduce((t, o) => t + (Number.isFinite(montoLote(o)) ? montoLote(o) : 0), 0))}`}
+              </button>
+              <button type="button" onClick={() => setVerLote(false)} className="underline">
+                cancelar
+              </button>
+              <span className="text-slate-500">En blanco = todo lo que falta por programar. Lo que no se pague queda como saldo de la orden.</span>
+            </div>
+          </div>
         )}
         {verConfirmar && confirmables.length > 0 && (
           <ConfirmarOcPagadas
@@ -569,7 +635,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
               className="flex flex-wrap items-end gap-3"
             >
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Monto (saldo {moneda(saldo)})</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Monto a pagar (parcial o total; saldo {moneda(saldo)})</label>
                 <input type="number" step="0.01" min="0.01" max={saldo} value={monto} onChange={(e) => setMonto(e.target.value)} className="w-32 rounded border border-slate-300 px-2 py-1 text-sm" />
               </div>
               <div>

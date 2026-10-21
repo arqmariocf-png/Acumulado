@@ -1686,6 +1686,33 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   lista de obras al capturar (`fn_ordenes_catalogo_captura` lo excluía a
   propósito; es el proyecto de lo que no es de obra en el backoffice: 301 OC
   en 7 empresas) (`20261020090000`).
+- **Cuentas por pagar con el saldo del proveedor (21-oct-2026, Laura: "los
+  saldos de Bodega Cruz Azul y Cemex están erróneos; ya los había cuadrado y
+  otra vez sale que le debemos más de un millón"; "cuentas por pagar solo son
+  proveedores con línea de crédito"; "en la programación de pagos falta
+  agregar, si es parcial, el monto de la OC")**: causa: la descarga masiva del
+  SAT trajo todas las facturas recibidas desde enero y casi ningún pago se ve
+  por nombre en el banco (Cruz Azul AEP: facturado − pagado = $1.35 M); y la
+  deuda era el mayor entre eso y el saldo de OC, que se infla con las OC que el
+  backoffice deja en "Pendiente de Pago" aunque tengan complemento (Muebles
+  para Baño, Industrial de Alambres, Pinturerías). Ahora
+  (`20261021160000`, aplicada como `cxp_saldo_proveedor` y `_2`):
+  `proveedores_credito.saldo_proveedor/_al/_nota` = saldo del estado de
+  cuenta del proveedor; `v_cxp_empresa.deuda` = (1) ese saldo − pagado aquí
+  después del corte (de OC de antes) + saldo de OC posteriores; (2) si manda
+  complementos o se ven pagos en el banco, facturado − pagado; (3) si no, el
+  saldo de OC (columnas nuevas al final: `saldo_proveedor`,
+  `saldo_proveedor_al`, `pagado_desde_corte`, `oc_desde_corte`). Cruz Azul
+  AEP quedó con $154,405.73 al 21-oct (su estado de cuenta por WhatsApp).
+  Cemex ERG ($402 mil calculado) espera que Laura capture el saldo de su PDF.
+  Pantallas: Cuentas por pagar solo lista proveedores con línea (sin "Sin
+  línea/Todos"), tarjetas Líneas · Se debe · Disponible · En rojo, cada saldo
+  dice de dónde sale y el detalle captura "Saldo según el estado de cuenta" con
+  fecha; el inicio de dirección ya no trae "Se debe por empresa" sino la lista
+  de proveedores con línea (línea, se debe, disponible, % de uso). Programación
+  de pagos: "Programar a pago N" abre un panel con el monto de cada OC
+  (parcial; en blanco = todo lo pendiente) y el formulario por OC dice
+  "parcial o total".
 - **Efectivo que quedaba como transferencia (20-oct-2026, Laura: "las órdenes
   de efectivo las está poniendo como transferencia al momento de
   guardarlas")**: el editor traía "Transferencia" puesta de fábrica (de 33 OS
