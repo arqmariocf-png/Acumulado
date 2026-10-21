@@ -119,6 +119,8 @@ export function ProyectoDetalle() {
       setErrorActivo(null);
       queryClient.invalidateQueries({ queryKey: ["proyecto-detalle", id] });
       queryClient.invalidateQueries({ queryKey: ["proyectos-ventana"] });
+      // El tablero de la obra se archiva o regresa con ella (21-oct-2026).
+      queryClient.invalidateQueries({ queryKey: ["tableros-proyecto", id] });
     },
     onError: (err) => setErrorActivo((err as Error).message),
   });
@@ -691,7 +693,11 @@ function PestanaAvance({ proyecto }: { proyecto: Proyecto }) {
         <ResumenTablero key={t.id} tablero={t} />
       ))}
 
+      {tableros?.length === 0 && !proyecto.activo && (
+        <p className="text-sm text-slate-500">La obra está desactivada: su tablero quedó archivado con sus actividades. Al reactivarla vuelve a salir.</p>
+      )}
       {tableros?.length === 0 &&
+        proyecto.activo &&
         (puedeAdministrar ? (
           <button onClick={() => crearTablero.mutate()} disabled={crearTablero.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
             {crearTablero.isPending ? "Creando…" : "Crear tablero de seguimiento"}
