@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
@@ -122,11 +122,22 @@ export function ProyectoDetalle() {
     },
     onError: (err) => setErrorActivo((err as Error).message),
   });
-  const [tab, setTab] = useState<Tab | null>(null);
+  // La pestaña va en la liga (?tab=) para que la barra de arriba abra
+  // directo el tablero de seguimiento de la obra (21-oct-2026).
+  const [params, setParams] = useSearchParams();
+  const tab = (params.get("tab") as Tab | null) ?? null;
+  const setTab = (t: Tab) =>
+    setParams(
+      (p) => {
+        const n = new URLSearchParams(p);
+        n.set("tab", t);
+        return n;
+      },
+      { replace: true },
+    );
   const [prellenado, setPrellenado] = useState<{ concepto: string; unidad: string } | null>(null);
 
   if (!proyecto) return <p className="text-sm text-slate-500">Cargando…</p>;
-  const tabActual: Tab = tab ?? (veResumen ? "resumen" : "planos");
   const puedeDesactivar = !!perfil && (perfil.rol === "admin" || perfil.rol === "corporativo" || (perfil.rol === "empresa" && perfil.empresa_id === proyecto.empresa_id));
 
   const TABS: { clave: Tab; etiqueta: string }[] = [
@@ -136,10 +147,12 @@ export function ProyectoDetalle() {
     { clave: "planos", etiqueta: "Planos" },
     { clave: "catalogo", etiqueta: "Catálogo" },
     { clave: "precios", etiqueta: "Precios unitarios" },
-    { clave: "avance", etiqueta: "Avance" },
+    { clave: "avance", etiqueta: "Tablero de seguimiento" },
     { clave: "control", etiqueta: "Control de obra" },
     { clave: "supervision", etiqueta: "Supervisión IA" },
   ];
+  // Una pestaña de la liga que esta persona no tiene (resumen, costeo) cae a la de siempre.
+  const tabActual: Tab = tab && TABS.some((t) => t.clave === tab) ? tab : veResumen ? "resumen" : "planos";
 
   return (
     <div>
