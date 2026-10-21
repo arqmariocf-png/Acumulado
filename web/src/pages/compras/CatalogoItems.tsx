@@ -15,6 +15,7 @@ import {
   type ItemCompra,
 } from "../../lib/catalogoItems";
 import { useItemsCompra } from "./useItemsCompra";
+import { BotonImportarBackoffice } from "../../components/BotonImportarBackoffice";
 
 // Catálogo propio de items de compras (21-oct-2026, Mario: "para compras, un
 // módulo para agregar nuevos items"). Items sin proveedor (clave, descripción,
@@ -24,6 +25,8 @@ import { useItemsCompra } from "./useItemsCompra";
 const dinero = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }));
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const VACIO: FormItem = { clave: "", descripcion: "", unidad: "", categoria: "material", precio: "" };
+
+const MOSTRAR = 300;
 
 export function CatalogoItems() {
   const { soloConsulta } = useAuth();
@@ -64,16 +67,19 @@ export function CatalogoItems() {
           <input type="checkbox" checked={inactivos} onChange={(e) => setInactivos(e.target.checked)} /> ver desactivados
         </label>
         {!soloConsulta && (
-          <button
-            type="button"
-            onClick={() => {
-              setDetalle(null);
-              setEditando("nuevo");
-            }}
-            className="ml-auto rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-          >
-            + Nuevo item
-          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <BotonImportarBackoffice funcion="fn_items_importar_backoffice" que="items" invalidar={["compras-items", "ordenes-ia-catalogo"]} />
+            <button
+              type="button"
+              onClick={() => {
+                setDetalle(null);
+                setEditando("nuevo");
+              }}
+              className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              + Nuevo item
+            </button>
+          </div>
         )}
       </div>
 
@@ -110,7 +116,7 @@ export function CatalogoItems() {
                   </td>
                 </tr>
               )}
-              {lista.map((i) => (
+              {lista.slice(0, MOSTRAR).map((i) => (
                 <tr key={i.id} className={`border-t border-slate-100 ${i.activo ? "" : "text-slate-400"} ${detalle?.id === i.id ? "bg-sky-50" : ""}`}>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{i.clave}</td>
                   <td className="px-3 py-2">
@@ -134,6 +140,11 @@ export function CatalogoItems() {
               ))}
             </tbody>
           </table>
+          {lista.length > MOSTRAR && (
+            <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+              Se muestran {MOSTRAR} de {lista.length.toLocaleString("es-MX")}; escribe en Buscar para encontrar el resto.
+            </p>
+          )}
         </div>
       )}
 

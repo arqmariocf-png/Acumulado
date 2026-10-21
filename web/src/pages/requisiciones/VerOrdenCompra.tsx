@@ -3,6 +3,7 @@ import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlOrdenCompra, type LineaOrdenCompra } from "../../lib/ordenCompraRq";
 import { datosProveedor, membreteEmpresa } from "../ordenes/datosImpresion";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 /** Abre la orden de compra RQ imprimible en una pestaña (almacén, dirección
  * o quien pueda ver la OC). La pestaña se abre durante el clic (móvil). */
@@ -85,7 +86,7 @@ export function BotonVerOc({ ocId, etiqueta = "Ver orden", className }: { ocId: 
           importes: preciosConIva && importes ? { subtotal: Number(importes.subtotal), iva: Number(importes.iva), total: Number(importes.total) } : null,
         },
         (lineas ?? []) as LineaOrdenCompra[],
-        codigo ? `${window.location.origin}/logos/${codigo.toLowerCase()}.png` : null,
+        await logoDeEmpresa(codigo),
       );
       if (!abrirParaImprimir(html, ventana)) setError("El navegador bloqueó la ventana. Permite ventanas emergentes.");
     } catch (e) {

@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlCotizacionPlanta, sinIva, totalesCotizacion, type LineaCotizacionPlanta, type MembreteEmpresa } from "../../lib/cotizacionPlanta";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiqueta = "mb-1 block text-xs font-medium text-slate-700";
@@ -111,7 +112,7 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
 
   const setLinea = (i: number, cambios: Partial<LineaForm>) => setLineas((p) => p.map((l, j) => (j === i ? { ...l, ...cambios } : l)));
 
-  const imprimir = (c: Pick<CotizacionFila, "folio" | "fecha" | "contraparte" | "obra" | "vigencia_dias" | "condicion_pago" | "dias_credito" | "notas" | "cliente_id" | "created_by_nombre">, ls: LineaCotizacionPlanta[], ventana: Window | null) => {
+  const imprimir = async (c: Pick<CotizacionFila, "folio" | "fecha" | "contraparte" | "obra" | "vigencia_dias" | "condicion_pago" | "dias_credito" | "notas" | "cliente_id" | "created_by_nombre">, ls: LineaCotizacionPlanta[], ventana: Window | null) => {
     const cli = catalogo?.clientes.find((x) => x.id === c.cliente_id);
     const html = htmlCotizacionPlanta(
       {
@@ -125,7 +126,7 @@ export function CotizadorPlanta({ empresa }: { empresa: { id: string; nombre: st
         cliente_domicilio: cli?.domicilio ?? null,
       },
       ls,
-      catalogo?.codigo ? `/logos/${catalogo.codigo.toLowerCase()}.png` : null,
+      await logoDeEmpresa(catalogo?.codigo),
     );
     if (!abrirParaImprimir(html, ventana)) {
       cerrarVentanaImpresion(ventana);

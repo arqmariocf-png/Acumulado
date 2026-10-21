@@ -118,6 +118,8 @@ export function htmlCotizacionPlanta(enc: EncabezadoCotizacionPlanta, lineas: Li
   .membrete { display: flex; align-items: center; gap: 16px; padding-bottom: 10px; }
   .logo { background: #000; border-radius: 6px; padding: 6px 10px; flex: none; }
   .logo img { height: 74px; display: block; }
+  .logo.propio { background: none; padding: 0; }
+  .logo.propio img { max-width: 260px; object-fit: contain; }
   .emp { flex: 1; text-align: right; line-height: 1.45; color: #3a3a3c; }
   .emp .rs { font-size: 15px; font-weight: bold; color: #111; letter-spacing: .02em; }
   .rayas { height: 4px; background: #be0a13; margin-bottom: 2px; } .rayas2 { height: 1px; background: #5b5a5f; margin-bottom: 14px; }
@@ -149,7 +151,7 @@ export function htmlCotizacionPlanta(enc: EncabezadoCotizacionPlanta, lineas: Li
 <button class="btn" onclick="window.print()">Imprimir / guardar PDF</button>
 <div class="hoja">
   <div class="membrete">
-    ${logoUrl ? `<div class="logo"><img src="${esc(logoUrl)}" alt="${esc(enc.empresa_nombre)}" onerror="this.parentNode.remove()"></div>` : ""}
+    ${logoUrl ? `<div class="logo${logoUrl.startsWith("data:") ? " propio" : ""}"><img src="${esc(logoUrl)}" alt="${esc(enc.empresa_nombre)}" onerror="this.parentNode.remove()"></div>` : ""}
     <div class="emp"><div class="rs">${esc(razon)}</div>${enc.empresa_rfc ? `<div>RFC ${esc(enc.empresa_rfc)}</div>` : ""}${m.domicilio_fiscal ? `<div>${esc(m.domicilio_fiscal)}</div>` : ""}${contacto ? `<div>${contacto}</div>` : ""}</div>
   </div>
   <div class="rayas"></div><div class="rayas2"></div>

@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { duplicado, filtrarPorTexto, revisarEmpresa, type FormEmpresa } from "../../lib/catalogos";
+import { LOGO_MAXIMO, TIPOS_LOGO, logoValido, medidasLogo } from "../../lib/logoEmpresa";
+import { olvidarLogos } from "../../lib/logoEmpresaCargar";
 
 // Catálogo de empresas (21-oct-2026, Mario: "que puedan ser fácilmente
 // manipulables por el área de Laura: agregar, quitar y editar"). Dirección y
@@ -25,9 +27,10 @@ interface EmpresaFicha {
   cuenta_bancaria: string | null;
   clabe: string | null;
   sucursal_bancaria: string | null;
+  logo: string | null;
 }
 
-const COLUMNAS = "id, nombre, codigo, rfc, activo, razon_social, domicilio_fiscal, telefono, correo, banco, cuenta_bancaria, clabe, sucursal_bancaria";
+const COLUMNAS = "id, nombre, codigo, rfc, activo, razon_social, domicilio_fiscal, telefono, correo, banco, cuenta_bancaria, clabe, sucursal_bancaria, logo";
 const campo = "mt-1 block w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const VACIA: FormEmpresa = { nombre: "", codigo: "", rfc: "", razon_social: "", domicilio_fiscal: "", telefono: "", correo: "", banco: "", cuenta_bancaria: "", clabe: "", sucursal_bancaria: "" };
 
@@ -105,6 +108,7 @@ export function CatalogoEmpresas() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
+                <th className="px-3 py-2">Logo</th>
                 <th className="px-3 py-2">Código</th>
                 <th className="px-3 py-2">Nombre</th>
                 <th className="px-3 py-2">RFC</th>
@@ -116,13 +120,16 @@ export function CatalogoEmpresas() {
             <tbody>
               {lista.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
                     Sin coincidencias.
                   </td>
                 </tr>
               )}
               {lista.map((e) => (
                 <tr key={e.id} className={`border-t border-slate-100 align-top ${e.activo ? "" : "text-slate-400"}`}>
+                  <td className="px-3 py-2">
+                    {e.logo ? <img src={e.logo} alt="" className="h-8 max-w-[96px] object-contain" /> : <span className="text-xs text-slate-400">—</span>}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{e.codigo}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium">{e.nombre}</div>
@@ -254,6 +261,7 @@ function EditorEmpresa({ empresa, empresas, onCerrar }: { empresa: EmpresaFicha 
       {entrada("sucursal_bancaria", "Sucursal", { className: "sm:col-span-1" })}
       {entrada("cuenta_bancaria", "Cuenta", { mono: true, className: "sm:col-span-2" })}
       {entrada("clabe", "CLABE (18 dígitos)", { mono: true, className: "sm:col-span-2" })}
+      {empresa && <LogoEmpresa empresa={empresa} onCambio={invalidar} />}
       {!puedeCambiarCodigo && <p className="text-xs text-slate-500 sm:col-span-6">El código se usa en cargas, folios y logos: solo el director general lo cambia.</p>}
       {dup && <p className="text-xs text-amber-700 sm:col-span-6">Ojo: ya existe {dup.nombre} con ese nombre o RFC.</p>}
       {error && <p className="text-xs text-red-700 sm:col-span-6">{error}</p>}
@@ -277,5 +285,90 @@ function EditorEmpresa({ empresa, empresas, onCerrar }: { empresa: EmpresaFicha 
         )}
       </div>
     </form>
+  );
+}
+
+/** Reduce la imagen a la caja del logo (PNG para conservar transparencia; si
+ * queda muy pesada, JPEG sobre blanco). */
+async function prepararLogo(archivo: File): Promise<string> {
+  if (!(TIPOS_LOGO as readonly string[]).includes(archivo.type)) throw new Error("Sube una imagen PNG, JPG o WEBP.");
+  const url = URL.createObjectURL(archivo);
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, mal) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => mal(new Error("No se pudo leer la imagen."));
+      i.src = url;
+    });
+    const m = medidasLogo(img.naturalWidth, img.naturalHeight);
+    if (!m.ancho) throw new Error("La imagen está vacía.");
+    const lienzo = document.createElement("canvas");
+    lienzo.width = m.ancho;
+    lienzo.height = m.alto;
+    const ctx = lienzo.getContext("2d")!;
+    ctx.drawImage(img, 0, 0, m.ancho, m.alto);
+    let dato = lienzo.toDataURL("image/png");
+    if (dato.length > LOGO_MAXIMO) {
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, m.ancho, m.alto);
+      dato = lienzo.toDataURL("image/jpeg", 0.85);
+    }
+    if (!logoValido(dato)) throw new Error("La imagen sigue muy pesada; usa una más sencilla.");
+    return dato;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function LogoEmpresa({ empresa, onCambio }: { empresa: EmpresaFicha; onCambio: () => void }) {
+  const [logo, setLogo] = useState<string | null>(empresa.logo);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const guardar = useMutation({
+    mutationFn: async (nuevo: string | null) => {
+      const { error } = await supabase.from("empresas").update({ logo: nuevo, logo_actualizado_en: new Date().toISOString() }).eq("id", empresa.id);
+      if (error) throw error;
+      return nuevo;
+    },
+    onSuccess: (nuevo) => {
+      setLogo(nuevo);
+      setAviso(nuevo ? "Logo guardado: ya sale en cotizaciones, órdenes, remisiones, requisiciones y tickets de esta empresa." : "Logo quitado.");
+      olvidarLogos();
+      onCambio();
+    },
+    onError: (e: Error) => setAviso(e.message),
+  });
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded border border-slate-200 bg-white p-2 sm:col-span-6">
+      <span className="text-xs font-medium text-slate-700">Logo para documentos</span>
+      {logo ? <img src={logo} alt="" className="h-12 max-w-[200px] object-contain" /> : <span className="text-xs text-slate-400">sin logo (se usa el de siempre si existe)</span>}
+      <label className="cursor-pointer rounded border border-slate-300 px-2 py-1 text-xs text-slate-700">
+        {logo ? "Cambiar imagen" : "Subir imagen"}
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={async (e) => {
+            const archivo = e.target.files?.[0];
+            e.target.value = "";
+            if (!archivo) return;
+            setAviso(null);
+            try {
+              guardar.mutate(await prepararLogo(archivo));
+            } catch (err) {
+              setAviso((err as Error).message);
+            }
+          }}
+        />
+      </label>
+      {logo && (
+        <button type="button" onClick={() => guardar.mutate(null)} className="text-xs text-red-700 underline">
+          Quitar
+        </button>
+      )}
+      {guardar.isPending && <span className="text-xs text-slate-500">Guardando…</span>}
+      {aviso && <span className="text-xs text-slate-600">{aviso}</span>}
+      <span className="w-full text-[11px] text-slate-500">PNG con fondo transparente se ve mejor. Se ajusta solo a 600 × 240 px.</span>
+    </div>
   );
 }

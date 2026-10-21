@@ -143,6 +143,8 @@ export interface TicketPv {
   cambio: number;
   requiereFactura?: boolean;
   cancelada?: boolean;
+  /** Logo de la empresa (data URL o ruta); si falla, no se muestra. */
+  logo?: string | null;
 }
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
@@ -168,7 +170,7 @@ h1{font-size:14px;text-align:center;margin:2px 0}.c{text-align:center}table{widt
 .d{text-align:right;white-space:nowrap}.t td{font-weight:bold;font-size:13px;border-top:1px dashed #000}.sep{border-top:1px dashed #000;margin:4px 0}
 .cancel{border:2px solid #000;text-align:center;font-weight:bold;padding:2px;margin:4px 0}svg{max-width:100%;height:auto}</style></head>
 <body onload="setTimeout(function(){window.print()},300)">
-<h1>${esc(t.empresa)}</h1>${t.rfc ? `<div class="c">RFC ${esc(t.rfc)}</div>` : ""}
+${t.logo ? `<div class="c"><img src="${esc(t.logo)}" alt="" style="max-width:60mm;max-height:22mm" onerror="this.remove()"></div>` : ""}<h1>${esc(t.empresa)}</h1>${t.rfc ? `<div class="c">RFC ${esc(t.rfc)}</div>` : ""}
 <div class="c">Ticket ${esc(t.folio)}</div><div class="c">${esc(t.fecha)}</div>
 ${t.vendedor ? `<div>Atendió: ${esc(t.vendedor)}</div>` : ""}<div>Cliente: ${esc(t.cliente || "Público en general")}</div>
 ${t.cancelada ? `<div class="cancel">CANCELADA</div>` : ""}
