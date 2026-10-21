@@ -10,6 +10,8 @@ import { MarcarSinFactura } from "../components/MarcarSinFactura";
 import { puedeMarcarSinFactura } from "../lib/sinFactura";
 import { LigarOrdenMovimiento } from "../components/LigarOrdenMovimiento";
 import { puedeLigarOrden } from "../lib/ligarOrden";
+import { LigarFacturaMovimiento } from "../components/LigarFacturaMovimiento";
+import { puedeLigarFactura } from "../lib/ligarFactura";
 import { TIPOS_PERIODO, etiquetaPeriodo, moverPeriodo, rangoPeriodo, type TipoPeriodo } from "../lib/periodoFiltro";
 import type { EstadoClasificacion, Movimiento } from "../types/database";
 
@@ -76,6 +78,8 @@ export function Movimientos() {
   const [marcando, setMarcando] = useState<string | null>(null);
   // Ligar a su OC/OS/OV desde la lista (20-oct-2026, Mario): mismos roles.
   const [ligando, setLigando] = useState<string | null>(null);
+  // Elegir la factura por número o folio fiscal (21-oct-2026, Mario).
+  const [eligiendoFactura, setEligiendoFactura] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
   const empresaFiltro = veTodasLasEmpresas ? empresaId : (perfil?.empresa_id ?? "");
@@ -302,6 +306,7 @@ export function Movimientos() {
                         onClick={() => {
                           setAviso(null);
                           setMarcando(null);
+                          setEligiendoFactura(null);
                           setLigando(m.id);
                         }}
                         className="block text-xs text-sky-700 underline"
@@ -318,11 +323,26 @@ export function Movimientos() {
                         onClick={() => {
                           setAviso(null);
                           setLigando(null);
+                          setEligiendoFactura(null);
                           setMarcando(m.id);
                         }}
                         className="text-xs text-sky-700 underline"
                       >
                         {m.factura ? "Cambiar motivo" : "No lleva factura"}
+                      </button>
+                    )}
+                    {marcaSinFactura && puedeLigarFactura(m.estado_clasificacion, m.factura) && eligiendoFactura !== m.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAviso(null);
+                          setLigando(null);
+                          setMarcando(null);
+                          setEligiendoFactura(m.id);
+                        }}
+                        className="block text-xs text-violet-700 underline"
+                      >
+                        {/^FM?- /.test(m.factura ?? "") ? "Cambiar factura" : "Elegir factura / folio fiscal"}
                       </button>
                     )}
                   </td>
@@ -349,6 +369,20 @@ export function Movimientos() {
                           setAviso(msg);
                         }}
                         onCancelar={() => setLigando(null)}
+                      />
+                    </td>
+                  </tr>
+                )}
+                {eligiendoFactura === m.id && (
+                  <tr>
+                    <td colSpan={8} className="px-3 pb-3">
+                      <LigarFacturaMovimiento
+                        movimiento={m}
+                        onListo={(msg) => {
+                          setEligiendoFactura(null);
+                          setAviso(msg);
+                        }}
+                        onCancelar={() => setEligiendoFactura(null)}
                       />
                     </td>
                   </tr>
