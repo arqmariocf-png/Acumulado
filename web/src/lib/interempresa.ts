@@ -11,6 +11,10 @@ import type { PartidaCaptura } from "./ordenesIa.ts";
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export interface LineaOrigen {
+  /** Partida de la orden de origen (fn_interempresa_restante). */
+  linea_id?: string | null;
+  /** Lo que falta por vender inter empresa de la partida; sin dato = toda. */
+  restante?: number | string | null;
   item: string | null;
   unidad: string | null;
   cantidad: number | string | null;
@@ -39,20 +43,42 @@ export interface PartidaInterempresa {
   /** Precio de venta s/IVA; vacío = costo + comisión. */
   precio: string;
   iva: boolean;
+  /** Partida de origen y lo máximo que se puede vender de ella. */
+  origenLinea?: string;
+  maximo?: number;
+}
+
+/** Cuánto queda de una partida (lo ya vendido inter empresa no se repite;
+ * Mario, 21-oct-2026: "si ya se generó la venta y compra total, que ya no te
+ * deje volverlo a hacer"). */
+function queda(l: LineaOrigen): number {
+  return l.restante == null ? Number(l.cantidad) : Number(l.restante);
 }
 
 export function partidasDesdeOrigen(lineas: LineaOrigen[], fuente: string): PartidaInterempresa[] {
   return lineas
-    .filter((l) => (l.item ?? "").trim() !== "" && Number(l.cantidad) > 0)
+    .filter((l) => (l.item ?? "").trim() !== "" && Number(l.cantidad) > 0 && queda(l) > 0)
     .map((l) => ({
       incluir: true,
       item: (l.item ?? "").trim(),
       unidad: (l.unidad ?? "").trim(),
-      cantidad: String(Number(l.cantidad)),
+      cantidad: String(queda(l)),
       costo: costoSinIva(l, fuente),
       precio: "",
       iva: l.iva !== false,
+      ...(l.linea_id ? { origenLinea: l.linea_id, maximo: queda(l) } : {}),
     }));
+}
+
+/** ¿Ya se vendió todo inter empresa? (sin partidas pendientes). */
+export function interempresaCompleta(lineas: LineaOrigen[]): boolean {
+  const validas = lineas.filter((l) => (l.item ?? "").trim() !== "" && Number(l.cantidad) > 0);
+  return validas.length > 0 && validas.every((l) => queda(l) <= 0);
+}
+
+/** Lo que cubre esta venta de cada partida de origen (la base lo valida). */
+export function partidasOrigen(ps: PartidaInterempresa[]): { linea: string; cantidad: number }[] {
+  return ps.filter((p) => p.incluir && p.origenLinea).map((p) => ({ linea: p.origenLinea as string, cantidad: Number(p.cantidad) }));
 }
 
 export function precioPartida(p: PartidaInterempresa, comisionPct: number): number {
@@ -99,6 +125,7 @@ export function revisarInterempresa(o: { empresaVende: string; empresaCompra: st
   usadas.forEach((p, i) => {
     if (!p.item.trim()) errores.push(`Partida ${i + 1}: falta la descripción.`);
     if (!(Number(p.cantidad) > 0)) errores.push(`Partida ${i + 1}: cantidad inválida.`);
+    else if (p.maximo != null && Number(p.cantidad) > p.maximo + 1e-9) errores.push(`Partida ${i + 1}: solo faltan ${p.maximo} por vender inter empresa.`);
     if (p.precio.trim() !== "" && !(Number(p.precio) >= 0)) errores.push(`Partida ${i + 1}: precio inválido.`);
   });
   return errores;

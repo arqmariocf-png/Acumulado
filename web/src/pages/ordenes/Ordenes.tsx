@@ -136,6 +136,19 @@ export function Ordenes() {
     },
   });
 
+  // Órdenes que ya tienen venta inter empresa: completas ya no ofrecen el botón
+  // (Mario, 21-oct-2026: "si ya se generó la venta y compra total, que ya no te
+  // deje volverlo a hacer"); la base también lo impide (fn_orden_interempresa).
+  const interempresaEstado = useQuery({
+    queryKey: ["ordenes-ia", "interempresa-estado"],
+    enabled: vista !== "OV",
+    queryFn: async () => {
+      const { data, error: e } = await supabase.rpc("fn_interempresa_estado");
+      if (e) throw e;
+      return new Map(((data ?? []) as { origen_id: string; completa: boolean }[]).map((x) => [x.origen_id, x.completa]));
+    },
+  });
+
   // Más reciente primero: fecha y luego folio como número.
   const filas = useMemo(() => {
     const q = texto.trim().toLowerCase();
@@ -299,7 +312,12 @@ export function Ordenes() {
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
                       {o.tipo === "OV" ? <BotonVerOv ovId={o.id} /> : <BotonVerOc ocId={o.id} />}
-                      {o.tipo !== "OV" && o.etapa.etiqueta !== "cancelada" && o.etapa.etiqueta !== "rechazada" && (
+                      {o.tipo !== "OV" && interempresaEstado.data?.get(o.id) === true && (
+                        <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700" title="Ya se generaron la venta y la compra inter empresa de todas sus partidas">
+                          inter empresa ✓
+                        </span>
+                      )}
+                      {o.tipo !== "OV" && o.etapa.etiqueta !== "cancelada" && o.etapa.etiqueta !== "rechazada" && interempresaEstado.data?.get(o.id) !== true && (
                         <button
                           type="button"
                           onClick={() => {
@@ -310,7 +328,7 @@ export function Ordenes() {
                           title="Copiar esta orden como base: venta a otra empresa del grupo y su compra, con comisión"
                           className="rounded border border-indigo-200 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-50"
                         >
-                          Inter empresa
+                          {interempresaEstado.data?.get(o.id) === false ? "Inter empresa (falta)" : "Inter empresa"}
                         </button>
                       )}
                       {o.editable && puedeTocar(o) && (

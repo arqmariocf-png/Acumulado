@@ -1683,6 +1683,22 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `lib/interempresa.ts` con pruebas). Probado como Laura en rollback (AEP →
   CSC, IA-OV-0001 e IA-OC-0048 por $1,334); consecutivos regresados (OC 47,
   OV sin usar).
+  **Una sola vez por partida (21-oct, Mario: "si ya se generó la venta y
+  compra total, que ya no te deje volverlo a hacer; que se elimine el
+  botón")**: `ordenes_venta.interempresa_partidas` = [{linea, cantidad}] de la
+  OC de origen que cubre cada OV inter empresa (en el encabezado: editar las
+  partidas de la OV no pierde la liga); `fn_interempresa_restante(origen)`
+  (definer, alcance) = lo que falta de cada partida (sin OV canceladas);
+  `fn_interempresa_estado()` = por origen si ya está completa.
+  `fn_orden_interempresa` tiene un 9º parámetro `p_partidas_origen` y rechaza
+  repetir una orden completa o pasar de lo que falta (la firma de 8 se quitó).
+  Las 7 que había (IA-OV-0001…0007) cubrían su orden completa y se rellenaron.
+  En `/ordenes` la completa ya no trae botón, sale "inter empresa ✓"; la
+  parcial dice "Inter empresa (falta)" y la pantalla solo ofrece lo que falta
+  (`interempresaCompleta`, `partidasOrigen` en `lib/interempresa.ts`)
+  (`20261021210000`). Probado como Laura en rollback (IA-OC-0040 completa
+  rechazada; IA-OC-0048 parcial: de más rechazado, la partida 1 y luego falta
+  la 2); consecutivos regresados (OC 59, OV 7).
 - **Sección Catálogos (21-oct-2026, Mario: "genera la sección de catálogos:
   empresas, proveedores, ítems, clientes; que puedan ser fácilmente
   manipulables por el área de Laura: agregar, quitar y editar")**: sección
