@@ -1,3 +1,4 @@
+import { TextoConEnlaces } from "../../components/TextoConEnlaces";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
@@ -223,7 +224,11 @@ export function SeguimientoLinea({
                   {e.cantidad} {unidad}
                 </span>
               )}
-              {e.nota && <span className="text-slate-700">· {e.nota}</span>}
+              {e.nota && (
+                <span className="text-slate-700">
+                  · <TextoConEnlaces texto={e.nota} />
+                </span>
+              )}
               <span className="text-slate-400">
                 · {e.created_by_nombre ?? "—"}
               </span>

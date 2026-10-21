@@ -1067,6 +1067,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   firmada con `download=` (`urlDescarga`, Content-Disposition attachment);
   botón "Descargar" en cada archivo de la tarjeta (`TarjetaPanel`) y en el
   encabezado del visor para cualquier fuente.
+- **Ligas clicables (21-oct-2026, Maria Fernanda: "en comentarios pongo
+  links pero se tiene que copiar todo y pegar")**: `lib/enlaces.ts`
+  (`partirEnlaces`/`ligasDe`, con pruebas: solo http(s) y www., sin la
+  puntuación final) + `components/TextoConEnlaces.tsx` (abre en otra pestaña).
+  Usado en comentarios de tarjetas, ligas de la descripción ("Abrir:" bajo el
+  campo) y notas del seguimiento de requisiciones. **Texto libre nuevo que se
+  muestre (comentarios, notas) → `TextoConEnlaces`.**
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
   abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
   (móvil). QR con `qrcode` (import dinámico).

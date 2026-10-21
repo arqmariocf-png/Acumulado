@@ -10,6 +10,7 @@ import { ETIQUETA_CONDICION, type CondicionPago } from "../../lib/pagosOc";
 import { ETIQUETA_SEGUIMIENTO, avancePartidas, puedeMarcarEvento, seguimientoLinea, type EstadoSeguimiento, type EventoLinea, type ExtraLinea, type Seguimiento, type TipoEvento } from "../../lib/seguimientoLinea";
 import { SeguimientoLinea } from "./SeguimientoLinea";
 import { BotonImprimirRequisicion } from "./ImprimirRequisicion";
+import { TextoConEnlaces } from "../../components/TextoConEnlaces";
 
 const COLOR_SEGUIMIENTO: Record<EstadoSeguimiento, string> = {
   sin_pedir: "bg-slate-100 text-slate-600",
@@ -473,7 +474,9 @@ function FilaLinea({ requisicionId, seguimiento, eventos, puedeMarcar, puede, se
             <td className="max-w-[14rem] py-1.5 pr-2 text-slate-600">
               {seguimiento.comentarios[0] ? (
                 <button type="button" onClick={() => onSeguimiento("comentario")} className="text-left hover:underline" title="Ver la bitácora del renglón">
-                  <span className="line-clamp-2">{seguimiento.comentarios[0].nota}</span>
+                  <span className="line-clamp-2">
+                    <TextoConEnlaces texto={seguimiento.comentarios[0].nota} />
+                  </span>
                   <span className="text-[10px] text-slate-400">
                     {seguimiento.comentarios[0].created_by_nombre ?? ""}
                     {seguimiento.comentarios.length > 1 ? ` · +${seguimiento.comentarios.length - 1}` : ""}
