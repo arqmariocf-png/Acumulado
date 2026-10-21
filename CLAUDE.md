@@ -1833,6 +1833,33 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   autorizar o programar → pagar. "Confirmar pagadas N" y Efectivo por
   confirmar solo toman autorizadas (las pendientes dicen "por autorizar").
   Al aplicarla: 0 pagos pagados o pendientes sobre OC sin autorizar.
+- **Deuda financiera (21-oct-2026, Mario: "crear un módulo de deuda
+  financiera para subir los préstamos")**: Finanzas › Cuentas por pagar ›
+  **Deuda financiera** (`/finanzas/deuda`, `pages/finanzas/DeudaFinanciera.tsx`;
+  `lib/deudaFinanciera.ts` con pruebas). Créditos de bancos, arrendadoras y
+  particulares (lo intercompañía sigue en "Préstamos entre empresas").
+  `deuda_creditos` (por empresa, folio DF-<emp>-0001 por trigger; acreedor,
+  tipo, contrato, MXN/USD, monto, disposición/vencimiento, tasa anual fija o
+  variable + referencia, IVA de intereses, plazo, periodicidad, amortización
+  pagos iguales / capital igual / solo intereses / personalizado, primer pago,
+  cuenta de cargo, garantía, aval, `saldo_corte` + `saldo_corte_al` para los
+  que se suben ya avanzados, estatus) y `deuda_pagos` (capital, interés, IVA,
+  comisiones, total generado; liga opcional a movimiento). **El saldo se
+  calcula** en `v_deuda_creditos` (corte − capital pagado después del corte, o
+  monto − capital pagado). Capturan admin, dirección y permiso tesorería
+  (`auth_opera_deuda`); consulta además permiso contabilidad (`auth_ve_deuda`);
+  frontera por empresa, espectador, director general y solo consulta
+  (`20261021220000`). Pantalla: tarjetas (deuda por moneda con tasa promedio
+  ponderada, pagos en 30 días, vencidos), lista con próximo pago y vencidos
+  (`estadoPagos`: contra el saldo real), alta/edición, pagos (sugiere el
+  siguiente de la tabla), tabla de amortización proyectada
+  (`tablaAmortizacion`), Excel de salida y **carga desde Excel/CSV**
+  (`creditosDesdeTabla`: encabezados libres, empresa por código, revisión por
+  fila; plantilla descargable). Probado en producción en rollback: Laura da de
+  alta DF-AEP-0001 y registra pago (saldo 820,000 − 25,000 = 795,000), Belén y
+  Delia ven, Belén no captura, Alma no ve. Pendiente: marcar "Créditos
+  bancarios" del Plan del sistema como Hecho (el update se quedó esperando
+  confirmación); programar pagos de deuda en la hoja de pagos del día.
 - **Efectivo que quedaba como transferencia (20-oct-2026, Laura: "las órdenes
   de efectivo las está poniendo como transferencia al momento de
   guardarlas")**: el editor traía "Transferencia" puesta de fábrica (de 33 OS
