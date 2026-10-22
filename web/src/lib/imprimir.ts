@@ -14,16 +14,11 @@ import { modoImpresion } from "./modoImpresion";
 export function abrirParaImprimir(html: string, ventana?: Window | null): boolean {
   const modo = modoImpresion(navigator.userAgent, navigator.platform, navigator.maxTouchPoints ?? 0);
   if (modo === "escribir") {
-    const destino = ventana && !ventana.closed ? ventana : window.open("", "_blank");
-    if (!destino) return false;
-    try {
-      destino.document.open();
-      destino.document.write(html);
-      destino.document.close();
-      return true;
-    } catch {
-      // Si no se puede escribir en la pestaña, se intenta con la liga blob.
-    }
+    // En computadora nunca se usa la liga blob (Safari de la Mac la pierde):
+    // si no se pudo escribir en la pestaña abierta, se intenta en una nueva.
+    if (ventana && !ventana.closed && escribirEn(ventana, html)) return true;
+    const nueva = window.open("", "_blank");
+    return !!nueva && escribirEn(nueva, html);
   }
   const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
   if (ventana && !ventana.closed) {
@@ -32,6 +27,17 @@ export function abrirParaImprimir(html: string, ventana?: Window | null): boolea
   }
   const nueva = window.open(url, "_blank");
   return !!nueva;
+}
+
+function escribirEn(destino: Window, html: string): boolean {
+  try {
+    destino.document.open();
+    destino.document.write(html);
+    destino.document.close();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Abre la pestaña vacía DURANTE el clic (antes de cualquier await): los
