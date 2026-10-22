@@ -1160,8 +1160,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   campo) y notas del seguimiento de requisiciones. **Texto libre nuevo que se
   muestre (comentarios, notas) → `TextoConEnlaces`.**
 - Impresión/PDF: HTML generado en `web/src/lib/*.ts` (puro, con pruebas) y
-  abierto como URL blob (`lib/imprimir.ts`); la pestaña se abre durante el clic
-  (móvil). QR con `qrcode` (import dinámico).
+  abierto por `abrirParaImprimir` (`lib/imprimir.ts`); la pestaña se abre
+  durante el clic (móvil). QR con `qrcode` (import dinámico). **Modo por
+  dispositivo (22-oct-2026, Mario: Safari de la Mac "No se pudo completar la
+  operación (Error de WebKitBlobResource 1)")**: en iPhone/iPad URL blob (el
+  document.write congelaba el iPhone); en computadora se escribe el HTML
+  directo en la pestaña (la liga blob se pierde si la pestaña de origen se
+  recarga o se cierra) (`lib/modoImpresion.ts`, con pruebas; iPad que se
+  presenta como Mac = táctil → blob).
 - `web/version.json` + `AvisoVersion`: aviso de "versión nueva" en pestañas viejas.
 - Foto de nota de entrega: evidencia por defecto; lectura por IA opcional
   (requiere `ANTHROPIC_API_KEY` válida en secrets de Edge Functions; la actual
