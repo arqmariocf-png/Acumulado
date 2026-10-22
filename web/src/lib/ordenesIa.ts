@@ -123,3 +123,47 @@ export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: strin
   }
   return renglones.map((r) => r.map(celda).join(",")).join("\n");
 }
+
+export interface LineaExcelOrden {
+  numero: number | null;
+  concepto: string | null;
+  unidad: string | null;
+  cantidad: number | null;
+  precio: number | null;
+  iva: boolean | null;
+}
+
+export const COLUMNAS_DETALLE_ORDENES = ["Partida", "Concepto", "Unidad", "Cantidad", "Precio unitario s/IVA", "Importe c/IVA"];
+
+/** Excel de órdenes con el detalle (Laura, 22-oct-2026: "en la descarga de
+ * Excel de órdenes de venta, poner el detalle de cada una"): un renglón por
+ * partida con los datos de la orden repetidos; una orden sin partidas sale en
+ * un renglón con el detalle vacío. Las del backoffice traen el precio con IVA
+ * (el total es la suma de cantidad × precio); las de aquí, sin IVA. */
+export function csvOrdenesConDetalle(
+  filas: { id: string; tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string; fuente: string }[],
+  lineas: Map<string, LineaExcelOrden[]>,
+): string {
+  const celda = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const tipoTexto: Record<TipoOrden, string> = { OC: "Compra", OS: "Servicio", OV: "Venta" };
+  const r2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  const renglones = [[...COLUMNAS_EXCEL_ORDENES, ...COLUMNAS_DETALLE_ORDENES]];
+  for (const o of filas) {
+    const base = [o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado];
+    const ls = [...(lineas.get(o.id) ?? [])].sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0));
+    if (!ls.length) {
+      renglones.push([...base, "", "", "", "", "", ""]);
+      continue;
+    }
+    const conIvaIncluido = o.fuente !== "acumulado";
+    ls.forEach((l, i) => {
+      const cant = Number(l.cantidad) || 0;
+      const precio = Number(l.precio) || 0;
+      const factor = l.iva === false ? 1 : 1.16;
+      const sinIva = conIvaIncluido ? precio / factor : precio;
+      const importe = conIvaIncluido ? cant * precio : cant * precio * factor;
+      renglones.push([...base, String(l.numero ?? i + 1), l.concepto ?? "", l.unidad ?? "", String(cant), r2(sinIva), r2(importe)]);
+    });
+  }
+  return renglones.map((r) => r.map(celda).join(",")).join("\n");
+}

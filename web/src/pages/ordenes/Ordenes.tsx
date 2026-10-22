@@ -8,7 +8,7 @@ import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { BotonVerOv } from "./VerOrdenVenta";
 import { EditorOrden } from "./EditorOrden";
 import { VentaInterempresa } from "./VentaInterempresa";
-import { csvOrdenes, etapaOrdenCompra, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
+import { csvOrdenes, csvOrdenesConDetalle, etapaOrdenCompra, type LineaExcelOrden, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
 
 const dinero = (n: number | null | undefined) =>
   n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
@@ -28,6 +28,7 @@ interface FilaOrden {
   empresa_id: string;
   contraparte: string | null;
   forma_pago: string | null;
+  estatus_backoffice?: string | null;
   proyecto: string | null;
   total: number | null;
   fecha: string | null;
@@ -97,7 +98,7 @@ export function Ordenes() {
       }
       let q = supabase
         .from("v_oc_pagos")
-        .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice, tipo_pago_backoffice")
+        .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice, tipo_pago_backoffice, estatus_backoffice")
         .in("tipo", filtro === "todas" ? ["OC", "OS"] : [filtro])
         .order("fecha_creacion", { ascending: false })
         .limit(300);
@@ -121,6 +122,7 @@ export function Ordenes() {
           empresa_id: o.empresa_id as string,
           contraparte: o.proveedor as string | null,
           forma_pago: o.tipo_pago_backoffice as string | null,
+          estatus_backoffice: o.estatus_backoffice as string | null,
           proyecto: o.proyecto as string | null,
           total: o.total as number | null,
           fecha: o.fecha_creacion as string | null,
@@ -159,10 +161,47 @@ export function Ordenes() {
 
   const codigo = (id: string) => empresas?.find((e) => e.id === id)?.codigo ?? "—";
   const info = infoTipo(tipo);
+  // Cancelada aquí o en el backoffice, o rechazada: sin inter empresa (Laura, 22-oct-2026).
+  const cerrada = (o: FilaOrden) => o.etapa.etiqueta === "cancelada" || o.etapa.etiqueta === "rechazada" || /cancel/i.test(o.estatus_backoffice ?? "");
   const puedeTocar = (o: FilaOrden) => esDireccion || o.creada_por === perfil?.id;
 
-  function descargar() {
-    const csv = csvOrdenes(filas.map((o) => ({ ...o, empresa: codigo(o.empresa_id), estado: o.etapa.etiqueta })));
+  const [descargando, setDescargando] = useState(false);
+  async function descargar() {
+    const conEstado = filas.map((o) => ({ ...o, empresa: codigo(o.empresa_id), estado: o.etapa.etiqueta }));
+    let csv: string;
+    if (vista === "OV") {
+      // Con el detalle de cada orden (Laura, 22-oct-2026).
+      setDescargando(true);
+      try {
+        const lineas = new Map<string, LineaExcelOrden[]>();
+        const ids = filas.map((o) => o.id);
+        for (let i = 0; i < ids.length; i += 100) {
+          for (let desde = 0; ; desde += 1000) {
+            const { data, error: e } = await supabase
+              .from("ordenes_venta_lineas")
+              .select("id, orden_venta_id, numero, concepto, unidad, cantidad, precio_base, iva")
+              .in("orden_venta_id", ids.slice(i, i + 100))
+              .order("id")
+              .range(desde, desde + 999);
+            if (e) throw e;
+            for (const l of data ?? []) {
+              const lista = lineas.get(l.orden_venta_id as string) ?? [];
+              lista.push({ numero: l.numero as number | null, concepto: l.concepto as string | null, unidad: l.unidad as string | null, cantidad: l.cantidad as number | null, precio: l.precio_base as number | null, iva: l.iva as boolean | null });
+              lineas.set(l.orden_venta_id as string, lista);
+            }
+            if ((data ?? []).length < 1000) break;
+          }
+        }
+        csv = csvOrdenesConDetalle(conEstado, lineas);
+      } catch (e) {
+        setError((e as Error).message);
+        return;
+      } finally {
+        setDescargando(false);
+      }
+    } else {
+      csv = csvOrdenes(conEstado);
+    }
     const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
@@ -192,8 +231,8 @@ export function Ordenes() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={descargar} disabled={!filas.length} className="rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            Descargar Excel
+          <button type="button" onClick={descargar} disabled={!filas.length || descargando} className="rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            {descargando ? "Preparando Excel…" : vista === "OV" ? "Descargar Excel (con detalle)" : "Descargar Excel"}
           </button>
           <button type="button" onClick={() => setEditor({ id: null })} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
             + Nueva {vista === "OV" ? "OV" : "OC u OS"}
@@ -312,12 +351,12 @@ export function Ordenes() {
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
                       {o.tipo === "OV" ? <BotonVerOv ovId={o.id} /> : <BotonVerOc ocId={o.id} />}
-                      {o.tipo !== "OV" && interempresaEstado.data?.get(o.id) === true && (
+                      {o.tipo !== "OV" && !cerrada(o) && interempresaEstado.data?.get(o.id) === true && (
                         <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700" title="Ya se generaron la venta y la compra inter empresa de todas sus partidas">
                           inter empresa ✓
                         </span>
                       )}
-                      {o.tipo !== "OV" && o.etapa.etiqueta !== "cancelada" && o.etapa.etiqueta !== "rechazada" && interempresaEstado.data?.get(o.id) !== true && (
+                      {o.tipo !== "OV" && !cerrada(o) && interempresaEstado.data?.get(o.id) !== true && (
                         <button
                           type="button"
                           onClick={() => {

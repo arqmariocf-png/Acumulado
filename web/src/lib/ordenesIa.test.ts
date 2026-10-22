@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { etapaOrdenCompra, ordenEditable, partidasParaGuardar, partidaVacia, revisarOrden, totalesPartidas, csvOrdenes } from "./ordenesIa.ts";
+import { etapaOrdenCompra, ordenEditable, partidasParaGuardar, partidaVacia, revisarOrden, totalesPartidas, csvOrdenes, csvOrdenesConDetalle } from "./ordenesIa.ts";
 
 test("totales sin IVA por partida, con y sin IVA", () => {
   const t = totalesPartidas([
@@ -48,4 +48,26 @@ test("Excel de compras y servicios en un solo archivo", () => {
   assert.equal(lineas[0], '"Empresa","Folio","Tipo","Proveedor / cliente","Tipo de pago","Proyecto","Monto c/IVA","Fecha","Estatus"');
   assert.equal(lineas[1], '"CSC","IA-OS-0004","Servicio","Fletes ""El Rayo""","Transferencia","Parque Real 63","1160.00","2026-10-19","por autorizar"');
   assert.equal(lineas[2], '"MCF","41422","Compra","Cemex","","","","2026-10-13","pagada"');
+});
+
+test("Excel de órdenes con el detalle de cada partida", () => {
+  const base = { tipo: "OV" as const, fecha: "2026-10-22", empresa: "AEP", contraparte: "Cliente", forma_pago: "Transferencia", proyecto: "Obra", estado: "abierta" };
+  const csv = csvOrdenesConDetalle(
+    [
+      { ...base, id: "a", folio: "IA-OV-0001", total: 1160, fuente: "acumulado" },
+      { ...base, id: "b", folio: "15340", total: 232, fuente: "api" },
+      { ...base, id: "c", folio: "15341", total: 0, fuente: "api" },
+    ],
+    new Map([
+      ["a", [{ numero: 2, concepto: "Varilla", unidad: "pza", cantidad: 5, precio: 100, iva: true }, { numero: 1, concepto: "Alambre", unidad: "kg", cantidad: 10, precio: 50, iva: true }]],
+      ["b", [{ numero: 1, concepto: "Flete", unidad: "srv", cantidad: 2, precio: 116, iva: true }]],
+    ]),
+  );
+  const filas = csv.split("\n");
+  assert.equal(filas.length, 5); // encabezado + 2 partidas + 1 + orden sin partidas
+  assert.match(filas[0], /"Partida","Concepto","Unidad","Cantidad","Precio unitario s\/IVA","Importe c\/IVA"$/);
+  assert.match(filas[1], /"IA-OV-0001".*"1","Alambre","kg","10","50.00","580.00"$/);
+  assert.match(filas[2], /"2","Varilla","pza","5","100.00","580.00"$/);
+  assert.match(filas[3], /"15340".*"1","Flete","srv","2","100.00","232.00"$/); // backoffice: precio con IVA
+  assert.match(filas[4], /"15341".*,"","","","","",""$/);
 });
