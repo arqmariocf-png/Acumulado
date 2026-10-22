@@ -104,7 +104,14 @@ export function MisRequisiciones() {
   const queryClient = useQueryClient();
   const { data: proyectosDisponibles } = useProyectosDisponibles(perfil?.rol, perfil?.id, perfil?.empresa_id);
 
-  const puedeCrear = perfil?.rol === "responsable" || perfil?.rol === "admin" || perfil?.rol === "corporativo" || administraProyectosDe(perfil, perfil?.empresa_id);
+  // Con el permiso por persona 'requisiciones' (Jaime, producción en
+  // Clavicón, 22-oct-2026) también pide, en obras de su empresa principal.
+  const puedeCrear =
+    perfil?.rol === "responsable" ||
+    perfil?.rol === "admin" ||
+    perfil?.rol === "corporativo" ||
+    administraProyectosDe(perfil, perfil?.empresa_id) ||
+    (!!perfil?.empresa_id && (perfil?.modulos ?? []).includes("requisiciones"));
   const puedeComprarAqui = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
 
   const [proyectoId, setProyectoId] = useState("");
