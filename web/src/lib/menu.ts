@@ -87,7 +87,7 @@ export const GRUPOS_MENU: { clave: GrupoMenu; titulo: string }[] = [
   { clave: "comercial", titulo: "Comercial" },
   { clave: "finanzas", titulo: "Finanzas" },
   { clave: "operacion", titulo: "Operación" },
-  { clave: "nomina", titulo: "Nómina y mano de obra" },
+  { clave: "nomina", titulo: "Recursos humanos" },
   { clave: "administracion", titulo: "Administración" },
 ];
 
@@ -228,7 +228,9 @@ export const SECCIONES: SeccionMenu[] = [
     area: "finanzas",
     titulo: "Presupuestos",
     proposito: "Presupuesto anual, por obra y contra real.",
-    entradas: [],
+    entradas: [
+      { ruta: "/finanzas/avance-financiero", etiqueta: "Avance financiero de obras", descripcion: "presupuesto contra real, pagado y pendiente por obra, empresa, periodo y categoría", uso: "Captura el presupuesto de cada obra por categoría; lo real (OC, OS y mano de obra) y lo pagado salen solos. El semáforo avisa qué obra gasta más de lo que avanza o ya rebasó su presupuesto.", visible: (p) => p.rol === "direccion" || p.rol === "empresa" || esAdmin(p), modulo: "proyectos" },
+    ],
   },
   {
     clave: "contabilidad",
@@ -289,40 +291,13 @@ export const SECCIONES: SeccionMenu[] = [
     ],
   },
   {
-    clave: "nomina",
-    grupo: "nomina",
-    area: "rh",
-    titulo: "Nómina",
-    proposito: "Pagos de nómina, préstamos y descuentos a empleados.",
-    entradas: [
-      {
-        ruta: "/financiamiento",
-        etiqueta: "Préstamos y descuentos",
-        descripcion: "estudio, líneas por trabajador y descuentos vía nómina",
-        uso: "Estudio por antigüedad, asistencia, tareas, cuidado de herramienta e historial de pago; autoriza la línea de cada trabajador (sin intereses, topes de ley), registra préstamos y anticipos y aplica los descuentos de cada viernes.",
-        visible: (p) => esAdmin(p) || p.rol === "direccion" || p.rol === "rh",
-        modulo: "rh",
-      },
-      { ruta: "/rh/agenda-pagos", etiqueta: "Agenda de pagos de nómina", descripcion: "calendario de pagos de nómina", uso: "Qué se paga cada semana y quincena.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
-    ],
-  },
-  {
-    clave: "mano_obra",
-    grupo: "nomina",
-    area: "rh",
-    titulo: "Mano de obra",
-    proposito: "Contratistas y destajos de obra.",
-    entradas: [
-      { ruta: "/rh/mano-de-obra", etiqueta: "Pagos de mano de obra", descripcion: "nómina externa de las APIs de Grupo Loma", uso: "Costo de mano de obra por periodo y por obra.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
-    ],
-  },
-  {
     clave: "rh",
-    grupo: "administracion",
+    grupo: "nomina",
     area: "rh",
     titulo: "Recursos humanos",
     proposito: "Expedientes, asistencia, EPP y accesos al sistema.",
     entradas: [
+      { ruta: "/tareas/area/rh", etiqueta: "Tablero de RH", descripcion: "actividades del equipo de recursos humanos", uso: "El tablero de tareas de RH (RH · Actividades): lo que asigna RH, quién lo tiene y qué está vencido. De ahí se organiza lo demás.", visible: (p) => p.rol === "rh" || p.rol === "rh_documentos" || esAdmin(p), modulo: "rh" },
       {
         ruta: "/rh",
         etiqueta: "Recursos humanos",
@@ -381,6 +356,34 @@ export const SECCIONES: SeccionMenu[] = [
       },
       { ruta: "/bbva/asistencia", etiqueta: "Asistencia de mi equipo", descripcion: "marcas del checador de tu gente", uso: "Para revisar quién llegó, a qué hora y desde dónde.", visible: (p) => p.rol === "supervisor" || p.rol === "directivo" || (p.modulos ?? []).includes("checador") || (bbva(p) && p.rol !== "rh") , modulo: "rh" },
       { ruta: "/epp/solicitar", etiqueta: "Solicitar EPP", descripcion: "casco, chaleco, botas… para tu gente", uso: "El supervisor o responsable de obra pide el equipo de protección de su gente; RH lo entrega de bodega o lo pide a compras y la persona firma su responsiva.", visible: (p) => ["supervisor", "responsable", "rh"].includes(p.rol) || esAdmin(p), modulo: "rh" },
+    ],
+  },
+  {
+    clave: "nomina",
+    grupo: "nomina",
+    area: "rh",
+    titulo: "Nómina",
+    proposito: "Pagos de nómina, préstamos y descuentos a empleados.",
+    entradas: [
+      {
+        ruta: "/financiamiento",
+        etiqueta: "Préstamos y descuentos",
+        descripcion: "estudio, líneas por trabajador y descuentos vía nómina",
+        uso: "Estudio por antigüedad, asistencia, tareas, cuidado de herramienta e historial de pago; autoriza la línea de cada trabajador (sin intereses, topes de ley), registra préstamos y anticipos y aplica los descuentos de cada viernes.",
+        visible: (p) => esAdmin(p) || p.rol === "direccion" || p.rol === "rh",
+        modulo: "rh",
+      },
+      { ruta: "/rh/agenda-pagos", etiqueta: "Agenda de pagos de nómina", descripcion: "calendario de pagos de nómina", uso: "Qué se paga cada semana y quincena.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
+    ],
+  },
+  {
+    clave: "mano_obra",
+    grupo: "nomina",
+    area: "rh",
+    titulo: "Mano de obra",
+    proposito: "Contratistas y destajos de obra.",
+    entradas: [
+      { ruta: "/rh/mano-de-obra", etiqueta: "Pagos de mano de obra", descripcion: "nómina externa de las APIs de Grupo Loma", uso: "Costo de mano de obra por periodo y por obra.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
     ],
   },
   {
