@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calendarioPagos, creditosDesdeTabla, csvPlantilla, estadoPagos, estatusRenglones, fechaDeTexto, numeroDeTexto, numeroPagos, pagosParaProgramar, resumenDeuda, resumenGrupo, sumarPeriodos, tablaAmortizacion, type CreditoBase, type CreditoGrupo } from "./deudaFinanciera.ts";
+import { calendarioPagos, creditosDesdeTabla, csvPlantilla, estadoPagos, estatusRenglones, fechaDeTexto, numeroDeTexto, numeroPagos, pagosParaProgramar, perfilPagos, porEnviar, resumenDeuda, resumenGrupo, sumarPeriodos, tablaAmortizacion, type CreditoBase, type CreditoGrupo } from "./deudaFinanciera.ts";
 
 const base: CreditoBase = {
   monto: 120000,
@@ -185,4 +185,20 @@ test("resumen del grupo y calendario", () => {
   const cal = calendarioPagos(cs, "2026-01-20", 3);
   assert.deepEqual(cal.map((m) => m.mes), ["2026-02", "2026-03", "2026-04"]);
   assert.equal(cal[0].renglones.length, 1); // solo a: c (USD) ya amortizó casi todo, d está liquidado y b no tiene tabla
+});
+
+test("perfil de 12 meses y pagos por enviar a la hoja", () => {
+  const t = tablaAmortizacion(base);
+  const c: CreditoGrupo = { ...base, id: "a", folio: "DF-1", acreedor: "BBVA", tipo: "simple", empresa_id: "e1", moneda: "MXN", saldo: 120000 - t[0].capital, estatus: "vigente", numeros_pagados: [1], numeros_programados: [3] };
+  const usd: CreditoGrupo = { ...c, id: "b", moneda: "USD", numeros_pagados: [], numeros_programados: [] };
+  const p = perfilPagos([c, usd], "2026-03-20");
+  assert.equal(p.length, 12);
+  assert.equal(p[0].mes, "2026-03");
+  assert.equal(p[0].vencido, t[1].pago); // el pago 2 (15-mar) ya venció
+  assert.equal(p[0].total, t[1].pago);
+  assert.equal(p[1].total, t[2].pago);
+  assert.equal(p[11].mes, "2027-02");
+  const e = porEnviar([c], "2026-03-20", 30);
+  assert.deepEqual(e[0].pagos.map((x) => x.numero), [2]); // el 3 ya está en la hoja
+  assert.deepEqual(porEnviar([{ ...c, numeros_programados: [2, 3] }], "2026-03-20", 30), []);
 });

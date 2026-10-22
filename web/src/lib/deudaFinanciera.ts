@@ -600,3 +600,38 @@ export function csvPlantilla(): string {
   const linea = (v: string[]) => v.map((x) => (/[",]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x)).join(",");
   return [linea(PLANTILLA_CARGA), linea(ejemplo)].join("\n");
 }
+
+export interface MesPerfil {
+  mes: string;
+  total: number;
+  vencido: number;
+}
+
+/** Perfil de pagos de los próximos `meses` meses (desde el mes de hoy), con
+ * los meses en cero incluidos; lo vencido se suma al mes actual. Para ver con
+ * anticipación los meses pesados. */
+export function perfilPagos(creditos: CreditoGrupo[], hoy: string, meses = 12, moneda = "MXN"): MesPerfil[] {
+  const inicio = `${hoy.slice(0, 7)}-01`;
+  const lista: MesPerfil[] = Array.from({ length: meses }, (_, i) => ({ mes: sumarPeriodos(inicio, "mensual", i).slice(0, 7), total: 0, vencido: 0 }));
+  const porMes = new Map(lista.map((m) => [m.mes, m]));
+  for (const m of calendarioPagos(creditos.filter((c) => (c.moneda || "MXN") === moneda), hoy, meses)) {
+    for (const r of m.renglones) {
+      const destino = r.estatus === "vencido" ? lista[0] : porMes.get(r.renglon.fecha.slice(0, 7));
+      if (!destino) continue;
+      destino.total = r2(destino.total + r.renglon.pago);
+      if (r.estatus === "vencido") destino.vencido = r2(destino.vencido + r.renglon.pago);
+    }
+  }
+  return lista;
+}
+
+/** Pagos de los próximos `dias` días (y vencidos) que todavía no están en la
+ * hoja de pagos, por crédito, listos para fn_deuda_enviar_pagos. */
+export function porEnviar(creditos: CreditoGrupo[], hoy: string, dias = 30): { credito: CreditoGrupo; pagos: ReturnType<typeof pagosParaProgramar> }[] {
+  return creditos
+    .map((c) => {
+      const ya = new Set(c.numeros_programados ?? []);
+      return { credito: c, pagos: pagosParaProgramar(c, hoy, dias).filter((p) => !ya.has(p.numero)) };
+    })
+    .filter((x) => x.pagos.length > 0);
+}
