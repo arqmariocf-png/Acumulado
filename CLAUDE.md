@@ -1935,6 +1935,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   regresar a pendiente un programado ya registrado → error "deshazlo allá";
   crédito liquidado/cancelado → sus pendientes se cancelan. Pendiente: que la
   hoja de pagos del día los muestre como cargo de la empresa.
+  **Como el resumen del diseño (22-oct-2026, Mario mandó la captura y la
+  lista)**: ya NO se mandan solos a Programación: Calendario de pagos trae el
+  perfil de los próximos 12 meses (barras por mes, mes más pesado, vencido en
+  rojo; solo MXN; `perfilPagos`), la lista de los próximos 6 meses con "A la
+  hoja de pagos" por pago y "Enviar los próximos 30 días a la hoja de pagos
+  (N · $)" (`porEnviar`, con pruebas). Al abrir solo se corrigen los que ya
+  están en la hoja si el crédito cambió. Registrar crédito calcula la tabla de
+  pagos mientras se escribe (`TablaPrevia`). En la tabla de amortización el
+  siguiente pago sin pagar dice "Próximo" y lo programado "En hoja de pagos".
+  Al 22-oct no hay créditos capturados (0 en `deuda_creditos`).
 - **Efectivo que quedaba como transferencia (20-oct-2026, Laura: "las órdenes
   de efectivo las está poniendo como transferencia al momento de
   guardarlas")**: el editor traía "Transferencia" puesta de fábrica (de 33 OS
