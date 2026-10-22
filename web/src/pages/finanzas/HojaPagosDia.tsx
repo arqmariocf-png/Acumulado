@@ -32,7 +32,7 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
     queryFn: async () => {
       const { data, error: err } = await supabase
         .from("v_pagos_programados")
-        .select("empresa_id, empresa_nombre, id_orden, beneficiario, concepto, monto, fecha_programada, estatus, metodo, tipo_pago_backoffice, oc_proyecto, notas, referencia, tipo")
+        .select("empresa_id, empresa_nombre, id_orden, beneficiario, concepto, monto, fecha_programada, estatus, metodo, tipo_pago_backoffice, oc_proyecto, notas, referencia, pagado_en, tipo")
         .neq("estatus", "cancelado")
         .or(`fecha_programada.eq.${fecha},and(estatus.eq.pendiente,fecha_programada.lt.${fecha})`);
       if (err) throw err;
