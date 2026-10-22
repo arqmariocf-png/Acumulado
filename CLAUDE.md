@@ -374,6 +374,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   responsable Christian, por SQL). Ojo: las OC de mantenimiento del
   backoffice siguen llegando a "BBVA Puebla" (135 OC); esta obra no
   recibe OC del backoffice salvo que allá se use el mismo nombre.
+- **Jaime con requisiciones en Clavicón (22-oct-2026, Mario: "activa
+  requisiciones en Clavicón para Jaime")**: Jaime Sierra es `produccion` y
+  `auth_opera_proyectos_empresa` no toma ese rol. Sin cambiarle el rol: empresa
+  principal **MCC** (antes vacía; sigue con todas_las_empresas) y
+  `permisos_modulo` 'requisiciones'. Policy permisiva nueva
+  `requisiciones_insert_permiso` con `auth_empresas_requisicion_permiso()`
+  (definer: empresa principal + "Maneja también" de quien tiene el permiso):
+  pide a su nombre SOLO en obras de esas empresas (Corporativo CLAVICON);
+  renglones y edición ya iban por quien pidió. `MisRequisiciones` muestra
+  "Nueva requisición" con ese permiso y empresa principal
+  (`20261022130000`). Probado como Jaime en rollback: crea en Clavicón con
+  renglón, CSC rechazada; consecutivo de folio regresado a 85.
 - **Supervisores con precios unitarios y tareas propias (16-oct-2026,
   Mario: "a todos los supervisores habilitarles el módulo de precios
   unitarios y que puedan asignarse tareas a ellos mismos")**: permiso
