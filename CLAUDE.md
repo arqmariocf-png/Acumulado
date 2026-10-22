@@ -325,6 +325,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   al día hábil previo (`fn_saldos_fecha_cuenta(fecha)`, RLS de quien
   consulta; `notaSaldoInicial` en `lib/hojaPagos.ts` con pruebas;
   `20261013090000`). "Actualizar OC/OV" NO toca bancos.
+  **Pagado antes del día de la hoja (22-oct-2026, Mario: la OC 41187 dejaba
+  AEP en −$5,584.13)**: Delia pagó la 41187 (Bodega Cruz Azul, $19,483) el
+  20-oct desde BBVA 5859 (ref 0046454029, el comprobante y el banco
+  coinciden) pero estaba programada al 22-oct, y la hoja la restaba otra vez
+  de un saldo inicial que ya la traía. Ahora `armarHojaPagos` no resta un
+  pago con `pagado_en` anterior a la fecha si el estado de cuenta de la
+  empresa ya llega a ese día ("ya está en el saldo del banco; no se resta otra
+  vez"); si el estado de cuenta es más viejo, sí lo resta ("aún no está en el
+  estado de cuenta"). Mismo caso pendiente: 41041 (28-oct), 41186 ERG (6-nov),
+  41432 (14-nov).
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el

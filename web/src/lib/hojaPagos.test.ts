@@ -90,3 +90,21 @@ test("saldo inicial dice de qué día es el estado de cuenta y avisa si está vi
   assert.equal(h.renglones[0].saldo_viejo, true);
   assert.match(h.renglones[0].comentarios ?? "", /30\/09/);
 });
+
+test("pago hecho antes de la fecha de la hoja: no se resta si el estado de cuenta ya lo trae (OC 41187, 22-oct-2026)", () => {
+  const cs: CuentaHoja[] = [{ ...AEP, banco: "BBVA", ultimos_4: "5859", alias: null, saldo_inicial: 38658.47, saldo_al: "2026-10-21" }];
+  const pagos = [
+    pago({ id_orden: "41187", beneficiario: "Bodega Cruz Azul", monto: 19483, fecha_programada: "2026-10-22", estatus: "pagado", pagado_en: "2026-10-20", referencia: "0046454029" }),
+    pago({ id_orden: "IA-OC-0079", beneficiario: "Crear Hogar", monto: 2534.1, fecha_programada: "2026-10-22", estatus: "pagado", pagado_en: "2026-10-22" }),
+  ];
+  const [h] = armarHojaPagos(cs, pagos, "2026-10-22");
+  assert.equal(h.cargos, 2534.1);
+  assert.equal(h.saldo, 36124.37);
+  const r41187 = h.renglones.find((r) => r.oc === "41187")!;
+  assert.equal(r41187.cargo, null);
+  assert.match(r41187.comentarios!, /pagado el 20\/10 · ref 0046454029 · ya está en el saldo del banco/);
+  // Si el estado de cuenta todavía no llega al día del pago, sí se resta.
+  const [h2] = armarHojaPagos([{ ...cs[0], saldo_al: "2026-10-19" }], pagos, "2026-10-22");
+  assert.equal(h2.cargos, 22017.1);
+  assert.match(h2.renglones.find((r) => r.oc === "41187")!.comentarios!, /aún no está en el estado de cuenta/);
+});

@@ -30,6 +30,8 @@ export interface PagoHoja {
   oc_proyecto: string | null;
   notas: string | null;
   referencia?: string | null;
+  /** Día en que se marcó pagado. */
+  pagado_en?: string | null;
   /** proveedor · nomina · mano_obra · traspaso · prestamo (8-oct-2026). */
   tipo?: TipoPago | null;
 }
@@ -120,6 +122,12 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     }
     return h;
   };
+  // Último día de estado de cuenta cargado por empresa: un pago hecho antes
+  // de la fecha y hasta ese día ya está restado en el saldo inicial.
+  const corte = new Map<string, string>();
+  for (const c of cuentas) {
+    if (c.saldo_al && (corte.get(c.empresa_id) ?? "") < c.saldo_al) corte.set(c.empresa_id, c.saldo_al);
+  }
   for (const c of cuentas) {
     const h = hoja(c.empresa_id, c.empresa_nombre);
     const monto = r2(Number(c.saldo_inicial) || 0);
@@ -164,11 +172,20 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
       h.n_efectivo += 1;
       continue;
     }
-    h.cargos = r2(h.cargos + monto);
-    h.saldo = r2(h.saldo - monto);
+    // Pagado antes de la fecha de la hoja (Mario, 22-oct-2026: la OC 41187
+    // programada al 22 se pagó el 20 y la hoja la volvía a restar, saldo
+    // negativo): si el estado de cuenta ya llega a ese día, el cargo ya está
+    // en el saldo inicial; se lista sin restarlo.
+    const pagadoAntes = p.estatus === "pagado" && !!p.pagado_en && p.pagado_en < fecha;
+    const yaEnSaldo = pagadoAntes && p.pagado_en! <= (corte.get(p.empresa_id) ?? "");
+    if (!yaEnSaldo) {
+      h.cargos = r2(h.cargos + monto);
+      h.saldo = r2(h.saldo - monto);
+    }
     const comentarios = [
       p.fecha_programada < fecha ? `vencido del ${ddmm(p.fecha_programada)}` : null,
-      p.estatus === "pagado" ? `pagado${p.referencia ? ` · ref ${p.referencia}` : ""}` : null,
+      p.estatus === "pagado" ? `pagado${pagadoAntes ? ` el ${ddmm(p.pagado_en!)}` : ""}${p.referencia ? ` · ref ${p.referencia}` : ""}` : null,
+      yaEnSaldo ? "ya está en el saldo del banco; no se resta otra vez" : pagadoAntes ? "aún no está en el estado de cuenta" : null,
       p.notas,
     ].filter(Boolean);
     h.renglones.push({
@@ -176,7 +193,7 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
       oc: p.id_orden,
       proveedor: p.id_orden ? p.beneficiario : p.concepto && p.concepto !== p.beneficiario ? `${p.beneficiario} · ${p.concepto}` : p.beneficiario,
       abono: null,
-      cargo: monto,
+      cargo: yaEnSaldo ? null : monto,
       saldo: h.saldo,
       forma_pago: p.tipo && p.tipo !== "proveedor" ? ETIQUETA_TIPO_PAGO[p.tipo] : (p.tipo_pago_backoffice ?? METODO[p.metodo]),
       proyecto: p.oc_proyecto,
