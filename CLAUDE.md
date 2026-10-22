@@ -1945,6 +1945,41 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pagos mientras se escribe (`TablaPrevia`). En la tabla de amortización el
   siguiente pago sin pagar dice "Próximo" y lo programado "En hoja de pagos".
   Al 22-oct no hay créditos capturados (0 en `deuda_creditos`).
+- **Avance financiero de obras (22-oct-2026, Laura por WhatsApp: "se puede
+  crear un módulo de avance financiero con estos puntos y visual")**: Finanzas ›
+  Presupuestos › **Avance financiero de obras** (`/finanzas/avance-financiero`,
+  `pages/finanzas/AvanceFinanciero.tsx`, `lib/avanceFinanciero.ts` con
+  pruebas; dirección, empresa y admin). Filtros empresa / obra / año (o toda
+  la obra) / periodo (año, trimestre, mes) / categoría; indicadores
+  presupuesto, real, pagado, pendiente de pago, disponible y obras con alerta;
+  pestañas Por obra (semáforo En línea / Desfase / Rebasado / Sin presupuesto
+  con lo acumulado de TODA la obra contra su avance físico = tarjetas hechas,
+  tolerancia 10 puntos; clic → por categoría + OC con saldo y vencimiento),
+  Por empresa, Por categoría (barras), Por periodo (barras por mes + tabla con
+  acumulados y diferencia) y Capturar presupuesto. Solo se captura el
+  presupuesto: `obra_presupuesto` (obra × categoría materiales / mano_obra /
+  subcontratos / renta_equipo / fletes / indirectos, monto s/IVA, mes de inicio
+  y término, reparto parejo o curva S —3x²−2x³—; frontera, espectador,
+  director general, solo consulta; `auth_opera_presupuesto_obra`). Lo real sale
+  de `fn_avance_financiero_base()` (definer, revocada): OC/OS de la obra por
+  nombre (como `fn_obra_gasto_backoffice`), a subtotal s/IVA en el mes que se
+  emiten, repartidas por categoría según el texto de sus partidas
+  (`fn_categoria_partida_obra`: flete/acarreo, renta/arrendamiento,
+  combustible/viáticos/papelería… → indirectos; lo demás materiales en OC y
+  subcontratos en OS); pagado = la OC completa si ya se pagó aquí o en el
+  backoffice, si no lo pagado aquí; más la mano de obra de la API por mes de
+  término de la semana. `fn_avance_financiero()` (jsonb: obras con tareas/hechas
+  + real) y `fn_avance_financiero_pendientes(obra)` (admin maestro; dirección y
+  empresa en su alcance) (`20261022110000`). Probado en producción: Laura 67
+  obras en 0.65 s y captura; Alma no ve ni captura. Al 22-oct no hay
+  presupuestos capturados.
+- **Recursos humanos como grupo (22-oct-2026, Mario: "la parte de nómina es
+  realmente recursos humanos"; "entré con Eréndira y no tiene el tablero")**:
+  el grupo del menú "Nómina y mano de obra" se llama **Recursos humanos** (la
+  clave sigue siendo `nomina`) y el menú Recursos humanos pasó de
+  Administración a ese grupo, con **Tablero de RH** (`/tareas/area/rh`, el
+  tablero "RH · Actividades") como primera opción (rh, rh_documentos, admin).
+  Plan del sistema igual (`20261022120000`).
 - **Efectivo que quedaba como transferencia (20-oct-2026, Laura: "las órdenes
   de efectivo las está poniendo como transferencia al momento de
   guardarlas")**: el editor traía "Transferencia" puesta de fábrica (de 33 OS

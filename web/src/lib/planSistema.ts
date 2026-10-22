@@ -13,7 +13,7 @@ export const PRIORIDADES_PLAN = ["alta", "media", "baja"] as const;
 export type PrioridadPlan = (typeof PRIORIDADES_PLAN)[number];
 
 /** Orden de la barra superior del Excel. */
-export const GRUPOS_PLAN = ["Mi día", "Dirección", "Comercial", "Finanzas", "Operación", "Nómina y mano de obra", "Administración"];
+export const GRUPOS_PLAN = ["Mi día", "Dirección", "Comercial", "Finanzas", "Operación", "Recursos humanos", "Administración"];
 
 export interface EspecificacionPlan {
   empresas?: string | null;
