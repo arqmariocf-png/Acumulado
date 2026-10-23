@@ -2894,3 +2894,40 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   quiero ver mi organigrama por áreas")**: `InicioSegunRol` pinta
   `Organigrama` al admin; la vista de socio sigue en `/socio` (liga abajo del
   organigrama y en Gobierno › Vista de socio).
+- **Aviso a Laura de solicitudes de crédito (23-oct-2026, Mario: "notifica a
+  Laura cuando exista una solicitud de crédito para que ella pueda
+  autorizarla")**: `fn_push_aviso(profiles[], titulo, cuerpo, url)` (definer,
+  revocada; `net.http_post` a `push-enviar-recordatorios` **v6** con body
+  `{aviso: {profiles, titulo, cuerpo, url}}` y el `cron_secret`; nunca falla
+  la transacción) y `fn_direccion_de(grupo)` (rol dirección activo de la
+  organización). Triggers AFTER: `clientes_credito_aviso` (alguien que no
+  autoriza —legal: Belén, Eréndira— da de alta o cambia línea/días de un
+  crédito sin autorizar → "Solicitud de crédito por autorizar · cliente ·
+  línea · días · empresa · capturó X" → `/legal?tab=credito`; dirección/admin
+  no se avisan a sí mismos) y `cuentas_nomina_aviso` (RH fija o cambia el
+  sueldo de alguien sin línea → "Cuenta de nómina lista para autorizar" →
+  `/financiamiento`) (`20261023180000`). El inicio de dirección trae el atajo
+  "Créditos a clientes por autorizar" (conteo). Probado en rollback: Eréndira
+  encola el aviso al capturar y al fijar sueldo; Laura al autorizar no.
+  **Aviso push nuevo desde la base → `fn_push_aviso`, no otra edge.**
+- **Proveedores: un solo RFC y cuenta/CLABE en la ficha (23-oct-2026, Mario:
+  "agrégales cuenta y CLABE interbancaria"; Laura: "a Delia a unos proveedores
+  no le muestra el RFC; hay dos campos para RFC, que sea uno solo y unificar los
+  existentes")**: el RFC vivía en `proveedores.rfc` (ficha; quien captura
+  órdenes) y en `proveedores_datos_bancarios.rfc` (lo que ven Tesorería, la OC
+  impresa y `v_pagos_programados.rfc_proveedor`); capturado en la ficha, Delia
+  no lo veía. Triggers `proveedores_rfc_a_bancarios` (ficha → bancarios, crea el
+  renglón con origen 'backoffice' si no existe, para que la sincronización pueda
+  completarle banco/CLABE) y `bancarios_rfc_a_proveedores` (bancarios → ficha)
+  lo mantienen igual en los dos lados; los existentes se unificaron (5 de 5
+  fichas con RFC) (`20261023190000`). Pantalla Catálogos › Proveedores y
+  artículos: la lista trae columnas Cuenta y CLABE (`fn_ordenes_catalogo_captura`
+  devuelve `cuenta`/`clabe` con la RLS de quien pregunta; ~1.1 s) y la ficha es
+  UN formulario: datos generales con un solo RFC + "Datos bancarios para
+  pagarle" (banco, cuenta, CLABE con dígito verificador, beneficiario); los
+  bancarios los ven admin/corporativo/dirección/empresa y los capturan
+  admin/corporativo/dirección (upsert a `proveedores_datos_bancarios`, origen
+  'captura'); almacén captura la ficha y el RFC sin ver cuentas. Se quitó el
+  editor `DatosBancariosProveedor` del encabezado de esa pantalla (sigue en OC y
+  pagos). Probado en rollback: Alma da de alta con RFC → bancarios lo recibe;
+  Laura cambia el RFC bancario → la ficha lo toma.

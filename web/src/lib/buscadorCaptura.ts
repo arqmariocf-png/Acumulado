@@ -7,6 +7,9 @@
 export interface ContraparteCatalogo {
   nombre: string;
   rfc?: string | null;
+  /** Cuenta y CLABE de datos bancarios (solo para quien los puede ver; 23-oct-2026). */
+  cuenta?: string | null;
+  clabe?: string | null;
   veces: number;
   ultima: string | null;
   misma_empresa: boolean;
