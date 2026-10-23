@@ -15,6 +15,7 @@ import type { AppRol } from "../types/database";
 import { IrAlAncla } from "./FiltroDesdeTablero";
 import { ProblemaDesdeTablero } from "./ProblemaDesdeTablero";
 import { MenuSeccion } from "./MenuSeccion";
+import { BuscadorMenu, abrirBuscador } from "./BuscadorMenu";
 import { AvisoNotificaciones } from "./AvisoNotificaciones";
 import { AvatarPixel } from "./personaje/AvatarPixel";
 import { useMiAvatar } from "./personaje/datos";
@@ -78,6 +79,11 @@ export function Layout() {
           <div className="flex items-center gap-3 text-sm text-slate-600">
             {/* Empresa activa (28-sep-2026): quien maneja varias elige aquí y
                 todas las pantallas se filtran por ella. */}
+            {!espectador && (
+              <button type="button" onClick={abrirBuscador} title="Buscar pantalla, pestaña u obra (Ctrl+K)" className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
+                🔍 Buscar
+              </button>
+            )}
             {eligeEmpresa && !espectador && <SelectorEmpresa value={empresaActiva ?? ""} onChange={(v) => setEmpresaActiva(v || null)} compacto vacio="Todas" className="max-w-[140px] rounded border border-slate-300 px-2 py-1 text-xs" />}
             {perfilReal?.rol === "admin" && !espectador && <VerComo vistaComo={vistaComo} onCambiar={setVistaComo} />}
             {perfilReal && !espectador && perfilReal.rol !== "pendiente" && <AvatarEncabezado />}
@@ -99,6 +105,7 @@ export function Layout() {
       <AvisoVersion />
       <BorradorFormularios />
       {!espectador && <MenuSeccion secciones={secciones} />}
+      {!espectador && <BuscadorMenu secciones={secciones} />}
       <main className="mx-auto max-w-7xl px-4 py-6">
         {/* Espectador (2-oct-2026, Mario): solo la barra y los menús, ninguna
             pantalla con información. La base tampoco le devuelve datos
@@ -194,6 +201,9 @@ function MenuModulos({ secciones, titulo }: { secciones: SeccionMenu[]; titulo: 
       </button>
       {abierto && (
         <div className={`absolute left-0 z-20 mt-1 max-h-[80vh] overflow-y-auto rounded border border-slate-200 bg-white py-1 shadow-lg ${secciones.some((s) => s.entradas.some((e) => e.niveles?.length)) ? "w-[26rem] max-w-[92vw]" : "w-80"}`}>
+          <button type="button" onClick={() => { setAbierto(false); abrirBuscador(); }} className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+            🔍 Buscar… <span className="text-[11px] text-slate-400">pantalla, pestaña u obra (Ctrl+K)</span>
+          </button>
           {secciones.map((s) => (
             <div key={s.clave} className="py-1">
               <div className={`px-3 pt-1 text-[11px] text-slate-400 ${secciones.length > 1 ? "font-semibold uppercase tracking-wide" : "normal-case"}`} title={s.proposito}>
