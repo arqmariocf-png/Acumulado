@@ -74,6 +74,7 @@ const MiOrganizacion = lazy(() => import("./pages/admin/MiOrganizacion").then((m
 const Organizaciones = lazy(() => import("./pages/admin/Organizaciones").then((m) => ({ default: m.Organizaciones })));
 const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m) => ({ default: m.Suscripcion })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
+const EvaluacionDesempeno = lazy(() => import("./pages/rh/EvaluacionDesempeno").then((m) => ({ default: m.EvaluacionDesempeno })));
 const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
 const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
 const InventarioPorRecibir = lazy(() => import("./pages/inventario/PorRecibir").then((m) => ({ default: m.PorRecibir })));
@@ -330,6 +331,10 @@ function Enrutador() {
             <Route path="/rh" element={<RH />} />
           </Route>
 
+          {/* Evaluación de desempeño (23-oct-2026): RH, dirección y el jefe directo de la persona. */}
+          <Route element={<ProtectedRoute roles={["rh", "direccion", "supervisor", "responsable", "directivo", "empresa"]} modulo="rh" />}>
+            <Route path="/rh/evaluacion" element={<EvaluacionDesempeno />} />
+          </Route>
           <Route element={<ProtectedRoute roles={["rh"]} />}>
             <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
             <Route path="/rh/agenda-pagos" element={<AgendaPagos />} />

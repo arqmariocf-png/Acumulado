@@ -374,6 +374,7 @@ export const SECCIONES: SeccionMenu[] = [
         visible: (p) => esAdmin(p) || p.rol === "direccion" || p.rol === "rh",
         modulo: "rh",
       },
+      { ruta: "/rh/evaluacion", etiqueta: "Evaluación de desempeño", descripcion: "formato por persona y periodo con las tareas cumplidas", uso: "Elige persona y periodo: el sistema trae tareas hechas, a tiempo y vencidas, cambios de fecha y asistencia; califica los criterios, escribe acuerdos, firma e imprime. El jefe directo evalúa a su gente.", visible: (p) => p.rol === "rh" || p.rol === "direccion" || p.rol === "supervisor" || p.rol === "responsable" || p.rol === "directivo" || p.rol === "empresa" || esAdmin(p), modulo: "rh" },
       { ruta: "/rh/agenda-pagos", etiqueta: "Agenda de pagos de nómina", descripcion: "calendario de pagos de nómina", uso: "Qué se paga cada semana y quincena.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
     ],
   },

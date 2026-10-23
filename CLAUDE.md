@@ -2097,6 +2097,28 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   barras y cifras ligan a lo mismo (físico → tablero, financiero → avance
   financiero, presupuesto → control o "capturar", ejercido → `#gastos`,
   disponible → por mes, desfase → resumen de la obra).
+- **Evaluación de desempeño (23-oct-2026, Mario: "un formato de evaluación de
+  desempeño del personal dentro de la aplicación con las tareas cumplidas")**:
+  Recursos humanos › **Evaluación de desempeño** (`/rh/evaluacion?persona=`,
+  `pages/rh/EvaluacionDesempeno.tsx`, `lib/evaluacionDesempeno.ts` con
+  pruebas). Evalúan RH, dirección, admin y el jefe directo
+  (`personal.supervisor_profile_id`; `auth_evalua_a(profile)`); la persona ve
+  las suyas firmadas. `fn_evaluacion_personas()` (personal activo con cuenta
+  que puede evaluar quien pregunta) y `fn_evaluacion_datos(profile, desde,
+  hasta)` (definer; tareas donde es responsable o corresponsable con fecha
+  límite en el periodo —o sin fecha y creadas en él—, hecha = última columna o
+  archivada, a tiempo = `updated_at` ≤ fecha límite, vencidas, cambios de
+  fecha, días con entrada en `v_checador_marcas` vs días hábiles; Jonathan
+  3 meses: 13 tareas en 0.15 s). Calificación 0-100 = 40 % tareas (60 %
+  hechas + 40 % a tiempo de las hechas − 2 por cambio de fecha, tope 10) +
+  60 % criterios (6 de 1 a 5: calidad, puntualidad, responsabilidad, equipo,
+  iniciativa, actitud); niveles ≥90 sobresaliente, ≥75 bueno, ≥60 regular,
+  menos = plan de mejora. `evaluaciones_desempeno` guarda la foto (`datos`),
+  criterios, fortalezas/mejoras/acuerdos, calificación y estatus
+  borrador→firmada (firmada no se edita; trigger); frontera por grupo,
+  espectador, director general, solo consulta (`20261023130000`). Imprimible
+  carta con firmas evaluado / evaluó / RH (`htmlEvaluacion`). Probado en
+  rollback: Eréndira ve 37 personas y firma; Alma no ve a nadie.
 - **Recursos humanos como grupo (22-oct-2026, Mario: "la parte de nómina es
   realmente recursos humanos"; "entré con Eréndira y no tiene el tablero")**:
   el grupo del menú "Nómina y mano de obra" se llama **Recursos humanos** (la
