@@ -50,15 +50,16 @@ function useResumenObra(proyectoId: string) {
   return useQuery({
     queryKey: ["resumen-obra", proyectoId],
     queryFn: async () => {
-      const [controles, tableros, pu, req, gasto, ordenes] = await Promise.all([
+      const [controles, tableros, pu, req, gasto, ordenes, presupuestoCat] = await Promise.all([
         supabase.from("proyecto_controles").select("*").eq("proyecto_id", proyectoId).order("created_at"),
         supabase.from("tableros").select("*").eq("proyecto_id", proyectoId).eq("archivado", false),
         supabase.from("pu_analisis").select("estado, cliente_autorizado_en").eq("proyecto_id", proyectoId),
         supabase.from("requisiciones").select("id, etapa, estado").eq("proyecto_id", proyectoId),
         supabase.rpc("fn_obra_gasto", { p_proyecto: proyectoId }),
         supabase.rpc("fn_obra_ordenes", { p_proyecto: proyectoId }),
+        supabase.from("obra_presupuesto").select("monto").eq("proyecto_id", proyectoId),
       ]);
-      for (const r of [controles, tableros, pu, req, gasto, ordenes]) if (r.error) throw r.error;
+      for (const r of [controles, tableros, pu, req, gasto, ordenes, presupuestoCat]) if (r.error) throw r.error;
       const ctrl = (controles.data ?? []) as ProyectoControl[];
       const ids = ctrl.map((c) => c.id);
       const [compras, nomina] = ids.length
@@ -84,6 +85,8 @@ function useResumenObra(proyectoId: string) {
       const avancePct = new Map((av ?? []).map((a) => [a.requisicion_id as string, Number(a.avance_pct)]));
       return {
         controles: ctrl,
+        // Presupuesto capturado por categoría (Finanzas › Avance financiero); manda sobre el de los controles.
+        presupuestoCategorias: (presupuestoCat.data ?? []).reduce((s, r) => s + Number((r as { monto: number }).monto), 0),
         compras: (compras.data ?? []) as { control_id: string; importe: number; estatus: "pagado" | "pendiente"; orden_compra_id: string | null }[],
         gasto: ((gasto.data ?? []) as GastoObra[])[0] ?? null,
         ordenes: (ordenes.data ?? []) as OrdenObra[],
@@ -104,8 +107,12 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
   if (q.isPending) return <p className="text-sm text-slate-500">Calculando…</p>;
   if (q.error || !d) return <p className="text-sm text-red-600">{(q.error as Error)?.message ?? "Sin datos"}</p>;
 
-  // Financiero y físico: misma regla que el panel del director general (lib/resumenObra.ts).
-  const presupuesto = d.controles.reduce((s, c) => s + Number(c.presupuesto), 0);
+  // Financiero y físico: misma regla que el panel del director general (lib/resumenObra.ts)
+  // y los mismos números que Finanzas › Avance financiero (23-oct-2026, Mario: "no cuadra y
+  // debería ser el mismo"): OC/OS a subtotal sin IVA (fn_avance_financiero_real), mano de
+  // obra de la API, compras del control sin OC; presupuesto por categoría y, si no, controles.
+  const presupuestoControles = d.controles.reduce((s, c) => s + Number(c.presupuesto), 0);
+  const presupuesto = d.presupuestoCategorias > 0 ? d.presupuestoCategorias : presupuestoControles;
   const materiales = d.compras.reduce((s, c) => s + Number(c.importe), 0);
   // Las compras ligadas a una OC ya cuentan en las OC de la obra.
   const comprasSinOc = d.compras.filter((c) => !c.orden_compra_id).reduce((s, c) => s + Number(c.importe), 0);
@@ -144,7 +151,7 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tarjeta etiqueta="Presupuesto contratado" valor={mxn.format(presupuesto)} detalle={`${d.controles.length} control(es) de obra`} ligas={[{ a: `${base}?tab=control`, texto: "control de obra" }, { a: `${avanceFin}&vista=capturar`, texto: "presupuesto por categoría" }]} />
+        <Tarjeta etiqueta="Presupuesto contratado" valor={mxn.format(presupuesto)} detalle={d.presupuestoCategorias > 0 ? "capturado por categoría (Avance financiero)" : `${d.controles.length} control(es) de obra`} ligas={[{ a: `${base}?tab=control`, texto: "control de obra" }, { a: `${avanceFin}&vista=capturar`, texto: "presupuesto por categoría" }]} />
         <Tarjeta
           etiqueta="Ejercido"
           valor={mxn.format(ejercido)}

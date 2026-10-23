@@ -19,6 +19,12 @@ export interface RemisionProduccionDoc {
   /** Contado o crédito (salidas, desde 30-sep-2026). */
   condicion_pago?: "contado" | "credito" | null;
   dias_credito?: number | null;
+  /** Se entrega a un cliente y paga otro (23-oct-2026): a quién se le cobra
+   * y factura, con la referencia que los liga (OV, pedido, acuerdo). */
+  paga_nombre?: string | null;
+  paga_rfc?: string | null;
+  paga_domicilio?: string | null;
+  referencia_pago?: string | null;
   estatus: "emitida" | "entregada";
   emitida_por_nombre: string | null;
   recibio_nombre: string | null;
@@ -63,7 +69,8 @@ export function htmlRemisionProduccion(r: RemisionProduccionDoc, lineas: LineaRe
   const color = COLOR_MEMBRETE[r.empresa_codigo] ?? "#334155";
   const entregada = r.estatus === "entregada";
   const titulo = r.tipo === "salida" ? "REMISIÓN DE ENTREGA" : "REMISIÓN DE RECEPCIÓN";
-  const etiquetaContraparte = r.tipo === "salida" ? "Cliente" : "Proveedor / de quién se recibe";
+  const pagaOtro = r.tipo === "salida" && !!r.paga_nombre && r.paga_nombre.trim() !== r.contraparte.trim();
+  const etiquetaContraparte = r.tipo === "salida" ? (pagaOtro ? "Entregar a (recibe la mercancía)" : "Cliente") : "Proveedor / de quién se recibe";
   const filas = lineas
     .map((l, i) => `<tr><td class="c">${i + 1}</td><td>${esc(l.descripcion)}</td><td class="c">${esc(l.unidad)}</td><td class="r">${esc(cantidadTexto(l.cantidad))}</td></tr>`)
     .join("");
@@ -110,8 +117,9 @@ export function htmlRemisionProduccion(r: RemisionProduccionDoc, lineas: LineaRe
   <div class="cuerpo">
     <div class="datos">
       <div><span>${etiquetaContraparte}</span>${esc(r.contraparte)}${r.cliente_rfc ? `<div class="rfc">RFC ${esc(r.cliente_rfc)}</div>` : ""}${r.cliente_domicilio ? `<div class="rfc">${esc(r.cliente_domicilio)}</div>` : ""}</div>
+      ${pagaOtro ? `<div><span>Paga / se factura a</span>${esc(r.paga_nombre)}${r.paga_rfc ? `<div class="rfc">RFC ${esc(r.paga_rfc)}</div>` : ""}${r.paga_domicilio ? `<div class="rfc">${esc(r.paga_domicilio)}</div>` : ""}</div>` : ""}
       <div><span>Proyecto / obra</span>${esc(r.proyecto_nombre) || "—"}</div>
-      <div><span>Referencia (OV / OC)</span>${esc(r.referencia) || "—"}</div>
+      <div><span>Referencia (OV / OC)</span>${esc(r.referencia) || "—"}${r.referencia_pago ? `<div class="rfc">Pago: ${esc(r.referencia_pago)}</div>` : ""}</div>
       ${r.tipo === "salida" && r.condicion_pago ? `<div><span>Pago</span>${r.condicion_pago === "contado" ? "Contado" : `Crédito${r.dias_credito ? ` a ${esc(r.dias_credito)} días` : ""}`}</div>` : ""}
       <div><span>Emitida por</span>${esc(r.emitida_por_nombre) || "—"}</div>
       <div><span>Recibió</span>${entregada ? `${esc(r.recibio_nombre)} · ${esc(r.entregada_en ? new Date(r.entregada_en).toLocaleString("es-MX") : "")}` : `<em style="color:#666">Pendiente de confirmar (escanea el QR)</em>`}</div>

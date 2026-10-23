@@ -54,6 +54,13 @@ export function RemisionProduccionModal({
   const [nuevoRfc, setNuevoRfc] = useState("");
   const [nuevoDomicilio, setNuevoDomicilio] = useState("");
   const [referenciaId, setReferenciaId] = useState("");
+  // Se entrega a un cliente y paga otro (Mario, 23-oct-2026): quien recibe es
+  // `contraparte`; a quien se le cobra y factura va en paga_*, con la
+  // referencia (OV, pedido, acuerdo) que los liga.
+  const [pagaOtro, setPagaOtro] = useState(false);
+  const [pagaClienteId, setPagaClienteId] = useState("");
+  const [pagaNombre, setPagaNombre] = useState("");
+  const [referenciaPago, setReferenciaPago] = useState("");
   const [proyectoId, setProyectoId] = useState("");
   const [observaciones, setObservaciones] = useState("");
   // Contado o crédito: se clasifica al emitir la entrega (Mario, 30-sep-2026).
@@ -106,6 +113,8 @@ export function RemisionProduccionModal({
     mutationFn: async () => {
       if (!contraparte.trim()) throw new Error(tipo === "salida" ? "Indica el cliente." : "Indica el proveedor o de quién se recibe.");
       if (tipo === "salida" && !condicion) throw new Error("Indica si la entrega es de contado o a crédito.");
+      const pagaNombreFinal = tipo === "salida" && pagaOtro ? (pagaClienteId ? clientes?.find((c) => c.id === pagaClienteId)?.razon_social ?? "" : pagaNombre.trim()) : "";
+      if (tipo === "salida" && pagaOtro && !pagaNombreFinal) throw new Error("Indica quién paga la entrega (o quita la casilla).");
       const validas = lineas.filter((l) => l.descripcion.trim() && l.cantidad > 0);
       if (validas.length === 0) throw new Error("Agrega al menos una partida con cantidad.");
       const { data: sesion } = await supabase.auth.getSession();
@@ -140,6 +149,9 @@ export function RemisionProduccionModal({
           orden_compra_id: tipo === "entrada" && referenciaId ? referenciaId : null,
           observaciones: observaciones.trim() || null,
           condicion_pago: tipo === "salida" ? condicion : null,
+          paga_cliente_id: tipo === "salida" && pagaOtro && pagaClienteId ? pagaClienteId : null,
+          paga_nombre: pagaNombreFinal || null,
+          referencia_pago: tipo === "salida" && pagaOtro && referenciaPago.trim() ? referenciaPago.trim() : null,
           dias_credito: tipo === "salida" && condicion === "credito" && Number(diasCredito) > 0 ? Math.round(Number(diasCredito)) : null,
           emitida_por: userId,
         })
@@ -252,6 +264,51 @@ export function RemisionProduccionModal({
                   </>
                 )}
               </div>
+              {tipo === "salida" && (
+                <div className="sm:col-span-2 rounded border border-dashed border-slate-300 p-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-800">
+                    <input type="checkbox" checked={pagaOtro} onChange={(e) => setPagaOtro(e.target.checked)} />
+                    Se entrega a este cliente y <b>paga otro</b> (se le cobra y factura a otro)
+                  </label>
+                  {pagaOtro && (
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div>
+                        <label className={etiqueta}>Quién paga / a quién se factura *</label>
+                        <select
+                          value={pagaClienteId || (pagaNombre ? "__otro__" : "")}
+                          onChange={(e) => {
+                            if (e.target.value === "__otro__") {
+                              setPagaClienteId("");
+                              if (!pagaNombre) setPagaNombre(" ");
+                              return;
+                            }
+                            setPagaClienteId(e.target.value);
+                            setPagaNombre("");
+                          }}
+                          className={campo}
+                        >
+                          <option value="">Elige del catálogo…</option>
+                          {clientes?.filter((c) => c.id !== clienteId).map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.razon_social}
+                              {c.rfc ? ` · ${c.rfc}` : ""}
+                            </option>
+                          ))}
+                          <option value="__otro__">Otro (escribir nombre)</option>
+                        </select>
+                        {!pagaClienteId && pagaNombre !== "" && (
+                          <input value={pagaNombre.trim() === "" ? "" : pagaNombre} onChange={(e) => setPagaNombre(e.target.value || " ")} className={`${campo} mt-1`} placeholder="Razón social de quien paga" autoFocus />
+                        )}
+                      </div>
+                      <div>
+                        <label className={etiqueta}>Referencia que los liga (OV, pedido, acuerdo)</label>
+                        <input value={referenciaPago} onChange={(e) => setReferenciaPago(e.target.value)} className={campo} placeholder="Ej. OV 15340 · pedido 77" />
+                        <p className="mt-1 text-xs text-slate-500">Si ligas la orden de venta de quien paga, la referencia se llena sola.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <label className={etiqueta}>{tipo === "salida" ? "Orden de venta" : "Orden de compra"} (opcional)</label>
                 <select
@@ -260,6 +317,12 @@ export function RemisionProduccionModal({
                     setReferenciaId(e.target.value);
                     const ref = referencias.find((r) => r.id === e.target.value);
                     if (ref?.contraparte && !contraparte) setContraparte(ref.contraparte);
+                    if (ref && pagaOtro && !pagaClienteId && !pagaNombre) {
+                      const c = clientes?.find((x) => x.razon_social === ref.contraparte);
+                      if (c) setPagaClienteId(c.id);
+                      else if (ref.contraparte) setPagaNombre(ref.contraparte);
+                      if (!referenciaPago) setReferenciaPago(ref.folio);
+                    }
                   }}
                   className={campo}
                 >

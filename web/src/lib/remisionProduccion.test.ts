@@ -51,3 +51,19 @@ test("la remisión de salida muestra contado o crédito", async () => {
   assert.match(htmlRemisionProduccion({ ...base, condicion_pago: "credito", dias_credito: 30 }, [], "<svg/>", "https://x", null), /Crédito a 30 días/);
   assert.match(htmlRemisionProduccion({ ...base, condicion_pago: "contado" }, [], "<svg/>", "https://x", null), /Contado/);
 });
+
+test("se entrega a un cliente y paga otro: la remisión dice quién recibe y quién paga", async () => {
+  const { htmlRemisionProduccion } = await import("./remisionProduccion.ts");
+  const base = {
+    folio: "MCC-R-0002", tipo: "salida" as const, fecha: "2026-10-23", empresa_nombre: "Clavicón", empresa_rfc: null, empresa_codigo: "MCC",
+    contraparte: "Obra Parque Real (Ergodinova)", proyecto_nombre: null, referencia: "OV 15340", observaciones: null, estatus: "emitida" as const,
+    emitida_por_nombre: null, recibio_nombre: null, entregada_en: null, condicion_pago: "credito" as const, dias_credito: 15,
+  };
+  const html = htmlRemisionProduccion({ ...base, paga_nombre: "Aceros y Envasados de Puebla", paga_rfc: "AEP010101AAA", referencia_pago: "OV 15340 · pedido 77" }, [], "<svg/>", "https://x", null);
+  assert.match(html, /Entregar a \(recibe la mercancía\)/);
+  assert.match(html, /Paga \/ se factura a.*Aceros y Envasados de Puebla/s);
+  assert.match(html, /RFC AEP010101AAA/);
+  assert.match(html, /Pago: OV 15340 · pedido 77/);
+  // Mismo nombre en los dos → se imprime como siempre.
+  assert.doesNotMatch(htmlRemisionProduccion({ ...base, paga_nombre: base.contraparte }, [], "<svg/>", "https://x", null), /Paga \/ se factura a/);
+});

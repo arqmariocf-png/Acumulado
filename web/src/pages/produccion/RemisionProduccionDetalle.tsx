@@ -59,9 +59,19 @@ export function RemisionProduccionDetalle() {
         </div>
         <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-xs uppercase text-slate-500">{r.tipo === "salida" ? "Cliente" : "Proveedor"}</dt>
+            <dt className="text-xs uppercase text-slate-500">{r.tipo === "salida" ? (r.paga_nombre && r.paga_nombre !== r.contraparte ? "Entregar a (recibe)" : "Cliente") : "Proveedor"}</dt>
             <dd className="text-slate-900">{r.contraparte}</dd>
           </div>
+          {r.tipo === "salida" && r.paga_nombre && r.paga_nombre !== r.contraparte && (
+            <div>
+              <dt className="text-xs uppercase text-slate-500">Paga / se factura a</dt>
+              <dd className="text-slate-900">
+                {r.paga_nombre}
+                {r.paga_rfc ? <span className="text-slate-500"> · RFC {r.paga_rfc}</span> : null}
+                {r.referencia_pago ? <div className="text-xs text-slate-600">Referencia de pago: {r.referencia_pago}</div> : null}
+              </dd>
+            </div>
+          )}
           <div>
             <dt className="text-xs uppercase text-slate-500">Proyecto / referencia</dt>
             <dd className="text-slate-900">{[r.proyecto_nombre, r.referencia].filter(Boolean).join(" · ") || "—"}</dd>

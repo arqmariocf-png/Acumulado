@@ -75,3 +75,27 @@ test("revisión de la captura", () => {
   assert.match(revisarPresupuesto({}, "2026-05", "2026-03")!, /antes/);
   assert.match(revisarPresupuesto({ fletes: -1 }, "2026-01", "2026-03")!, /Fletes/);
 });
+
+test("sin presupuesto por categoría vale el de los controles de obra (igual que Operación)", () => {
+  const obras: ObraAvance[] = [
+    { id: "a", nombre: "Con categorías", empresa_id: "csc", empresa_codigo: "CSC", tareas: 2, hechas: 1, presupuesto_control: 999 },
+    { id: "b", nombre: "Solo control", empresa_id: "csc", empresa_codigo: "CSC", tareas: 0, hechas: 0, presupuesto_control: 500 },
+  ];
+  const pres: PresupuestoObra[] = [{ proyecto_id: "a", categoria: "materiales", monto: 1000, mes_inicio: "2026-01-01", mes_fin: "2026-01-01", reparto: "parejo" }];
+  const real: RealMes[] = [
+    { proyecto_id: "a", mes: "2026-01", categoria: "materiales", real: 100, pagado: 100 },
+    { proyecto_id: "b", mes: "2026-01", categoria: "materiales", real: 200, pagado: 0 },
+  ];
+  const r = calcularAvance(obras, real, pres, FILTRO_INICIAL);
+  const a = r.porObra.find((x) => x.obra.id === "a")!;
+  const b = r.porObra.find((x) => x.obra.id === "b")!;
+  assert.equal(a.presupuesto, 1000); // el capturado por categoría manda
+  assert.equal(b.presupuesto, 500); // el de los controles
+  assert.equal(b.obraTotal.presupuesto, 500);
+  assert.equal(b.semaforo, "en_linea");
+  // Con filtro de año el de los controles solo cuenta para toda la obra, y con categoría no entra.
+  const anio = calcularAvance(obras, real, pres, { ...FILTRO_INICIAL, anio: 2026 }).porObra.find((x) => x.obra.id === "b")!;
+  assert.equal(anio.presupuesto, 0);
+  assert.equal(anio.obraTotal.presupuesto, 500);
+  assert.equal(calcularAvance(obras, real, pres, { ...FILTRO_INICIAL, categoria: "materiales" }).porObra.find((x) => x.obra.id === "b")!.presupuesto, 0);
+});
