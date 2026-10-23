@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import type { SeccionMenu } from "../lib/menu";
 import { atajosDeRuta, muestraBarra, seccionDeRuta, type AtajoBarra } from "../lib/menuSeccion";
+import { abrirBuscador } from "./BuscadorMenu";
 
 // Barra fija con las demás pantallas de la sección en la que está la persona
 // (Mario, 21-oct-2026: "para no tener que hacer scroll para ir a las
@@ -28,6 +29,9 @@ export function MenuSeccion({ secciones }: { secciones: SeccionMenu[] }) {
     <nav aria-label={`Pantallas de ${actual.seccion.titulo}`} className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-11 max-w-7xl items-center gap-2 overflow-x-auto px-4 text-sm [scrollbar-width:none]">
         <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400">{actual.seccion.titulo}</span>
+        <button type="button" onClick={abrirBuscador} title="Buscar pantalla, pestaña u obra (Ctrl+K)" className="shrink-0 rounded-full border border-slate-200 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100">
+          🔍
+        </button>
         {actual.seccion.entradas.map((e) => {
           // Con un atajo activo (p. ej. el tablero de la obra) ese es el marcado.
           const activa = e === actual.entrada && !atajos.some((a) => a.activo);

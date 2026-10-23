@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
@@ -69,7 +70,7 @@ function useRequisiciones(empresaId: string) {
     queryFn: async () => {
       let query = supabase
         .from("requisiciones")
-        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
+        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, proyecto_id, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
         .order("created_at", { ascending: false })
         .limit(100);
       if (empresaId) query = query.eq("empresa_id", empresaId);
@@ -159,8 +160,12 @@ export function MisRequisiciones() {
   // confirmar lo recibido.
   const procesa = ["admin", "corporativo", "almacen", "direccion", "empresa"].includes(perfil?.rol ?? "");
   const [soloMias, setSoloMias] = useState(!procesa);
+  // Desde el resumen de la obra (23-oct-2026): ?obra=<id> deja solo las de esa obra.
+  const [paramsObra, setParamsObra] = useSearchParams();
+  const obraFiltro = paramsObra.get("obra");
   const conFiltro = filtro && todas ? todas.filter(filtro.f) : todas;
-  const requisiciones = soloMias && conFiltro ? conFiltro.filter((r: any) => r.solicitado_por === perfil?.id) : conFiltro;
+  const deObra = obraFiltro && conFiltro ? conFiltro.filter((r: any) => r.proyecto_id === obraFiltro) : conFiltro;
+  const requisiciones = soloMias && deObra && !obraFiltro ? deObra.filter((r: any) => r.solicitado_por === perfil?.id) : deObra;
 
   useEffect(() => {
     if (proyectosDisponibles?.length === 1) setProyectoId(proyectosDisponibles[0].id);
@@ -508,6 +513,13 @@ export function MisRequisiciones() {
         )}
       </label>
       {filtro && <AvisoFiltro texto={filtro.texto} total={requisiciones?.length} onQuitar={quitarVer} />}
+      {obraFiltro && (
+        <AvisoFiltro
+          texto={`requerimientos de la obra ${(todas as any[] | undefined)?.find((r) => r.proyecto_id === obraFiltro)?.proyectos?.nombre ?? "elegida"}`}
+          total={requisiciones?.length}
+          onQuitar={() => { const n = new URLSearchParams(paramsObra); n.delete("obra"); setParamsObra(n, { replace: true }); }}
+        />
+      )}
       {requisiciones && (
         <div className="overflow-x-auto rounded border border-slate-200 bg-white">
           <table className="w-full text-sm">

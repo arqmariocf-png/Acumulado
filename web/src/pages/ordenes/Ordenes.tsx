@@ -58,8 +58,9 @@ export function Ordenes() {
   const queryClient = useQueryClient();
   const [editor, setEditor] = useState<{ id: string | null } | null>(null);
   const [interempresa, setInterempresa] = useState<string | null>(null);
-  const [verBackoffice, setVerBackoffice] = useState(false);
-  const [texto, setTexto] = useState("");
+  // Desde el resumen de la obra (23-oct-2026): ?buscar=<folio u obra>&backoffice=1 abre la lista ya filtrada.
+  const [verBackoffice, setVerBackoffice] = useState(params.get("backoffice") === "1");
+  const [texto, setTexto] = useState(params.get("buscar") ?? "");
   const [error, setError] = useState<string | null>(null);
   const esDireccion = !!perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol);
 

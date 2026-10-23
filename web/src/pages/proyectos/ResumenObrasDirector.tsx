@@ -129,30 +129,35 @@ export function ResumenObrasDirector() {
                         {o.responsable ? ` · ${o.responsable}` : ""} · {o.hechas}/{o.tarjetas} tareas · {o.requisiciones.length} req.
                       </div>
                     </td>
+                    {/* Cada gráfica y cifra abre lo que la explica (Mario, 23-oct-2026). */}
                     <td className="pr-2">
-                      <div className="flex items-center gap-2">
+                      <Link to={`/proyectos/${o.proyecto_id}?tab=avance`} title="Abrir el tablero de seguimiento" className="flex items-center gap-2 hover:underline">
                         <Barra valor={r.avanceFisico} color="bg-blue-600" />
                         <span className="tabular-nums text-xs">{pct(r.avanceFisico)}</span>
-                      </div>
+                      </Link>
                     </td>
                     <td className="pr-2">
-                      <div className="flex items-center gap-2">
+                      <Link to={`/finanzas/avance-financiero?obra=${o.proyecto_id}`} title="Abrir el avance financiero de la obra" className="flex items-center gap-2 hover:underline">
                         <Barra valor={r.avanceFinanciero} color="bg-orange-500" />
                         <span className="tabular-nums text-xs">{pct(r.avanceFinanciero)}</span>
-                      </div>
+                      </Link>
                     </td>
-                    <td className="pr-2 text-right tabular-nums">{o.presupuesto > 0 ? mxn.format(o.presupuesto) : "—"}</td>
+                    <td className="pr-2 text-right tabular-nums">
+                      {o.presupuesto > 0 ? <Link to={`/proyectos/${o.proyecto_id}?tab=control`} title="Abrir el control de obra" className="hover:underline">{mxn.format(o.presupuesto)}</Link> : <Link to={`/finanzas/avance-financiero?obra=${o.proyecto_id}&vista=capturar`} className="text-xs text-sky-700 hover:underline">capturar</Link>}
+                    </td>
                     <td className="pr-2 text-right tabular-nums" title={`OC ${mxn.format(r.desglose.oc)} · mano de obra ${mxn.format(r.desglose.manoObra)} · otras compras ${mxn.format(r.desglose.compras)}`}>
-                      {r.ejercido > 0 ? mxn.format(r.ejercido) : "—"}
+                      {r.ejercido > 0 ? <Link to={`/proyectos/${o.proyecto_id}?tab=resumen#gastos`} title="Ver cada OC/OS y la mano de obra" className="hover:underline">{mxn.format(r.ejercido)}</Link> : "—"}
                       {r.ejercido > 0 && (
                         <div className="text-[10px] text-slate-500">
-                          OC {mxn.format(r.desglose.oc)} · MO {mxn.format(r.desglose.manoObra)}
+                          <Link to={`/proyectos/${o.proyecto_id}?tab=resumen#gastos`} className="hover:underline">OC {mxn.format(r.desglose.oc)}</Link> · <Link to={`/proyectos/${o.proyecto_id}?tab=resumen#mano-obra`} className="hover:underline">MO {mxn.format(r.desglose.manoObra)}</Link>
                         </div>
                       )}
                     </td>
-                    <td className={`pr-2 text-right tabular-nums ${o.presupuesto > 0 && r.disponible < 0 ? "text-red-700" : ""}`}>{o.presupuesto > 0 ? mxn.format(r.disponible) : "—"}</td>
+                    <td className={`pr-2 text-right tabular-nums ${o.presupuesto > 0 && r.disponible < 0 ? "text-red-700" : ""}`}>
+                      {o.presupuesto > 0 ? <Link to={`/finanzas/avance-financiero?obra=${o.proyecto_id}&vista=periodo`} title="Presupuesto contra real por mes" className="hover:underline">{mxn.format(r.disponible)}</Link> : "—"}
+                    </td>
                     <td className={`pr-2 text-right tabular-nums ${semaforo === "rojo" ? "text-red-700" : semaforo === "ambar" ? "text-amber-700" : ""}`}>
-                      {r.desfase === null ? "—" : `${r.desfase > 0 ? "+" : ""}${Math.round(r.desfase)} pts`}
+                      <Link to={`/proyectos/${o.proyecto_id}?tab=resumen`} title="Abrir el resumen físico-financiero de la obra" className="hover:underline">{r.desfase === null ? "—" : `${r.desfase > 0 ? "+" : ""}${Math.round(r.desfase)} pts`}</Link>
                     </td>
                   </tr>
                 ))}
