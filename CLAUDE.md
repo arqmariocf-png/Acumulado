@@ -2011,6 +2011,58 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   empresa en su alcance) (`20261022110000`). Probado en producción: Laura 67
   obras en 0.65 s y captura; Alma no ve ni captura. Al 22-oct no hay
   presupuestos capturados.
+- **Cuentas por cobrar (23-oct-2026, Laura mandó el diseño "Comercial /
+  Cobranza / Cuentas por cobrar" en 5 capturas)**: Comercial › Cobranza ›
+  **Cuentas por cobrar** (`/finanzas/cobranza?vista=cartera|cobro|agenda|entre
+  &cliente=<clave>`, `pages/finanzas/CuentasPorCobrar.tsx`,
+  `lib/cuentasPorCobrar.ts` con pruebas; ven dirección, corporativo, empresa y
+  admin —`auth_ve_cxc`—, operan admin/dirección/corporativo —`auth_opera_cxc`—).
+  **Nada se captura como saldo**: `fn_cxc_cartera()` (definer, 0.07 s)
+  devuelve cada documento con total, cobrado, retenido y saldo exigible =
+  total − cobrado − retenido: (a) facturas emitidas del SAT tipo I con
+  `metodo_pago = 'PPD'` (PUE solo si el cliente tiene `pue_a_credito`),
+  cobrado = el mayor entre los complementos de pago del SAT (`ImpPagado` por
+  UUID en `cfdi.relacionados`, más notas de crédito relacionadas 01/03) y lo
+  registrado aquí + depósitos conciliados en Movimientos (`FACTURA` "F-/FM-"
+  con ese UUID); (b) `cxc_documentos` (estimaciones, facturas sin CFDI, saldo
+  inicial, otro; con `retenido` = fondo de garantía, obra, vence). Cliente =
+  RFC (`fn_cxc_clave_cliente`; sin RFC "N:" + nombre normalizado); si el
+  cliente es otra empresa del grupo trae `cliente_empresa` y el filtro
+  Externos / Empresas del grupo / Todos lo separa. `cxc_clientes` (por
+  organización: días de crédito —30 por defecto—, línea, área, responsable,
+  pue_a_credito; "datos del cliente" en Cartera). `fn_cxc_registrar_cobro(p
+  jsonb)` (definer): cobro + aplicaciones por documento (no más del saldo ni
+  del monto; la pantalla aplica primero a lo más vencido con `aplicarCobro`);
+  con `movimiento_id` (abono sin conciliar de esa empresa) el movimiento queda
+  resuelto con `FM- <uuids>`; `fn_cxc_cancelar_cobro(id, motivo)` no borra.
+  `cxc_gestiones` (llamada/correo/whatsapp/visita/aviso_legal, promesa fecha y
+  monto): la Agenda ordena incumplidas primero y luego por días vencidos; la
+  cobranza esperada de 8 semanas mueve lo vencido a la semana de la promesa.
+  **Entre empresas** `fn_cxc_entre_empresas(desde)`: por pareja vende→compra,
+  OV (cliente = empresa del grupo por `fn_proveedor_clave` de razón social o
+  nombre) contra OC/OS (proveedor = empresa del grupo), saldo por pagar y
+  vencido, y OV inter empresa cuya OC no existe (`ov_sin_oc`). Tablas
+  `cxc_clientes/_documentos/_cobros/_aplicaciones/_gestiones` con frontera,
+  espectador, director general y solo_consulta (`20261023110000`, aplicada
+  como `cuentas_por_cobrar_tablas` y `_funciones`). **Para esto el SAT ahora
+  guarda `cfdi.tipo_comprobante` (I/E/P/N/T), `metodo_pago` (PUE/PPD),
+  `forma_pago` y `relacionados` [{uuid, importe, tipo_relacion}]**
+  (`20261023100000`; `sat-descarga-masiva` v3 con `{reprocesar: true}` que
+  relee los ZIP guardados: 62 ZIP, 7,600 CFDI releídos el 23-oct; la nómina N
+  no cuenta). Al 23-oct: 28 documentos con saldo, $6.9 M (de ellos $3.0 M de
+  AEP a Mario Contreras Farfán = grupo); mayores: UAEH $1.9 M (CSC, vence
+  11-nov), Tiendas Super Precio $577 mil (CSC, vencida desde feb). Probado como
+  Laura en rollback (cobro de $100 mil liga el abono y baja el saldo; de más
+  rechazado; cancelar lo regresa; gestión a su nombre); Alma no ve ni escribe.
+  Plan del sistema #23 y #24 en Hecho.
+- **Safari (23-oct-2026, Mario: "tenemos intermitencias en safari")**: se
+  quitó el único *lookbehind* `(?<!…)` del código (`lib/ligarOrden.ts`; Safari
+  anterior a 16.4 no lo entiende y tira todo el chunk con SyntaxError) y
+  `Array.prototype.at` (`lib/enlaces.ts`). **Regla: nada de lookbehind en regex
+  ni `.at()` en `web/src`** (el build no los transpila). El resto (modo de
+  impresión por dispositivo, renovación de sesión al volver a la pestaña,
+  marcas offline, visor `/archivo`) ya estaba resuelto; falta que Mario diga qué
+  pantalla y qué síntoma para seguir.
 - **Recursos humanos como grupo (22-oct-2026, Mario: "la parte de nómina es
   realmente recursos humanos"; "entré con Eréndira y no tiene el tablero")**:
   el grupo del menú "Nómina y mano de obra" se llama **Recursos humanos** (la

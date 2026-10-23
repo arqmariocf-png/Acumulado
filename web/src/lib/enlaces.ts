@@ -11,7 +11,7 @@ const PATRON = /\b(?:https?:\/\/|www\.)[^\s<>"']+/gi;
 function recortarFinal(liga: string): string {
   let s = liga;
   for (;;) {
-    const ult = s.at(-1);
+    const ult = s[s.length - 1];
     if (!ult) return s;
     if (".,;:!?¡¿…\"'»".includes(ult)) {
       s = s.slice(0, -1);

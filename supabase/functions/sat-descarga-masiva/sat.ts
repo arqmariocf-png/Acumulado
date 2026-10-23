@@ -251,6 +251,13 @@ export interface CfdiLeido {
   /** Complemento de pago: suma de Monto de cada pago y la primera FechaPago. */
   montoPagos: number | null;
   fechaPago: string | null;
+  /** PUE / PPD y forma de pago (01, 03, 99…) del comprobante. */
+  metodoPago: string | null;
+  formaPago: string | null;
+  /** Complemento de pago: cada factura que paga (DoctoRelacionado) con lo
+   * pagado; otros comprobantes: los CFDI relacionados (nota de crédito → la
+   * factura que corrige) con su TipoRelacion. */
+  relacionados: { uuid: string; importe: number | null; tipo_relacion: string | null }[];
 }
 
 /** Lee lo necesario de un XML de CFDI 3.3/4.0 (sin DOM). */
@@ -278,7 +285,26 @@ export function leerCfdiXml(xml: string): CfdiLeido | null {
     receptorNombre: r.Nombre ?? null,
     montoPagos,
     fechaPago: pagos[0]?.FechaPago ? pagos[0].FechaPago.slice(0, 10) : null,
+    metodoPago: c.MetodoPago ? c.MetodoPago.toUpperCase() : null,
+    formaPago: c.FormaPago ?? null,
+    relacionados: relacionadosDe(xml),
   };
+}
+
+function relacionadosDe(xml: string): CfdiLeido["relacionados"] {
+  const r: CfdiLeido["relacionados"] = [];
+  for (const m of xml.matchAll(/<pago\d+:DoctoRelacionado\b[^>]*>/g)) {
+    const a = atributos(m[0]);
+    if (a.IdDocumento) r.push({ uuid: a.IdDocumento.trim().toUpperCase(), importe: a.ImpPagado != null ? Number(a.ImpPagado) : null, tipo_relacion: null });
+  }
+  for (const g of xml.matchAll(/<(?:[\w.-]+:)?CfdiRelacionados\b([^>]*)>([\s\S]*?)<\/(?:[\w.-]+:)?CfdiRelacionados>/g)) {
+    const tipo = atributos(`<x ${g[1]}>`).TipoRelacion ?? null;
+    for (const u of g[2].matchAll(/<(?:[\w.-]+:)?CfdiRelacionado\b[^>]*>/g)) {
+      const uuid = atributos(u[0]).UUID;
+      if (uuid) r.push({ uuid: uuid.trim().toUpperCase(), importe: null, tipo_relacion: tipo });
+    }
+  }
+  return r;
 }
 
 export interface FilaCfdi {
@@ -290,6 +316,11 @@ export interface FilaCfdi {
   contraparte: string | null;
   fecha: string;
   es_complemento_pago: boolean;
+  /** I ingreso, E egreso (nota de crédito), P pago, N nómina, T traslado. */
+  tipo_comprobante: string | null;
+  metodo_pago: string | null;
+  forma_pago: string | null;
+  relacionados: CfdiLeido["relacionados"];
 }
 
 /** Renglón de `cfdi` como lo deja la carga de Compac: UUID como folio, RFC y
@@ -309,6 +340,10 @@ export function filaCfdi(c: CfdiLeido, tipo: TipoCfdi): FilaCfdi | null {
     contraparte: (tipo === "recibido" ? c.emisorNombre : c.receptorNombre) ?? null,
     fecha,
     es_complemento_pago: esPago,
+    tipo_comprobante: c.tipoComprobante || null,
+    metodo_pago: c.metodoPago,
+    forma_pago: c.formaPago,
+    relacionados: c.relacionados,
   };
 }
 

@@ -27,11 +27,12 @@ function sinAcentos(texto: string): string {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-/** Números de 4 a 6 dígitos que siguen a OC/OS/OV en el concepto del banco. */
+/** Números de 4 a 6 dígitos que siguen a OC/OS/OV en el concepto del banco.
+ * Sin "lookbehind" (?<!…): Safari anterior a 16.4 no lo entiende y no carga. */
 export function numerosEnConcepto(concepto: string | null | undefined): string[] {
   if (!concepto) return [];
   const encontrados = new Set<string>();
-  for (const m of concepto.matchAll(/(?<![A-Z])(?:O\.?\s?[CSV]\.?|ORDEN)\s*[-#:]?\s*(\d{4,6})(?!\d)/gi)) {
+  for (const m of concepto.matchAll(/(?:^|[^A-Z])(?:O\.?\s?[CSV]\.?|ORDEN)\s*[-#:]?\s*(\d{4,6})(?!\d)/gi)) {
     encontrados.add(m[1]);
   }
   return [...encontrados];

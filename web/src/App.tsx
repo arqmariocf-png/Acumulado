@@ -28,6 +28,7 @@ const OrdenesPorAutorizarPagina = lazy(() => import("./pages/finanzas/OrdenesPor
 const EfectivoPorConfirmar = lazy(() => import("./pages/finanzas/EfectivoPorConfirmar").then((m) => ({ default: m.EfectivoPorConfirmar })));
 const LineasCredito = lazy(() => import("./pages/finanzas/LineasCredito").then((m) => ({ default: m.LineasCredito })));
 const DeudaFinanciera = lazy(() => import("./pages/finanzas/DeudaFinanciera").then((m) => ({ default: m.DeudaFinanciera })));
+const CuentasPorCobrar = lazy(() => import("./pages/finanzas/CuentasPorCobrar").then((m) => ({ default: m.CuentasPorCobrar })));
 const AvanceFinanciero = lazy(() => import("./pages/finanzas/AvanceFinanciero").then((m) => ({ default: m.AvanceFinanciero })));
 const PrestamosIntercompania = lazy(() => import("./pages/PrestamosIntercompania").then((m) => ({ default: m.PrestamosIntercompania })));
 const PerfilFiscal = lazy(() => import("./pages/PerfilFiscal").then((m) => ({ default: m.PerfilFiscal })));
@@ -249,6 +250,10 @@ function Enrutador() {
           </Route>
           <Route element={<ProtectedRoute roles={["direccion"]} modulo="proyectos" />}>
             <Route path="/finanzas/obras" element={<ObrasFisicoFinanciero />} />
+          </Route>
+          {/* Cuentas por cobrar (23-oct-2026, Laura): cartera, cobros, agenda y entre empresas. */}
+          <Route element={<ProtectedRoute roles={["direccion", "corporativo", "empresa"]} />}>
+            <Route path="/finanzas/cobranza" element={<CuentasPorCobrar />} />
           </Route>
           {/* Avance financiero de obras (22-oct-2026, Laura): presupuesto contra real por obra. */}
           <Route element={<ProtectedRoute roles={["direccion", "empresa"]} modulo="proyectos" />}>
