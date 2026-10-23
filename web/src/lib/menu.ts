@@ -114,10 +114,11 @@ export const SECCIONES: SeccionMenu[] = [
     grupo: "direccion",
     area: "finanzas",
     titulo: "Tablero",
-    proposito: "Cómo va el grupo y lo que espera a dirección.",
+    // Dirección solo reportes (Mario, 23-oct-2026): la bandeja de aprobaciones
+    // (OC por autorizar) vive en Contabilidad.
+    proposito: "Cómo va el grupo: reportes para interpretar la información del sistema.",
     entradas: [
       { ruta: "/dashboard", etiqueta: "Resumen del grupo", descripcion: "KPIs, carga por empresa y saldos", uso: "Vista general para dirección; de aquí salen los reportes de Clavicón y saldos.", visible: veFinanzasCompleto , modulo: "conciliacion" },
-      { ruta: "/finanzas/por-autorizar", etiqueta: "Bandeja de aprobaciones", descripcion: "OC del backoffice, requisiciones y Excel que esperan a dirección", uso: "Autoriza o rechaza; al programar el pago también se autoriza.", visible: (p) => p.rol === "direccion" || esAdmin(p), modulo: "conciliacion" },
       { ruta: "/finanzas/obras", etiqueta: "Seguimiento de obras", descripcion: "avance contra lo ejercido en OC y mano de obra, por obra", uso: "Para ver qué obra va gastando más de lo que avanza: tareas, suministro y precios unitarios contra órdenes de compra, mano de obra semanal y presupuesto.", visible: (p) => p.rol === "direccion" || esAdmin(p), modulo: "proyectos" },
     ],
   },
@@ -242,6 +243,7 @@ export const SECCIONES: SeccionMenu[] = [
     entradas: [
       { ruta: "/carga", etiqueta: "Carga de archivos", descripcion: "estados de cuenta, CFDI y catálogo OC/OV", uso: "Cada corte: sube el PDF del banco y el zip de CFDI; el catálogo OC/OV se trae del backoffice.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/pendientes", etiqueta: "Pendientes", descripcion: "concentrado por proveedor", uso: "Qué falta pagar o facturar, agrupado por proveedor.", visible: veFinanzasCompleto , modulo: "conciliacion" },
+      { ruta: "/finanzas/por-autorizar", etiqueta: "Bandeja de aprobaciones", descripcion: "OC del backoffice, requisiciones y Excel que esperan autorización", uso: "Autoriza o rechaza; al programar el pago también se autoriza. Resumen y lista en la misma pantalla.", visible: (p) => p.rol === "direccion" || esAdmin(p), modulo: "conciliacion" },
       { ruta: "/perfil-fiscal", etiqueta: "Perfil fiscal", descripcion: "datos fiscales y legales de cada empresa", uso: "Razón social, RFC, representante legal y domicilio que salen en contratos y documentos.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/contabilidad/efirmas-sat", etiqueta: "e.firma del SAT", descripcion: "e.firma de cada empresa para bajar los CFDI del SAT", uso: "Sube el .cer, el .key y la contraseña de cada empresa una vez; con eso la descarga masiva del SAT corre sola. Avisa cuando una e.firma está por vencer.", visible: (p) => esAdmin(p) || esContabilidad(p), modulo: "conciliacion" },
       { ruta: "/finanzas/seguro-social-obras", etiqueta: "Seguro social de obras", descripcion: "contabilidad captura el seguro social del costeo de cada obra", uso: "Cuando dirección asigna personal a una obra: calcula el seguro social y captúralo.", visible: (p) => p.rol === "corporativo" || p.rol === "admin", modulo: "conciliacion" },

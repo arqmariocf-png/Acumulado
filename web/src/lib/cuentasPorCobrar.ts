@@ -6,7 +6,7 @@
 // promesas de pago moviendo lo vencido a la semana prometida.
 
 export interface DocumentoCxc {
-  origen: "cfdi" | "manual";
+  origen: "cfdi" | "manual" | "ov";
   id: string;
   empresa_id: string;
   empresa: string;
@@ -406,4 +406,63 @@ export function revisarDocumento(d: { folio: string; cliente_nombre: string; fec
   if (d.retenido < 0 || d.retenido > d.total) return "El retenido no puede pasar del total.";
   if (d.vence && d.vence < d.fecha) return "El vencimiento no puede ser antes de la fecha.";
   return null;
+}
+
+// ---------- Órdenes de venta pendientes de pago (23-oct-2026) ----------
+// Mario: "al registrar cobro de la empresa, despliega el listado de OV
+// pendientes de pago para seleccionarlas únicamente y vincularlas". La OV
+// elegida se liga al cobro (fn_cxc_registrar_cobro la vuelve documento de la
+// cartera) y el depósito se aplica SOLO a las OV elegidas.
+
+export interface OvPendiente {
+  id: string;
+  id_ov: string;
+  empresa_id: string;
+  empresa: string;
+  cliente: string;
+  cliente_clave: string;
+  cliente_rfc: string | null;
+  fecha_ov: string | null;
+  total: number;
+  cobrado: number;
+  saldo: number;
+  proyecto: string | null;
+  fuente: string | null;
+  condicion_pago: string | null;
+  documento_id: string | null;
+  dias_credito: number;
+}
+
+/** La OV como documento de la cartera para aplicarle el cobro. */
+export function docDesdeOv(o: OvPendiente, hoy: string): DocumentoCxc {
+  const fecha = o.fecha_ov ?? hoy;
+  return {
+    origen: "ov", id: o.id, empresa_id: o.empresa_id, empresa: o.empresa, cliente_clave: o.cliente_clave, cliente: o.cliente, rfc: o.cliente_rfc,
+    cliente_empresa_id: null, cliente_empresa: null, tipo: "orden_venta", folio: `OV ${o.id_ov}`, uuid: null, fecha, vence: sumarDias(fecha, o.dias_credito),
+    total: o.total, retenido: 0, cobrado: o.cobrado, saldo: o.saldo, metodo_pago: null, proyecto_id: null, obra: o.proyecto, cfdi_id: null,
+  };
+}
+
+export interface FiltroOv {
+  empresaId: string | null;
+  /** Solo las del cliente elegido, salvo que `todas` sea true. */
+  clienteClave: string | null;
+  todas: boolean;
+  texto: string;
+}
+
+/** OV de la empresa, del cliente (o todas) y que digan el texto (folio, cliente,
+ * proyecto), de la más reciente a la más vieja. */
+export function filtrarOvPendientes(ovs: OvPendiente[], f: FiltroOv): OvPendiente[] {
+  const t = f.texto.trim().toLowerCase();
+  return ovs
+    .filter((o) => (!f.empresaId || o.empresa_id === f.empresaId) && (f.todas || !f.clienteClave || o.cliente_clave === f.clienteClave))
+    .filter((o) => !t || [o.id_ov, o.cliente, o.proyecto ?? ""].some((v) => v.toLowerCase().includes(t)))
+    .sort((a, b) => ((b.fecha_ov ?? "") < (a.fecha_ov ?? "") ? -1 : (b.fecha_ov ?? "") > (a.fecha_ov ?? "") ? 1 : b.id_ov.localeCompare(a.id_ov, undefined, { numeric: true })));
+}
+
+/** Suma de las OV elegidas (lo que se sugiere como monto del cobro). */
+export function sumaOv(ovs: OvPendiente[], ids: Iterable<string>): number {
+  const set = new Set(ids);
+  return r2(ovs.filter((o) => set.has(o.id)).reduce((s, o) => s + o.saldo, 0));
 }

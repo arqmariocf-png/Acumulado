@@ -6,7 +6,10 @@ import {
   aplicarCobro,
   cobranzaEsperada,
   cuadreEntreEmpresas,
+  docDesdeOv,
   estatusDocumento,
+  filtrarOvPendientes,
+  sumaOv,
   filtrarClientes,
   indicadores,
   lunesDe,
@@ -17,6 +20,7 @@ import {
   type ClienteCxc,
   type DocumentoCxc,
   type GestionCxc,
+  type OvPendiente,
 } from "./cuentasPorCobrar.ts";
 
 const HOY = "2026-10-22"; // jueves
@@ -139,4 +143,31 @@ test("revisión de la captura de un documento", () => {
   assert.match(revisarDocumento({ folio: "", cliente_nombre: "SOP", fecha: "2026-10-01", total: 100, retenido: 0, vence: null })!, /folio/);
   assert.match(revisarDocumento({ folio: "E", cliente_nombre: "SOP", fecha: "2026-10-01", total: 100, retenido: 200, vence: null })!, /retenido/);
   assert.match(revisarDocumento({ folio: "E", cliente_nombre: "SOP", fecha: "2026-10-01", total: 100, retenido: 0, vence: "2026-09-01" })!, /vencimiento/);
+});
+
+test("OV pendientes: filtro por empresa y cliente, documento para aplicar y suma", () => {
+  const ov = (p: Partial<OvPendiente> & { id: string; id_ov: string; saldo: number }): OvPendiente => ({
+    empresa_id: "mcc", empresa: "MCC", cliente: "Ferretería El Tornillo", cliente_clave: "FET010101AAA", cliente_rfc: "FET010101AAA", fecha_ov: "2026-10-01",
+    total: p.saldo, cobrado: 0, proyecto: null, fuente: "acumulado", condicion_pago: "credito", documento_id: null, dias_credito: 30, ...p,
+  });
+  const OVS = [
+    ov({ id: "a", id_ov: "IA-OV-0003", saldo: 1_000, fecha_ov: "2026-09-20" }),
+    ov({ id: "b", id_ov: "IA-OV-0010", saldo: 2_500, fecha_ov: "2026-10-05" }),
+    ov({ id: "c", id_ov: "15340", saldo: 800, cliente: "Otro cliente", cliente_clave: "N:OTRO CLIENTE", cliente_rfc: null, proyecto: "Parque Real" }),
+    ov({ id: "d", id_ov: "IA-OV-0001", saldo: 400, empresa_id: "aep", empresa: "AEP" }),
+  ];
+  const f = { empresaId: "mcc", clienteClave: "FET010101AAA", todas: false, texto: "" };
+  assert.deepEqual(filtrarOvPendientes(OVS, f).map((o) => o.id), ["b", "a"]); // más reciente primero
+  assert.deepEqual(filtrarOvPendientes(OVS, { ...f, todas: true }).map((o) => o.id), ["b", "c", "a"]);
+  assert.deepEqual(filtrarOvPendientes(OVS, { ...f, todas: true, texto: "parque" }).map((o) => o.id), ["c"]);
+  assert.deepEqual(filtrarOvPendientes(OVS, { ...f, empresaId: null, todas: true, texto: "0001" }).map((o) => o.id), ["d"]);
+  assert.equal(sumaOv(OVS, ["a", "b"]), 3_500);
+  const d = docDesdeOv(OVS[0], HOY);
+  assert.equal(d.origen, "ov");
+  assert.equal(d.folio, "OV IA-OV-0003");
+  assert.equal(d.vence, "2026-10-20"); // 20-sep + 30 días
+  assert.equal(docDesdeOv({ ...OVS[0], fecha_ov: null }, HOY).fecha, HOY);
+  // El cobro se aplica solo a las OV elegidas, la más vencida primero.
+  const r = aplicarCobro([OVS[0], OVS[1]].map((o) => docDesdeOv(o, HOY)), 1_500);
+  assert.deepEqual(r.aplicaciones.map((a) => [a.doc.folio, a.aplica]), [["OV IA-OV-0003", 1_000], ["OV IA-OV-0010", 500]]);
 });

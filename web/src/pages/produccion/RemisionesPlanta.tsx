@@ -9,6 +9,7 @@ interface RemisionListada {
   folio: string;
   fecha: string;
   contraparte: string | null;
+  paga_nombre: string | null;
   proyecto_nombre: string | null;
   estatus: string;
   condicion_pago: string | null;
@@ -27,7 +28,7 @@ export function RemisionesPlanta({ empresaId, tipo }: { empresaId: string; tipo:
     queryFn: async () => {
       const { data, error } = await supabase
         .from("v_remisiones_produccion")
-        .select("id, folio, fecha, contraparte, proyecto_nombre, estatus, condicion_pago, dias_credito, lineas, fotos")
+        .select("id, folio, fecha, contraparte, paga_nombre, proyecto_nombre, estatus, condicion_pago, dias_credito, lineas, fotos")
         .eq("empresa_id", empresaId)
         .eq("tipo", tipo)
         .order("fecha", { ascending: false })
@@ -39,7 +40,7 @@ export function RemisionesPlanta({ empresaId, tipo }: { empresaId: string; tipo:
   });
 
   const filtro = texto.trim().toLowerCase();
-  const filas = (data ?? []).filter((r) => !filtro || [r.folio, r.contraparte, r.proyecto_nombre].some((v) => v?.toLowerCase().includes(filtro)));
+  const filas = (data ?? []).filter((r) => !filtro || [r.folio, r.contraparte, r.paga_nombre, r.proyecto_nombre].some((v) => v?.toLowerCase().includes(filtro)));
 
   return (
     <div>
@@ -81,7 +82,10 @@ export function RemisionesPlanta({ empresaId, tipo }: { empresaId: string; tipo:
               <tr key={r.id} className="border-t border-slate-100">
                 <td className="px-3 py-2 font-mono">{r.folio}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{fechaLargaCorta(r.fecha)}</td>
-                <td className="px-3 py-2">{r.contraparte ?? "—"}</td>
+                <td className="px-3 py-2">
+                  {r.contraparte ?? "—"}
+                  {r.paga_nombre && r.paga_nombre !== r.contraparte && <div className="text-xs text-violet-700">paga: {r.paga_nombre}</div>}
+                </td>
                 <td className="px-3 py-2 text-slate-600">{r.proyecto_nombre ?? "—"}</td>
                 {tipo === "salida" && (
                   <td className="px-3 py-2 text-slate-600">{r.condicion_pago === "credito" ? `Crédito${r.dias_credito ? ` ${r.dias_credito} d` : ""}` : r.condicion_pago === "contado" ? "Contado" : "—"}</td>

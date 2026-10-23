@@ -27,6 +27,10 @@ export interface ObraAvance {
   empresa_nombre?: string | null;
   tareas: number;
   hechas: number;
+  /** Presupuesto de los controles de obra (23-oct-2026): se usa cuando la obra
+   * no tiene presupuesto capturado por categoría, igual que el resumen
+   * físico-financiero de Operación. */
+  presupuesto_control?: number;
 }
 
 export interface RealMes {
@@ -241,6 +245,18 @@ export function calcularAvance(obras: ObraAvance[], real: RealMes[], presupuesto
     sumar(enPeriodo, x.proyecto_id, 0, r, g);
     sumar(porCat as Map<string, { p: number; r: number; g: number }>, x.categoria, 0, r, g);
     sumar(porMes, x.mes, 0, r, g);
+  }
+
+  // Sin presupuesto por categoría, vale el de los controles de obra (sin mes:
+  // cuenta en toda la obra y, si no hay filtro de año, también en el periodo).
+  const conPresupuesto = new Set(pres.map((x) => x.proyecto_id));
+  if (!f.categoria) {
+    for (const o of obras) {
+      const pc = Number(o.presupuesto_control) || 0;
+      if (!ids.has(o.id) || conPresupuesto.has(o.id) || pc <= 0) continue;
+      sumar(todaObra, o.id, pc, 0, 0);
+      if (f.anio == null) sumar(enPeriodo, o.id, pc, 0, 0);
+    }
   }
 
   const porObra: FilaObra[] = [];

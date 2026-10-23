@@ -2834,3 +2834,63 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   nuevo para eso. Lo que sí pedirle: datos bancarios del proveedor
   (beneficiario, banco, CLABE, RFC) en la OC o un endpoint de proveedores,
   caché de 5–10 min y filtro por fecha.
+
+## 23-oct-2026 (tarde): remisiones, OV en cobros, avance unificado, menús
+- **Se entrega a un cliente y paga otro (Mario: "en las entregas, empezando
+  por Clavicón… hacer referencia para que quede todo vinculado")**:
+  `remisiones_produccion.paga_cliente_id / paga_nombre / referencia_pago`
+  (`20261023150000`; la vista `v_remisiones_produccion` trae `paga_nombre`,
+  `paga_rfc`, `paga_domicilio`, `referencia_pago`). En el modal de remisión de
+  salida la casilla "Se entrega a este cliente y paga otro": quien paga se elige
+  del catálogo (o nombre libre) y la referencia (OV, pedido, acuerdo); si se liga
+  la OV de quien paga, se llena sola. La remisión impresa dice "Entregar a
+  (recibe la mercancía)" y "Paga / se factura a" con RFC y "Pago: <referencia>";
+  el detalle y la lista muestran "paga: X". `contraparte`/`cliente_id` siguen
+  siendo quien recibe; la OV ligada es la de quien paga (así cuentas por cobrar
+  y margen siguen igual).
+- **OV pendientes al registrar cobro (Mario: "despliega el listado de OV
+  pendientes de pago para seleccionarlas únicamente y vincularlas")**:
+  `fn_cxc_ov_pendientes(empresa|null)` (definer, alcance; OV no canceladas con
+  saldo = total − cobrado aquí; clave del cliente = RFC con que se le factura o
+  "N:" + nombre; 691 OV para Laura en 0.26 s) y `cxc_documentos.orden_venta_id`
+  (único por OV viva): al registrar un cobro con `aplicaciones: [{origen: 'ov',
+  id, monto}]` la OV se vuelve documento de la cartera (tipo 'otro', folio
+  "OV <id_ov>", vence = fecha + días de crédito del cliente) y el cobro se aplica
+  a él; parcial → la OV sigue pendiente con su saldo; la nota del cobro dice
+  "Liga: OV …" y el depósito del banco ligado queda resuelto con las OV en
+  referencia/observación (`20261023160000`). Pantalla: en Registrar cobro,
+  bajo el formulario, "Órdenes de venta pendientes de pago · <empresa>" con
+  casillas (del cliente elegido; "ver todas las OV de la empresa"; búsqueda);
+  con OV marcadas el depósito se aplica SOLO a ellas (las facturas no se tocan)
+  y el botón sugiere la suma (`docDesdeOv`, `filtrarOvPendientes`, `sumaOv` en
+  `lib/cuentasPorCobrar.ts`, con pruebas). Probado como Laura en rollback (OV
+  15380 de MCC: cobro de $100 → documento ligado, saldo 86,900; de más rechazado).
+  Ojo: hay 456 OV "pendientes" en AEP desde siempre porque nunca se registró
+  cobro aquí; la lista es para elegir, no es cartera.
+- **Avance financiero unificado (Mario: "el avance financiero en el área de
+  finanzas y en operaciones no cuadra y debería ser el mismo")**: Finanzas ›
+  Avance financiero y Operación › Resumen físico-financiero (de la obra y de
+  todas) calculaban distinto (OC a subtotal s/IVA por mes vs total c/IVA; el
+  resumen sumaba compras del control sin OC y Finanzas no; presupuesto de
+  `obra_presupuesto` vs `proyecto_controles`). Ahora `fn_avance_financiero_real()`
+  (definer, revocada; obra × mes × categoría × origen 'oc' s/IVA con pagado en
+  proporción | 'mano_obra' API | 'control' = compras del control de obra sin OC)
+  es LA fuente: `fn_avance_financiero_base()` la agrupa y `fn_obra_gasto_backoffice()`
+  toma de ahí `oc_total/oc_pagado/mo_total`. Presupuesto en las dos pantallas =
+  capturado por categoría y, si no, el de los controles (`fn_resumen_obras_director`,
+  `fn_avance_financiero` → `presupuesto_control`, `calcularAvance` en
+  `lib/avanceFinanciero.ts` con prueba; `ResumenObra.tsx` consulta
+  `obra_presupuesto`) (`20261023170000`, aplicada como `avance_financiero_unificado`
+  y `_2`). Verificado como Laura: ejercido Operación = real Finanzas en las 54
+  obras. Ojo: la primera versión del conteo de OC hacía `normalizar_texto_sql`
+  dentro del join (12 s); la clave se calcula una vez por OC en un CTE
+  materializado. **Cambio en lo real de una obra → solo en `fn_avance_financiero_real`.**
+- **Dirección solo reportes (Mario)**: "Bandeja de aprobaciones"
+  (`/finanzas/por-autorizar`) pasó del menú Tablero (Dirección) a Contabilidad;
+  Dirección queda con Resumen del grupo, Seguimiento de obras, Reportes y
+  Gobierno. No existe una pantalla llamada "Resumen de aprobaciones": si Mario
+  se refiere a otra cosa, moverla igual.
+- **Inicio de Mario = organigrama por áreas (Mario: "más que ver las empresas
+  quiero ver mi organigrama por áreas")**: `InicioSegunRol` pinta
+  `Organigrama` al admin; la vista de socio sigue en `/socio` (liga abajo del
+  organigrama y en Gobierno › Vista de socio).

@@ -166,8 +166,9 @@ export function ResumenObrasDirector() {
           )}
           <p className="mt-2 text-[11px] text-slate-400">
             Físico = promedio de tareas hechas, suministro de requerimientos y precios unitarios. Ejercido = órdenes de compra y de servicio de la obra (sin
-            canceladas) + mano de obra pagada por semana (backoffice) + compras capturadas en el control de obra sin OC. Financiero = ejercido entre el
-            presupuesto de los controles de obra (sin presupuesto capturado no hay %). Desfase en rojo: se ha gastado más de 10 puntos por encima de lo
+            canceladas, a subtotal sin IVA) + mano de obra pagada por semana (backoffice) + compras capturadas en el control de obra sin OC: el mismo
+            cálculo que Finanzas › Avance financiero de obras. Financiero = ejercido entre el presupuesto capturado por categoría o, si no hay, el de los
+            controles de obra (sin presupuesto no hay %). Desfase en rojo: se ha gastado más de 10 puntos por encima de lo
             avanzado o se rebasó el presupuesto.
           </p>
         </div>

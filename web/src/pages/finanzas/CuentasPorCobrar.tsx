@@ -12,8 +12,11 @@ import {
   aplicarCobro,
   cobranzaEsperada,
   cuadreEntreEmpresas,
+  docDesdeOv,
   estatusDocumento,
   filtrarClientes,
+  filtrarOvPendientes,
+  sumaOv,
   indicadores,
   revisarDocumento,
   textoGestion,
@@ -22,6 +25,7 @@ import {
   type DocumentoCxc,
   type FiltroClientes,
   type GestionCxc,
+  type OvPendiente,
   type ParEntreEmpresas,
 } from "../../lib/cuentasPorCobrar";
 
@@ -392,18 +396,41 @@ function VistaCobro({ docs, clientes, hoy, clienteParam, puedeOperar }: { docs: 
   const qc = useQueryClient();
   const { data: empresas } = useEmpresasAlcance();
   const vivos = useMemo(() => docs.filter((d) => d.saldo > 0.5), [docs]);
+  // Órdenes de venta pendientes de pago (Mario, 23-oct-2026): se eligen y el
+  // cobro se liga y aplica solo a ellas.
+  const { data: ovs } = useQuery({
+    queryKey: ["cxc-ov-pendientes"],
+    enabled: puedeOperar,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_cxc_ov_pendientes");
+      if (error) throw error;
+      return ((data ?? []) as OvPendiente[]).map((o) => ({ ...o, total: Number(o.total), cobrado: Number(o.cobrado), saldo: Number(o.saldo) }));
+    },
+  });
   const opcionesCliente = useMemo(() => {
     const m = new Map<string, string>();
     for (const d of vivos) if (!m.has(d.cliente_clave)) m.set(d.cliente_clave, clientes.find((c) => c.clave === d.cliente_clave)?.nombre ?? d.cliente);
+    for (const o of ovs ?? []) if (!m.has(o.cliente_clave)) m.set(o.cliente_clave, clientes.find((c) => c.clave === o.cliente_clave)?.nombre ?? o.cliente);
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [vivos, clientes]);
+  }, [vivos, ovs, clientes]);
   const [clave, setClave] = useState(clienteParam ?? "");
   useEffect(() => { if (clienteParam) setClave(clienteParam); }, [clienteParam]);
-  const empresasCliente = useMemo(() => [...new Set(vivos.filter((d) => d.cliente_clave === clave).map((d) => d.empresa_id))], [vivos, clave]);
+  const empresasCliente = useMemo(
+    () => [...new Set([...vivos.filter((d) => d.cliente_clave === clave).map((d) => d.empresa_id), ...(ovs ?? []).filter((o) => o.cliente_clave === clave).map((o) => o.empresa_id)])],
+    [vivos, ovs, clave],
+  );
   const [empresaId, setEmpresaId] = useState("");
   useEffect(() => { setEmpresaId(empresasCliente[0] ?? ""); }, [empresasCliente]);
   const delCliente = useMemo(() => vivos.filter((d) => d.cliente_clave === clave && d.empresa_id === empresaId), [vivos, clave, empresaId]);
   const saldoTotal = delCliente.reduce((s, d) => s + d.saldo, 0);
+  const [ovSel, setOvSel] = useState<string[]>([]);
+  const [verTodasOv, setVerTodasOv] = useState(false);
+  const [buscarOv, setBuscarOv] = useState("");
+  useEffect(() => { setOvSel([]); setVerTodasOv(false); }, [empresaId, clave]);
+  const ovsEmpresa = useMemo(() => (ovs ?? []).filter((o) => o.empresa_id === empresaId), [ovs, empresaId]);
+  const ovsLista = useMemo(() => filtrarOvPendientes(ovs ?? [], { empresaId: empresaId || null, clienteClave: clave || null, todas: verTodasOv, texto: buscarOv }), [ovs, empresaId, clave, verTodasOv, buscarOv]);
+  const ovsElegidas = useMemo(() => (ovs ?? []).filter((o) => ovSel.includes(o.id)), [ovs, ovSel]);
+  const sumaElegidas = sumaOv(ovs ?? [], ovSel);
   const [monto, setMonto] = useState("");
   const [fecha, setFecha] = useState(hoy);
   const [cuentaId, setCuentaId] = useState("");
@@ -412,7 +439,8 @@ function VistaCobro({ docs, clientes, hoy, clienteParam, puedeOperar }: { docs: 
   const [notas, setNotas] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
-  const aplicacion = useMemo(() => aplicarCobro(delCliente, num(monto)), [delCliente, monto]);
+  // Con OV elegidas el depósito se aplica SOLO a ellas; si no, a las facturas más vencidas.
+  const aplicacion = useMemo(() => aplicarCobro(ovsElegidas.length > 0 ? ovsElegidas.map((o) => docDesdeOv(o, hoy)) : delCliente, num(monto)), [ovsElegidas, delCliente, monto, hoy]);
 
   const { data: cuentas } = useQuery({
     queryKey: ["cuentas-bancarias", empresaId],
@@ -473,8 +501,9 @@ function VistaCobro({ docs, clientes, hoy, clienteParam, puedeOperar }: { docs: 
     onSuccess: () => {
       setOk(`Cobro de ${dinero(num(monto), 2)} aplicado${aplicacion.sobrante > 0 ? ` (sobran ${dinero(aplicacion.sobrante, 2)} sin aplicar: queda como saldo a favor del cliente)` : ""}.`);
       setErr(null);
-      setMonto(""); setReferencia(""); setMovimientoId(""); setNotas("");
+      setMonto(""); setReferencia(""); setMovimientoId(""); setNotas(""); setOvSel([]);
       qc.invalidateQueries({ queryKey: ["cxc-cartera"] });
+      qc.invalidateQueries({ queryKey: ["cxc-ov-pendientes"] });
       qc.invalidateQueries({ queryKey: ["cxc-cobros"] });
       qc.invalidateQueries({ queryKey: ["cxc-abonos"] });
     },
@@ -490,6 +519,7 @@ function VistaCobro({ docs, clientes, hoy, clienteParam, puedeOperar }: { docs: 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cxc-cartera"] });
       qc.invalidateQueries({ queryKey: ["cxc-cobros"] });
+      qc.invalidateQueries({ queryKey: ["cxc-ov-pendientes"] });
     },
     onError: (e) => setErr((e as Error).message),
   });
@@ -510,7 +540,7 @@ function VistaCobro({ docs, clientes, hoy, clienteParam, puedeOperar }: { docs: 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <form className={`${tarjeta} p-4`} data-sin-borrador onSubmit={(e: FormEvent) => { e.preventDefault(); registrar.mutate(); }}>
           <h2 className="text-lg font-semibold text-slate-900">Registrar cobro</h2>
-          <p className="mb-3 text-xs text-slate-600">El depósito se aplica primero a los documentos más vencidos. Si lo eliges del estado de cuenta, el movimiento queda conciliado con esas facturas.</p>
+          <p className="mb-3 text-xs text-slate-600">El depósito se aplica primero a los documentos más vencidos, o solo a las órdenes de venta que marques abajo. Si lo eliges del estado de cuenta, el movimiento queda conciliado con esas facturas u OV.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className={`${etiqueta} sm:col-span-2`}>
               Cliente
@@ -547,14 +577,60 @@ function VistaCobro({ docs, clientes, hoy, clienteParam, puedeOperar }: { docs: 
             <label className={`${etiqueta} sm:col-span-2`}>Nota<input value={notas} onChange={(e) => setNotas(e.target.value)} className={campo} /></label>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setMonto(String(Math.round(saldoTotal * 100) / 100))} disabled={!delCliente.length} className={btnSecundario}>Poner el saldo total ({dinero(saldoTotal, 2)})</button>
+            {ovSel.length > 0 ? (
+              <button type="button" onClick={() => setMonto(String(sumaElegidas))} className={btnSecundario}>Poner la suma de las {ovSel.length} OV elegidas ({dinero(sumaElegidas, 2)})</button>
+            ) : (
+              <button type="button" onClick={() => setMonto(String(Math.round(saldoTotal * 100) / 100))} disabled={!delCliente.length} className={btnSecundario}>Poner el saldo total ({dinero(saldoTotal, 2)})</button>
+            )}
           </div>
+          {empresaId && (
+            <section id="ov-pendientes" className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-900">Órdenes de venta pendientes de pago · {empresas?.find((x) => x.id === empresaId)?.codigo ?? ""}</h3>
+                <span className="text-xs text-slate-500">{ovsLista.length} de {ovsEmpresa.length}</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-600">Marca las OV que cubre este depósito: el cobro se liga y se aplica solo a ellas (el saldo que no alcance queda pendiente en la OV).</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                <label className="flex items-center gap-1 text-slate-700">
+                  <input type="checkbox" checked={verTodasOv} onChange={(e) => setVerTodasOv(e.target.checked)} /> ver todas las OV de la empresa, no solo las del cliente
+                </label>
+                <input value={buscarOv} onChange={(e) => setBuscarOv(e.target.value)} placeholder="Buscar folio, cliente, proyecto…" className="w-56 rounded border border-slate-300 px-2 py-1 text-xs" />
+              </div>
+              <div className="mt-2 max-h-64 overflow-y-auto rounded border border-slate-200 bg-white">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-slate-100 text-left text-slate-500">
+                    <tr><th className="px-2 py-1" /><th className="px-2 py-1">OV</th><th className="px-2 py-1">Fecha</th><th className="px-2 py-1">Cliente</th><th className="px-2 py-1">Proyecto</th><th className="px-2 py-1 text-right">Saldo</th></tr>
+                  </thead>
+                  <tbody>
+                    {ovsLista.slice(0, 150).map((o) => {
+                      const marcada = ovSel.includes(o.id);
+                      const otroCliente = !!clave && o.cliente_clave !== clave;
+                      return (
+                        <tr key={o.id} className={`border-t border-slate-100 ${marcada ? "bg-emerald-50" : ""}`}>
+                          <td className="px-2 py-1"><input type="checkbox" checked={marcada} onChange={(e) => setOvSel((prev) => (e.target.checked ? [...prev, o.id] : prev.filter((x) => x !== o.id)))} aria-label={`Elegir OV ${o.id_ov}`} /></td>
+                          <td className="px-2 py-1 font-semibold">{o.id_ov}{o.cobrado > 0 && <span className="ml-1 font-normal text-amber-700" title={`ya cobrado ${dinero(o.cobrado, 2)}`}>parcial</span>}</td>
+                          <td className="px-2 py-1 whitespace-nowrap">{o.fecha_ov ? fechaCorta(o.fecha_ov) : "—"}</td>
+                          <td className={`px-2 py-1 ${otroCliente ? "text-amber-800" : ""}`} title={otroCliente ? "Es de otro cliente" : undefined}>{o.cliente}</td>
+                          <td className="px-2 py-1 text-slate-500">{o.proyecto ?? "—"}</td>
+                          <td className="px-2 py-1 text-right tabular-nums">{dinero(o.saldo, 2)}</td>
+                        </tr>
+                      );
+                    })}
+                    {ovsLista.length === 0 && <tr><td colSpan={6} className="px-2 py-3 text-center text-slate-500">{ovsEmpresa.length === 0 ? "Esta empresa no tiene OV pendientes de pago." : verTodasOv ? "Ninguna OV dice eso." : "Este cliente no tiene OV pendientes; marca \"ver todas\" si la OV está a otro nombre."}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              {ovsLista.length > 150 && <p className="mt-1 text-xs text-slate-500">Se muestran 150; afina la búsqueda.</p>}
+              {ovSel.length > 0 && <p className="mt-2 text-xs font-semibold text-emerald-800">{ovSel.length} OV elegidas · suman {dinero(sumaElegidas, 2)}. <button type="button" onClick={() => setOvSel([])} className="font-normal underline">quitar</button></p>}
+            </section>
+          )}
           {err && <p className="mt-2 text-sm text-red-700">{err}</p>}
           {ok && <p className="mt-2 text-sm text-emerald-700">{ok}</p>}
           <button type="submit" disabled={registrar.isPending || !clave || !(num(monto) > 0)} className={`${btnPrimario} mt-3`}>Aplicar cobro</button>
         </form>
         <section className={`${tarjeta} p-4`}>
           <h2 className="text-lg font-semibold text-slate-900">Cómo se aplica</h2>
+          {ovsElegidas.length > 0 && <p className="text-xs text-emerald-800">Solo a las {ovsElegidas.length} órdenes de venta elegidas; las facturas no se tocan.</p>}
           <table className="mt-2 w-full text-sm">
             <thead className="text-left text-xs text-slate-500">
               <tr><th className="px-2 py-1">Documento</th><th className="px-2 py-1">Vence</th><th className="px-2 py-1 text-right">Saldo</th><th className="px-2 py-1 text-right">Se aplica</th><th className="px-2 py-1 text-right">Queda</th></tr>
@@ -562,18 +638,18 @@ function VistaCobro({ docs, clientes, hoy, clienteParam, puedeOperar }: { docs: 
             <tbody>
               {aplicacion.aplicaciones.map((a) => (
                 <tr key={a.doc.id} className="border-t border-slate-100">
-                  <td className="px-2 py-1.5 font-semibold" title={a.doc.uuid ?? undefined}>{a.doc.origen === "cfdi" ? `Factura ${a.doc.folio.slice(0, 8)}…` : a.doc.folio}</td>
+                  <td className="px-2 py-1.5 font-semibold" title={a.doc.uuid ?? undefined}>{a.doc.origen === "cfdi" ? `Factura ${a.doc.folio.slice(0, 8)}…` : a.doc.folio}{a.doc.origen === "ov" && <span className="ml-1 text-[10px] font-normal text-slate-400">OV</span>}</td>
                   <td className="px-2 py-1.5">{fechaCorta(a.doc.vence)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{dinero(a.doc.saldo, 2)}</td>
                   <td className={`px-2 py-1.5 text-right tabular-nums ${a.aplica > 0 ? "font-semibold text-emerald-700" : "text-slate-400"}`}>{a.aplica > 0 ? dinero(a.aplica, 2) : "—"}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{dinero(a.queda, 2)}</td>
                 </tr>
               ))}
-              {delCliente.length === 0 && <tr><td colSpan={5} className="px-2 py-3 text-center text-slate-500">Elige un cliente con saldo.</td></tr>}
+              {delCliente.length === 0 && ovsElegidas.length === 0 && <tr><td colSpan={5} className="px-2 py-3 text-center text-slate-500">Elige un cliente con saldo o marca sus órdenes de venta.</td></tr>}
             </tbody>
           </table>
           {aplicacion.sobrante > 0 && <p className="mt-2 text-xs text-amber-800">Sobran {dinero(aplicacion.sobrante, 2)} que no se aplican a ningún documento (saldo a favor del cliente).</p>}
-          {delCliente.length > 0 && !(num(monto) > 0) && <p className="mt-2 text-xs text-slate-500">Captura el monto para ver cómo se aplica.</p>}
+          {(delCliente.length > 0 || ovsElegidas.length > 0) && !(num(monto) > 0) && <p className="mt-2 text-xs text-slate-500">Captura el monto para ver cómo se aplica.</p>}
         </section>
       </div>
       <CapturaDocumento empresas={empresas ?? []} clientes={clientes} docs={docs} />
