@@ -114,11 +114,17 @@ export function ordenEditable(o: { fuente: string; autorizacion?: string | null;
  * Proveedor · Tipo de pago · Proyecto · Monto · Fecha · Estatus. */
 export const COLUMNAS_EXCEL_ORDENES = ["Empresa", "Folio", "Tipo", "Proveedor / cliente", "Tipo de pago", "Proyecto", "Monto c/IVA", "Fecha", "Estatus"];
 
+/** El Excel va ordenado por folio (id) de menor a mayor, como lo revisa Laura
+ * (23-oct-2026); el folio es texto, se compara como número. */
+export function ordenarPorFolio<T extends { folio: string }>(filas: T[]): T[] {
+  return [...filas].sort((a, b) => a.folio.localeCompare(b.folio, "es", { numeric: true }));
+}
+
 export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string }[]): string {
   const celda = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const tipoTexto: Record<TipoOrden, string> = { OC: "Compra", OS: "Servicio", OV: "Venta" };
   const renglones = [COLUMNAS_EXCEL_ORDENES];
-  for (const o of filas) {
+  for (const o of ordenarPorFolio(filas)) {
     renglones.push([o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado]);
   }
   return renglones.map((r) => r.map(celda).join(",")).join("\n");
@@ -148,7 +154,7 @@ export function csvOrdenesConDetalle(
   const tipoTexto: Record<TipoOrden, string> = { OC: "Compra", OS: "Servicio", OV: "Venta" };
   const r2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   const renglones = [[...COLUMNAS_EXCEL_ORDENES, ...COLUMNAS_DETALLE_ORDENES]];
-  for (const o of filas) {
+  for (const o of ordenarPorFolio(filas)) {
     const base = [o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado];
     const ls = [...(lineas.get(o.id) ?? [])].sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0));
     if (!ls.length) {

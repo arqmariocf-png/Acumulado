@@ -44,10 +44,10 @@ test("Excel de compras y servicios en un solo archivo", () => {
     { tipo: "OC", folio: "41422", fecha: "2026-10-13", empresa: "MCF", contraparte: "Cemex", proyecto: null, total: null, estado: "pagada" },
   ]);
   const lineas = csv.split("\n");
-  // Orden de Laura: Empresa · Folio · Tipo · Proveedor · Tipo de pago · Proyecto · Monto · Fecha · Estatus.
+  // Orden de Laura: Empresa · Folio · Tipo · Proveedor · Tipo de pago · Proyecto · Monto · Fecha · Estatus; renglones por folio ascendente.
   assert.equal(lineas[0], '"Empresa","Folio","Tipo","Proveedor / cliente","Tipo de pago","Proyecto","Monto c/IVA","Fecha","Estatus"');
-  assert.equal(lineas[1], '"CSC","IA-OS-0004","Servicio","Fletes ""El Rayo""","Transferencia","Parque Real 63","1160.00","2026-10-19","por autorizar"');
-  assert.equal(lineas[2], '"MCF","41422","Compra","Cemex","","","","2026-10-13","pagada"');
+  assert.equal(lineas[1], '"MCF","41422","Compra","Cemex","","","","2026-10-13","pagada"');
+  assert.equal(lineas[2], '"CSC","IA-OS-0004","Servicio","Fletes ""El Rayo""","Transferencia","Parque Real 63","1160.00","2026-10-19","por autorizar"');
 });
 
 test("Excel de órdenes con el detalle de cada partida", () => {
@@ -66,8 +66,9 @@ test("Excel de órdenes con el detalle de cada partida", () => {
   const filas = csv.split("\n");
   assert.equal(filas.length, 5); // encabezado + 2 partidas + 1 + orden sin partidas
   assert.match(filas[0], /"Partida","Concepto","Unidad","Cantidad","Precio unitario s\/IVA","Importe c\/IVA"$/);
-  assert.match(filas[1], /"IA-OV-0001".*"1","Alambre","kg","10","50.00","580.00"$/);
-  assert.match(filas[2], /"2","Varilla","pza","5","100.00","580.00"$/);
-  assert.match(filas[3], /"15340".*"1","Flete","srv","2","100.00","232.00"$/); // backoffice: precio con IVA
-  assert.match(filas[4], /"15341".*,"","","","","",""$/);
+  // Por folio (id) ascendente: 15340, 15341, IA-OV-0001.
+  assert.match(filas[1], /"15340".*"1","Flete","srv","2","100.00","232.00"$/); // backoffice: precio con IVA
+  assert.match(filas[2], /"15341".*,"","","","","",""$/);
+  assert.match(filas[3], /"IA-OV-0001".*"1","Alambre","kg","10","50.00","580.00"$/);
+  assert.match(filas[4], /"2","Varilla","pza","5","100.00","580.00"$/);
 });
