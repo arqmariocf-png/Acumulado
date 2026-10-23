@@ -1977,6 +1977,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pagos mientras se escribe (`TablaPrevia`). En la tabla de amortización el
   siguiente pago sin pagar dice "Próximo" y lo programado "En hoja de pagos".
   Al 22-oct no hay créditos capturados (0 en `deuda_creditos`).
+  **No dejaba elegir la empresa (23-oct-2026, Laura: "en la sección de deuda
+  financiera no me deja seleccionar la empresa que debe")**: el formulario
+  tenía `onInput` además de `onChange` para la tabla en vivo; el `input` del
+  `<select>` volvía a pintar antes de su `change` y React lo regresaba a
+  "Elige…" (con `selectOption` de Playwright no se veía; con teclado sí). Ahora
+  solo `onChange`. **En un form con `<select>` controlado, nunca `onInput`.**
 - **Avance financiero de obras (22-oct-2026, Laura por WhatsApp: "se puede
   crear un módulo de avance financiero con estos puntos y visual")**: Finanzas ›
   Presupuestos › **Avance financiero de obras** (`/finanzas/avance-financiero`,
