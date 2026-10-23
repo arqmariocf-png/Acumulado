@@ -19,13 +19,16 @@ function usePendientesDireccion() {
   return useQuery({
     queryKey: ["pagos-programados", "pendientes-direccion"],
     queryFn: async () => {
-      const [autorizar, efectivo] = await Promise.all([
+      const [autorizar, efectivo, creditos] = await Promise.all([
         supabase.from("v_oc_pagos").select("id", { count: "exact", head: true }).eq("autorizacion", "pendiente").gt("saldo", 0.01).eq("programado", 0),
         supabase.from("v_oc_pagos").select("id", { count: "exact", head: true }).gt("saldo", 0.009).neq("autorizacion", "rechazada").eq("pagada_backoffice", false).or(FILTRO_OC_EFECTIVO),
+        // Solicitudes de crédito a clientes que esperan a dirección (Mario, 23-oct-2026).
+        supabase.from("clientes_credito").select("cliente_id", { count: "exact", head: true }).eq("autorizado", false),
       ]);
       if (autorizar.error) throw autorizar.error;
       if (efectivo.error) throw efectivo.error;
-      return { autorizar: autorizar.count ?? 0, efectivo: efectivo.count ?? 0 };
+      if (creditos.error) throw creditos.error;
+      return { autorizar: autorizar.count ?? 0, efectivo: efectivo.count ?? 0, creditos: creditos.count ?? 0 };
     },
   });
 }
@@ -34,9 +37,10 @@ export function InicioDireccion() {
   const { data: pend } = usePendientesDireccion();
   return (
     <div className="space-y-6">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Atajo to="/finanzas/por-autorizar" titulo="Órdenes por autorizar" valor={pend?.autorizar} alerta={(pend?.autorizar ?? 0) > 0} />
         <Atajo to="/finanzas/efectivo" titulo="Efectivo por confirmar" valor={pend?.efectivo} alerta={(pend?.efectivo ?? 0) > 0} />
+        <Atajo to="/legal?tab=credito" titulo="Créditos a clientes por autorizar" valor={pend?.creditos} alerta={(pend?.creditos ?? 0) > 0} />
         <Atajo to="/finanzas/historial-pagos" titulo="Base de pagos y comprobantes" valor={null} />
         <Atajo to="/finanzas/obras" titulo="Físico-financiero de obras" valor={null} />
       </div>

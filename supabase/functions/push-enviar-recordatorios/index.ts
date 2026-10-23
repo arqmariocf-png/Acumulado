@@ -17,6 +17,12 @@
 // SQL, p. ej. la de Belén para subir la e.firma): POST con body
 // { "tarjetaId": "<id>" } y el mismo header → "Te asignaron una tarea" al
 // responsable, supervisor y corresponsables de esa tarjeta, nada más.
+//
+// Aviso libre a personas concretas (23-oct-2026, Mario: "notifica a Laura
+// cuando exista una solicitud de crédito para que ella pueda autorizarla"):
+// POST con body { "aviso": { "profiles": ["<uuid>", …], "titulo", "cuerpo",
+// "url" } } y el mismo header. Lo manda la base con fn_push_aviso(...) desde
+// triggers (crédito a clientes, sueldo fijado por RH).
 
 import webpush from "npm:web-push@3.6.7";
 import { corsHeaders, respuestaCors, jsonResponse } from "../_shared/cors.ts";
@@ -57,7 +63,31 @@ Deno.serve(async (req) => {
 
     webpush.setVapidDetails(config.vapid_subject, config.vapid_public_key, config.vapid_private_key);
 
-    const cuerpoPeticion = (await req.json().catch(() => ({}))) as { tarjetaId?: string };
+    const cuerpoPeticion = (await req.json().catch(() => ({}))) as { tarjetaId?: string; aviso?: { profiles?: string[]; titulo?: string; cuerpo?: string; url?: string } };
+    if (cuerpoPeticion.aviso) {
+      const a = cuerpoPeticion.aviso;
+      const destinos = new Set<string>((a.profiles ?? []).filter((x) => typeof x === "string" && x.length > 0));
+      if (destinos.size === 0 || !a.titulo) return jsonResponse({ error: "El aviso necesita profiles y titulo" }, 400);
+      const payload = JSON.stringify({ titulo: String(a.titulo).slice(0, 120), cuerpo: String(a.cuerpo ?? "").slice(0, 300), url: a.url && String(a.url).startsWith("/") ? a.url : "/" });
+      let enviadosAviso = 0;
+      let fallidosAviso = 0;
+      const borrar: string[] = [];
+      for (const profileId of destinos) {
+        const { data: subs } = await dbServicio.from("push_subscripciones").select("id, endpoint, p256dh, auth").eq("profile_id", profileId);
+        for (const sub of subs ?? []) {
+          try {
+            await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+            enviadosAviso++;
+          } catch (err) {
+            fallidosAviso++;
+            const status = (err as { statusCode?: number }).statusCode;
+            if (status === 404 || status === 410) borrar.push(sub.id);
+          }
+        }
+      }
+      if (borrar.length > 0) await dbServicio.from("push_subscripciones").delete().in("id", borrar);
+      return jsonResponse({ personas: destinos.size, enviados: enviadosAviso, fallidos: fallidosAviso, suscripcionesLimpiadas: borrar.length });
+    }
     if (cuerpoPeticion.tarjetaId) {
       const { data: t } = await dbServicio
         .from("tarjetas")

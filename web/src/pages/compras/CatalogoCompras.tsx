@@ -3,13 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
 import { CampoBuscador } from "../../components/CampoBuscador";
-import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 import { compararPrecios, detalleItem, fechaCortaCatalogo, filtrarContrapartes, filtrarItems, type ContraparteCatalogo, type ItemCatalogo } from "../../lib/buscadorCaptura";
 import { csvHistorico, resumenPorConcepto, totalesHistorico, type CompraHistorico } from "../../lib/historicoCostos";
 import { etiquetaCategoria, sugerirItems } from "../../lib/catalogoItems";
 import { normalizarBusqueda } from "../../lib/buscadorCaptura";
 import { useItemsCompra } from "./useItemsCompra";
 import { descargarCsv } from "../../lib/descargarArchivo";
+import { clabeValida } from "../../lib/importarBancarios";
 
 const dinero = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }));
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -103,6 +103,8 @@ function ListaProveedores({ lista, cargando, onElegir, onNuevo }: { lista: Contr
             <tr>
               <th className="px-3 py-2">Proveedor</th>
               <th className="px-3 py-2">RFC</th>
+              <th className="px-3 py-2">Cuenta</th>
+              <th className="px-3 py-2">CLABE</th>
               <th className="px-3 py-2 text-right">Órdenes</th>
               <th className="px-3 py-2">Última</th>
               <th className="px-3 py-2">Ficha</th>
@@ -113,6 +115,8 @@ function ListaProveedores({ lista, cargando, onElegir, onNuevo }: { lista: Contr
               <tr key={c.nombre} onClick={() => onElegir(c.nombre)} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-3 py-2 font-medium text-slate-900">{c.nombre}</td>
                 <td className="px-3 py-2 font-mono text-xs text-slate-600">{c.rfc ?? ""}</td>
+                <td className="px-3 py-2 font-mono text-xs text-slate-600">{c.cuenta ?? ""}</td>
+                <td className="px-3 py-2 font-mono text-xs text-slate-600">{c.clabe ?? ""}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{c.veces || ""}</td>
                 <td className="px-3 py-2 text-xs text-slate-500">{fechaCortaCatalogo(c.ultima)}</td>
                 <td className="px-3 py-2 text-xs">{c.ficha ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800">con ficha</span> : <span className="text-slate-400">solo en órdenes</span>}</td>
@@ -120,7 +124,7 @@ function ListaProveedores({ lista, cargando, onElegir, onNuevo }: { lista: Contr
             ))}
             {!cargando && visibles.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-sm text-slate-400">
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-slate-400">
                   Sin coincidencias. Usa "+ Nuevo proveedor" para darlo de alta.
                 </td>
               </tr>
@@ -181,14 +185,6 @@ function DetalleProveedor({ nombre, items, onCerrar, onGuardado }: { nombre: str
           ← Proveedores
         </button>
         <h2 className="text-lg font-semibold text-slate-900">{nombre ?? "Nuevo proveedor"}</h2>
-        {ficha.data?.bancarios !== undefined && nombre && (
-          <span className="ml-2">
-            <DatosBancariosProveedor
-              key={ficha.data?.clave}
-              datos={{ clave: ficha.data?.clave ?? null, nombre, beneficiario_bancario: ficha.data?.bancarios?.beneficiario, banco_proveedor: ficha.data?.bancarios?.banco, clabe: ficha.data?.bancarios?.clabe, cuenta_proveedor: ficha.data?.bancarios?.cuenta, rfc_proveedor: ficha.data?.bancarios?.rfc, correo_proveedor: ficha.data?.bancarios?.correo }}
-            />
-          </span>
-        )}
       </div>
       {nombre && ficha.isLoading ? (
         <p className="text-sm text-slate-500">Cargando…</p>
@@ -198,10 +194,10 @@ function DetalleProveedor({ nombre, items, onCerrar, onGuardado }: { nombre: str
           nombreInicial={nombre}
           ficha={f}
           rfcSugerido={ficha.data?.bancarios?.rfc ?? null}
+          bancarios={ficha.data?.bancarios ?? null}
           soloConsulta={soloConsulta}
           onGuardado={(n) => {
-            queryClient.invalidateQueries({ queryKey: ["proveedor-ficha"] });
-            queryClient.invalidateQueries({ queryKey: ["ordenes-ia-catalogo"] });
+            for (const k of [["proveedor-ficha"], ["ordenes-ia-catalogo"], ["oc-pagos"], ["pagos-programados"], ["tesoreria"], ["v-pagos-programados"]]) queryClient.invalidateQueries({ queryKey: k });
             onGuardado(n);
           }}
         />
@@ -212,7 +208,17 @@ function DetalleProveedor({ nombre, items, onCerrar, onGuardado }: { nombre: str
   );
 }
 
-function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado }: { nombreInicial: string | null; ficha: Ficha | null; rfcSugerido: string | null; soloConsulta: boolean; onGuardado: (nombre: string) => void }) {
+interface BancariosFicha { beneficiario: string | null; banco: string | null; clabe: string | null; cuenta: string | null; rfc: string | null; correo: string | null }
+
+// Una sola ficha con UN RFC y los datos bancarios (Mario, 23-oct-2026: "agrégales
+// cuenta y CLABE"; Laura: "hay dos campos para RFC, que sea uno solo"). El RFC se
+// guarda en la ficha y la base lo copia a datos bancarios (y al revés), así que
+// Tesorería lo ve. Banco / cuenta / CLABE los capturan admin, corporativo y
+// dirección (RLS de proveedores_datos_bancarios); los demás solo los ven o no.
+function FormFicha({ nombreInicial, ficha, rfcSugerido, bancarios, soloConsulta, onGuardado }: { nombreInicial: string | null; ficha: Ficha | null; rfcSugerido: string | null; bancarios: BancariosFicha | null; soloConsulta: boolean; onGuardado: (nombre: string) => void }) {
+  const { perfil } = useAuth();
+  const veBancarios = !!perfil && ["admin", "corporativo", "direccion", "empresa"].includes(perfil.rol);
+  const editaBancarios = !soloConsulta && !!perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol);
   const [v, setV] = useState({
     nombre: ficha?.nombre ?? nombreInicial ?? "",
     rfc: ficha?.rfc ?? rfcSugerido ?? "",
@@ -223,6 +229,10 @@ function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado
     giro: ficha?.giro ?? "",
     notas: ficha?.notas ?? "",
     activo: ficha?.activo ?? true,
+    banco: bancarios?.banco ?? "",
+    cuenta: bancarios?.cuenta ?? "",
+    clabe: bancarios?.clabe ?? "",
+    beneficiario: bancarios?.beneficiario ?? "",
   });
   const [aviso, setAviso] = useState<string | null>(null);
   const guardar = useMutation({
@@ -230,9 +240,37 @@ function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado
       if (!v.nombre.trim()) throw new Error("Escribe el nombre del proveedor.");
       const rfc = v.rfc.trim().toUpperCase();
       if (rfc && !/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(rfc)) throw new Error("El RFC no tiene el formato correcto (12 o 13 caracteres).");
+      const clabe = v.clabe.replace(/\s/g, "");
+      if (editaBancarios && clabe && !clabeValida(clabe)) throw new Error("La CLABE debe tener 18 dígitos y un dígito verificador correcto.");
+      const cuenta = v.cuenta.replace(/\s/g, "");
+      if (editaBancarios && cuenta && !/^\d{6,20}$/.test(cuenta)) throw new Error("La cuenta lleva solo dígitos (6 a 20).");
       const fila = { nombre: v.nombre.trim(), rfc: rfc || null, domicilio: v.domicilio.trim() || null, contacto: v.contacto.trim() || null, telefono: v.telefono.trim() || null, correo: v.correo.trim() || null, giro: v.giro.trim() || null, notas: v.notas.trim() || null, activo: v.activo };
       const { error } = ficha ? await supabase.from("proveedores").update(fila).eq("id", ficha.id) : await supabase.from("proveedores").insert(fila);
       if (error) throw new Error(/duplicate key|unique/i.test(error.message) ? "Ya existe un proveedor con ese nombre en el catálogo." : error.message);
+      // Banco, cuenta y CLABE van a datos bancarios (misma clave que la ficha);
+      // el RFC va en los dos lados para que Tesorería lo vea.
+      const hayBancarios = !!(v.banco.trim() || cuenta || clabe || v.beneficiario.trim());
+      if (editaBancarios && (hayBancarios || bancarios)) {
+        const { data: clave, error: eClave } = await supabase.rpc("fn_proveedor_clave", { p_nombre: fila.nombre });
+        if (eClave) throw eClave;
+        const { error: eB } = await supabase.from("proveedores_datos_bancarios").upsert(
+          {
+            clave: clave as string,
+            nombre: fila.nombre,
+            beneficiario: v.beneficiario.trim() || null,
+            banco: v.banco.trim() || null,
+            clabe: clabe || null,
+            cuenta: cuenta || null,
+            rfc: rfc || bancarios?.rfc || null,
+            correo: bancarios?.correo ?? fila.correo,
+            origen: "captura",
+            updated_by: perfil?.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "clave" },
+        );
+        if (eB) throw eB;
+      }
       return fila.nombre;
     },
     onSuccess: (n) => {
@@ -262,6 +300,29 @@ function FormFicha({ nombreInicial, ficha, rfcSugerido, soloConsulta, onGuardado
           <input type="checkbox" checked={v.activo} onChange={(e) => setV({ ...v, activo: e.target.checked })} disabled={soloConsulta} /> Activo (sale en el buscador)
         </label>
         {input("notas", "Notas", "sm:col-span-2 lg:col-span-4")}
+        {veBancarios && (
+          <>
+            <p className="sm:col-span-2 lg:col-span-4 mt-1 border-t border-slate-100 pt-2 text-xs font-semibold text-slate-700">
+              Datos bancarios para pagarle{!editaBancarios && <span className="font-normal text-slate-500"> (los capturan dirección, corporativo o el administrador)</span>}
+            </p>
+            <label className="text-xs text-slate-600">
+              Banco
+              <input value={v.banco} onChange={(e) => setV({ ...v, banco: e.target.value })} disabled={!editaBancarios} className={`mt-1 ${campo}`} />
+            </label>
+            <label className="text-xs text-slate-600">
+              Cuenta
+              <input value={v.cuenta} onChange={(e) => setV({ ...v, cuenta: e.target.value })} disabled={!editaBancarios} inputMode="numeric" className={`mt-1 ${campo} font-mono`} />
+            </label>
+            <label className="text-xs text-slate-600">
+              CLABE interbancaria (18 dígitos)
+              <input value={v.clabe} onChange={(e) => setV({ ...v, clabe: e.target.value })} disabled={!editaBancarios} inputMode="numeric" className={`mt-1 ${campo} font-mono`} />
+            </label>
+            <label className="text-xs text-slate-600">
+              Beneficiario (si es distinto al nombre)
+              <input value={v.beneficiario} onChange={(e) => setV({ ...v, beneficiario: e.target.value })} disabled={!editaBancarios} className={`mt-1 ${campo}`} />
+            </label>
+          </>
+        )}
       </div>
       {!soloConsulta && (
         <div className="mt-3 flex items-center gap-3">
