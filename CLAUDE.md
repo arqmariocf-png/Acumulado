@@ -265,6 +265,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   con la suma; `fn_movimiento_ligar_factura` (una) ahora la llama
   (`20261023090000`). Leer folios de ese texto con `foliosDeFactura`
   (`lib/ligarFactura.ts`). Probado como Laura en rollback.
+  **Hasta 200 facturas (23-oct-2026, Allison: "que me deje seleccionar más
+  de 20 facturas"; un depósito de $430,000 cubría 42; Mario: "Claro")**: el
+  tope de `fn_movimiento_ligar_facturas` subió de 20 a 200
+  (`20261023210000`); la pantalla no tenía tope propio, solo mostraba el error
+  de la función. FACTURA y observación son `text`; la lista la recorta con
+  `truncate` y el texto completo va en `title`.
   **Botón "No lleva factura" (7-oct-2026, Mario: "sí")** en Movimientos
   (admin/dirección/corporativo; `components/MarcarSinFactura.tsx`,
   `lib/sinFactura.ts` con pruebas): motivo de la lista de reglas u otro, y
