@@ -67,8 +67,9 @@ export function AvanceFinanciero() {
       },
       { replace: true },
     );
-  const [filtro, setFiltro] = useState<FiltroAvance>(FILTRO_INICIAL);
-  const [elegida, setElegida] = useState<string | null>(null);
+  // Desde el resumen de la obra (23-oct-2026): ?obra=<id>&empresa=<id> llega con esa obra abierta.
+  const [filtro, setFiltro] = useState<FiltroAvance>({ ...FILTRO_INICIAL, obraId: params.get("obra") || null, empresaId: params.get("empresa") || null });
+  const [elegida, setElegida] = useState<string | null>(params.get("obra") || null);
   const puedeCapturar = !soloConsulta && !!perfil && ["admin", "direccion", "empresa"].includes(perfil.rol);
 
   const datos = useQuery({

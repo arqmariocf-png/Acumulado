@@ -2071,6 +2071,32 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `lib/descargarArchivo.ts` (`descargarBlob` / `descargarCsv` /
   `descargarTexto`: anchor en el body, clic, liberar al minuto). **Descarga
   nueva → ese helper, nunca `a.click()` suelto.**
+- **Buscador en todos los menús (23-oct-2026, Mario: "en todos los menús
+  ponles una opción de buscador para llegar más rápido a la información
+  requerida")**: `components/BuscadorMenu.tsx` en el Layout (Ctrl+K / ⌘K / "/"
+  fuera de un campo; botón "🔍 Buscar" en el encabezado, primera opción de cada
+  desplegable y pastilla en la barra de la sección; `abrirBuscador()` dispara
+  el evento `acumulado:buscar`). Índice = `seccionesPara` de la persona
+  (pantallas y sus pestañas `niveles`) + obras activas (`proyectos`, RLS);
+  `lib/buscadorMenu.ts` (con pruebas): sin acentos, palabras en cualquier
+  orden, nombre > camino > descripción > uso. **Opción nueva en `SECCIONES` →
+  entra sola al buscador.**
+- **Hipervínculos del resumen físico-financiero (23-oct-2026, Mario: "genera
+  los hipervínculos para poder ver cada gráfica y cada gasto que incluye, al
+  igual de irnos a los presupuestos y avances en un solo clic")**: en la pestaña
+  de la obra (`ResumenObra.tsx`) tarjetas y barras ligan a su pestaña
+  (`?tab=avance|control|precios`), a `/requisiciones?obra=<id>` (filtro nuevo
+  con aviso) y a `/finanzas/avance-financiero?obra=<id>&empresa=<id>[&vista=]`
+  (lee los params y abre esa obra); la sección "Órdenes de compra y de
+  servicio" (`#gastos`) lista cada OC/OS de la obra con `fn_obra_ordenes(obra)`
+  (mismo cruce por nombre que `fn_obra_gasto_backoffice`; 101 OC de Parque Real
+  63 en 0.6 s; `20261023120000`) con "Ver orden" y liga a
+  `/ordenes?tipo=OC&buscar=<obra>&backoffice=1` (Órdenes lee `buscar` y
+  `backoffice`); `#mano-obra` liga a `/rh/mano-de-obra`; `#controles` al control
+  de obra. En el resumen de todas las obras (`ResumenObrasDirector.tsx`) las
+  barras y cifras ligan a lo mismo (físico → tablero, financiero → avance
+  financiero, presupuesto → control o "capturar", ejercido → `#gastos`,
+  disponible → por mes, desfase → resumen de la obra).
 - **Recursos humanos como grupo (22-oct-2026, Mario: "la parte de nómina es
   realmente recursos humanos"; "entré con Eréndira y no tiene el tablero")**:
   el grupo del menú "Nómina y mano de obra" se llama **Recursos humanos** (la
