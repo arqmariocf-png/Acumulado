@@ -255,6 +255,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   difiere o la factura ya estaba en otro movimiento (`20261021240000`).
   Probado como Laura en rollback (liga, cambia, rechaza emitida en un cargo;
   Alma bloqueada).
+  **Varias facturas en un movimiento (23-oct-2026, Mario: "en conciliación
+  bancaria habilita que se elija más de una factura para conciliar")**: en
+  el mismo panel cada factura trae casilla; arriba "N facturas · suman $X ·
+  movimiento $Y · cuadra/diferencia" (±$1, `resumenSeleccion`) y "Conciliar
+  con estas N facturas"; el botón del renglón es "Solo esta".
+  `fn_movimiento_ligar_facturas(mov, cfdis[])` (definer, 1-20, mismas reglas)
+  deja FACTURA = **"FM- <folio1>, <folio2>, …"** (por fecha) y la observación
+  con la suma; `fn_movimiento_ligar_factura` (una) ahora la llama
+  (`20261023090000`). Leer folios de ese texto con `foliosDeFactura`
+  (`lib/ligarFactura.ts`). Probado como Laura en rollback.
   **Botón "No lleva factura" (7-oct-2026, Mario: "sí")** en Movimientos
   (admin/dirección/corporativo; `components/MarcarSinFactura.tsx`,
   `lib/sinFactura.ts` con pruebas): motivo de la lista de reglas u otro, y

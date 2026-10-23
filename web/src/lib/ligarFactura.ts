@@ -94,3 +94,25 @@ export function folioDeFactura(factura: string | null | undefined): string | nul
   const m = /^FM?- (.+)$/.exec(factura ?? "");
   return m ? m[1].trim() : null;
 }
+
+/** Folios de una factura con una o varias ("FM- A, B, C" → ["A", "B", "C"]). */
+export function foliosDeFactura(factura: string | null | undefined): string[] {
+  const texto = folioDeFactura(factura);
+  if (!texto) return [];
+  return texto
+    .split(",")
+    .map((f) => f.trim())
+    .filter(Boolean);
+}
+
+/** Suma de las facturas elegidas contra el monto del movimiento (±$1 cuadra). */
+export function resumenSeleccion(monto: number | null, totales: (number | null)[]): { n: number; suma: number; diferencia: number | null; cuadra: boolean } {
+  const suma = Math.round(totales.reduce<number>((s, t) => s + (Number(t) || 0), 0) * 100) / 100;
+  const diferencia = monto == null ? null : Math.round((monto - suma) * 100) / 100;
+  return { n: totales.length, suma, diferencia, cuadra: diferencia != null && Math.abs(diferencia) <= TOLERANCIA };
+}
+
+/** Texto seguro para buscar un folio dentro de la columna factura con ilike. */
+export function folioParaBuscar(folio: string): string {
+  return folio.replace(/[%,()*_\\]/g, "").trim();
+}
