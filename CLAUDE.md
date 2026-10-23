@@ -2061,8 +2061,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `Array.prototype.at` (`lib/enlaces.ts`). **Regla: nada de lookbehind en regex
   ni `.at()` en `web/src`** (el build no los transpila). El resto (modo de
   impresión por dispositivo, renovación de sesión al volver a la pestaña,
-  marcas offline, visor `/archivo`) ya estaba resuelto; falta que Mario diga qué
-  pantalla y qué síntoma para seguir.
+  marcas offline, visor `/archivo`) ya estaba resuelto.
+  **El Excel no bajaba en Safari (23-oct, Mario: "el descargable de Excel de
+  Laura no está listo")**: Laura lo intentó 2 veces en Safari 26 y luego en
+  Chrome (logs 16:36-16:40). Safari no descarga si el `<a>` no está en el
+  documento o si la liga blob se libera al instante. Ahora TODAS las descargas
+  (16 pantallas: OV/OC, base de OC, hoja de pagos, checador, deuda, plan, CxP,
+  comedor, agenda y mano de obra xlsx, saldos PDF, contratos Word…) pasan por
+  `lib/descargarArchivo.ts` (`descargarBlob` / `descargarCsv` /
+  `descargarTexto`: anchor en el body, clic, liberar al minuto). **Descarga
+  nueva → ese helper, nunca `a.click()` suelto.**
 - **Recursos humanos como grupo (22-oct-2026, Mario: "la parte de nómina es
   realmente recursos humanos"; "entré con Eréndira y no tiene el tablero")**:
   el grupo del menú "Nómina y mano de obra" se llama **Recursos humanos** (la

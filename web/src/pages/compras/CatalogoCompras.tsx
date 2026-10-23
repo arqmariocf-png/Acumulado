@@ -9,6 +9,7 @@ import { csvHistorico, resumenPorConcepto, totalesHistorico, type CompraHistoric
 import { etiquetaCategoria, sugerirItems } from "../../lib/catalogoItems";
 import { normalizarBusqueda } from "../../lib/buscadorCaptura";
 import { useItemsCompra } from "./useItemsCompra";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 const dinero = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }));
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -482,12 +483,7 @@ function HistoricoCostos({ nombre, proveedorId, soloConsulta }: { nombre: string
   });
 
   function descargar() {
-    const url = URL.createObjectURL(new Blob([csvHistorico(nombre, hist.data ?? [])], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `historico-costos-${nombre.replace(/[^\w]+/g, "-").slice(0, 40)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarCsv(`historico-costos-${nombre.replace(/[^\w]+/g, "-").slice(0, 40)}.csv`, csvHistorico(nombre, hist.data ?? []));
   }
 
   return (

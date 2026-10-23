@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
+import { descargarBlob } from "../lib/descargarArchivo";
 
 /** Descarga el PDF de reporte-saldos-diario -- a diferencia del resto de
  * funciones de este proyecto (que devuelven JSON), esta responde el PDF
@@ -25,15 +26,7 @@ async function descargarReporte(): Promise<void> {
   }
 
   const blob = await respuesta.blob();
-  const url = URL.createObjectURL(blob);
-  const nombreArchivo = respuesta.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "grupo-loma-saldos.pdf";
-  const enlace = document.createElement("a");
-  enlace.href = url;
-  enlace.download = nombreArchivo;
-  document.body.appendChild(enlace);
-  enlace.click();
-  enlace.remove();
-  URL.revokeObjectURL(url);
+  descargarBlob(blob, respuesta.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "grupo-loma-saldos.pdf");
 }
 
 export function SaldosDiarios() {

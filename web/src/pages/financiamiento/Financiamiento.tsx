@@ -17,6 +17,7 @@ import {
   type ConfigFinanciamiento,
   type FactoresEstudio,
 } from "../../lib/cuentaNomina";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 // Cuentas de nómina y financiamiento a trabajadores (18-oct-2026, Mario: "por
 // antigüedad y por buen comportamiento y pago daremos financiamiento estilo
@@ -633,12 +634,7 @@ function Descuentos() {
     const filas = [["Empresa", "Trabajador", "Concepto", "Descuento", "Saldo después"]];
     for (const c of porAplicar) filas.push([c.empresa ?? "", c.trabajador_nombre ?? "", c.concepto, c.siguiente_descuento.toFixed(2), (c.saldo - c.siguiente_descuento).toFixed(2)]);
     const texto = filas.map((f) => f.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob(["﻿" + texto], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `descuentos-nomina-${fecha}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarCsv(`descuentos-nomina-${fecha}.csv`, texto);
   }
 
   return (

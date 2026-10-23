@@ -27,6 +27,7 @@ import {
   type TipoCredito,
 } from "../../lib/deudaFinanciera";
 import { tablaDesdeCsv } from "../../lib/importarBancarios";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 // Deuda financiera del grupo (21-oct-2026, Mario: "crear un módulo de deuda
 // financiera para subir los préstamos", y después el diseño con Resumen /
@@ -122,12 +123,7 @@ function hoyIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function descargar(nombre: string, texto: string) {
-  const url = URL.createObjectURL(new Blob(["﻿" + texto], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  URL.revokeObjectURL(url);
+  descargarCsv(nombre, texto);
 }
 function csv(filas: (string | number)[][]): string {
   return filas.map((v) => v.map((x) => (/[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : String(x))).join(",")).join("\n");

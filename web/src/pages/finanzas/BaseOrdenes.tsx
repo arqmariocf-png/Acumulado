@@ -7,6 +7,7 @@ import { ETIQUETA_ETAPA_OC, etapaOc, ordenarOcs, saldoOc, type EtapaOc } from ".
 import { rutaVerArchivo } from "../../lib/verArchivo";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import type { OcPago } from "./OrdenesPorPagar";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 // Base de órdenes de compra (Mario con Laura, 6-oct-2026: "base de datos en
 // donde salga OC · proveedor · fecha · estatus · detalle · comprobante"). Las
@@ -103,12 +104,7 @@ export function BaseOrdenes({ desde, hasta, empresaId, nombreEmpresa }: { desde:
         .map((v) => celda(String(v)))
         .join(","),
     );
-    const url = URL.createObjectURL(new Blob(["﻿" + [enc.join(","), ...lineas].join("\n")], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ordenes-${desde}-a-${hasta}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    descargarCsv(`ordenes-${desde}-a-${hasta}.csv`, [enc.join(","), ...lineas].join("\n"));
   }
 
   return (

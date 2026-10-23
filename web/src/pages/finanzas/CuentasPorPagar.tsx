@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { moneda } from "../../lib/saldosEmpresas";
 import { csvCxp, deudaCxp, filtrarYOrdenar, llaveCxp, semaforoCredito, totalesCxp, type ColorCredito, type FilaCxp, type FiltroLinea, type OrdenCxp } from "../../lib/cuentasPorPagar";
+import { descargarCsv as bajarCsv } from "../../lib/descargarArchivo";
 
 const PUNTO: Record<ColorCredito, string> = {
   gris: "bg-slate-300",
@@ -66,12 +67,7 @@ export function CuentasPorPagar() {
 
   function descargarCsv() {
     const csv = csvCxp(lista, (id) => nombreEmpresa.get(id) ?? "");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `cuentas-por-pagar-${filtroLinea}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    bajarCsv(`cuentas-por-pagar-${filtroLinea}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   }
 
   return (

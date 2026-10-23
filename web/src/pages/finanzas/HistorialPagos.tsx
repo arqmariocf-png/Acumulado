@@ -9,6 +9,7 @@ import { ComprobantePago } from "../../components/ComprobantePago";
 import { BaseOrdenes } from "./BaseOrdenes";
 import { normalizarTexto } from "../../lib/cuentasPorPagar";
 import { agruparPorDia, csvHistorial, moverRango, rangoAtajo, totalesHistorial, type AtajoRango, type PagoHistorial } from "../../lib/historialPagos";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 // Historial de pagos y comprobantes (Mario, 6-oct-2026: "revisar otras
 // semanas y otros días de comprobantes y consultarlas en el pasado"). Lee
@@ -109,12 +110,7 @@ export function HistorialPagos() {
   const tot = useMemo(() => totalesHistorial(filtrados), [filtrados]);
 
   function descargar() {
-    const url = URL.createObjectURL(new Blob([csvHistorial(filtrados)], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pagos-${rango.desde}-a-${rango.hasta}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    descargarCsv(`pagos-${rango.desde}-a-${rango.hasta}.csv`, csvHistorial(filtrados));
   }
 
   return (
