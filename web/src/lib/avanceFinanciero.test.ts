@@ -99,3 +99,16 @@ test("sin presupuesto por categoría vale el de los controles de obra (igual que
   assert.equal(anio.obraTotal.presupuesto, 500);
   assert.equal(calcularAvance(obras, real, pres, { ...FILTRO_INICIAL, categoria: "materiales" }).porObra.find((x) => x.obra.id === "b")!.presupuesto, 0);
 });
+
+test("el físico que manda es el del resumen de la obra (fisico_pct), si viene", () => {
+  const obras: ObraAvance[] = [
+    { id: "a", nombre: "A", empresa_id: "csc", empresa_codigo: "CSC", tareas: 10, hechas: 5, fisico_pct: 72.26 },
+    { id: "b", nombre: "B", empresa_id: "csc", empresa_codigo: "CSC", tareas: 10, hechas: 5, fisico_pct: null },
+    { id: "c", nombre: "C", empresa_id: "csc", empresa_codigo: "CSC", tareas: 10, hechas: 5 },
+  ];
+  const real: RealMes[] = ["a", "b", "c"].map((id) => ({ proyecto_id: id, mes: "2026-01", categoria: "materiales", real: 100, pagado: 0 }));
+  const r = calcularAvance(obras, real, [], FILTRO_INICIAL);
+  assert.equal(r.porObra.find((x) => x.obra.id === "a")!.fisicoPct, 72.3);
+  assert.equal(r.porObra.find((x) => x.obra.id === "b")!.fisicoPct, null);
+  assert.equal(r.porObra.find((x) => x.obra.id === "c")!.fisicoPct, 50);
+});

@@ -31,6 +31,10 @@ export interface ObraAvance {
    * no tiene presupuesto capturado por categoría, igual que el resumen
    * físico-financiero de Operación. */
   presupuesto_control?: number;
+  /** Avance físico ya calculado con la fórmula del resumen de la obra
+   * (`avanceFisicoDe`: tareas + suministro + PU). Si viene, manda sobre
+   * tareas/hechas. null = sin nada que medir. */
+  fisico_pct?: number | null;
 }
 
 export interface RealMes {
@@ -265,7 +269,7 @@ export function calcularAvance(obras: ObraAvance[], real: RealMes[], presupuesto
     const t = todaObra.get(o.id);
     if (!t || (t.p <= 0 && Math.abs(t.r) < 0.01)) continue;
     const e = enPeriodo.get(o.id) ?? vacio();
-    const fisicoPct = o.tareas > 0 ? Math.round((o.hechas / o.tareas) * 1000) / 10 : null;
+    const fisicoPct = o.fisico_pct !== undefined ? (o.fisico_pct == null ? null : Math.round(o.fisico_pct * 10) / 10) : o.tareas > 0 ? Math.round((o.hechas / o.tareas) * 1000) / 10 : null;
     porObra.push({ ...totales(e.p, e.r, e.g), obra: o, fisicoPct, semaforo: semaforoObra(t.p, t.r, fisicoPct), obraTotal: totales(t.p, t.r, t.g) });
   }
   const orden: Record<Semaforo, number> = { rebasado: 0, desfase: 1, en_linea: 2, sin_presupuesto: 3 };

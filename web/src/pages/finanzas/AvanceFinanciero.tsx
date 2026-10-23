@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
+import { avanceFisicoDe, type DatosResumenObra } from "../../lib/resumenObra";
 import { useAuth } from "../../lib/auth";
 import {
   CATEGORIAS_OBRA,
@@ -77,8 +78,15 @@ export function AvanceFinanciero() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc("fn_avance_financiero");
       if (error) throw error;
-      const d = (data ?? {}) as { obras?: ObraAvance[]; real?: RealMes[] };
-      return { obras: d.obras ?? [], real: (d.real ?? []).map((r) => ({ ...r, real: Number(r.real) || 0, pagado: Number(r.pagado) || 0 })) };
+      type ObraCruda = ObraAvance & { requisiciones?: DatosResumenObra["requisiciones"]; pu?: DatosResumenObra["pu"] };
+      const d = (data ?? {}) as { obras?: ObraCruda[]; real?: RealMes[] };
+      // El físico se calcula con la MISMA fórmula que el resumen físico-financiero
+      // de la obra (tareas + suministro de requerimientos + precios unitarios).
+      const obras: ObraAvance[] = (d.obras ?? []).map((o) => ({
+        ...o,
+        fisico_pct: avanceFisicoDe({ tarjetas: o.tareas, hechas: o.hechas, requisiciones: o.requisiciones ?? [], pu: o.pu ?? [] }).avanceFisico,
+      }));
+      return { obras, real: (d.real ?? []).map((r) => ({ ...r, real: Number(r.real) || 0, pagado: Number(r.pagado) || 0 })) };
     },
   });
   const presupuestos = useQuery({
@@ -111,7 +119,7 @@ export function AvanceFinanciero() {
           <p className="text-xs text-slate-500">Finanzas / Presupuestos</p>
           <h1 className="text-2xl font-semibold text-slate-900">Avance financiero de obras</h1>
           <p className="max-w-3xl text-sm text-slate-500">
-            Presupuesto contra real (OC, OS, mano de obra y compras del control de obra sin OC), lo pagado y lo pendiente de pago, por obra, empresa, periodo y categoría. Importes sin IVA; el mismo cálculo que el resumen físico-financiero de cada obra. Sin presupuesto por categoría vale el de los controles de obra. Lo real
+            Presupuesto contra real (OC, OS, mano de obra y compras del control de obra sin OC), lo pagado y lo pendiente de pago, por obra, empresa, periodo y categoría. Importes sin IVA; el mismo cálculo que el resumen físico-financiero de cada obra. Sin presupuesto por categoría vale el de los controles de obra. El avance físico es el del resumen de la obra: promedio de tareas hechas, suministro de requerimientos y precios unitarios. Lo real
             sale solo de lo que Acumulado registra; aquí solo se captura el presupuesto.
           </p>
         </div>
@@ -303,7 +311,7 @@ function FilaObraTabla({ o, abierta, onClick, detalle }: { o: Res["porObra"][num
             <span className="text-xs tabular-nums text-slate-600">{o.ejercidoPct != null ? `${o.ejercidoPct}%` : "—"}</span>
           </div>
         </td>
-        <td className="px-2 text-right text-xs tabular-nums text-slate-600">{o.fisicoPct != null ? `${o.fisicoPct}%` : "sin tareas"}</td>
+        <td className="px-2 text-right text-xs tabular-nums text-slate-600">{o.fisicoPct != null ? `${o.fisicoPct}%` : "sin avance"}</td>
         <td className="px-2">
           <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${SEMAFOROS[o.semaforo].clase}`}>{SEMAFOROS[o.semaforo].texto}</span>
         </td>
@@ -337,7 +345,7 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct }: { obraId: string
           {nombre} · por categoría
           <span className="ml-2 text-xs font-normal text-slate-500">
             toda la obra: {dinero(total.real)} de {dinero(total.presupuesto)}
-            {total.ejercidoPct != null ? ` (${total.ejercidoPct}%)` : ""} · físico {fisicoPct != null ? `${fisicoPct}%` : "sin tareas"}
+            {total.ejercidoPct != null ? ` (${total.ejercidoPct}%)` : ""} · físico {fisicoPct != null ? `${fisicoPct}%` : "sin avance"}
           </span>
         </p>
         <table className="w-full text-xs">

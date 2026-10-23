@@ -36,6 +36,25 @@ export interface ResumenObraCalculado {
   desfase: number | null;
 }
 
+/** Avance físico de una obra: promedio de tareas hechas, suministro de
+ * requerimientos y precios unitarios (los que existan). Es LA fórmula del
+ * físico: la usan el resumen de la obra, el de todas las obras y Finanzas ›
+ * Avance financiero (23-oct-2026, Mario: "el avance físico sigue sin
+ * coincidir"). */
+export function avanceFisicoDe(d: Pick<DatosResumenObra, "tarjetas" | "hechas" | "requisiciones" | "pu">): {
+  avanceTareas: number | null;
+  avanceSuministro: number | null;
+  avancePu: number | null;
+  avanceFisico: number | null;
+} {
+  const avanceTareas = d.tarjetas > 0 ? (100 * d.hechas) / d.tarjetas : null;
+  const avanceSuministro = avanceRequisiciones(d.requisiciones);
+  const avancePu = d.pu.length > 0 ? contarSemaforoPu(d.pu).avance_pct : null;
+  const fisicos = [avanceTareas, avanceSuministro, avancePu].filter((x): x is number => x !== null);
+  const avanceFisico = fisicos.length > 0 ? fisicos.reduce((s, x) => s + x, 0) / fisicos.length : null;
+  return { avanceTareas, avanceSuministro, avancePu, avanceFisico };
+}
+
 export function calcularResumenObra(d: DatosResumenObra): ResumenObraCalculado {
   const oc = d.oc ?? 0;
   const manoObraApi = d.manoObra ?? 0;
@@ -43,11 +62,7 @@ export function calcularResumenObra(d: DatosResumenObra): ResumenObraCalculado {
   const ejercido = d.materiales + oc + manoObra;
   const disponible = d.presupuesto - ejercido;
   const avanceFinanciero = d.presupuesto > 0 ? (100 * ejercido) / d.presupuesto : null;
-  const avanceTareas = d.tarjetas > 0 ? (100 * d.hechas) / d.tarjetas : null;
-  const avanceSuministro = avanceRequisiciones(d.requisiciones);
-  const avancePu = d.pu.length > 0 ? contarSemaforoPu(d.pu).avance_pct : null;
-  const fisicos = [avanceTareas, avanceSuministro, avancePu].filter((x): x is number => x !== null);
-  const avanceFisico = fisicos.length > 0 ? fisicos.reduce((s, x) => s + x, 0) / fisicos.length : null;
+  const { avanceTareas, avanceSuministro, avancePu, avanceFisico } = avanceFisicoDe(d);
   const desfase = avanceFisico !== null && avanceFinanciero !== null ? avanceFinanciero - avanceFisico : null;
   const desglose = { compras: d.materiales, oc, manoObra, manoObraDe: manoObraApi > 0 ? ("api" as const) : ("captura" as const) };
   return { ejercido, desglose, disponible, avanceFinanciero, avanceTareas, avanceSuministro, avancePu, avanceFisico, desfase };

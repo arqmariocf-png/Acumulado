@@ -2931,3 +2931,15 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   editor `DatosBancariosProveedor` del encabezado de esa pantalla (sigue en OC y
   pagos). Probado en rollback: Alma da de alta con RFC → bancarios lo recibe;
   Laura cambia el RFC bancario → la ficha lo toma.
+- **Avance físico unificado (23-oct-2026, Mario: "el avance físico sigue sin
+  coincidir")**: Finanzas › Avance financiero medía el físico solo con tareas
+  hechas; Operación (resumen de la obra y de todas) con el promedio de tareas,
+  suministro de requerimientos y precios unitarios. Ahora la fórmula vive una
+  sola vez en `avanceFisicoDe` (`lib/resumenObra.ts`; `calcularResumenObra` la
+  usa) y `fn_avance_financiero()` devuelve por obra `requisiciones` y `pu`
+  (igual que `fn_resumen_obras_director`) para que la pantalla de Finanzas la
+  aplique (`ObraAvance.fisico_pct`; con prueba) (`20261023200000`). Verificado
+  como Laura: 54 obras con los mismos insumos en las dos. El backoffice no
+  expone ningún avance físico (probados api_proyectos/_project/_projects/
+  _avance/_avances/_avance_fisico/_estimaciones/_estim/_obras/_avance_obra_aut
+  → 404): el físico sale solo de Acumulado.
