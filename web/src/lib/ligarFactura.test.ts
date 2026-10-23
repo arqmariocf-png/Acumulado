@@ -5,6 +5,9 @@ import {
   esFolioFiscal,
   filtrarFacturas,
   folioDeFactura,
+  folioParaBuscar,
+  foliosDeFactura,
+  resumenSeleccion,
   ordenarFacturas,
   puedeLigarFactura,
   terminoBusqueda,
@@ -73,4 +76,18 @@ test("folioDeFactura lee el folio de F- y FM-", () => {
   assert.equal(folioDeFactura("FM- ABC-1"), "ABC-1");
   assert.equal(folioDeFactura("F- 99"), "99");
   assert.equal(folioDeFactura("N/A - X"), null);
+});
+
+test("varias facturas en un movimiento", () => {
+  assert.deepEqual(foliosDeFactura("FM- AAA-1, BBB-2,CCC-3"), ["AAA-1", "BBB-2", "CCC-3"]);
+  assert.deepEqual(foliosDeFactura("F- UNO"), ["UNO"]);
+  assert.deepEqual(foliosDeFactura("N/A - COMISION"), []);
+  const r = resumenSeleccion(3000, [1000, 1999.5]);
+  assert.equal(r.n, 2);
+  assert.equal(r.suma, 2999.5);
+  assert.equal(r.diferencia, 0.5);
+  assert.equal(r.cuadra, true);
+  assert.equal(resumenSeleccion(3000, [1000]).cuadra, false);
+  assert.equal(resumenSeleccion(null, [1000]).diferencia, null);
+  assert.equal(folioParaBuscar("A1,(B)%"), "A1B");
 });

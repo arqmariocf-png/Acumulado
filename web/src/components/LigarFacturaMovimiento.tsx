@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
-import { filtrarFacturas, folioDeFactura, ordenarFacturas, terminoBusqueda, type FacturaCandidata } from "../lib/ligarFactura";
+import { filtrarFacturas, folioParaBuscar, foliosDeFactura, ordenarFacturas, resumenSeleccion, terminoBusqueda, type FacturaCandidata } from "../lib/ligarFactura";
 
 // Panel para elegir la factura (CFDI) de un movimiento por número de factura o
 // folio fiscal (Mario, 21-oct-2026), como el de ligar OC/OS/OV. Cargo → CFDI
-// recibidos, abono → emitidos, de la misma empresa. Al elegir,
-// fn_movimiento_ligar_factura deja FACTURA "FM- <folio>" y lo concilia.
+// recibidos, abono → emitidos, de la misma empresa. Se puede elegir una o
+// varias (23-oct-2026, Mario: un pago que cubre varias facturas):
+// fn_movimiento_ligar_facturas deja FACTURA "FM- <folio1>, <folio2>…" y lo
+// concilia.
 
 interface Props {
   movimiento: {
@@ -50,7 +52,8 @@ export function LigarFacturaMovimiento({ movimiento, onListo, onCancelar }: Prop
   const esCargo = movimiento.cargo_total != null;
   const tipoCfdi = esCargo ? "recibido" : "emitido";
   const monto = movimiento.cargo_total ?? movimiento.abono_total;
-  const actual = folioDeFactura(movimiento.factura);
+  const actuales = foliosDeFactura(movimiento.factura);
+  const [seleccion, setSeleccion] = useState<Map<string, FacturaCandidata>>(new Map());
   const [texto, setTexto] = useState("");
   const [buscar, setBuscar] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -108,43 +111,56 @@ export function LigarFacturaMovimiento({ movimiento, onListo, onCancelar }: Prop
     queryKey: ["ligar-factura-usadas", movimiento.empresa_id, folios.join(",")],
     enabled: folios.length > 0,
     queryFn: async () => {
-      const valores = folios.flatMap((fo) => [`F- ${fo}`, `FM- ${fo}`]);
+      // La factura de un movimiento puede traer varios folios ("FM- A, B").
+      const filtros = folios.map(folioParaBuscar).filter(Boolean).map((fo) => `factura.ilike.%${fo}%`);
       const { data, error } = await supabase
         .from("movimientos")
         .select("id, factura")
         .eq("empresa_id", movimiento.empresa_id)
-        .in("factura", valores)
+        .or(filtros.join(","))
         .neq("id", movimiento.id);
       if (error) throw error;
       const cuenta = new Map<string, number>();
       for (const m of data ?? []) {
-        const fo = folioDeFactura(m.factura);
-        if (fo) cuenta.set(fo, (cuenta.get(fo) ?? 0) + 1);
+        for (const fo of foliosDeFactura(m.factura)) {
+          if (folios.includes(fo)) cuenta.set(fo, (cuenta.get(fo) ?? 0) + 1);
+        }
       }
       return cuenta;
     },
   });
 
   const ligar = useMutation({
-    mutationFn: async (f: FacturaCandidata) => {
-      const { data, error } = await supabase.rpc("fn_movimiento_ligar_factura", {
+    mutationFn: async (ids: string[]) => {
+      const { data, error } = await supabase.rpc("fn_movimiento_ligar_facturas", {
         p_movimiento: movimiento.id,
-        p_cfdi: f.id,
+        p_cfdis: ids,
       });
       if (error) throw error;
-      return data as { folio: string; contraparte: string | null; total: number | null; otros_movimientos: number };
+      return data as { folios: string[]; contraparte: string | null; total: number | null; facturas: number; otros_movimientos: number };
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["movimientos"] });
       const diferencia = monto != null && r.total != null && Math.abs(Number(r.total) - monto) > 1;
+      const varias = r.facturas > 1;
       onListo(
-        `Factura ${r.folio}${r.contraparte ? ` (${r.contraparte})` : ""} ligada: conciliado.` +
-          (diferencia ? ` Ojo: la factura es de ${moneda(Number(r.total))} y el movimiento de ${moneda(monto)}.` : "") +
-          (r.otros_movimientos > 0 ? ` Esa factura ya estaba en ${r.otros_movimientos} movimiento(s) más.` : ""),
+        (varias ? `${r.facturas} facturas (${r.folios.join(", ")}) por ${moneda(Number(r.total))}` : `Factura ${r.folios[0]}`) +
+          `${r.contraparte ? ` (${r.contraparte})` : ""} ligada${varias ? "s" : ""}: conciliado.` +
+          (diferencia ? ` Ojo: ${varias ? "suman" : "la factura es de"} ${moneda(Number(r.total))} y el movimiento es de ${moneda(monto)}.` : "") +
+          (r.otros_movimientos > 0 ? ` ${varias ? "Alguna ya estaba" : "Esa factura ya estaba"} en ${r.otros_movimientos} movimiento(s) más.` : ""),
       );
     },
     onError: (e: Error) => setError(e.message),
   });
+  const elegidas = [...seleccion.values()];
+  const resumen = resumenSeleccion(monto, elegidas.map((f) => f.total));
+  const alternar = (f: FacturaCandidata) =>
+    setSeleccion((s) => {
+      const n = new Map(s);
+      if (n.has(f.id)) n.delete(f.id);
+      else n.set(f.id, f);
+      return n;
+    });
 
   return (
     <div className="rounded bg-violet-50 p-3 text-sm">
@@ -176,10 +192,45 @@ export function LigarFacturaMovimiento({ movimiento, onListo, onCancelar }: Prop
           Cancelar
         </button>
         <span className="text-xs text-slate-500">
-          {esCargo ? "Cargo" : "Abono"} de {moneda(monto)} · facturas {esCargo ? "recibidas" : "emitidas"} de esta empresa; primero las del mismo monto
+          {esCargo ? "Cargo" : "Abono"} de {moneda(monto)} · facturas {esCargo ? "recibidas" : "emitidas"} de esta empresa; primero las del mismo monto.
+          Si el pago cubre varias, márcalas con la casilla.
         </span>
       </div>
-      {actual && <p className="mb-2 text-xs text-slate-600">Factura actual: {actual}</p>}
+      {actuales.length > 0 && (
+        <p className="mb-2 text-xs text-slate-600">
+          {actuales.length > 1 ? "Facturas actuales" : "Factura actual"}: {actuales.join(", ")}
+        </p>
+      )}
+      {elegidas.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-violet-200 bg-white px-2 py-1.5 text-xs">
+          <span className="font-medium text-slate-800">
+            {elegidas.length} factura{elegidas.length > 1 ? "s" : ""} · suman {moneda(resumen.suma)}
+          </span>
+          <span className="text-slate-600">movimiento {moneda(monto)}</span>
+          {resumen.diferencia != null && (
+            <span className={resumen.cuadra ? "font-medium text-emerald-700" : "font-medium text-amber-700"}>
+              {resumen.cuadra ? "cuadra" : `diferencia ${moneda(resumen.diferencia)}`}
+            </span>
+          )}
+          <button
+            type="button"
+            disabled={ligar.isPending}
+            onClick={() => {
+              setError(null);
+              ligar.mutate(elegidas.map((f) => f.id));
+            }}
+            className="rounded bg-violet-700 px-2 py-1 font-medium text-white disabled:opacity-50"
+          >
+            {ligar.isPending ? "Conciliando…" : `Conciliar con ${elegidas.length > 1 ? `estas ${elegidas.length} facturas` : "esta factura"}`}
+          </button>
+          <button type="button" onClick={() => setSeleccion(new Map())} className="text-slate-500 underline">
+            quitar selección
+          </button>
+          {elegidas.some((f) => !lista.some((x) => x.id === f.id)) && (
+            <span className="text-slate-500">(incluye facturas de otra búsqueda: {elegidas.filter((f) => !lista.some((x) => x.id === f.id)).map((f) => f.folio).join(", ")})</span>
+          )}
+        </div>
+      )}
       {error && <p className="mb-2 text-xs text-red-700">{error}</p>}
       {errorCarga && <p className="mb-2 text-xs text-red-700">No se pudieron cargar las facturas: {(errorCarga as Error).message}</p>}
       {isLoading ? (
@@ -193,6 +244,7 @@ export function LigarFacturaMovimiento({ movimiento, onListo, onCancelar }: Prop
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-slate-50 text-left uppercase text-slate-500">
               <tr>
+                <th className="w-6 px-2 py-1" title="Marca varias si un solo pago cubre varias facturas" />
                 <th className="px-2 py-1">Factura / folio fiscal</th>
                 <th className="px-2 py-1">{esCargo ? "Proveedor" : "Cliente"}</th>
                 <th className="px-2 py-1">Fecha</th>
@@ -204,7 +256,10 @@ export function LigarFacturaMovimiento({ movimiento, onListo, onCancelar }: Prop
               {lista.map((f) => {
                 const enOtros = usadas?.get(f.folio) ?? 0;
                 return (
-                  <tr key={f.id} className={`border-t border-slate-100 ${f.mismoMonto ? "bg-amber-50" : ""}`}>
+                  <tr key={f.id} className={`border-t border-slate-100 ${seleccion.has(f.id) ? "bg-violet-50" : f.mismoMonto ? "bg-amber-50" : ""}`}>
+                    <td className="px-2 py-1">
+                      <input type="checkbox" checked={seleccion.has(f.id)} onChange={() => alternar(f)} aria-label={`Elegir ${f.folio}`} />
+                    </td>
                     <td className="px-2 py-1 font-mono text-[11px]">
                       <span className="break-all">{f.folio}</span>
                       {f.mismoMonto && <span className="ml-1 rounded bg-amber-100 px-1 font-sans text-[10px] text-amber-800">mismo monto</span>}
@@ -213,7 +268,7 @@ export function LigarFacturaMovimiento({ movimiento, onListo, onCancelar }: Prop
                       {enOtros > 0 && (
                         <span className="ml-1 rounded bg-red-100 px-1 font-sans text-[10px] text-red-800">ya en {enOtros} movimiento(s)</span>
                       )}
-                      {f.folio === actual && <span className="ml-1 rounded bg-violet-100 px-1 font-sans text-[10px] text-violet-800">la actual</span>}
+                      {actuales.includes(f.folio) && <span className="ml-1 rounded bg-violet-100 px-1 font-sans text-[10px] text-violet-800">la actual</span>}
                     </td>
                     <td className="px-2 py-1">
                       {f.contraparte ?? "—"}
@@ -224,14 +279,15 @@ export function LigarFacturaMovimiento({ movimiento, onListo, onCancelar }: Prop
                     <td className="px-2 py-1 text-right">
                       <button
                         type="button"
-                        disabled={ligar.isPending || f.folio === actual}
+                        disabled={ligar.isPending || (actuales.length === 1 && actuales[0] === f.folio)}
                         onClick={() => {
                           setError(null);
-                          ligar.mutate(f);
+                          ligar.mutate([f.id]);
                         }}
+                        title="Conciliar solo con esta factura"
                         className="rounded bg-violet-700 px-2 py-1 text-white disabled:opacity-50"
                       >
-                        Elegir
+                        Solo esta
                       </button>
                     </td>
                   </tr>
