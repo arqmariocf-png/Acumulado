@@ -291,7 +291,7 @@ function VerComo({ vistaComo, onCambiar }: { vistaComo: { rol: AppRol; empresaId
   const { data: empresas } = useQuery({
     queryKey: ["empresas-todas-admin"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre").order("nombre");
+      const { data, error } = await supabase.from("empresas").select("id, nombre").eq("activo", true).order("nombre");
       if (error) throw error;
       return (data ?? []) as { id: string; nombre: string }[];
     },

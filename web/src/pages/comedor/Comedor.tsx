@@ -4,7 +4,8 @@ import { NominaComedor } from "./NominaComedor";
 import { PedirComida } from "./PedirComida";
 import { usePermisosComedor } from "./comun";
 
-/** Comedor (30-sep-2026): empresa aparte dentro de la organización; los
+/** Comedor (30-sep-2026; desde el 23-oct-2026 caja virtual dentro de CSC, ya
+ * no empresa: no contabiliza, solo control del área y descuentos); los
  * trabajadores piden desde su app y se les descuenta por nómina. Pestañas
  * según lo que cada quien puede hacer. */
 export function Comedor() {

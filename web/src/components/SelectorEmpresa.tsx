@@ -11,7 +11,8 @@ export function useEmpresasAlcance() {
   return useQuery({
     queryKey: ["empresas-alcance", clave],
     queryFn: async () => {
-      const { data, error } = await supabase.from("empresas").select("id, nombre, codigo").order("nombre");
+      // Solo activas: el comedor (COM) dejó de ser empresa el 23-oct-2026.
+      const { data, error } = await supabase.from("empresas").select("id, nombre, codigo").eq("activo", true).order("nombre");
       if (error) throw error;
       const filas = (data ?? []) as { id: string; nombre: string; codigo: string }[];
       return veTodasLasEmpresas ? filas : filas.filter((e) => empresasAlcance.includes(e.id));

@@ -1527,6 +1527,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   aplicado en nómina"). Reglas puras en `lib/comedor.ts` (con pruebas).
   Acceso rápido en el inicio y entrada en el menú; permiso "Comedor
   (cocina)" asignable desde RH → Accesos. Prueba `supabase/tests/comedor.sql`.
+- **Ya no es empresa (23-oct-2026, Mario: "comedor, por el momento sácalo
+  como empresa porque no va a contabilizar; solo será una caja virtual para
+  descuentos vía nómina y para llevar el control del área, dentro de
+  CSC")**: la empresa COM quedó `activo = false` (nombre "Comedor (caja
+  virtual, dentro de CSC)"; no tenía cuentas, perfiles, órdenes ni pedidos) y
+  `comedor_config.empresa_id` = **CSC**: platillos, menús y pedidos van con
+  CSC; el descuento sigue a la empresa de cada trabajador
+  (`20261023140000`). `useEmpresasAlcance` y "Ver como" ya solo listan
+  empresas activas (los admin de Empresas/Usuarios siguen viendo todas).
+  **Ninguna pantalla contable debe sumar el comedor como empresa.**
 - **Encargada de cocina (19-oct-2026, Mario: "Moni Moreno será la
   encargada de comedor; únicamente va a ver las comidas que el personal
   solicite")**: Monica Moreno Rojas (morenorojasmoni79@gmail.com, operativo,
