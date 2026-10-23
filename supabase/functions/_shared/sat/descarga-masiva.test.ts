@@ -64,8 +64,10 @@ test("lee las respuestas del SAT", () => {
   assert.deepEqual(d, { codEstatus: "5000", mensaje: "Solicitud Aceptada", paqueteBase64: "UEsDBA==" });
 });
 
-const FACTURA = `<?xml version="1.0" encoding="UTF-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" Version="4.0" Fecha="2026-09-15T10:20:30" Total="1160.00" TipoDeComprobante="I"><cfdi:Emisor Rfc="ACE010101AB1" Nombre="ACEROS &amp; MAS" RegimenFiscal="601"/><cfdi:Receptor Rfc="AEL131023CS1" Nombre="ACEROS Y ENVASADOS DE PUEBLA"/><cfdi:Complemento><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" UUID="45a9b49c-59e2-4593-8ea5-c1ceaba0a248"/></cfdi:Complemento></cfdi:Comprobante>`;
-const PAGO = `<cfdi:Comprobante Fecha="2026-10-01T09:00:00" Total="0" TipoDeComprobante="P"><cfdi:Emisor Rfc="AEL131023CS1" Nombre="AEP"/><cfdi:Receptor Rfc="CLI010101AA1" Nombre="CLIENTE"/><cfdi:Complemento><pago20:Pagos><pago20:Totales MontoTotalPagos="300"/><pago20:Pago FechaPago="2026-09-30T12:00:00" Monto="100.50"><pago20:DoctoRelacionado ImpPagado="100.50"/></pago20:Pago><pago20:Pago FechaPago="2026-09-30T13:00:00" Monto="199.50"/></pago20:Pagos><tfd:TimbreFiscalDigital UUID="CDE63D72-C891-4767-A159-FC5636187EA6"/></cfdi:Complemento></cfdi:Comprobante>`;
+const FACTURA = `<?xml version="1.0" encoding="UTF-8"?><cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" Version="4.0" Fecha="2026-09-15T10:20:30" Total="1160.00" TipoDeComprobante="I" MetodoPago="PPD" FormaPago="99"><cfdi:Emisor Rfc="ACE010101AB1" Nombre="ACEROS &amp; MAS" RegimenFiscal="601"/><cfdi:Receptor Rfc="AEL131023CS1" Nombre="ACEROS Y ENVASADOS DE PUEBLA"/><cfdi:Complemento><tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" UUID="45a9b49c-59e2-4593-8ea5-c1ceaba0a248"/></cfdi:Complemento></cfdi:Comprobante>`;
+const PAGO = `<cfdi:Comprobante Fecha="2026-10-01T09:00:00" Total="0" TipoDeComprobante="P"><cfdi:Emisor Rfc="AEL131023CS1" Nombre="AEP"/><cfdi:Receptor Rfc="CLI010101AA1" Nombre="CLIENTE"/><cfdi:Complemento><pago20:Pagos><pago20:Totales MontoTotalPagos="300"/><pago20:Pago FechaPago="2026-09-30T12:00:00" Monto="100.50"><pago20:DoctoRelacionado IdDocumento="45a9b49c-59e2-4593-8ea5-c1ceaba0a248" ImpPagado="100.50"/></pago20:Pago><pago20:Pago FechaPago="2026-09-30T13:00:00" Monto="199.50"/></pago20:Pagos><tfd:TimbreFiscalDigital UUID="CDE63D72-C891-4767-A159-FC5636187EA6"/></cfdi:Complemento></cfdi:Comprobante>`;
+
+const NOTA = `<cfdi:Comprobante Fecha="2026-10-02T09:00:00" Total="116" TipoDeComprobante="E" MetodoPago="PUE" FormaPago="15"><cfdi:CfdiRelacionados TipoRelacion="01"><cfdi:CfdiRelacionado UUID="45a9b49c-59e2-4593-8ea5-c1ceaba0a248"/></cfdi:CfdiRelacionados><cfdi:Emisor Rfc="AEL131023CS1" Nombre="AEP"/><cfdi:Receptor Rfc="CLI010101AA1" Nombre="CLIENTE"/><cfdi:Complemento><tfd:TimbreFiscalDigital UUID="11111111-2222-3333-4444-555555555555"/></cfdi:Complemento></cfdi:Comprobante>`;
 
 test("XML de CFDI a renglón de cfdi (factura y complemento de pago)", () => {
   const f = leerCfdiXml(FACTURA)!;
@@ -73,6 +75,7 @@ test("XML de CFDI a renglón de cfdi (factura y complemento de pago)", () => {
   assert.deepEqual(filaCfdi(f, "recibido"), {
     tipo: "recibido", rfc: "ACE010101AB1", folio: "45A9B49C-59E2-4593-8EA5-C1CEABA0A248", total: 1160, periodo: "202609",
     contraparte: "ACEROS & MAS", fecha: "2026-09-15", es_complemento_pago: false,
+    tipo_comprobante: "I", metodo_pago: "PPD", forma_pago: "99", relacionados: [],
   });
   const p = filaCfdi(leerCfdiXml(PAGO)!, "emitido")!;
   assert.equal(p.total, 300);
@@ -80,6 +83,11 @@ test("XML de CFDI a renglón de cfdi (factura y complemento de pago)", () => {
   assert.equal(p.periodo, "202609");
   assert.equal(p.rfc, "CLI010101AA1");
   assert.equal(p.es_complemento_pago, true);
+  assert.equal(p.tipo_comprobante, "P");
+  assert.deepEqual(p.relacionados, [{ uuid: "45A9B49C-59E2-4593-8EA5-C1CEABA0A248", importe: 100.5, tipo_relacion: null }]);
+  const nc = filaCfdi(leerCfdiXml(NOTA)!, "emitido")!;
+  assert.equal(nc.tipo_comprobante, "E");
+  assert.deepEqual(nc.relacionados, [{ uuid: "45A9B49C-59E2-4593-8EA5-C1CEABA0A248", importe: null, tipo_relacion: "01" }]);
   assert.equal(leerCfdiXml("<html/>"), null);
 });
 

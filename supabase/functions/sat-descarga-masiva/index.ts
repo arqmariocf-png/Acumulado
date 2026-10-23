@@ -8,7 +8,7 @@
 //      desde 3 días antes de lo último descargado (o el 1-ene-2026) hasta ayer.
 // Bitácora: sat_descargas. Errores de la empresa: sat_efirmas.ultimo_error.
 //
-// POST { empresaId?: string }
+// POST { empresaId?: string }  ·  { reprocesar: true } relee los ZIP guardados
 //   - pg_cron (disparar_descarga_sat) con header x-cron-secret.
 //   - O contabilidad / admin (auth_opera_sat) con su sesión: "Descargar ahora".
 //
@@ -140,6 +140,52 @@ interface Descarga {
   solicitada_por: string | null;
 }
 
+function filasDeZip(zip: Uint8Array, tipo: TipoCfdi): { filas: Map<string, FilaCfdi>; ilegibles: number } {
+  const archivos = unzipSync(zip);
+  const filas = new Map<string, FilaCfdi>();
+  let ilegibles = 0;
+  for (const [nombre, contenido] of Object.entries(archivos)) {
+    if (!nombre.toLowerCase().endsWith(".xml")) continue;
+    const leido = leerCfdiXml(new TextDecoder("utf-8").decode(contenido));
+    const fila = leido ? filaCfdi(leido, tipo) : null;
+    if (!fila) {
+      ilegibles++;
+      continue;
+    }
+    filas.set(`${fila.tipo}|${fila.rfc}|${fila.folio}|${fila.periodo}`, fila);
+  }
+  return { filas, ilegibles };
+}
+
+/** Vuelve a leer los ZIP ya guardados para llenar lo que antes no se tomaba
+ * del XML (tipo de comprobante, PUE/PPD, forma de pago, relacionados). */
+async function reprocesar(db: SupabaseClient, inicio: number) {
+  const { data, error } = await db.rpc("fn_sat_archivos_por_reprocesar", { p_limite: 200 });
+  if (error) throw new Error(error.message);
+  const lista = (data ?? []) as { id: string; empresa_id: string; tipo: string; storage_path: string }[];
+  let archivos = 0;
+  let cfdi = 0;
+  const errores: string[] = [];
+  for (const a of lista) {
+    if (Date.now() - inicio > PRESUPUESTO_MS) break;
+    const tipo: TipoCfdi = a.tipo === "cfdi_recibidos" ? "recibido" : "emitido";
+    const bajado = await db.storage.from("cargas").download(a.storage_path);
+    if (bajado.error) {
+      errores.push(`${a.storage_path}: ${bajado.error.message}`);
+      continue;
+    }
+    const { filas } = filasDeZip(new Uint8Array(await bajado.data.arrayBuffer()), tipo);
+    const renglones = [...filas.values()].map((f) => ({ ...f, empresa_id: a.empresa_id, archivo_id: a.id }));
+    for (let i = 0; i < renglones.length; i += 500) {
+      const { error: e } = await db.from("cfdi").upsert(renglones.slice(i, i + 500), { onConflict: "tipo,rfc,folio,periodo" });
+      if (e) throw new Error(`cfdi: ${e.message}`);
+    }
+    archivos++;
+    cfdi += renglones.length;
+  }
+  return { archivos, cfdi, quedan: Math.max(lista.length - archivos, 0), errores };
+}
+
 async function guardarPaquete(
   db: SupabaseClient,
   ef: Efirma,
@@ -147,19 +193,7 @@ async function guardarPaquete(
   paquete: string,
   zip: Uint8Array,
 ): Promise<number> {
-  const archivos = unzipSync(zip);
-  const filas = new Map<string, FilaCfdi>();
-  let ilegibles = 0;
-  for (const [nombre, contenido] of Object.entries(archivos)) {
-    if (!nombre.toLowerCase().endsWith(".xml")) continue;
-    const leido = leerCfdiXml(new TextDecoder("utf-8").decode(contenido));
-    const fila = leido ? filaCfdi(leido, d.tipo) : null;
-    if (!fila) {
-      ilegibles++;
-      continue;
-    }
-    filas.set(`${fila.tipo}|${fila.rfc}|${fila.folio}|${fila.periodo}`, fila);
-  }
+  const { filas, ilegibles } = filasDeZip(zip, d.tipo);
   const ruta = `sat/${ef.empresa_id}/descargas/${d.tipo}/${paquete}.zip`;
   await db.storage.from("cargas").upload(ruta, zip, { contentType: "application/zip", upsert: true });
   const { data: archivo, error: errArchivo } = await db
@@ -330,7 +364,8 @@ Deno.serve(async (req) => {
       porUsuario = user.id;
     }
 
-    const cuerpo = (await req.json().catch(() => ({}))) as { empresaId?: string };
+    const cuerpo = (await req.json().catch(() => ({}))) as { empresaId?: string; reprocesar?: boolean };
+    if (cuerpo.reprocesar) return json({ ok: true, ...(await reprocesar(db, inicio)) });
     let q = db.from("sat_efirmas").select("empresa_id, rfc, subido_por, empresas(codigo, grupo_id)");
     if (cuerpo.empresaId) q = q.eq("empresa_id", cuerpo.empresaId);
     const { data: efirmas, error } = await q;

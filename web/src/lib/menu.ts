@@ -162,6 +162,7 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Cobranza",
     proposito: "Lo que nos deben los clientes y su crédito.",
     entradas: [
+      { ruta: "/finanzas/cobranza", etiqueta: "Cuentas por cobrar", descripcion: "cartera por antigüedad, cobros, agenda de cobranza y cuadre entre empresas", uso: "Facturas PPD del SAT y estimaciones con su retenido; registra el depósito y se aplica a lo más vencido; gestiones con promesa de pago.", visible: (p) => esFinanzas(p) || p.rol === "empresa", modulo: "conciliacion" },
       { ruta: "/legal?tab=credito", etiqueta: "Crédito a clientes", descripcion: "línea, días de crédito y contrato por cliente", uso: "Dirección autoriza la línea de crédito del cliente y se genera el contrato de los abogados.", visible: (p) => esAdmin(p) || p.rol === "direccion" || (p.modulos ?? []).includes("legal"), modulo: "legal" },
     ],
   },
