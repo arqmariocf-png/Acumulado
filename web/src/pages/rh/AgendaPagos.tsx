@@ -8,6 +8,7 @@ import { useNominaExternaAutoSync } from "../../lib/useNominaExternaAutoSync";
 import { ORIGIN_LABELS, agendaTotals, groupByDate, isOverdue, type AgendaEntry } from "../../lib/agendaPagosExterna";
 import { parseAmountCents } from "../../../../supabase/functions/_shared/nomina-externa.ts";
 import type { NominaExternaMapeo, NominaExternaOrigen, NominaExternaOrigenKey, NominaExternaPago, NominaExternaRenglon } from "../../types/database";
+import { descargarBlob } from "../../lib/descargarArchivo";
 
 const FALLBACK_REFETCH_MS = 60_000;
 
@@ -71,12 +72,7 @@ async function exportAgenda(entries: AgendaEntry[]) {
   sheet.columns.forEach((c) => (c.width = 20));
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "agenda-de-pagos.xlsx";
-  a.click();
-  URL.revokeObjectURL(url);
+  descargarBlob(blob, "agenda-de-pagos.xlsx");
 }
 
 const ORIGIN_STYLES: Record<NominaExternaOrigenKey, string> = {

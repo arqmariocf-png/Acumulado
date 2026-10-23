@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
 import { csvNomina, resumenNomina, type PedidoComedor } from "../../lib/comedor";
 import { hoyMx, mensajeError } from "./comun";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 /** RH / finanzas: descuento del comedor por trabajador y periodo (solo lo
  * entregado), para capturarlo en la nómina y marcarlo como aplicado. */
@@ -35,12 +36,7 @@ export function NominaComedor() {
   }, [renglones]);
 
   const descargar = () => {
-    const blob = new Blob([csvNomina(renglones, desde, hasta)], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `comedor-nomina-${desde}-a-${hasta}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    descargarCsv(`comedor-nomina-${desde}-a-${hasta}.csv`, csvNomina(renglones, desde, hasta));
   };
 
   const aplicar = useMutation({

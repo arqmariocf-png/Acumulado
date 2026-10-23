@@ -19,6 +19,7 @@ import {
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
 import { DocumentosLegal } from "./DocumentosLegal";
 import { autorizaCredito, fechaCorta } from "./comun";
+import { descargarTexto } from "../../lib/descargarArchivo";
 
 interface Cliente {
   id: string;
@@ -70,12 +71,7 @@ const inp = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const hoy = () => new Date().toISOString().slice(0, 10);
 
 function descargar(nombre: string, contenido: string, tipo: string) {
-  const url = URL.createObjectURL(new Blob(["﻿", contenido], { type: tipo }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  descargarTexto(nombre, contenido, tipo);
 }
 
 function compradorDesde(c: Credito): CompradorContrato {

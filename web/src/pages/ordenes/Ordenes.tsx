@@ -9,6 +9,7 @@ import { BotonVerOv } from "./VerOrdenVenta";
 import { EditorOrden } from "./EditorOrden";
 import { VentaInterempresa } from "./VentaInterempresa";
 import { csvOrdenes, csvOrdenesConDetalle, etapaOrdenCompra, type LineaExcelOrden, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 const dinero = (n: number | null | undefined) =>
   n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
@@ -202,12 +203,7 @@ export function Ordenes() {
     } else {
       csv = csvOrdenes(conEstado);
     }
-    const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${vista === "OV" ? "ordenes-venta" : "ordenes-compra-y-servicio"}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarCsv(`${vista === "OV" ? "ordenes-venta" : "ordenes-compra-y-servicio"}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   }
 
   async function cancelar(o: FilaOrden) {

@@ -5,6 +5,7 @@ import { moneda } from "../../lib/saldosEmpresas";
 import { armarHojaPagos, csvHojaPagos, htmlHojaPagos, type EntradaHoja, type PagoHoja } from "../../lib/hojaPagos";
 import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { useSaldosDia } from "./SaldosEmpresas";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 function fechaCorta(iso: string): string {
   const [a, m, d] = iso.split("-");
@@ -90,12 +91,7 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
   }
 
   function excel() {
-    const url = URL.createObjectURL(new Blob([csvHojaPagos(hojas)], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pagos-${fecha}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarCsv(`pagos-${fecha}.csv`, csvHojaPagos(hojas));
   }
 
   return (

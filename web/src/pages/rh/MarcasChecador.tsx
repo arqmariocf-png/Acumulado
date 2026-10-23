@@ -7,6 +7,7 @@ import { useUbicacionesChecador } from "./UbicacionesChecador";
 import { rutaVerArchivo } from "../../lib/verArchivo";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { armarReporteChecador, csvReporteChecador, formatoHoras, horaLocal, htmlReporteChecador, totalesPorPersona, type FilaChecador } from "../../lib/reporteChecador";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 interface MarcaChecador {
   id: string;
@@ -370,12 +371,7 @@ function ReporteHorizontal({ marcas, dias, cargando }: { marcas: MarcaChecador[]
   let anterior = "";
 
   function descargar() {
-    const url = URL.createObjectURL(new Blob([csvReporteChecador(filas)], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `checador-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    descargarCsv(`checador-${new Date().toISOString().slice(0, 10)}.csv`, csvReporteChecador(filas));
   }
 
   const celda = (iso: string | null, enTurno = false) => <td className={`whitespace-nowrap px-3 py-1.5 tabular-nums ${iso ? "" : enTurno ? "text-slate-300" : "text-amber-600"}`}>{horaLocal(iso)}</td>;

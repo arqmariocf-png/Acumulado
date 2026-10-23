@@ -17,6 +17,7 @@ import {
   type OpcionPlan,
   type TonoPlan,
 } from "../../lib/planSistema";
+import { descargarCsv } from "../../lib/descargarArchivo";
 
 // Plan del sistema (21-oct-2026, Mario: "te adjunto el excel para acomodo del
 // sistema, con toda la lógica de ventanas, menús y orden del sistema así como
@@ -67,12 +68,7 @@ export function PlanSistema() {
   const grupos = useMemo(() => agruparPlan(lista), [lista]);
 
   function descargar() {
-    const url = URL.createObjectURL(new Blob(["\ufeff" + csvPlan(lista)], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `plan-del-sistema-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarCsv(`plan-del-sistema-${new Date().toISOString().slice(0, 10)}.csv`, csvPlan(lista));
   }
 
   return (

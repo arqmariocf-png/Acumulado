@@ -21,6 +21,7 @@ import { estadoVencimiento, textoVencimiento } from "../../lib/expedienteLegal";
 import { SelectorEmpresa, useEmpresasAlcance } from "../../components/SelectorEmpresa";
 import { DocumentosLegal } from "./DocumentosLegal";
 import { fechaCorta } from "./comun";
+import { descargarTexto } from "../../lib/descargarArchivo";
 
 interface Arrendamiento {
   id: string;
@@ -45,12 +46,7 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 const AVISO_DIAS = 60;
 
 function descargar(nombre: string, contenido: string, tipo: string) {
-  const url = URL.createObjectURL(new Blob(["﻿", contenido], { type: tipo }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  descargarTexto(nombre, contenido, tipo);
 }
 
 function abrir(datos: DatosArrendamiento, formato: "imprimir" | "word", ventana?: Window | null) {

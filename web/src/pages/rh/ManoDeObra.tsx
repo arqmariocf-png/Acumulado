@@ -19,6 +19,7 @@ import type {
   NominaExternaPago,
   NominaExternaRenglon,
 } from "../../types/database";
+import { descargarBlob } from "../../lib/descargarArchivo";
 
 const FALLBACK_REFETCH_MS = 60_000;
 
@@ -127,12 +128,7 @@ async function exportToExcel(sourceName: string, columns: string[], rows: Row[])
   sheet.columns.forEach((c) => (c.width = 18));
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${sourceName.replace(/\s+/g, "-").toLowerCase()}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
+  descargarBlob(blob, `${sourceName.replace(/\s+/g, "-").toLowerCase()}.xlsx`);
 }
 
 export function ManoDeObra() {
