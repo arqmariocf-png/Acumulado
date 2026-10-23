@@ -950,7 +950,9 @@ function FormCredito({ credito, onListo }: { credito: Credito | null; onListo: (
 
   const c = credito;
   return (
-    <form onSubmit={onSubmit} onInput={(e) => leerTerminos(e.currentTarget)} onChange={(e) => leerTerminos(e.currentTarget)} className={`${tarjeta} mb-4 p-5`} data-sin-borrador>
+    // Solo onChange (en React ya corre con cada tecla): un onInput aquí volvía a
+    // pintar antes del change del <select> de empresa y lo regresaba a "Elige…".
+    <form onSubmit={onSubmit} onChange={(e) => leerTerminos(e.currentTarget)} className={`${tarjeta} mb-4 p-5`} data-sin-borrador>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-slate-900">{c ? `Editar ${c.folio}` : "Registrar crédito"}</h2>
         <button type="button" onClick={() => onListo(null)} className="text-xs text-slate-500 underline">
