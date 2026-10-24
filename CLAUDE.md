@@ -1898,6 +1898,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   lista de obras al capturar (`fn_ordenes_catalogo_captura` lo excluía a
   propósito; es el proyecto de lo que no es de obra en el backoffice: 301 OC
   en 7 empresas) (`20261020090000`).
+  **Excel por número de folio (24-oct-2026, Laura: "no están en orden")**:
+  el Excel de `/ordenes` se ordenaba por folio como texto y, como OC y OS
+  comparten serie, salían todas las IA-OC y luego todas las IA-OS.
+  `ordenarPorFolio` (`lib/ordenesIa.ts`, con prueba) usa `claveFolio`: primero
+  los folios sin serie (backoffice, por número) y luego cada serie (IA-, RQ-…)
+  por su consecutivo sin importar OC/OS/OV (IA-OC-0003, IA-OS-0004,
+  IA-OC-0005…). La pantalla sigue de la más reciente a la más vieja.
 - **Cuentas por pagar con el saldo del proveedor (21-oct-2026, Laura: "los
   saldos de Bodega Cruz Azul y Cemex están erróneos; ya los había cuadrado y
   otra vez sale que le debemos más de un millón"; "cuentas por pagar solo son

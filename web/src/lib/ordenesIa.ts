@@ -115,9 +115,28 @@ export function ordenEditable(o: { fuente: string; autorizacion?: string | null;
 export const COLUMNAS_EXCEL_ORDENES = ["Empresa", "Folio", "Tipo", "Proveedor / cliente", "Tipo de pago", "Proyecto", "Monto c/IVA", "Fecha", "Estatus"];
 
 /** El Excel va ordenado por folio (id) de menor a mayor, como lo revisa Laura
- * (23-oct-2026); el folio es texto, se compara como número. */
+ * (23-oct-2026). OC y OS comparten una sola serie (IA-OC-0003, IA-OS-0004,
+ * IA-OC-0005…), así que se ordena por el NÚMERO del folio y no por el texto:
+ * comparar el texto ponía todas las OC y luego todas las OS (Laura, 24-oct-2026:
+ * "no están en orden"). Primero los folios sin serie (backoffice) y luego cada
+ * serie (IA-, RQ-…) por su consecutivo. */
+export function claveFolio(folio: string): { serie: string; numero: number } {
+  const m = /(\d+)\s*$/.exec(folio.trim());
+  const numero = m ? Number(m[1]) : Number.POSITIVE_INFINITY;
+  const serie = folio
+    .trim()
+    .replace(/\d+\s*$/, "")
+    .replace(/-(OC|OS|OV)-$/i, "-")
+    .toUpperCase();
+  return { serie, numero };
+}
+
 export function ordenarPorFolio<T extends { folio: string }>(filas: T[]): T[] {
-  return [...filas].sort((a, b) => a.folio.localeCompare(b.folio, "es", { numeric: true }));
+  return [...filas].sort((a, b) => {
+    const ka = claveFolio(a.folio);
+    const kb = claveFolio(b.folio);
+    return ka.serie.localeCompare(kb.serie) || ka.numero - kb.numero || a.folio.localeCompare(b.folio, "es", { numeric: true });
+  });
 }
 
 export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string }[]): string {

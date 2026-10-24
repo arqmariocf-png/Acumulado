@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { etapaOrdenCompra, ordenEditable, partidasParaGuardar, partidaVacia, revisarOrden, totalesPartidas, csvOrdenes, csvOrdenesConDetalle } from "./ordenesIa.ts";
+import { etapaOrdenCompra, ordenEditable, partidasParaGuardar, partidaVacia, revisarOrden, totalesPartidas, csvOrdenes, csvOrdenesConDetalle, ordenarPorFolio, claveFolio } from "./ordenesIa.ts";
 
 test("totales sin IVA por partida, con y sin IVA", () => {
   const t = totalesPartidas([
@@ -71,4 +71,15 @@ test("Excel de órdenes con el detalle de cada partida", () => {
   assert.match(filas[2], /"15341".*,"","","","","",""$/);
   assert.match(filas[3], /"IA-OV-0001".*"1","Alambre","kg","10","50.00","580.00"$/);
   assert.match(filas[4], /"2","Varilla","pza","5","100.00","580.00"$/);
+});
+
+test("Excel por el número del folio: OC y OS comparten serie (Laura, 24-oct-2026)", () => {
+  const folios = ["IA-OS-0010", "IA-OC-0012", "41500", "IA-OS-0004", "IA-OC-0003", "RQ-CSC-0002", "41492", "IA-OC-0005"].map((folio) => ({ folio }));
+  assert.deepEqual(
+    ordenarPorFolio(folios).map((f) => f.folio),
+    ["41492", "41500", "IA-OC-0003", "IA-OS-0004", "IA-OC-0005", "IA-OS-0010", "IA-OC-0012", "RQ-CSC-0002"],
+  );
+  assert.deepEqual(claveFolio("IA-OS-0004"), { serie: "IA-", numero: 4 });
+  assert.deepEqual(claveFolio("41492"), { serie: "", numero: 41492 });
+  assert.deepEqual(claveFolio("IA-OV-0001"), { serie: "IA-", numero: 1 });
 });
