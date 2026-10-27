@@ -1823,6 +1823,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (3) "No se guardan los datos bancarios" (INMOBILIARIA COMATSE): sí se
   guardaban (16:51 UTC); el catálogo no refrescaba. `DatosBancariosProveedor`
   muestra lo guardado al momento ("✓ guardado") e invalida `proveedor-ficha`.
+  **Todos los proveedores y todos los items (27-oct-2026, Laura: "no le
+  salen todos")**: Proveedores y artículos cortaba la lista en 300 (eran 302)
+  y Catálogo de items pintaba 300 de 1,360. Ahora proveedores salen todos,
+  items pintan 300 con botón "Mostrar los N restantes", y las dos pantallas
+  tienen "Descargar Excel" con todo lo filtrado (`lib/catalogoExcel.ts`, con
+  pruebas). Al 27-oct: 302 contrapartes (6 con ficha), 1,360 items, 3,587
+  partidas por proveedor en `fn_ordenes_catalogo_captura`.
 - **Cancelar, impresión completa y clientes registrados (15-oct-2026,
   Mario)**: (1) `fn_orden_ia_cancelar` ya cancela CUALQUIER OC/OS
   (backoffice, Excel, RQ: solo admin/corporativo/dirección; IA también

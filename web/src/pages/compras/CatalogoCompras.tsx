@@ -10,6 +10,7 @@ import { normalizarBusqueda } from "../../lib/buscadorCaptura";
 import { useItemsCompra } from "./useItemsCompra";
 import { descargarCsv } from "../../lib/descargarArchivo";
 import { clabeValida } from "../../lib/importarBancarios";
+import { csvProveedoresCatalogo } from "../../lib/catalogoExcel";
 
 const dinero = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }));
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -85,14 +86,24 @@ export function CatalogoCompras() {
 function ListaProveedores({ lista, cargando, onElegir, onNuevo }: { lista: ContraparteCatalogo[]; cargando: boolean; onElegir: (nombre: string) => void; onNuevo: () => void }) {
   const { soloConsulta } = useAuth();
   const [texto, setTexto] = useState("");
-  const visibles = filtrarContrapartes(lista, texto, 300);
+  // Todos, sin tope (27-oct-2026, Laura: "no le salen todos los proveedores":
+  // eran 302 y se cortaba en 300).
+  const visibles = filtrarContrapartes(lista, texto, Math.max(lista.length, 1));
   return (
     <div className="rounded border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2">
         <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Busca por nombre o RFC…" className="w-72 rounded border border-slate-300 px-2 py-1 text-sm" />
         <span className="text-xs text-slate-500">{cargando ? "Cargando…" : `${visibles.length} de ${lista.length}`}</span>
+        <button
+          type="button"
+          disabled={visibles.length === 0}
+          onClick={() => descargarCsv(`proveedores-${new Date().toISOString().slice(0, 10)}.csv`, csvProveedoresCatalogo(visibles))}
+          className="ml-auto rounded border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          Descargar Excel
+        </button>
         {!soloConsulta && (
-          <button type="button" onClick={onNuevo} className="ml-auto rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white">
+          <button type="button" onClick={onNuevo} className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white">
             + Nuevo proveedor
           </button>
         )}
