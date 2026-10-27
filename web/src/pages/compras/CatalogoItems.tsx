@@ -16,6 +16,8 @@ import {
 } from "../../lib/catalogoItems";
 import { useItemsCompra } from "./useItemsCompra";
 import { BotonImportarBackoffice } from "../../components/BotonImportarBackoffice";
+import { descargarCsv } from "../../lib/descargarArchivo";
+import { csvItemsCatalogo } from "../../lib/catalogoExcel";
 
 // Catálogo propio de items de compras (21-oct-2026, Mario: "para compras, un
 // módulo para agregar nuevos items"). Items sin proveedor (clave, descripción,
@@ -26,6 +28,8 @@ const dinero = (n: number | null | undefined) => (n == null ? "—" : Number(n).
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const VACIO: FormItem = { clave: "", descripcion: "", unidad: "", categoria: "material", precio: "" };
 
+// Se pintan 300 y un botón muestra el resto (27-oct-2026, Laura: "no le salen
+// todos los ítems"); el Excel siempre lleva todos los filtrados.
 const MOSTRAR = 300;
 
 export function CatalogoItems() {
@@ -36,6 +40,7 @@ export function CatalogoItems() {
   const [inactivos, setInactivos] = useState(false);
   const [editando, setEditando] = useState<ItemCompra | "nuevo" | null>(null);
   const [detalle, setDetalle] = useState<ItemCompra | null>(null);
+  const [verTodos, setVerTodos] = useState(false);
 
   const lista = useMemo(() => filtrarCatalogo(items.data ?? [], texto, categoria, inactivos), [items.data, texto, categoria, inactivos]);
 
@@ -66,8 +71,17 @@ export function CatalogoItems() {
         <label className="flex items-center gap-1 pb-2 text-xs text-slate-600">
           <input type="checkbox" checked={inactivos} onChange={(e) => setInactivos(e.target.checked)} /> ver desactivados
         </label>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={lista.length === 0}
+            onClick={() => descargarCsv(`catalogo-items-${new Date().toISOString().slice(0, 10)}.csv`, csvItemsCatalogo(lista))}
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+          >
+            Descargar Excel ({lista.length.toLocaleString("es-MX")})
+          </button>
         {!soloConsulta && (
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <>
             <BotonImportarBackoffice funcion="fn_items_importar_backoffice" que="items" invalidar={["compras-items", "ordenes-ia-catalogo"]} />
             <button
               type="button"
@@ -79,8 +93,9 @@ export function CatalogoItems() {
             >
               + Nuevo item
             </button>
-          </div>
+          </>
         )}
+        </div>
       </div>
 
       {editando && (
@@ -116,7 +131,7 @@ export function CatalogoItems() {
                   </td>
                 </tr>
               )}
-              {lista.slice(0, MOSTRAR).map((i) => (
+              {(verTodos ? lista : lista.slice(0, MOSTRAR)).map((i) => (
                 <tr key={i.id} className={`border-t border-slate-100 ${i.activo ? "" : "text-slate-400"} ${detalle?.id === i.id ? "bg-sky-50" : ""}`}>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{i.clave}</td>
                   <td className="px-3 py-2">
@@ -140,9 +155,13 @@ export function CatalogoItems() {
               ))}
             </tbody>
           </table>
-          {lista.length > MOSTRAR && (
-            <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-              Se muestran {MOSTRAR} de {lista.length.toLocaleString("es-MX")}; escribe en Buscar para encontrar el resto.
+          {lista.length > MOSTRAR && !verTodos && (
+            <p className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+              Se muestran {MOSTRAR} de {lista.length.toLocaleString("es-MX")}.
+              <button type="button" onClick={() => setVerTodos(true)} className="rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-700 hover:bg-slate-100">
+                Mostrar los {(lista.length - MOSTRAR).toLocaleString("es-MX")} restantes
+              </button>
+              o escribe en Buscar.
             </p>
           )}
         </div>
