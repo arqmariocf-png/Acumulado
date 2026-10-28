@@ -2101,6 +2101,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `lib/descargarArchivo.ts` (`descargarBlob` / `descargarCsv` /
   `descargarTexto`: anchor en el body, clic, liberar al minuto). **Descarga
   nueva → ese helper, nunca `a.click()` suelto.**
+  **Traducción automática del navegador (28-oct-2026, Alma: "no puedo pasar
+  pago de LRT"; en su captura LRT salía como "Equipo de carreras de Loma")**:
+  `index.html` decía `lang="en"`, Chrome ofrecía traducir y, al aceptar,
+  Google Translate reescribe el DOM (nodos `<font>`) y React truena al
+  actualizar el formulario. Ahora `lang="es"`, `translate="no"` y
+  `<meta name="google" content="notranslate">`. Si alguien ya lo tenía
+  traducido: en Chrome, icono de traducir en la barra → "Mostrar original" /
+  "No traducir nunca este sitio".
 - **Buscador en todos los menús (23-oct-2026, Mario: "en todos los menús
   ponles una opción de buscador para llegar más rápido a la información
   requerida")**: `components/BuscadorMenu.tsx` en el Layout (Ctrl+K / ⌘K / "/"
