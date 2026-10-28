@@ -279,6 +279,25 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   …", crea la regla de la organización y la aplica a lo pendiente con ese
   concepto; `20261007100000`). Dirección no tiene update directo en
   movimientos: todo por la función.
+  **489 movimientos marcados por una palabra genérica (28-oct-2026, Mario:
+  "Allison hizo un movimiento como depósito erróneo, el cual se hizo bien,
+  pero en automático hizo todos los demás y los cuentas de tercero no todos
+  llevan esa condición")**: el 26-oct Allison guardó "N/A - DEPOSITO POR
+  ERROR" con "siempre que el concepto diga" **PAGO CUENTA DE TERCERO** (es
+  el nombre que Banorte pone a CUALQUIER pago a terceros: 373 pendientes de 6
+  empresas, $3 M en cargos) y luego **ERROR**; además Reclasificar pisó 111
+  ya conciliados (F-/FM-). Las dos reglas quedaron `activo = false` y los 488
+  se restauraron desde `audit_log` (`datos_previos` de la primera entrada con
+  esa etiqueta: 306 revisión, 42 esperado, 25 ambiguo, 111 resueltos con su
+  factura); se dejó el único marcado a mano (AEP 1-ago, BNET 15111002). Ahora
+  `MarcarSinFactura` trae la regla **apagada de fábrica** y, al prenderla,
+  `fn_movimientos_sin_factura_alcance(palabra)` (definer; mismo filtro que la
+  aplicación) dice cuántos pendientes marcaría y por empresa; con N > 0 hay
+  que palomear "Sí, aplicar también a esos N" (`textoAlcanceRegla` en
+  `lib/sinFactura.ts`, con prueba; `20261028090000`). Para deshacer una regla
+  mal puesta: `activo = false` + restaurar desde `audit_log` como aquí. Ojo
+  pendiente: el motor (`motor-conciliacion`, Reclasificar) aplica las reglas
+  N/A por encima de lo ya conciliado con F-/FM-.
 - **Backoffice caído 7-oct-2026**: `api_ocs_aut`/`api_ov_aut` responden 500
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
