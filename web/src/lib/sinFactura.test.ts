@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { etiquetaSinFactura, palabraClaveSugerida, puedeMarcarSinFactura } from "./sinFactura.ts";
+import { etiquetaSinFactura, palabraClaveSugerida, puedeMarcarSinFactura, textoAlcanceRegla } from "./sinFactura.ts";
 
 test("etiqueta siempre N/A - en mayúsculas", () => {
   assert.equal(etiquetaSinFactura("pago a crédito"), "N/A - PAGO A CRÉDITO");
@@ -20,4 +20,13 @@ test("solo sin factura real", () => {
   assert.equal(puedeMarcarSinFactura(null), true);
   assert.equal(puedeMarcarSinFactura("N/A - RENTA"), true);
   assert.equal(puedeMarcarSinFactura("F- A3E54ADE-8F75"), false);
+});
+
+test("aviso del alcance de una regla por palabra", () => {
+  assert.match(textoAlcanceRegla(0, []), /Ningún otro movimiento pendiente/);
+  assert.equal(
+    textoAlcanceRegla(373, [{ codigo: "AEP", n: 300 }, { codigo: "MCF", n: 73 }]),
+    "Esta regla marcará ahora 373 movimientos pendientes más (AEP 300, MCF 73) y todos los que lleguen con esa palabra.",
+  );
+  assert.match(textoAlcanceRegla(1, [{ codigo: "CSC", n: 1 }]), /1 movimiento pendiente más \(CSC 1\)/);
 });

@@ -25,3 +25,12 @@ export function palabraClaveSugerida(concepto: string | null | undefined): strin
 export function puedeMarcarSinFactura(factura: string | null | undefined): boolean {
   return !factura || /^N\s*\/\s*A/i.test(factura);
 }
+
+/** Lo que dice la pantalla antes de guardar una regla "siempre que el
+ * concepto diga…" (28-oct-2026, tras los 489 movimientos de "PAGO CUENTA DE
+ * TERCERO"): cuántos pendientes se marcarían ahora y en qué empresas. */
+export function textoAlcanceRegla(n: number, empresas: { codigo: string; n: number }[]): string {
+  if (n <= 0) return "Ningún otro movimiento pendiente dice eso hoy; solo aplicará a los que lleguen.";
+  const detalle = empresas.map((e) => `${e.codigo} ${e.n}`).join(", ");
+  return `Esta regla marcará ahora ${n.toLocaleString("es-MX")} movimiento${n === 1 ? "" : "s"} pendiente${n === 1 ? "" : "s"} más${detalle ? ` (${detalle})` : ""} y todos los que lleguen con esa palabra.`;
+}
