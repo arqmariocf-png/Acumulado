@@ -2188,6 +2188,33 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   espectador, director general, solo consulta (`20261023130000`). Imprimible
   carta con firmas evaluado / evaluó / RH (`htmlEvaluacion`). Probado en
   rollback: Eréndira ve 37 personas y firma; Alma no ve a nadie.
+- **Reporte de RH para el director general (29-oct-2026, Mario: "genera el
+  reporte para director general de recursos humanos")**: Recursos humanos →
+  **Reporte para el director general** (`/rh/reporte-director`,
+  `pages/rh/ReporteDirector.tsx`; menú visible a admin, la función devuelve
+  null a quien no sea el admin maestro). `fn_reporte_rh_director(p_dias)`
+  (definer, `20261029100000`; 0.5 s) junta en un jsonb, para la organización:
+  plantilla (activos, con cuenta, checan, altas/bajas del periodo, por
+  empresa —contratación más reciente o la de su cuenta—, área, rotación de
+  `v_rotacion_mensual`, expedientes incompletos por `tipos_documento_personal`
+  'todos', sin cuenta, bajas con cuenta activa), asistencia (primera entrada
+  por día; retardo = hora de entrada + tolerancia del perfil de jornada o
+  08:00 + 15; % asistencia entre quienes checan sobre días hábiles lun-vie),
+  tareas de todos los tableros activos (hecha = última columna o archivada;
+  del periodo = fecha límite en el periodo, o sin fecha y hecha en él, o
+  vencida), evaluaciones firmadas (12 m) y sin evaluar (6 m), nómina del
+  backoffice (última semana y quincena por empresa por `normalizar_texto_sql`
+  del nombre, mano de obra con llaves `Empresa/Fecha_fin/Monto`, tendencia 8
+  semanas), EPP, herramienta, cuentas de nómina y accesos (push, pendientes).
+  `lib/reporteRhDirector.ts` (con pruebas): `alertasReporte` (rojas primero,
+  cada una con su pantalla), `resumenEjecutivo`, semáforos y
+  `htmlReporteRh` imprimible. Primera corrida 29-oct (30 días): 52 activos, 38
+  con cuenta, 29 checan, 9 con cuenta sin ninguna entrada, asistencia 81 %,
+  puntualidad 41 % (306 retardos: revisar perfiles de jornada), tareas 57/76
+  hechas, 16 vencidas, 0 evaluaciones, nómina fiscal última $220 mil
+  (semanal $71.7 mil + quincenal $148.3 mil), mano de obra $210 mil/semana,
+  2 bajas con cuenta activa (Daissy, Josafat), 2 expedientes sin documentos
+  (Delia, Jaime), 14 sin cuenta.
 - **Recursos humanos como grupo (22-oct-2026, Mario: "la parte de nómina es
   realmente recursos humanos"; "entré con Eréndira y no tiene el tablero")**:
   el grupo del menú "Nómina y mano de obra" se llama **Recursos humanos** (la

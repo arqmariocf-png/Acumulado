@@ -75,6 +75,7 @@ const Organizaciones = lazy(() => import("./pages/admin/Organizaciones").then((m
 const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m) => ({ default: m.Suscripcion })));
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
 const EvaluacionDesempeno = lazy(() => import("./pages/rh/EvaluacionDesempeno").then((m) => ({ default: m.EvaluacionDesempeno })));
+const ReporteDirectorRh = lazy(() => import("./pages/rh/ReporteDirector").then((m) => ({ default: m.ReporteDirector })));
 const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
 const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
 const InventarioPorRecibir = lazy(() => import("./pages/inventario/PorRecibir").then((m) => ({ default: m.PorRecibir })));
@@ -334,6 +335,10 @@ function Enrutador() {
           {/* Evaluación de desempeño (23-oct-2026): RH, dirección y el jefe directo de la persona. */}
           <Route element={<ProtectedRoute roles={["rh", "direccion", "supervisor", "responsable", "directivo", "empresa"]} modulo="rh" />}>
             <Route path="/rh/evaluacion" element={<EvaluacionDesempeno />} />
+          </Route>
+          {/* Reporte de RH para el director general (29-oct-2026): la función devuelve null a quien no sea el admin maestro. */}
+          <Route element={<ProtectedRoute roles={["admin"]} modulo="rh" />}>
+            <Route path="/rh/reporte-director" element={<ReporteDirectorRh />} />
           </Route>
           <Route element={<ProtectedRoute roles={["rh"]} />}>
             <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
