@@ -77,7 +77,7 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
   const hojas = useMemo(
     () =>
       armarHojaPagos(
-        (saldos ?? []).map((s) => ({ empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre, banco: s.banco, ultimos_4: s.ultimos_4, alias: s.alias, saldo_inicial: Number(s.saldo_inicial), saldo_al: saldoAl ? (saldoAl.get(s.cuenta_id) ?? null) : undefined })),
+        (saldos ?? []).map((s) => ({ empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre, banco: s.banco, ultimos_4: s.ultimos_4, alias: s.alias, saldo_inicial: Number(s.saldo_inicial), saldo_final: Number(s.saldo_final), saldo_al: saldoAl ? (saldoAl.get(s.cuenta_id) ?? null) : undefined })),
         pagos ?? [],
         fecha,
         entradas ?? [],

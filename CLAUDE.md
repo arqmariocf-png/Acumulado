@@ -370,6 +370,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   vez"); si el estado de cuenta es más viejo, sí lo resta ("aún no está en el
   estado de cuenta"). Mismo caso pendiente: 41041 (28-oct), 41186 ERG (6-nov),
   41432 (14-nov).
+  **Estado de cuenta del mismo día (29-oct-2026, Laura: "no me actualiza
+  los saldos en programación de pagos, aunque ya se subió el estado de
+  cuenta")**: subió el de hoy de BBVA 5859 (AEP; el 28 salió $1,000,000 a
+  Banregio y el 29 regresó de Banamex) y la hoja seguía en $6,255.61 porque
+  el saldo inicial era el del último movimiento ANTERIOR al día.
+  `fn_saldos_fecha_cuenta` ahora cuenta hasta la fecha inclusive
+  (`20261029090000`) y `armarHojaPagos` (`CuentaHoja.saldo_final`), cuando
+  el estado de cuenta ya llega al día de la hoja, usa el saldo del día
+  ("estado de cuenta al dd/mm, ya con los movimientos de ese día") y no
+  vuelve a restar lo pagado ese día (`pagado_en <= corte`); sin el estado de
+  cuenta de hoy todo sigue igual. Si Laura paga DESPUÉS de subir el estado de
+  cuenta y lo marca pagado, debe volver a subirlo para que la hoja lo traiga.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el
