@@ -108,3 +108,29 @@ test("pago hecho antes de la fecha de la hoja: no se resta si el estado de cuent
   assert.equal(h2.cargos, 22017.1);
   assert.match(h2.renglones.find((r) => r.oc === "41187")!.comentarios!, /aún no está en el estado de cuenta/);
 });
+
+test("estado de cuenta del mismo día ya subido: el saldo inicial es el del día y lo pagado hoy no se resta otra vez (29-oct-2026)", () => {
+  // BBVA 5859 de AEP: al cierre del 28 quedaban $6,255.61; el 29 entró $1,000,000
+  // y Laura subió el estado de cuenta del 29. La hoja seguía en $6,255.61.
+  const cs: CuentaHoja[] = [{ ...AEP, banco: "BBVA", ultimos_4: "5859", alias: null, saldo_inicial: 6255.61, saldo_final: 1006255.61, saldo_al: "2026-10-29" }];
+  const pagos = [
+    pago({ id_orden: "41500", beneficiario: "Cemex", monto: 50000, fecha_programada: "2026-10-29", estatus: "pagado", pagado_en: "2026-10-29", referencia: "0046999" }),
+    pago({ id_orden: "41501", beneficiario: "Cruz Azul", monto: 20000, fecha_programada: "2026-10-29" }),
+  ];
+  const [h] = armarHojaPagos(cs, pagos, "2026-10-29");
+  assert.equal(h.abonos, 1006255.61);
+  assert.match(h.renglones[0].comentarios!, /estado de cuenta al 29\/10, ya con los movimientos de ese día/);
+  assert.equal(h.renglones[0].saldo_viejo, false);
+  const r41500 = h.renglones.find((r) => r.oc === "41500")!;
+  assert.equal(r41500.cargo, null);
+  assert.match(r41500.comentarios!, /^pagado · ref 0046999 · ya está en el saldo del banco/);
+  assert.equal(h.cargos, 20000);
+  assert.equal(h.saldo, 986255.61);
+  // Sin el estado de cuenta de hoy (el último es del 28): saldo de la víspera
+  // y lo pagado hoy sí se resta, como siempre.
+  const [h2] = armarHojaPagos([{ ...cs[0], saldo_al: "2026-10-28" }], pagos, "2026-10-29");
+  assert.equal(h2.abonos, 6255.61);
+  assert.equal(h2.cargos, 70000);
+  assert.equal(h2.renglones.find((r) => r.oc === "41500")!.cargo, 50000);
+  assert.deepEqual(notaSaldoInicial("2026-10-29", "2026-10-29"), { texto: "estado de cuenta al 29/10, ya con los movimientos de ese día", viejo: false });
+});

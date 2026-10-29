@@ -11,8 +11,13 @@ export interface CuentaHoja {
   ultimos_4: string;
   alias: string | null;
   saldo_inicial: number;
-  /** Día del último movimiento cargado antes de la fecha: de ahí sale el
-   * saldo inicial (13-oct-2026, Laura). null = la cuenta no tiene nada. */
+  /** Saldo después del último movimiento cargado del mismo día de la hoja
+   * (29-oct-2026, Laura: subió el estado de cuenta de hoy y el saldo no
+   * cambiaba). Si el estado de cuenta ya llega a la fecha, este es el saldo
+   * inicial que se usa. */
+  saldo_final?: number | null;
+  /** Día del último movimiento cargado hasta la fecha inclusive: de ahí sale
+   * el saldo inicial (13-oct-2026, Laura). null = la cuenta no tiene nada. */
   saldo_al?: string | null;
 }
 
@@ -106,6 +111,7 @@ export function diaHabilAnterior(iso: string): string {
 export function notaSaldoInicial(saldoAl: string | null | undefined, fecha: string): { texto: string; viejo: boolean } | null {
   if (saldoAl === undefined) return null;
   if (saldoAl === null) return { texto: "sin estado de cuenta cargado", viejo: true };
+  if (saldoAl >= fecha) return { texto: `estado de cuenta al ${ddmm(saldoAl)}, ya con los movimientos de ese día`, viejo: false };
   const viejo = saldoAl < diaHabilAnterior(fecha);
   return { texto: viejo ? `estado de cuenta al ${ddmm(saldoAl)}: falta subir lo más reciente` : `estado de cuenta al ${ddmm(saldoAl)}`, viejo };
 }
@@ -122,15 +128,19 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     }
     return h;
   };
-  // Último día de estado de cuenta cargado por empresa: un pago hecho antes
-  // de la fecha y hasta ese día ya está restado en el saldo inicial.
+  // Último día de estado de cuenta cargado por empresa: un pago hecho hasta
+  // ese día ya está restado en el saldo inicial (también los de la misma
+  // fecha de la hoja cuando ya se subió el estado de cuenta de ese día).
   const corte = new Map<string, string>();
   for (const c of cuentas) {
     if (c.saldo_al && (corte.get(c.empresa_id) ?? "") < c.saldo_al) corte.set(c.empresa_id, c.saldo_al);
   }
   for (const c of cuentas) {
     const h = hoja(c.empresa_id, c.empresa_nombre);
-    const monto = r2(Number(c.saldo_inicial) || 0);
+    // Si el estado de cuenta ya trae el día de la hoja, el saldo que cuenta
+    // es el de ese día (con sus depósitos y pagos), no el de la víspera.
+    const alDia = !!c.saldo_al && c.saldo_al >= fecha && c.saldo_final != null;
+    const monto = r2(Number(alDia ? c.saldo_final : c.saldo_inicial) || 0);
     h.abonos = r2(h.abonos + monto);
     h.saldo = r2(h.saldo + monto);
     const nota = notaSaldoInicial(c.saldo_al, fecha);
@@ -174,10 +184,11 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     }
     // Pagado antes de la fecha de la hoja (Mario, 22-oct-2026: la OC 41187
     // programada al 22 se pagó el 20 y la hoja la volvía a restar, saldo
-    // negativo): si el estado de cuenta ya llega a ese día, el cargo ya está
-    // en el saldo inicial; se lista sin restarlo.
+    // negativo) o el mismo día con el estado de cuenta de ese día ya subido
+    // (29-oct-2026): si el estado de cuenta ya llega al día del pago, el
+    // cargo ya está en el saldo inicial; se lista sin restarlo.
     const pagadoAntes = p.estatus === "pagado" && !!p.pagado_en && p.pagado_en < fecha;
-    const yaEnSaldo = pagadoAntes && p.pagado_en! <= (corte.get(p.empresa_id) ?? "");
+    const yaEnSaldo = p.estatus === "pagado" && !!p.pagado_en && p.pagado_en <= fecha && p.pagado_en <= (corte.get(p.empresa_id) ?? "");
     if (!yaEnSaldo) {
       h.cargos = r2(h.cargos + monto);
       h.saldo = r2(h.saldo - monto);
