@@ -2215,6 +2215,31 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (semanal $71.7 mil + quincenal $148.3 mil), mano de obra $210 mil/semana,
   2 bajas con cuenta activa (Daissy, Josafat), 2 expedientes sin documentos
   (Delia, Jaime), 14 sin cuenta.
+- **Tiempos y checador para RH (29-oct-2026, Mario: "genera el reporte del
+  área de RH a manera de información más específica en cuanto tiempos y
+  checador")**: Recursos humanos → **Tiempos y checador** (`/rh/tiempos`,
+  `pages/rh/ReporteTiempos.tsx`; rh, dirección y admin).
+  `fn_reporte_rh_tiempos(desde, hasta)` (definer, `20261029110000`; 0.15 s;
+  null a quien no sea rh/admin/dirección de su organización; máximo 6 meses):
+  por persona con cuenta y por día la primera entrada, salida a comer,
+  regreso, última salida, horas activas (salida − entrada − comida; sin comida
+  el día completo; sin salida no suma), retardo en minutos contra la hora de
+  entrada + tolerancia de su perfil de jornada (o la base 08:00 + 15); por
+  persona: días hábiles según su jornada (lun-vie, o lun-sáb si `dias_semana`
+  es 6), días con entrada, faltas, retardos, entrada/salida promedio, horas
+  activas totales y esperadas (`horas_semana ÷ dias_semana × días completos`),
+  días sin salida, comida promedio, marcas manuales/offline/anuladas y
+  ubicación más frecuente; `detalle` por persona y día y `por_dia`.
+  `lib/reporteRhTiempos.ts` (con pruebas): `semaforoPersona` (rojo = sin
+  entradas, asistencia < 70 % o puntualidad < 50 %; ámbar = asistencia < 90 %,
+  puntualidad < 80 %, ≥ 3 días sin salida o más de 1 h/día por debajo de su
+  jornada), orden, filtro, CSV por persona y por día, HTML horizontal con
+  detalle opcional. **Al 29-oct las 38 personas tienen la jornada base (08:00,
+  48 h en 6 días)**: los retardos y horas esperadas no son reales para
+  practicantes de medio turno (Katherine, Andrea, Valery entran 10:40-11:50)
+  hasta que RH asigne perfiles en RH → Checador → Jornadas. Primera corrida 30
+  días: 29 de 38 checan, asistencia 69 %, puntualidad 41 %, 3,334 h activas,
+  84 días con entrada y sin salida, 29 en rojo (9 sin ninguna entrada).
 - **Recursos humanos como grupo (22-oct-2026, Mario: "la parte de nómina es
   realmente recursos humanos"; "entré con Eréndira y no tiene el tablero")**:
   el grupo del menú "Nómina y mano de obra" se llama **Recursos humanos** (la
