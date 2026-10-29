@@ -233,7 +233,7 @@ export function htmlReporteRh(d: ReporteRh, organizacion: string, generadoPor: s
   th{background:#f1f5f9;font-size:10px;text-transform:uppercase;color:#475569} td.r,th.r{text-align:right}
   .vacio{color:#94a3b8;font-style:italic;margin:2px 0 8px}
   ul.alertas{padding-left:18px;margin:4px 0} li.rojo{color:#b91c1c} li.ambar{color:#b45309}
-  ol.resumen{padding-left:18px} section{break-inside:avoid}
+  ol.resumen{padding-left:18px} h3{font-size:12px;margin:10px 0 2px;break-after:avoid} tr{break-inside:avoid} .kpis{break-inside:avoid}
   @media print{body{margin:12mm}}
 </style></head><body>
 <h1>Reporte de recursos humanos · director general</h1>
