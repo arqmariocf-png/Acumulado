@@ -53,6 +53,17 @@ export function Ordenes() {
   // Tipo con el que abre "+ Nueva" (en el editor se cambia entre OC y OS).
   const tipo: TipoOrden = vista === "OV" ? "OV" : filtro === "OS" ? "OS" : "OC";
   const [empresaId, setEmpresaId] = useEmpresaFiltro();
+  // 30-oct-2026: quien captura solo por permiso 'compras' (Jaime) queda
+  // acotado a su empresa principal + "Maneja también" (la base lo valida en
+  // fn_orden_ia_guardar); aquí solo se avisa y se apaga "+ Nueva" fuera de eso.
+  const { data: empresasCaptura } = useQuery({
+    queryKey: ["empresas-captura-ordenes"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("auth_empresas_captura_ordenes");
+      if (error) throw error;
+      return (data ?? []) as string[];
+    },
+  });
   const { perfil } = useAuth();
   const { data: empresas } = useEmpresasAlcance();
   const queryClient = useQueryClient();
@@ -231,7 +242,13 @@ export function Ordenes() {
           <button type="button" onClick={descargar} disabled={!filas.length || descargando} className="rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             {descargando ? "Preparando Excel…" : vista === "OV" ? "Descargar Excel (con detalle)" : "Descargar Excel"}
           </button>
-          <button type="button" onClick={() => setEditor({ id: null })} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+          <button
+            type="button"
+            onClick={() => setEditor({ id: null })}
+            disabled={!!empresasCaptura && !!empresaId && !empresasCaptura.includes(empresaId)}
+            title={empresasCaptura && empresaId && !empresasCaptura.includes(empresaId) ? "Solo puedes capturar en tu empresa principal y las que manejas" : undefined}
+            className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          >
             + Nueva {vista === "OV" ? "OV" : "OC u OS"}
           </button>
         </div>
@@ -278,6 +295,11 @@ export function Ordenes() {
 
       <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
         <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />
+        {empresasCaptura && empresas && empresasCaptura.length < empresas.length && (
+          <span className="text-xs text-slate-500">
+            Capturas en: {empresas.filter((e) => empresasCaptura.includes(e.id)).map((e) => e.codigo || e.nombre).join(", ") || "ninguna"}
+          </span>
+        )}
         {vista === "compras" && (
           <div className="flex gap-1 rounded border border-slate-300 p-0.5">
             {(["todas", "OC", "OS"] as const).map((f) => (

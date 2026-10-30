@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { useAuth } from "../../lib/auth";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
@@ -34,6 +35,10 @@ function hoyIso(): string {
 
 export function EfectivoPorConfirmar() {
   const qc = useQueryClient();
+  // 30-oct-2026 (Mario): con permiso por persona 'caja' (Jaime) la caja se
+  // consulta; confirmar y subir comprobante sigue siendo de dirección.
+  const { perfil } = useAuth();
+  const puedeConfirmar = !!perfil && ["admin", "direccion", "corporativo"].includes(perfil.rol);
   const hoy = hoyIso();
   const [texto, setTexto] = useState("");
   const [empresaId, setEmpresaId] = useState("");
@@ -88,7 +93,11 @@ export function EfectivoPorConfirmar() {
   return (
     <div>
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Efectivo por confirmar</h1>
-      <p className="mb-4 text-sm text-slate-500">Órdenes de compra con saldo que se pagan en efectivo. Elige una o varias, confirma el pago y sube un solo comprobante para todas.</p>
+      {puedeConfirmar ? (
+        <p className="mb-4 text-sm text-slate-500">Órdenes de compra con saldo que se pagan en efectivo. Elige una o varias, confirma el pago y sube un solo comprobante para todas.</p>
+      ) : (
+        <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">Órdenes de compra con saldo que se pagan en efectivo. Solo consulta: el pago lo confirma dirección en esta misma pantalla.</p>
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar OC, proveedor u obra…" className="w-64 rounded border border-slate-300 px-2 py-1.5 text-sm" />
@@ -103,7 +112,7 @@ export function EfectivoPorConfirmar() {
         <span className="text-sm text-slate-600">
           {lista.length} OC · <b className="tabular-nums">{moneda(total)}</b>
         </span>
-        {sel.size > 0 && (
+        {puedeConfirmar && sel.size > 0 && (
           <span className="ml-auto flex items-center gap-2 text-sm">
             <span>
               {sel.size} elegidas · <b className="tabular-nums">{moneda(suma)}</b>
@@ -154,14 +163,14 @@ export function EfectivoPorConfirmar() {
                 <th className="px-3 py-2">Proveedor</th>
                 <th className="px-3 py-2 text-right">Monto</th>
                 <th className="px-3 py-2">Ver orden</th>
-                <th className="px-3 py-2">Confirmar pago / comprobante</th>
+                {puedeConfirmar && <th className="px-3 py-2">Confirmar pago / comprobante</th>}
               </tr>
             </thead>
             <tbody>
               {lista.map((o) => (
                 <tr key={o.id} className={`border-t border-slate-100 ${sel.has(o.id) ? "bg-emerald-50/60" : ""}`}>
                   <td className="px-3 py-2">
-                    <input type="checkbox" checked={sel.has(o.id)} disabled={o.autorizacion !== "autorizada"} onChange={() => alternar(o.id)} aria-label={`Elegir ${o.id_orden}`} />
+                    <input type="checkbox" checked={sel.has(o.id)} disabled={!puedeConfirmar || o.autorizacion !== "autorizada"} onChange={() => alternar(o.id)} aria-label={`Elegir ${o.id_orden}`} />
                   </td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-slate-900">{o.id_orden}</div>
@@ -177,6 +186,7 @@ export function EfectivoPorConfirmar() {
                   <td className="px-3 py-2">
                     <BotonVerOc ocId={o.id} className="text-xs text-sky-700 underline" />
                   </td>
+                  {puedeConfirmar && (
                   <td className="px-3 py-2">
                     {o.autorizacion !== "autorizada" ? (
                       // 21-oct-2026, Laura: "solo órdenes autorizadas se pueden completar como pagadas".
@@ -196,6 +206,7 @@ export function EfectivoPorConfirmar() {
                     </button>
                     )}
                   </td>
+                  )}
                 </tr>
               ))}
               {lista.length === 0 && (

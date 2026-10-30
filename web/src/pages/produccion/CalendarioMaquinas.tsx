@@ -68,9 +68,6 @@ function isoLocal(d: Date): string {
 function hora(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 }
-function fechaHora(iso: string): string {
-  return new Date(iso).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-}
 function minutosTexto(m: number): string {
   const h = Math.floor(m / 60);
   const mm = Math.round(m % 60);
@@ -343,7 +340,6 @@ function SeccionRutas({
 }) {
   const [productoId, setProductoId] = useState("");
   const pasos = rutas.filter((r) => r.producto_id === productoId).sort((a, b) => a.orden - b.orden);
-  const nombreEquipo = new Map(equipos.map((e) => [e.id, e.nombre]));
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -375,13 +371,26 @@ function SeccionRutas({
         <>
           <ol className="mb-2 space-y-1 text-sm">
             {pasos.map((p) => (
-              <li key={p.id} className="flex items-center justify-between rounded border border-slate-100 px-2 py-1">
-                <span>
-                  <span className="mr-1 inline-block w-5 rounded bg-slate-900 text-center text-[10px] font-bold text-white">{p.orden}</span>
-                  {p.nombre_paso}
-                  <span className="text-slate-400"> · {p.equipo_id ? nombreEquipo.get(p.equipo_id) ?? "máquina" : "sin máquina"} · {p.minutos_preparacion} min prep + {p.minutos_por_unidad} min/u</span>
-                </span>
-                <button onClick={() => onBorrar(p.id)} className="text-xs text-red-600 underline">
+              // 30-oct-2026 (Mario, Jaime): los tiempos de cada paso se editan
+              // en línea (máquina, minutos de preparación y por unidad).
+              <li key={p.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-100 px-2 py-1">
+                <span className="mr-1 inline-block w-5 rounded bg-slate-900 text-center text-[10px] font-bold text-white">{p.orden}</span>
+                <span className="font-medium">{p.nombre_paso}</span>
+                <select value={p.equipo_id ?? ""} onChange={(e) => onGuardar(p.id, { equipo_id: e.target.value || null })} className="rounded border border-slate-300 px-1 py-0.5 text-xs" aria-label="Máquina">
+                  <option value="">sin máquina</option>
+                  {equipos.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.nombre}
+                    </option>
+                  ))}
+                </select>
+                <label className="text-xs text-slate-500">
+                  <input type="number" step="1" min="0" defaultValue={p.minutos_preparacion} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== Number(p.minutos_preparacion)) onGuardar(p.id, { minutos_preparacion: v }); }} className="w-16 rounded border border-slate-300 px-1 py-0.5 text-xs" aria-label="Minutos de preparación" /> min prep
+                </label>
+                <label className="text-xs text-slate-500">
+                  + <input type="number" step="0.01" min="0" defaultValue={p.minutos_por_unidad} onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== Number(p.minutos_por_unidad)) onGuardar(p.id, { minutos_por_unidad: v }); }} className="w-16 rounded border border-slate-300 px-1 py-0.5 text-xs" aria-label="Minutos por unidad" /> min/u
+                </label>
+                <button onClick={() => onBorrar(p.id)} className="ml-auto text-xs text-red-600 underline">
                   Quitar
                 </button>
               </li>
@@ -505,9 +514,9 @@ function SeccionProgramacion({
                   <div className="text-slate-400">{minutosTexto(Number(o.minutos_programados))}</div>
                 </td>
                 <td className="px-2 py-2 text-xs">
-                  {o.inicio_real ? fechaHora(o.inicio_real) : "—"}
-                  {" → "}
-                  {o.fin_real ? fechaHora(o.fin_real) : "—"}
+                  {/* 30-oct-2026 (Mario, Jaime): el inicio y fin reales también se corrigen a mano. */}
+                  <input type="datetime-local" value={o.inicio_real ? isoLocal(new Date(o.inicio_real)) : ""} onChange={(e) => onActualizar(o.id, { inicio_real: e.target.value ? new Date(e.target.value).toISOString() : null, fuente_real: "manual" })} className="mb-1 block rounded border border-slate-300 px-1 py-0.5" aria-label="Inicio real" />
+                  <input type="datetime-local" value={o.fin_real ? isoLocal(new Date(o.fin_real)) : ""} onChange={(e) => onActualizar(o.id, { fin_real: e.target.value ? new Date(e.target.value).toISOString() : null, fuente_real: "manual" })} className="block rounded border border-slate-300 px-1 py-0.5" aria-label="Fin real" />
                   {o.minutos_reales != null && (
                     <div className={Number(o.minutos_reales) > Number(o.minutos_programados) ? "text-red-700" : "text-emerald-700"}>
                       {minutosTexto(Number(o.minutos_reales))} real ({Number(o.minutos_reales) - Number(o.minutos_programados) >= 0 ? "+" : ""}
