@@ -492,6 +492,21 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   "Deuda corto y mediano plazo - Grupo Loma 2026-10-30" (10 láminas, fuera
   del repo). El proxy bloquea descargas de dropboxusercontent (no se puede
   OCR desde aquí).
+  **Estado de resultados de AEP ene–oct 2026 (30-oct-2026, Mario: "genera un
+  estado de resultados de Aceros y Envasados y nutrimos con esta información
+  que revisaremos")**: armado a base de CFDI del SAT (emitidos tipo I =
+  ventas; recibidos tipo I clasificados por RFC de proveedor; notas de crédito
+  tipo E restan; todo /1.16) + nómina del backoffice (AEP: 34,000 quincenal +
+  30–40 mil semanal al mes; ene–jun estimada 67,800 por Mario). Resultado:
+  ventas 21.7 M (13.1 M a grupo: ERG 5.9 M, CSC 3.8 M, Mario 3.2 M; Teziutlán
+  8.2 M c/IVA), costo 17.5 M (mercancía 8.0 M + subcontratos "Pagos por Daniel"
+  8.4 M: Maqui Print, Yulitsadonce, Galicia, Sushshop, Tobala, CPM), utilidad
+  bruta 4.27 M (19.6 %), gastos de operación 2.15 M, financieros 0.44 M
+  (BBVA sube a 39–77 mil/mes desde agosto: ¿intereses del abono de 5.86 M?),
+  utilidad antes de ISR 1.68 M. Inmobiliaria Comatse 8.9 M c/IVA (3 CFDI
+  23-oct) se dejó como inversión, fuera del resultado. Sin inventarios,
+  depreciación ni ISR. Generador y CSV en scratchpad `er/er.cjs`; Eric
+  corrige el CSV y se regenera.
 - **Supervisores con precios unitarios y tareas propias (16-oct-2026,
   Mario: "a todos los supervisores habilitarles el módulo de precios
   unitarios y que puedan asignarse tareas a ellos mismos")**: permiso
