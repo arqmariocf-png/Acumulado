@@ -459,6 +459,39 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   efectivo de 7 empresas y 182 pagos en efectivo, confirmar bloqueado, edita
   operaciones y rutas. El módulo completo de caja (fondo, entregas, arqueo)
   sigue pendiente.
+- **Deuda a corto y mediano plazo (30-oct-2026, Mario: "vamos a trabajar
+  con Eric y Laura en la parte de deudas a mediano y corto plazo para
+  iniciar el análisis financiero; quiero tener los balances interpretados
+  por ti")**: NO hay balances ni balanzas 2026 en Dropbox ni en el sistema
+  (solo LRT y QX a nov-2025, escaneados sin texto, en "Teziutlan/LIS
+  TEZIUTLÁN/REGISTRO AL PADRON"); se pidieron a Eric (contador; no tiene
+  cuenta en Acumulado) y Laura en Dropbox "01 Documentos base/Balances".
+  Fuentes que sí hay: `Grupo Loma/Finanzas 2.0/PRESTAMOS 2026.xlsx`
+  (préstamos intercompañía y pagos a bancos ene–jul por empresa; las hojas
+  AEP/CSC no distinguen préstamo/devolución), `Finanzas/PRESTAMOS 2025.xlsx`
+  (resumen de Laura), `Finanzas/PRESTAMOS DE MCF A GRUPO LOMA AÑO
+  24-25-26.xlsx` (AEP le debe a Mario 3.47 M, CSC 2.50 M, LRT 0.19 M; ERG
+  devolvió 0.77 M de más), `Finanzas/Vencimiento de créditos.xlsx` (días de
+  pago por banco), `Finanzas/PRESTAMOS TC.xlsx` (tarjetas ≈ 303 mil jul-26).
+  Los estados de cuenta en `movimientos` empiezan en jul-2026. Créditos
+  vistos: AEP Banorte/NAFIN (1,710,000 ene-26, capital 28,500 + intereses el
+  15; saldo 1,453,500 al 30-oct), Banorte "nuevo" (≈ 39 mil el 15),
+  Actinver 35,627/mes, AB&C Leasing 48,824; CSC BanBajío 4 M (disposiciones
+  7 y 14-sep-26, cta 8954) y Unión de Crédito General (pagó 4.09 M ene–jun,
+  luego 11–23 mil/mes); ERG Santander (83,333 capital + ≈ 12 mil intereses
+  el 28; ≈ 1.08 M, ≈ 13 pagos) y Unión de Crédito (≈ 0.4 M); MCC y VBB
+  BanBajío (11.7 y 31.2 mil/mes). Abonos BBVA sin explicar: AEP 5,861,000
+  (15-jun) y CSC 1,872,450 (9-jun). **Mifel (Mario): 4 M a 12.75 % a 36
+  meses para AEP, en aprobación final; entra a finales de mes; 1,710,000 →
+  liquida Banorte/NAFIN 1,453,500 y quedan 256,500 para operación; pago ≈
+  134,295/mes. Nómina AEP ≈ 67,800/mes (17,000 quincenal + 7,800
+  semanal).** 263 movimientos jul–oct (17.1 M) con etiqueta "N/A - PRESTAMO
+  INTERCOMPAÑIA" no tienen `empresa_contraparte_id`: `v_prestamos_intercompania`
+  no puede netear. `deuda_creditos` sigue en 0: se entregó plantilla CSV
+  prellenada (scratchpad) para Finanzas › Deuda financiera. Entregable: PDF
+  "Deuda corto y mediano plazo - Grupo Loma 2026-10-30" (10 láminas, fuera
+  del repo). El proxy bloquea descargas de dropboxusercontent (no se puede
+  OCR desde aquí).
 - **Supervisores con precios unitarios y tareas propias (16-oct-2026,
   Mario: "a todos los supervisores habilitarles el módulo de precios
   unitarios y que puedan asignarse tareas a ellos mismos")**: permiso
