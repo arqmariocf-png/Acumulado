@@ -249,6 +249,9 @@ function Enrutador() {
             <Route path="/finanzas/historial-pagos" element={<HistorialPagos />} />
             <Route path="/finanzas/proveedores" element={<CuentasPorPagar />} />
             <Route path="/finanzas/por-autorizar" element={<OrdenesPorAutorizarPagina />} />
+          </Route>
+          {/* Caja de efectivo (30-oct-2026): con permiso por persona 'caja' (Jaime) se consulta; confirma dirección. */}
+          <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} oPermiso={(p) => (p.modulos ?? []).includes("caja")} />}>
             <Route path="/finanzas/efectivo" element={<EfectivoPorConfirmar />} />
           </Route>
           <Route element={<ProtectedRoute roles={["direccion"]} modulo="proyectos" />}>

@@ -433,6 +433,32 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   "Nueva requisición" con ese permiso y empresa principal
   (`20261022130000`). Probado como Jaime en rollback: crea en Clavicón con
   renglón, CSC rechazada; consecutivo de folio regresado a 85.
+- **Jaime con Balken y la caja de efectivo (30-oct-2026, Mario: "habilita a
+  Jaime el poder editar los tiempos de la maquinaria y también las órdenes y
+  requisiciones de Balken; que pueda ver la caja de efectivo ya que Jaime
+  hará uso de esa caja")** (`20261030090000`, aplicada como
+  `jaime_balken_caja_1_permiso` y `_2_funciones_policies`): (1) tiempos de
+  máquina: la base ya dejaba al rol produccion escribir `equipos_produccion`,
+  `rutas_producto` y `operaciones_programadas`; en Calendario de máquinas
+  ahora cada paso de la ruta se edita en línea (máquina, min prep, min/u) y
+  el inicio/fin REAL de cada operación se corrige a mano (antes solo "Iniciar"
+  / "Terminar" con la hora actual). (2) VBB en "Maneja también" de Jaime →
+  requisiciones en Balken (`auth_empresas_requisicion_permiso`). (3) Permiso
+  por persona 'compras' → captura OC/OS/OV en `/ordenes`; **quien captura
+  solo por ese permiso (no por rol) queda acotado a empresa principal +
+  "Maneja también"** (`auth_empresas_captura_ordenes()`, la valida
+  `fn_orden_ia_guardar`; Jaime: MCC y VBB aunque tenga todas_las_empresas);
+  la pantalla dice "Capturas en: …" y apaga "+ Nueva" fuera de eso. (4) Permiso
+  por persona **'caja'** (en `permisos_modulo` y `MODULOS_ASIGNABLES`) = ver
+  Efectivo por confirmar (`/finanzas/efectivo`) en solo lectura: policies
+  `ordenes_compra_caja_select` (OC con condición efectivo o forma Efectivo en su
+  alcance) y `pagos_programados_caja_select` (`metodo = 'efectivo'`); confirmar
+  sigue siendo de dirección/admin (la pantalla esconde casillas y botones).
+  Probado como Jaime en rollback: OC en VBB sí (IA-OC-0265, consecutivo
+  regresado a 264), en AEP bloqueada, requisición en VBB ok, ve 434 OC en
+  efectivo de 7 empresas y 182 pagos en efectivo, confirmar bloqueado, edita
+  operaciones y rutas. El módulo completo de caja (fondo, entregas, arqueo)
+  sigue pendiente.
 - **Supervisores con precios unitarios y tareas propias (16-oct-2026,
   Mario: "a todos los supervisores habilitarles el módulo de precios
   unitarios y que puedan asignarse tareas a ellos mismos")**: permiso

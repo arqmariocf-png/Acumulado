@@ -206,7 +206,7 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/finanzas/saldos", etiqueta: "Bancos y saldos", descripcion: "inicio y cierre por empresa, sin detalle", uso: "El resumen rápido para finanzas antes de programar pagos.", visible: esFinanzas , modulo: "conciliacion" },
       { ruta: "/saldos", etiqueta: "Saldos diarios por cuenta", descripcion: "corte por cuenta bancaria", uso: "Saldo de inicio y cierre de cada cuenta por día.", visible: esFinanzas , modulo: "conciliacion" },
       { ruta: "/movimientos", etiqueta: "Conciliación bancaria", descripcion: "movimientos bancarios conciliados contra CFDI", uso: "Para revisar lo ambiguo, duplicado o sin factura después de cargar un estado de cuenta.", visible: veFinanzasCompleto , modulo: "conciliacion" },
-      { ruta: "/finanzas/efectivo", etiqueta: "Efectivo", descripcion: "OC que se pagan en efectivo: proveedor, monto y orden", uso: "Elige una o varias, confirma el pago y sube un solo comprobante para todas.", visible: (p) => p.rol === "direccion" || esAdmin(p), modulo: "conciliacion" },
+      { ruta: "/finanzas/efectivo", etiqueta: "Efectivo", descripcion: "OC que se pagan en efectivo: proveedor, monto y orden", uso: "Elige una o varias, confirma el pago y sube un solo comprobante para todas. Con permiso de caja (Jaime) solo se consulta.", visible: (p) => p.rol === "direccion" || esAdmin(p) || conPermiso("caja")(p), modulo: "conciliacion" },
       { ruta: "/prestamos-intercompania", etiqueta: "Préstamos entre empresas", descripcion: "movimientos intercompañía", uso: "Cuando una empresa del grupo le presta a otra: queda registrado de los dos lados.", visible: veFinanzasCompleto , modulo: "conciliacion" },
     ],
   },
