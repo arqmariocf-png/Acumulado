@@ -14,7 +14,7 @@ export function Comedor() {
   const pestanas = [
     { clave: "pedir", titulo: "Pedir comida", ve: true },
     { clave: "cocina", titulo: "Cocina", ve: !!permisos?.cocina },
-    { clave: "nomina", titulo: "Descuento vía nómina", ve: !!permisos?.nomina },
+    { clave: "nomina", titulo: "Corte y descuento vía nómina", ve: !!permisos?.nomina },
   ].filter((p) => p.ve);
   const actual = pestanas.find((p) => p.clave === params.get("tab"))?.clave ?? "pedir";
 

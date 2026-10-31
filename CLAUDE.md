@@ -1655,6 +1655,14 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (pedidos, entregar, menú y platillos); no ve Descuento vía nómina ni nada de
   finanzas (probado en rollback). Al 19-oct el comedor está vacío: 0
   platillos, 0 menús, 0 pedidos; ella da de alta platillos y el menú del día.
+- **Corte del comedor para la caja (31-oct-2026, Mario: "deja ver el corte
+  semanal a Jaime también por si es en efectivo")**: la pestaña "Corte y
+  descuento vía nómina" la ve también quien tiene el permiso por persona
+  'caja' (Jaime): `auth_ve_nomina_comedor()` = roles de siempre O permiso
+  caja; marcar aplicado en nómina es `auth_aplica_nomina_comedor()` (admin,
+  corporativo, dirección, rh) y lo exige `fn_comedor_aplicar_descuento`; la
+  pantalla esconde el botón y avisa "Solo consulta" (`20261031090000`).
+  Probado en rollback: Jaime ve y no aplica; Alma no ve.
 
 ## Director general (30-sep-2026)
 - Mario: "genera un rol de director general; debo poder editar absolutamente

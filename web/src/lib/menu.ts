@@ -105,7 +105,7 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/", etiqueta: "Inicio", descripcion: "mis pendientes y alertas del día según mi puesto", uso: "Lo primero al entrar: lo que te toca hoy y las alertas con liga directa al problema.", visible: (p) => p.rol !== "pendiente", personal: true },
       { ruta: "/tareas", etiqueta: "Mis tareas", descripcion: "una sola lista de actividades, con filtro por área", uso: "Para asignar y dar seguimiento a pendientes por equipo.", visible: (p) => p.rol !== "pendiente" },
       { ruta: "/checador", etiqueta: "Checador", descripcion: "entrada, comida y salida con foto y ubicación", uso: "Cada día al llegar, al salir a comer y al terminar. Funciona sin señal y sincroniza después.", visible: () => true , personal: true },
-      { ruta: "/comedor", etiqueta: "Comedor", descripcion: "pide tu comida del día; se descuenta de tu nómina", uso: "Antes de la hora límite eliges tus platillos; la cocina entrega y el descuento sale en tu nómina. Cocina y RH ven sus pestañas aquí mismo.", visible: (p) => p.rol !== "pendiente", modulo: "comedor" },
+      { ruta: "/comedor", etiqueta: "Comedor", descripcion: "pide tu comida del día; se descuenta de tu nómina", uso: "Antes de la hora límite eliges tus platillos; la cocina entrega y el descuento sale en tu nómina. Cocina, RH y quien lleva la caja ven sus pestañas aquí mismo.", visible: (p) => p.rol !== "pendiente", modulo: "comedor" },
       { ruta: "/personaje", etiqueta: "Mi perfil", descripcion: "personaje, credencial QR, crédito y mis documentos", uso: "Tómate la foto de frente para crear tu personaje; cada tarea terminada y cada día que checas te da experiencia. También ves a tu equipo.", visible: (p) => p.rol !== "pendiente" , personal: true },
     ],
   },
