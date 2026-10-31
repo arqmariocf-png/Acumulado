@@ -3,13 +3,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
 import { csvNomina, resumenNomina, type PedidoComedor } from "../../lib/comedor";
-import { hoyMx, mensajeError } from "./comun";
+import { hoyMx, mensajeError, usePermisosComedor } from "./comun";
 import { descargarCsv } from "../../lib/descargarArchivo";
 
 /** RH / finanzas: descuento del comedor por trabajador y periodo (solo lo
  * entregado), para capturarlo en la nómina y marcarlo como aplicado. */
 export function NominaComedor() {
   const queryClient = useQueryClient();
+  const { data: permisos } = usePermisosComedor();
+  // Con el permiso 'caja' (Jaime) solo se consulta el corte; marcarlo aplicado
+  // en nómina sigue siendo de RH, dirección, corporativo y admin.
+  const puedeAplicar = !!permisos?.aplica;
   const [desde, setDesde] = useState(hoyMx(-14));
   const [hasta, setHasta] = useState(hoyMx());
   const [aviso, setAviso] = useState<string | null>(null);
@@ -72,6 +76,11 @@ export function NominaComedor() {
         </button>
         {aviso && <span className="text-slate-600">{aviso}</span>}
       </div>
+      {!puedeAplicar && (
+        <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Solo consulta: este es el corte de lo entregado por trabajador y empresa. Marcarlo como aplicado en nómina lo hace RH o finanzas.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {porEmpresa.map((e) => (
@@ -80,7 +89,7 @@ export function NominaComedor() {
             <div className="tabular-nums text-slate-700">
               {moneda(e.pendiente)} por descontar · {e.personas} personas
             </div>
-            {e.pendiente > 0 && (
+            {puedeAplicar && e.pendiente > 0 && (
               <button type="button" onClick={() => aplicar.mutate(e)} disabled={aplicar.isPending} className="mt-1 rounded bg-slate-900 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50">
                 Marcar aplicado en nómina
               </button>

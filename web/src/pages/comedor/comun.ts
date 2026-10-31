@@ -29,8 +29,14 @@ export function usePermisosComedor() {
   return useQuery({
     queryKey: ["comedor", "permisos"],
     queryFn: async () => {
-      const [cocina, nomina] = await Promise.all([supabase.rpc("auth_opera_comedor"), supabase.rpc("auth_ve_nomina_comedor")]);
-      return { cocina: cocina.data === true, nomina: nomina.data === true };
+      const [cocina, nomina, aplica] = await Promise.all([
+        supabase.rpc("auth_opera_comedor"),
+        supabase.rpc("auth_ve_nomina_comedor"),
+        supabase.rpc("auth_aplica_nomina_comedor"),
+      ]);
+      // nomina = ve el corte (RH, dirección, corporativo, admin o permiso 'caja');
+      // aplica = puede marcarlo aplicado en nómina (sin el permiso 'caja').
+      return { cocina: cocina.data === true, nomina: nomina.data === true, aplica: aplica.data === true };
     },
   });
 }
