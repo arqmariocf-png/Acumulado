@@ -22,6 +22,7 @@ interface MarcaChecador {
   ubicacion_id: string | null;
   ubicacion_nombre: string | null;
   sincronizada_offline: boolean;
+  automatica?: boolean;
   manual: boolean;
   hora_original: string | null;
   ajustada_en: string | null;
@@ -236,8 +237,9 @@ export function MarcasChecador({
                 <td className="whitespace-nowrap px-3 py-2">
                   {SIMBOLO_MARCA[m.tipo]} {ETIQUETA_MARCA[m.tipo]}
                   {m.sincronizada_offline && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] text-amber-800 no-underline">offline</span>}
+                  {m.automatica && <span title={m.ajuste_nota ?? ""} className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-800">automática 23:59</span>}
                   {m.manual && <span className="ml-1 rounded bg-sky-100 px-1 text-[10px] text-sky-800">manual</span>}
-                  {!m.manual && m.ajustada_en && <span className="ml-1 rounded bg-sky-100 px-1 text-[10px] text-sky-800">corregida</span>}
+                  {!m.manual && !m.automatica && m.ajustada_en && <span className="ml-1 rounded bg-sky-100 px-1 text-[10px] text-sky-800">corregida</span>}
                   {m.anulada && <span className="ml-1 rounded bg-red-100 px-1 text-[10px] text-red-800">anulada</span>}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-slate-600">
@@ -374,7 +376,12 @@ function ReporteHorizontal({ marcas, dias, cargando }: { marcas: MarcaChecador[]
     descargarCsv(`checador-${new Date().toISOString().slice(0, 10)}.csv`, csvReporteChecador(filas));
   }
 
-  const celda = (iso: string | null, enTurno = false) => <td className={`whitespace-nowrap px-3 py-1.5 tabular-nums ${iso ? "" : enTurno ? "text-slate-300" : "text-amber-600"}`}>{horaLocal(iso)}</td>;
+  const celda = (iso: string | null, enTurno = false, auto = false) => (
+    <td className={`whitespace-nowrap px-3 py-1.5 tabular-nums ${iso ? "" : enTurno ? "text-slate-300" : "text-amber-600"}`}>
+      {horaLocal(iso)}
+      {auto && <span title="Cierre automático de las 23:59: no marcó salida; se cerró su jornada regular" className="ml-1 text-[10px] text-violet-700">auto</span>}
+    </td>
+  );
   const fecha = (f: FilaChecador) =>
     new Date(`${f.fecha}T12:00:00`).toLocaleDateString("es-MX", { weekday: "short", day: "2-digit", month: "short" });
 
@@ -426,7 +433,7 @@ function ReporteHorizontal({ marcas, dias, cargando }: { marcas: MarcaChecador[]
                   {celda(f.entrada)}
                   {celda(f.comida_inicio, f.enTurno)}
                   {celda(f.comida_fin, f.enTurno)}
-                  {celda(f.salida, f.enTurno)}
+                  {celda(f.salida, f.enTurno, f.automatica)}
                   <td className="whitespace-nowrap px-3 py-1.5 text-right font-semibold tabular-nums" title={f.faltan.length ? `Falta: ${f.faltan.join(", ")}` : ""}>
                     {f.minutos != null ? formatoHoras(f.minutos) : f.enTurno ? <span className="text-xs font-normal text-sky-700">en turno</span> : <span className="text-xs font-normal text-amber-700">falta {f.faltan.includes("entrada") ? "entrada" : "salida"}</span>}
                   </td>

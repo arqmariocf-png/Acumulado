@@ -12,6 +12,8 @@ export interface MarcaReporte {
   tipo: TipoMarcaReporte;
   created_at: string;
   anulada?: boolean;
+  /** Cierre automático de las 23:59 (no marcó salida): la jornada regular. */
+  automatica?: boolean;
 }
 
 export interface FilaChecador {
@@ -22,6 +24,8 @@ export interface FilaChecador {
   comida_inicio: string | null;
   comida_fin: string | null;
   salida: string | null;
+  /** La salida (o el regreso de comer) la puso el cierre automático de las 23:59. */
+  automatica: boolean;
   /** Minutos activos; null si falta entrada o salida. */
   minutos: number | null;
   /** Qué falta para cerrar el día (vacío si está completo). */
@@ -63,14 +67,19 @@ export function armarReporteChecador(marcas: MarcaReporte[], ahora: Date = new D
     const llave = `${m.profile_id}|${fecha}`;
     let f = grupos.get(llave);
     if (!f) {
-      f = { profile_id: m.profile_id, nombre: m.nombre, fecha, entrada: null, comida_inicio: null, comida_fin: null, salida: null, minutos: null, faltan: [], enTurno: false };
+      f = { profile_id: m.profile_id, nombre: m.nombre, fecha, entrada: null, comida_inicio: null, comida_fin: null, salida: null, automatica: false, minutos: null, faltan: [], enTurno: false };
       grupos.set(llave, f);
     }
     const t = m.created_at;
     if (m.tipo === "entrada") f.entrada = f.entrada ? min(f.entrada, t) : t;
-    else if (m.tipo === "salida") f.salida = f.salida ? max(f.salida, t) : t;
-    else if (m.tipo === "comida_inicio") f.comida_inicio = f.comida_inicio ? min(f.comida_inicio, t) : t;
-    else if (m.tipo === "comida_fin") f.comida_fin = f.comida_fin ? max(f.comida_fin, t) : t;
+    else if (m.tipo === "salida") {
+      if (!f.salida || t > f.salida) f.automatica = !!m.automatica;
+      f.salida = f.salida ? max(f.salida, t) : t;
+    } else if (m.tipo === "comida_inicio") f.comida_inicio = f.comida_inicio ? min(f.comida_inicio, t) : t;
+    else if (m.tipo === "comida_fin") {
+      if (m.automatica && (!f.comida_fin || t > f.comida_fin)) f.automatica = true;
+      f.comida_fin = f.comida_fin ? max(f.comida_fin, t) : t;
+    }
   }
   for (const f of grupos.values()) {
     if (!f.entrada) f.faltan.push("entrada");
@@ -109,8 +118,8 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 
 /** CSV para Excel (separado por comas, con BOM para acentos). */
 export function csvReporteChecador(filas: FilaChecador[]): string {
-  const enc = ["Trabajador", "Fecha", "Entrada", "Salida a comer", "Regreso de comer", "Salida", "Horas activas", "Falta"];
-  const lineas = filas.map((f) => [f.nombre, f.fecha, horaLocal(f.entrada), horaLocal(f.comida_inicio), horaLocal(f.comida_fin), horaLocal(f.salida), f.minutos != null ? (f.minutos / 60).toFixed(2) : "", f.faltan.join(" / ")]);
+  const enc = ["Trabajador", "Fecha", "Entrada", "Salida a comer", "Regreso de comer", "Salida", "Horas activas", "Falta", "Cierre automático"];
+  const lineas = filas.map((f) => [f.nombre, f.fecha, horaLocal(f.entrada), horaLocal(f.comida_inicio), horaLocal(f.comida_fin), horaLocal(f.salida), f.minutos != null ? (f.minutos / 60).toFixed(2) : "", f.faltan.join(" / "), f.automatica ? "sí" : ""]);
   return "﻿" + [enc, ...lineas].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
 }
 
@@ -123,7 +132,7 @@ export function htmlReporteChecador(filas: FilaChecador[], periodo: string): str
     .map((fs) => {
       const t = totales.get(fs[0].profile_id)!;
       const renglones = fs
-        .map((f) => `<tr><td>${esc(fechaTexto(f.fecha))}</td><td>${horaLocal(f.entrada)}</td><td>${horaLocal(f.comida_inicio)}</td><td>${horaLocal(f.comida_fin)}</td><td>${horaLocal(f.salida)}</td><td class="n">${f.enTurno ? "en turno" : formatoHoras(f.minutos)}</td><td class="f">${f.enTurno ? "" : esc(f.faltan.join(", "))}</td></tr>`)
+        .map((f) => `<tr><td>${esc(fechaTexto(f.fecha))}</td><td>${horaLocal(f.entrada)}</td><td>${horaLocal(f.comida_inicio)}</td><td>${horaLocal(f.comida_fin)}</td><td>${horaLocal(f.salida)}${f.automatica ? " (auto)" : ""}</td><td class="n">${f.enTurno ? "en turno" : formatoHoras(f.minutos)}</td><td class="f">${f.enTurno ? "" : esc(f.faltan.join(", "))}</td></tr>`)
         .join("");
       return `<tbody><tr class="p"><td colspan="7">${esc(fs[0].nombre)}</td></tr>${renglones}<tr class="t"><td colspan="5">Total ${t.dias} día(s)${t.incompletos ? ` · ${t.incompletos} sin cerrar` : ""}</td><td class="n">${formatoHoras(t.minutos)}</td><td></td></tr></tbody>`;
     })
@@ -132,7 +141,7 @@ export function htmlReporteChecador(filas: FilaChecador[], periodo: string): str
 @page{size:letter landscape;margin:12mm}body{font-family:system-ui,sans-serif;font-size:11px;color:#0f172a}h1{font-size:16px;margin:0 0 4px}p{margin:0 0 10px;color:#475569}
 table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e2e8f0;padding:4px 6px;text-align:left}th{background:#0f172a;color:#fff;font-size:10px;text-transform:uppercase}
 .p td{background:#f1f5f9;font-weight:600}.t td{font-weight:600;border-bottom:2px solid #94a3b8}.n{text-align:right;white-space:nowrap}.f{color:#b45309;font-size:10px}
-</style></head><body><h1>Reporte del checador</h1><p>${esc(periodo)} · horas activas = salida − entrada − tiempo de comida</p>
+</style></head><body><h1>Reporte del checador</h1><p>${esc(periodo)} · horas activas = salida − entrada − tiempo de comida · (auto) = cierre automático de las 23:59 con la jornada regular</p>
 <table><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida a comer</th><th>Regreso de comer</th><th>Salida</th><th class="n">Horas activas</th><th>Falta</th></tr></thead>${bloques}</table></body></html>`;
 }
 
