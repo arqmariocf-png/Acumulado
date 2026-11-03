@@ -2605,6 +2605,51 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   La compra del trabajador puede ir a su cuenta de nómina (sección
   siguiente).
 
+## Vacaciones y permisos (3-nov-2026)
+- Mario: "habilitar un módulo de vacaciones, con recordatorio de quién se va
+  y cuándo regresa". `20261103100000_vacaciones.sql` (aplicada): tabla
+  `vacaciones` (por expediente de `personal`: tipo vacaciones / permiso con
+  goce / sin goce / incapacidad, desde, hasta, `dias` hábiles, `regresa_el`,
+  quién cubre, estado solicitada → autorizada | rechazada | cancelada;
+  `personal_nombre` y `cubre_nombre` guardados porque `profiles` solo deja
+  leer el renglón propio) y `vacaciones_avisos` (un aviso por ausencia y
+  tipo salida/regreso). Frontera, espectador, director_general, solo_consulta.
+  Se escribe solo por funciones: `fn_vacaciones_solicitar(personal, tipo,
+  desde, hasta, notas, cubre)` (la persona, su jefe directo —
+  `personal.supervisor_profile_id`— o RH/dirección/admin
+  (`auth_opera_vacaciones`); lo de RH queda autorizado de una vez; valida
+  encimadas, 120 días máximo, saldo de ley —RH puede exceder—),
+  `fn_vacaciones_resolver(id, bool, motivo)` y `fn_vacaciones_cancelar(id)`
+  (la persona solo antes de que empiece).
+- **Días hábiles y ley**: `fn_festivos_lft(año)` (art. 74: 1-ene, 1er lunes
+  feb, 3er lunes mar, 1-may, 16-sep, 3er lunes nov, 25-dic, 1-oct cada 6 años
+  desde 2024), `fn_dias_habiles_lft(desde, hasta, dias_semana)` (lun-vie o
+  lun-sáb según `perfiles_jornada.dias_semana`; sin perfil 6) y
+  `fn_siguiente_habil_lft` (día en que regresa). `fn_vacaciones_dias_ley(año
+  de servicio)` = art. 76 reforma 2023 (12, 14, 16, 18, 20, luego +2 cada 5
+  años). `fn_vacaciones_saldo(personal)`: periodo de aniversario a aniversario
+  sobre `personal.fecha_ingreso`; disponibles = ley − autorizadas − pendientes
+  del periodo. `fn_vacaciones_personas()`: RH/dirección/admin toda la
+  organización, el jefe su gente, cada quien su expediente, con saldo.
+  Misma lógica en `lib/vacaciones.ts` (con pruebas).
+- **Recordatorios**: pg_cron `vacaciones-recordatorios` (14:00 UTC = 8:00 MX)
+  → `fn_vacaciones_recordatorios()`: el día anterior a salir, push a la
+  persona ("mañana empiezan tus vacaciones… regresas el …") y a su jefe, RH
+  (`fn_rh_de`) y quien cubre ("X sale mañana, regresa el …"); el día anterior
+  al regreso, lo mismo. Al solicitar avisa a RH y al jefe; al resolver, a la
+  persona (`fn_push_aviso`). Las ausencias autorizadas ya no cuentan como
+  falta en Tiempos y checador (`fn_reporte_rh_tiempos`, hábiles − ausencia).
+- Pantalla `/vacaciones` (`pages/rh/Vacaciones.tsx`): Mi día › **Mis
+  vacaciones** (saldo, pedir, mis registros; sin expediente ligado avisa) y
+  pestaña **Equipo (RH)** / **Mi equipo** (`?tab=equipo`; menú RH →
+  Vacaciones y permisos): por autorizar (Autorizar/Rechazar solo RH), fuera
+  hoy / salen y regresan en 7 días / próximas 30, registrar para alguien,
+  saldos por persona e historial. Probado en producción en rollback: Jonathan
+  pide 5 días (16-21 nov, el 16 es festivo), encimada rechazada, él no
+  autoriza, Alma no ve ni pide por él, Eréndira autoriza, el recordatorio
+  manda una vez y no repite. Al 3-nov nadie tiene perfil de jornada: todos
+  cuentan lun-sáb.
+
 ## Cuentas de nómina y financiamiento (18-oct-2026)
 - Mario: "llevaría una cuenta para descontarse vía nómina; por antigüedad y
   por buen comportamiento y pago daremos financiamiento estilo Mercado
