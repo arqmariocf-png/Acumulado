@@ -659,6 +659,25 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`lib/marcasPendientes.ts`, con pruebas): lo que ya está en el servidor
   (mismo tipo ±2 min) se borra del teléfono sin reenviar; lo rechazado no
   bloquea marcas nuevas ni se reenvía solo (solo con "Enviar ahora").
+  **Cierre automático a las 23:59 (3-nov-2026, Mario: "si no checaron salida
+  se cierra en automático la jornada regular para no alargar horas
+  inciertas")**: pg_cron `checador-cierre-jornadas` (05:59 UTC = 23:59 MX)
+  → `fn_checador_cerrar_jornadas(dia)` (definer; sin usuario o rh/admin;
+  repasa también el día anterior): a quien tiene entrada del día y su última
+  marca no es salida le inserta una SALIDA `automatica = true` a la hora en
+  que terminaba su jornada regular = última entrada + horas_semana ÷
+  dias_semana de su perfil (sin perfil, el base: 8 h) + la comida marcada
+  (comida abierta → también `comida_fin` automática 1 h después), tope 23:59
+  de ese día; `ajuste_nota` explica el cálculo. Trigger
+  `checador_registros_anula_automatica`: si después llega la salida (o
+  regreso de comer) real del mismo día —offline o manual de RH— la
+  automática se anula. `v_checador_marcas.automatica`; etiqueta "automática"
+  en el checador personal y en RH, "auto" en la vista por trabajador, columna
+  "Cierre automático" en el CSV y "(auto)" en la impresión
+  (`FilaChecador.automatica`, con prueba) (`20261103090000`). No se cerraron
+  días pasados (135 jornadas sin salida en los 30 días previos): empieza con
+  el 3-nov. Probado en rollback con el 30-oct: 9 cierres; la salida real
+  posterior anula la automática.
   **Cada día empieza en "fuera" (19-oct-2026, Mario: "Lau no puede marcar
   entrada")**: la secuencia entrada → salida se validaba contra la última
   marca de TODA la historia; Laura tenía una entrada del 28-sep sin salida y

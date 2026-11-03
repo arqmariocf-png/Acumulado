@@ -3,12 +3,26 @@ import assert from "node:assert/strict";
 import { armarReporteChecador, csvReporteChecador, formatoHoras, htmlReporteChecador, totalesPorPersona, type MarcaReporte, estadoChecador } from "./reporteChecador.ts";
 
 // 9-oct-2026 en México = UTC-6.
-const m = (profile_id: string, nombre: string, tipo: MarcaReporte["tipo"], horaMx: string, fecha = "2026-10-09", anulada = false): MarcaReporte => ({
+const m = (profile_id: string, nombre: string, tipo: MarcaReporte["tipo"], horaMx: string, fecha = "2026-10-09", anulada = false, automatica = false): MarcaReporte => ({
   profile_id,
   nombre,
   tipo,
   created_at: new Date(`${fecha}T${horaMx}:00-06:00`).toISOString(),
   anulada,
+  automatica,
+});
+
+test("salida del cierre automático: cuenta las horas y queda marcada en fila, CSV y HTML", () => {
+  const filas = armarReporteChecador([m("a", "Ana", "entrada", "07:44"), m("a", "Ana", "salida", "15:44", "2026-10-09", false, true)], new Date("2026-10-10T12:00:00-06:00"));
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].minutos, 480);
+  assert.equal(filas[0].automatica, true);
+  assert.ok(csvReporteChecador(filas).includes('"sí"'));
+  assert.ok(htmlReporteChecador(filas, "p").includes("(auto)"));
+  // Una salida real posterior (no anulada) gana y la fila deja de ser automática.
+  const f2 = armarReporteChecador([m("a", "Ana", "entrada", "07:44"), m("a", "Ana", "salida", "15:44", "2026-10-09", false, true), m("a", "Ana", "salida", "19:10")]);
+  assert.equal(f2[0].automatica, false);
+  assert.equal(f2[0].minutos, 686);
 });
 
 test("día completo: 4 etapas y horas activas sin la comida", () => {

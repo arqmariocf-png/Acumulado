@@ -64,6 +64,7 @@ interface RegistroChecador {
   precision_m: number | null;
   foto_path: string | null;
   sincronizada_offline?: boolean;
+  automatica?: boolean;
   manual?: boolean;
   ajuste_nota?: string | null;
   ubicacion_id?: string | null;
@@ -599,8 +600,9 @@ export function Checador() {
                     <span key={r.id} className="mr-3 inline-flex items-center gap-1 whitespace-nowrap">
                       <span title={ETIQUETA_MARCA[r.tipo]}>{SIMBOLO_MARCA[r.tipo]}</span> {horaCorta(r.created_at)}
                       {r.sincronizada_offline && <span title="Marcada sin señal y enviada después" className="text-[10px] text-amber-600">offline</span>}
+                      {r.automatica && <span title={r.ajuste_nota ?? "Cierre automático de las 23:59: no marcaste salida"} className="text-[10px] text-violet-700">automática</span>}
                       {r.manual && <span title={r.ajuste_nota ?? "Marca manual de RH"} className="text-[10px] text-sky-700">manual</span>}
-                      {!r.manual && r.ajuste_nota && <span title={r.ajuste_nota} className="text-[10px] text-sky-700">corregida</span>}
+                      {!r.manual && !r.automatica && r.ajuste_nota && <span title={r.ajuste_nota} className="text-[10px] text-sky-700">corregida</span>}
                       {enlaceMapa(r) && (
                         <a href={enlaceMapa(r)!} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:underline" title={`±${Math.round(r.precision_m ?? 0)} m`}>
                           mapa
