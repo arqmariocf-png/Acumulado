@@ -51,6 +51,7 @@ const Crm = lazy(() => import("./pages/crm/Crm").then((m) => ({ default: m.Crm }
 const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
 const PlanSistemaPagina = lazy(() => import("./pages/admin/PlanSistemaPagina").then((m) => ({ default: m.PlanSistemaPagina })));
 const RespaldoDropbox = lazy(() => import("./pages/admin/RespaldoDropbox").then((m) => ({ default: m.RespaldoDropbox })));
+const Vacaciones = lazy(() => import("./pages/rh/Vacaciones").then((m) => ({ default: m.Vacaciones })));
 const SolicitarEpp = lazy(() => import("./pages/rh/SolicitarEpp").then((m) => ({ default: m.SolicitarEpp })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
@@ -167,6 +168,8 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["supervisor", "responsable", "rh", "directivo", "administrativo"]} />}>
             <Route path="/epp/solicitar" element={<SolicitarEpp />} />
           </Route>
+          {/* Vacaciones y permisos (3-nov-2026): cualquiera con expediente pide; jefe/RH se deciden en la base. */}
+          <Route path="/vacaciones" element={<Vacaciones />} />
           {/* Comedor: cualquiera con cuenta pide; cocina y nómina se deciden en la base. */}
           <Route path="/comedor" element={<Comedor />} />
           {/* Punto de venta (ferretería, almacén general): almacén, corporativo o permiso 'punto_venta'. */}
