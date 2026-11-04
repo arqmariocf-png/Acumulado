@@ -1,13 +1,19 @@
-// Remisión de salida de almacén: HTML imprimible con código QR. Sin DOM
-// (se compila también para las pruebas de node): el QR llega ya generado
-// como SVG y la pantalla se encarga de abrir la ventana de impresión.
+// Remisión de salida de almacén: HTML imprimible con código QR, en la hoja
+// membretada de la empresa (desde 4-nov-2026 el mismo logo y formato que la
+// remisión de planta; ver membreteRemision.ts). Sin DOM (se compila también
+// para las pruebas de node): el QR llega ya generado como SVG y la pantalla se
+// encarga de abrir la ventana de impresión.
 
-export interface RemisionImprimible {
+import { colorMembrete, esc, estilosMembrete, htmlMembrete, type EmpresaMembrete } from "./membreteRemision.ts";
+
+export interface RemisionImprimible extends Partial<EmpresaMembrete> {
   folio: string;
   fecha: string;
   empresa_nombre: string;
   almacen_nombre: string;
   entregar_a: string;
+  destino?: string | null;
+  referencia?: string | null;
   observaciones: string | null;
   estatus: string;
   emitida_por_nombre: string | null;
@@ -49,11 +55,9 @@ export function idRemisionDesdeCodigo(codigo: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
-function esc(t: string | number | null | undefined): string {
-  return String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-export function htmlRemision(r: RemisionImprimible, lineas: LineaRemision[], qrSvg: string, url: string): string {
+/** @param logoUrl el logo de la empresa (`logoDeEmpresa`); sin él solo va el nombre. */
+export function htmlRemision(r: RemisionImprimible, lineas: LineaRemision[], qrSvg: string, url: string, logoUrl: string | null = null): string {
+  const color = colorMembrete(r.empresa_codigo);
   const filas = lineas
     .map(
       (l, i) => `<tr>
@@ -66,57 +70,30 @@ export function htmlRemision(r: RemisionImprimible, lineas: LineaRemision[], qrS
     .join("");
   const total = lineas.reduce((s, l) => s + Number(l.cantidad), 0);
   const entregada = r.estatus === "entregada";
+  const membrete = htmlMembrete(
+    { empresa_nombre: r.empresa_nombre, empresa_codigo: r.empresa_codigo ?? "", empresa_rfc: r.empresa_rfc, empresa_razon_social: r.empresa_razon_social, empresa_domicilio: r.empresa_domicilio, empresa_telefono: r.empresa_telefono },
+    logoUrl,
+    "REMISIÓN DE SALIDA",
+    r.folio,
+    fechaCorta(r.fecha),
+    entregada,
+  );
   return `<!doctype html>
-<html lang="es"><head><meta charset="utf-8"><title>Remisión ${esc(r.folio)}</title>
-<style>
-  @page { size: letter; margin: 14mm; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; margin: 0; }
-  .hoja { max-width: 190mm; margin: 0 auto; padding: 12px; }
-  .cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 10px; }
-  .cab h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: .5px; }
-  .cab .emp { font-size: 13px; font-weight: bold; }
-  .cab .sub { color: #555; }
-  .folio { text-align: right; }
-  .folio .num { font-size: 22px; font-weight: bold; font-family: "Courier New", monospace; }
-  .qr { width: 34mm; height: 34mm; }
-  .qr svg { width: 100%; height: 100%; display: block; }
-  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; margin: 12px 0; }
-  .datos div span { display: block; font-size: 10px; text-transform: uppercase; color: #666; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  th, td { border: 1px solid #999; padding: 6px 8px; vertical-align: top; }
-  th { background: #eee; font-size: 11px; text-transform: uppercase; text-align: left; }
-  td.c, th.c { text-align: center; }
-  td.r, th.r { text-align: right; }
-  .sku { font-size: 10px; color: #666; }
-  tfoot td { font-weight: bold; background: #f6f6f6; }
-  .obs { margin-top: 10px; min-height: 28px; }
-  .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 44px; }
-  .firmas div { border-top: 1px solid #111; padding-top: 6px; text-align: center; font-size: 11px; }
-  .pie { margin-top: 18px; font-size: 10px; color: #666; display: flex; justify-content: space-between; gap: 12px; }
-  .sello { display: inline-block; border: 2px solid #15803d; color: #15803d; padding: 2px 8px; font-weight: bold; border-radius: 4px; font-size: 11px; }
-  .btn { position: fixed; top: 10px; right: 10px; padding: 8px 14px; background: #0f172a; color: #fff; border: 0; border-radius: 6px; font-size: 13px; cursor: pointer; }
-  @media print { .btn { display: none; } .hoja { padding: 0; } }
-</style></head>
+<html lang="es"><head><meta charset="utf-8"><title>Remisión ${esc(r.folio)} · ${esc(r.empresa_nombre)}</title>
+<style>${estilosMembrete(color)}</style></head>
 <body>
 <button class="btn" onclick="window.print()">Imprimir / guardar PDF</button>
 <div class="hoja">
-  <div class="cab">
-    <div>
-      <h1>REMISIÓN DE SALIDA</h1>
-      <div class="emp">${esc(r.empresa_nombre)}</div>
-      <div class="sub">${esc(r.almacen_nombre)}</div>
-      ${entregada ? `<div style="margin-top:6px"><span class="sello">ENTREGADA</span></div>` : ""}
+  ${membrete}
+  <div class="cuerpo">
+    <div class="datos">
+      <div><span>Entregar a</span>${esc(r.entregar_a)}${r.destino ? `<div class="rfc">${esc(r.destino)}</div>` : ""}</div>
+      <div><span>Almacén</span>${esc(r.almacen_nombre)}</div>
+      <div><span>Referencia (OV)</span>${esc(r.referencia) || "—"}</div>
+      <div><span>Emitida por</span>${esc(r.emitida_por_nombre) || "—"}</div>
+      <div><span>Recibió</span>${entregada ? `${esc(r.recibio_nombre)} · ${esc(r.entregada_en ? new Date(r.entregada_en).toLocaleString("es-MX") : "")}` : `<em style="color:#666">Pendiente de confirmar (escanea el QR)</em>`}</div>
     </div>
-    <div class="folio">
-      <div class="num">${esc(r.folio)}</div>
-      <div class="sub">${esc(fechaCorta(r.fecha))}</div>
-      <div class="qr" style="margin: 6px 0 0 auto">${qrSvg}</div>
-    </div>
-  </div>
-  <div class="datos">
-    <div><span>Entregar a</span>${esc(r.entregar_a)}</div>
-    <div><span>Emitida por</span>${esc(r.emitida_por_nombre) || "—"}</div>
-    <div><span>Recibió</span>${entregada ? `${esc(r.recibio_nombre)} · ${esc(r.entregada_en ? new Date(r.entregada_en).toLocaleString("es-MX") : "")}` : `<em style="color:#666">Pendiente de confirmar (escanea el QR)</em>`}</div>
+    <div class="qr">${qrSvg}</div>
   </div>
   <table>
     <thead><tr><th class="c" style="width:32px">#</th><th>Producto</th><th class="c" style="width:70px">Unidad</th><th class="r" style="width:90px">Cantidad</th></tr></thead>

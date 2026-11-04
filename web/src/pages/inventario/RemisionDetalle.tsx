@@ -5,6 +5,8 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { esRolBasico } from "../../lib/modulos";
 import { cantidadTexto, fechaCorta, urlRemision } from "../../lib/remision";
+import { textoFactura } from "../../lib/remisionesFacturacion";
+import { esContabilidad } from "../../lib/puestos";
 import { cargarRemision, imprimirRemision, qrSvg } from "./remisionQr";
 import { EstatusRemisionChip } from "./Remisiones";
 
@@ -30,6 +32,7 @@ export function RemisionDetalle() {
     qrSvg(urlRemision(window.location.origin, id)).then(setSvg).catch(() => setSvg(""));
   }, [id]);
 
+  const puedeFacturar = !!perfil && (["admin", "corporativo", "direccion"].includes(perfil.rol) || esContabilidad(perfil));
   const puedeConfirmar =
     !!perfil && (["admin", "corporativo", "empresa", "almacen", "direccion", "responsable"].includes(perfil.rol) || (esRolBasico(perfil.rol) && (perfil.modulos ?? []).includes("inventario")));
 
@@ -109,6 +112,20 @@ export function RemisionDetalle() {
               <dd className="text-slate-900">{remision.observaciones}</dd>
             </div>
           )}
+          <div className="sm:col-span-2">
+            <dt className="text-xs uppercase text-slate-500">Facturación</dt>
+            <dd className="text-slate-900">
+              {textoFactura(remision)}
+              {puedeFacturar && (
+                <>
+                  {" · "}
+                  <Link to="/contabilidad/remisiones" className="text-slate-600 underline">
+                    Remisiones por facturar
+                  </Link>
+                </>
+              )}
+            </dd>
+          </div>
         </dl>
 
         <div className="mt-4 overflow-x-auto rounded border border-slate-200">

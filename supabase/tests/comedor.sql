@@ -18,7 +18,7 @@ update public.profiles set nombre = 'Trabajador AEP', rol = 'operativo', grupo_i
 update public.profiles set nombre = 'Otro Trabajador', rol = 'operativo', grupo_id = (select id from public.grupos where codigo = 'LOMA'),
   empresa_id = (select id from public.empresas where codigo = 'AEP') where id = 'eeeeeeee-0000-0000-0000-000000000002';
 update public.profiles set nombre = 'Cocina', rol = 'operativo', grupo_id = (select id from public.grupos where codigo = 'LOMA'),
-  empresa_id = (select id from public.empresas where codigo = 'COM') where id = 'eeeeeeee-0000-0000-0000-000000000003';
+  empresa_id = (select empresa_id from public.comedor_config limit 1) where id = 'eeeeeeee-0000-0000-0000-000000000003';
 update public.profiles set nombre = 'RH Loma', rol = 'rh', grupo_id = (select id from public.grupos where codigo = 'LOMA'),
   todas_las_empresas = true where id = 'eeeeeeee-0000-0000-0000-000000000004';
 update public.profiles set nombre = 'Corporativo ARSSA', rol = 'corporativo', todas_las_empresas = true,
@@ -32,8 +32,8 @@ insert into public.personal (nombre, profile_id, activo, grupo_id, fecha_ingreso
   ('Otro Trabajador', 'eeeeeeee-0000-0000-0000-000000000002', true, (select id from public.grupos where codigo = 'LOMA'), current_date - 30);
 
 insert into public.comedor_platillos (empresa_id, nombre, precio) values
-  ((select id from public.empresas where codigo = 'COM'), 'Comida corrida', 65),
-  ((select id from public.empresas where codigo = 'COM'), 'Agua del día', 15);
+  ((select empresa_id from public.comedor_config limit 1), 'Comida corrida', 65),
+  ((select empresa_id from public.comedor_config limit 1), 'Agua del día', 15);
 insert into public.comedor_menu (empresa_id, fecha, platillo_id)
 select p.empresa_id, current_date + 1, p.id from public.comedor_platillos p;
 

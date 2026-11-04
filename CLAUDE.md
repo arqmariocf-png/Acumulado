@@ -407,6 +407,41 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   vuelve a restar lo pagado ese día (`pagado_en <= corte`); sin el estado de
   cuenta de hoy todo sigue igual. Si Laura paga DESPUÉS de subir el estado de
   cuenta y lo marca pagado, debe volver a subirlo para que la hoja lo traiga.
+- **Remisiones: folio único, membrete y facturación (4-nov-2026, Mario:
+  "la remisión de mallas tiene un folio diferente a las remisiones,
+  vincúlalos"; "ocupa el mismo logo y formato para todas las empresas";
+  "pásalas al proceso de facturación para que ya solamente tengan que dar
+  click las contadoras")** (`20261104100000`, aplicada como
+  `remisiones_folio_unico_facturacion`): (1) **Un folio por empresa** para
+  almacén (`remisiones_salida`) y planta (`remisiones_produccion`):
+  `folios_series` serie 'REM' compartida, folio **REM-<CODIGO>-000005**
+  (`fn_remision_siguiente_numero`, candado por empresa; los dos triggers
+  before insert). `folio` dejó de ser columna generada: la vieja quedó como
+  `folio_anterior` (el MCP no deja quitar la expresión) y las vistas
+  `v_remisiones_salida`, `v_remisiones_produccion` y
+  `v_margen_remisiones_produccion` se recrearon apuntando a la nueva. Los
+  folios impresos conservan su número con el código de empresa
+  (REM-000004 → REM-MCC-000004; RM-000001 de planta → RM-MCC-000001). (2)
+  **Membrete común** `lib/membreteRemision.ts` (logo `logoDeEmpresa`, razón
+  social, RFC, domicilio, teléfono, color por empresa): lo usan
+  `lib/remision.ts` (almacén, antes sin logo) y `lib/remisionProduccion.ts`;
+  las vistas traen `empresa_codigo/_rfc/_razon_social/_domicilio/_telefono`.
+  (3) **Contabilidad › Remisiones por facturar** (`/contabilidad/remisiones`,
+  `pages/contabilidad/RemisionesFacturar.tsx`, `lib/remisionesFacturacion.ts`
+  con pruebas; corporativo, dirección, permiso contabilidad y admin):
+  `factura_estado` (por_facturar → facturada | no_factura; no_aplica en
+  entradas de planta) + `cfdi_id`/`factura_folio`/`factura_nota` en las dos
+  tablas; `fn_remisiones_facturacion(estado)` (definer, alcance) une almacén
+  y planta con cliente, OV, importe s/IVA (planta) y entrega;
+  `fn_remision_facturar(origen, id, cfdi, folio, nota)` (CFDI emitido del SAT
+  de la misma empresa, ordenado por RFC/nombre/importe, o folio a mano),
+  `fn_remision_sin_factura(origen, id, motivo)`, `fn_remision_reabrir_factura`;
+  trigger `remisiones_guarda_facturacion` (solo por esas funciones; el admin
+  maestro pasa) y `remisiones_aviso_facturar`: al confirmar la entrega,
+  push a quien tiene permiso contabilidad (`fn_contabilidad_de`) → la
+  bandeja. Las pantallas de detalle muestran "Facturación: …". Probado en
+  rollback: Belén ve 22, factura, no factura y reabre; Alma 0 y bloqueada.
+  Pendiente: KPI con conteo y `?ver=` para la bandeja.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el

@@ -10,6 +10,11 @@ export interface RemisionProduccionFila extends RemisionProduccionDoc {
   orden_compra_id: string | null;
   created_at: string;
   lineas: number;
+  factura_estado: "por_facturar" | "facturada" | "no_factura" | "no_aplica";
+  facturada_en: string | null;
+  cfdi_id: string | null;
+  factura_folio: string | null;
+  factura_nota: string | null;
 }
 
 export async function qrSvg(texto: string): Promise<string> {
