@@ -76,13 +76,87 @@ test("un PDF sin ninguno de los dos encabezados conocidos reporta errorDocumento
   assert.match(r.errorDocumento ?? "", /No se encontró la tabla de movimientos/);
 });
 
-test("si faltan 'Saldo Actual' o 'Total:' declarados, bloquea con un mensaje específico en vez de adivinar el saldo inicial", () => {
+const TABLA_SIN_TOTALES = [
+  "Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos Saldos Cheque",
+  "03/Nov./2026 100 511 COMPRA ORDEN DE PAGO SPEI OC 1",
+  "$400.00 $1,000.00",
+  "03/Nov./2026 101 523 DEPOSITO SPEI CLIENTE",
+  "$250.00 $1,250.00",
+  "Exportar Imprimir",
+];
+
+test("sin 'Saldo Actual' ni 'Total:' y sin saldo previo conocido, bloquea explicando qué faltó (no adivina el saldo inicial)", () => {
+  const r = parsearPdfEstadoCuentaBanorte(TABLA_SIN_TOTALES.join("\n"));
+  assert.equal(r.movimientos.length, 0);
+  assert.match(r.errorDocumento ?? "", /No se pudo determinar el saldo inicial del periodo/);
+  assert.match(r.errorDocumento ?? "", /'Saldo Actual:' y la fila 'Total/);
+  assert.match(r.errorDocumento ?? "", /no tiene movimientos cargados/);
+});
+
+test("sin totales declarados, el último saldo cargado de la cuenta decide si el primer movimiento fue retiro (caso Ergodinova 3-nov-2026)", () => {
+  // Último saldo en la base 1,400.00 -> el primer renglón ($400 → $1,000) fue retiro.
+  const r = parsearPdfEstadoCuentaBanorte(TABLA_SIN_TOTALES.join("\n"), "7022", { saldo: 1400, fecha: "2026-10-30" });
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos.length, 2);
+  assert.equal(r.movimientos[0].cargoTotal, 400);
+  assert.equal(r.movimientos[0].abonoTotal, null);
+  assert.equal(r.movimientos[0].saldo, 1000);
+  assert.equal(r.movimientos[1].abonoTotal, 250);
+  assert.equal(r.movimientos[1].saldo, 1250);
+  assert.match(r.movimientos[0].observacion ?? "", /sin fila Total; saldo inicial tomado de el último saldo ya cargado de la cuenta \(1400 al 2026-10-30\)/);
+});
+
+test("sin totales declarados, el último saldo cargado también puede decir que el primer movimiento fue depósito", () => {
+  const r = parsearPdfEstadoCuentaBanorte(TABLA_SIN_TOTALES.join("\n"), undefined, { saldo: 600, fecha: "2026-10-30" });
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos[0].abonoTotal, 400);
+  assert.equal(r.movimientos[0].cargoTotal, null);
+});
+
+test("sin totales, el 'Saldo Inicial del Día' del encabezado ancla el primer movimiento antes que el saldo de la base", () => {
+  const texto = ["1138867022 | 2203-SUCURSAL PUEBLA REFORMA | 15/Ene./2021 Saldo Inicial del Día: $1,400.00", ...TABLA_SIN_TOTALES].join("\n");
+  // El saldo de la base no empata (hay movimientos de por medio), el del encabezado sí.
+  const r = parsearPdfEstadoCuentaBanorte(texto, "7022", { saldo: 999, fecha: "2026-10-28" });
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos[0].cargoTotal, 400);
+  assert.match(r.movimientos[0].observacion ?? "", /Saldo Inicial del Día/);
+});
+
+test("sin totales y con un saldo previo que no empata con el primer movimiento, bloquea y dice los dos saldos posibles", () => {
+  const r = parsearPdfEstadoCuentaBanorte(TABLA_SIN_TOTALES.join("\n"), undefined, { saldo: 999, fecha: "2026-10-28" });
+  assert.equal(r.movimientos.length, 0);
+  assert.match(r.errorDocumento ?? "", /999 al 2026-10-28/);
+  assert.match(r.errorDocumento ?? "", /tendría que venir de 600 o de 1400/);
+});
+
+test("con 'Saldo Actual' pero sin 'Total:', valida el final de la cadena contra el Saldo Actual", () => {
+  const ok = parsearPdfEstadoCuentaBanorte(["Saldo Actual: $1,250.00", ...TABLA_SIN_TOTALES].join("\n"), undefined, { saldo: 1400, fecha: "2026-10-30" });
+  assert.equal(ok.errorDocumento, null);
+  assert.equal(ok.movimientos.length, 2);
+  const mal = parsearPdfEstadoCuentaBanorte(["Saldo Actual: $9,999.00", ...TABLA_SIN_TOTALES].join("\n"), undefined, { saldo: 1400, fecha: "2026-10-30" });
+  assert.match(mal.errorDocumento ?? "", /declara un Saldo Actual de 9999/);
+});
+
+test("la fila 'Total:' pegada al final del último renglón (misma línea) también se reconoce", () => {
   const texto = [
+    "Saldo Actual: $1,250.00",
     "Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos Saldos Cheque",
-    "03/Ago./2026 100 511 ALGO",
+    "03/Nov./2026 100 511 COMPRA ORDEN DE PAGO SPEI OC 1",
     "$400.00 $1,000.00",
+    "03/Nov./2026 101 523 DEPOSITO SPEI CLIENTE $250.00 $1,250.00 Total: $400.00 $250.00",
   ].join("\n");
   const r = parsearPdfEstadoCuentaBanorte(texto);
+  assert.equal(r.errorDocumento, null);
+  assert.equal(r.movimientos.length, 2);
+  assert.equal(r.movimientos[0].cargoTotal, 400);
+  assert.equal(r.movimientos[1].abonoTotal, 250);
+  assert.match(r.movimientos[1].nombreRazonSocial ?? "", /^DEPOSITO SPEI CLIENTE$/);
+});
+
+test("un PDF del formato Detalle sin ningún movimiento avisa que no hay nada que cargar y cuál es el último saldo", () => {
+  const texto = ["Saldo Actual: $1,000.00", "Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos Saldos Cheque", "Exportar Imprimir"].join("\n");
+  const r = parsearPdfEstadoCuentaBanorte(texto, undefined, { saldo: 1000, fecha: "2026-10-30" });
   assert.equal(r.movimientos.length, 0);
-  assert.match(r.errorDocumento ?? "", /saldo inicial del periodo/);
+  assert.match(r.errorDocumento ?? "", /no trae ningún movimiento en el periodo/);
+  assert.match(r.errorDocumento ?? "", /1000 al 2026-10-30/);
 });
