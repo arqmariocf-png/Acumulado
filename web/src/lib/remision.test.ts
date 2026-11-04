@@ -68,3 +68,38 @@ test("htmlRemision marca la entrega confirmada", () => {
   assert.match(html, /Juan/);
   assert.match(html, /frágil/);
 });
+
+test("htmlRemision lleva el membrete de la empresa: logo, razón social, RFC, domicilio y referencia", () => {
+  const html = htmlRemision(
+    {
+      folio: "REM-MCC-000005",
+      fecha: "2026-11-04",
+      empresa_nombre: "Clavicón",
+      empresa_codigo: "MCC",
+      empresa_rfc: "MCC1801231U3",
+      empresa_razon_social: "Mallas y Clavos Clavicón, S.A. de C.V.",
+      empresa_domicilio: "Carretera federal km 5, Puebla",
+      empresa_telefono: "222 123 4567",
+      almacen_nombre: "Planta",
+      entregar_a: "Prefabricados",
+      referencia: "OV 15380",
+      observaciones: null,
+      estatus: "emitida",
+      emitida_por_nombre: "Jaime",
+      recibio_nombre: null,
+      entregada_en: null,
+    },
+    [],
+    "<svg></svg>",
+    "u",
+    "data:image/png;base64,AAAA",
+  );
+  assert.match(html, /REMISIÓN DE SALIDA/);
+  assert.match(html, /#b91c1c/);
+  assert.match(html, /Mallas y Clavos Clavicón, S\.A\. de C\.V\./);
+  assert.match(html, /RFC MCC1801231U3/);
+  assert.match(html, /Carretera federal km 5/);
+  assert.match(html, /Tel\. 222 123 4567/);
+  assert.match(html, /data:image\/png;base64,AAAA/);
+  assert.match(html, /OV 15380/);
+});

@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion, cerrarVentanaImpresion } from "../../lib/imprimir";
 import { htmlRemision, urlRemision, type LineaRemision } from "../../lib/remision";
 import type { RemisionSalida } from "../../types/database";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 
 /** QR como SVG inline (la librería se carga bajo demanda: solo pesa cuando
  * alguien imprime o abre una remisión). */
@@ -10,7 +11,7 @@ export async function qrSvg(texto: string): Promise<string> {
   return QRCode.toString(texto, { type: "svg", errorCorrectionLevel: "M", margin: 1 });
 }
 
-export async function cargarRemision(id: string): Promise<{ remision: RemisionSalida; lineas: LineaRemision[] }> {
+export async function cargarRemision(id: string): Promise<{ remision: RemisionSalida & { referencia: string | null }; lineas: LineaRemision[] }> {
   const { data: remision, error } = await supabase.from("v_remisiones_salida").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
   if (!remision) throw new Error("Remisión no encontrada o sin permiso para verla.");
@@ -26,7 +27,13 @@ export async function cargarRemision(id: string): Promise<{ remision: RemisionSa
     unidad: m.productos?.unidad_medida ?? "",
     cantidad: Number(m.cantidad),
   }));
-  return { remision: remision as RemisionSalida, lineas };
+  // Referencia legible (folio de la OV) para el documento.
+  let referencia: string | null = null;
+  if ((remision as RemisionSalida).orden_venta_id) {
+    const { data } = await supabase.from("ordenes_venta").select("id_ov").eq("id", (remision as RemisionSalida).orden_venta_id as string).maybeSingle();
+    referencia = data ? `OV ${data.id_ov}` : null;
+  }
+  return { remision: { ...(remision as RemisionSalida), referencia }, lineas };
 }
 
 /** Abre la remisión lista para imprimir. Regresa false si el navegador
@@ -39,7 +46,8 @@ export async function imprimirRemision(id: string): Promise<boolean> {
     const { remision, lineas } = await cargarRemision(id);
     const url = urlRemision(window.location.origin, id);
     const svg = await qrSvg(url);
-    return abrirParaImprimir(htmlRemision(remision, lineas, svg, url), ventana);
+    const logo = await logoDeEmpresa(remision.empresa_codigo);
+    return abrirParaImprimir(htmlRemision(remision, lineas, svg, url, logo), ventana);
   } catch (err) {
     cerrarVentanaImpresion(ventana);
     throw err;

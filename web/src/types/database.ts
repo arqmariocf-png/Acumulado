@@ -1252,6 +1252,18 @@ export interface RemisionSalida {
   created_at: string;
   lineas: number;
   cantidad_total: number;
+  /** Membrete (4-nov-2026): código, RFC, razón social, domicilio y teléfono de la empresa. */
+  empresa_codigo: string;
+  empresa_rfc: string | null;
+  empresa_razon_social: string | null;
+  empresa_domicilio: string | null;
+  empresa_telefono: string | null;
+  /** Facturación (4-nov-2026): la marca contabilidad en Remisiones por facturar. */
+  factura_estado: "por_facturar" | "facturada" | "no_factura" | "no_aplica";
+  facturada_en: string | null;
+  cfdi_id: string | null;
+  factura_folio: string | null;
+  factura_nota: string | null;
 }
 
 

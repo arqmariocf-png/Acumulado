@@ -1,8 +1,13 @@
 // Remisión de planta (Clavicón, Balken, taller) en hoja membretada, con QR.
-// Sin DOM: el QR llega como SVG ya generado. El membrete usa el nombre,
-// RFC y código de la empresa; si existe /logos/<codigo>.png se muestra.
+// Sin DOM: el QR llega como SVG ya generado. El membrete (logo, razón social,
+// RFC, domicilio, color de la empresa) es el mismo de la remisión de almacén:
+// ver membreteRemision.ts.
 
-export interface RemisionProduccionDoc {
+import { colorMembrete, esc, estilosMembrete, htmlMembrete, type EmpresaMembrete } from "./membreteRemision.ts";
+
+export { COLOR_MEMBRETE } from "./membreteRemision.ts";
+
+export interface RemisionProduccionDoc extends Partial<Omit<EmpresaMembrete, "empresa_nombre" | "empresa_codigo" | "empresa_rfc">> {
   folio: string;
   tipo: "salida" | "entrada";
   fecha: string;
@@ -58,15 +63,8 @@ export function idRemisionProduccionDesdeCodigo(codigo: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
-/** Color de membrete por empresa (fallback gris azulado). */
-export const COLOR_MEMBRETE: Record<string, string> = { MCC: "#b91c1c", VBB: "#1d4ed8", CSC: "#0f766e" };
-
-function esc(t: string | number | null | undefined): string {
-  return String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
 export function htmlRemisionProduccion(r: RemisionProduccionDoc, lineas: LineaRemisionProduccion[], qrSvg: string, url: string, logoUrl: string | null): string {
-  const color = COLOR_MEMBRETE[r.empresa_codigo] ?? "#334155";
+  const color = colorMembrete(r.empresa_codigo);
   const entregada = r.estatus === "entregada";
   const titulo = r.tipo === "salida" ? "REMISIÓN DE ENTREGA" : "REMISIÓN DE RECEPCIÓN";
   const pagaOtro = r.tipo === "salida" && !!r.paga_nombre && r.paga_nombre.trim() !== r.contraparte.trim();
@@ -76,44 +74,10 @@ export function htmlRemisionProduccion(r: RemisionProduccionDoc, lineas: LineaRe
     .join("");
   const total = lineas.reduce((s, l) => s + Number(l.cantidad), 0);
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(r.folio)} · ${esc(r.empresa_nombre)}</title>
-<style>
-  @page { size: letter; margin: 12mm; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; margin: 0; }
-  .hoja { max-width: 190mm; margin: 0 auto; padding: 12px; }
-  .membrete { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 4px solid ${color}; padding-bottom: 10px; }
-  .membrete .marca { display: flex; align-items: center; gap: 12px; }
-  .membrete img { height: 56px; max-width: 180px; object-fit: contain; }
-  .membrete .emp { font-size: 20px; font-weight: 800; color: ${color}; letter-spacing: .5px; }
-  .membrete .rfc { color: #555; font-size: 11px; }
-  .folio { text-align: right; }
-  .folio .tit { font-size: 12px; font-weight: bold; color: ${color}; letter-spacing: 1px; }
-  .folio .num { font-size: 24px; font-weight: bold; font-family: "Courier New", monospace; }
-  .cuerpo { display: grid; grid-template-columns: 1fr 34mm; gap: 16px; margin-top: 12px; align-items: start; }
-  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
-  .datos div span { display: block; font-size: 10px; text-transform: uppercase; color: #666; }
-  .qr svg { width: 34mm; height: 34mm; display: block; }
-  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-  th, td { border: 1px solid #999; padding: 6px 8px; vertical-align: top; }
-  th { background: ${color}; color: #fff; font-size: 11px; text-transform: uppercase; text-align: left; }
-  td.c, th.c { text-align: center; } td.r, th.r { text-align: right; }
-  tfoot td { font-weight: bold; background: #f3f4f6; }
-  .obs { margin-top: 10px; min-height: 24px; }
-  .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 44px; }
-  .firmas div { border-top: 1px solid #111; padding-top: 6px; text-align: center; font-size: 11px; }
-  .pie { margin-top: 18px; font-size: 10px; color: #666; display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid ${color}; padding-top: 6px; }
-  .sello { display: inline-block; border: 2px solid #15803d; color: #15803d; padding: 2px 8px; font-weight: bold; border-radius: 4px; font-size: 11px; }
-  .btn { position: fixed; top: 10px; right: 10px; padding: 8px 14px; background: #0f172a; color: #fff; border: 0; border-radius: 6px; font-size: 13px; cursor: pointer; }
-  @media print { .btn { display: none; } .hoja { padding: 0; } }
-</style></head><body>
+<style>${estilosMembrete(color)}</style></head><body>
 <button class="btn" onclick="window.print()">Imprimir / guardar PDF</button>
 <div class="hoja">
-  <div class="membrete">
-    <div class="marca">
-      ${logoUrl ? `<img src="${esc(logoUrl)}" alt="" onerror="this.style.display='none'">` : ""}
-      <div><div class="emp">${esc(r.empresa_nombre)}</div><div class="rfc">${r.empresa_rfc ? `RFC ${esc(r.empresa_rfc)}` : ""}</div></div>
-    </div>
-    <div class="folio"><div class="tit">${titulo}</div><div class="num">${esc(r.folio)}</div><div class="rfc">${esc(fechaLargaCorta(r.fecha))}</div>${entregada ? `<div style="margin-top:4px"><span class="sello">ENTREGADA</span></div>` : ""}</div>
-  </div>
+  ${htmlMembrete({ empresa_nombre: r.empresa_nombre, empresa_codigo: r.empresa_codigo, empresa_rfc: r.empresa_rfc, empresa_razon_social: r.empresa_razon_social, empresa_domicilio: r.empresa_domicilio, empresa_telefono: r.empresa_telefono }, logoUrl, titulo, r.folio, fechaLargaCorta(r.fecha), entregada)}
   <div class="cuerpo">
     <div class="datos">
       <div><span>${etiquetaContraparte}</span>${esc(r.contraparte)}${r.cliente_rfc ? `<div class="rfc">RFC ${esc(r.cliente_rfc)}</div>` : ""}${r.cliente_domicilio ? `<div class="rfc">${esc(r.cliente_domicilio)}</div>` : ""}</div>

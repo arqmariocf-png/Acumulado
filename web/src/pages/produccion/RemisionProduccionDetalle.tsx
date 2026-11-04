@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { cantidadTexto, fechaLargaCorta, urlRemisionProduccion } from "../../lib/remisionProduccion";
+import { textoFactura } from "../../lib/remisionesFacturacion";
 import { cargarRemisionProduccion, imprimirRemisionProduccion, qrSvg } from "./remisionProduccionQr";
 import { FotosRemision } from "./FotosRemision";
 
@@ -58,6 +59,17 @@ export function RemisionProduccionDetalle() {
           {svg && <div className="h-28 w-28 shrink-0" dangerouslySetInnerHTML={{ __html: svg }} />}
         </div>
         <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+          {r.tipo === "salida" && (
+            <div className="sm:col-span-2">
+              <dt className="text-xs uppercase text-slate-500">Facturación</dt>
+              <dd className="text-slate-900">
+                {textoFactura(r)} ·{" "}
+                <Link to="/contabilidad/remisiones" className="text-slate-600 underline">
+                  Remisiones por facturar
+                </Link>
+              </dd>
+            </div>
+          )}
           <div>
             <dt className="text-xs uppercase text-slate-500">{r.tipo === "salida" ? (r.paga_nombre && r.paga_nombre !== r.contraparte ? "Entregar a (recibe)" : "Cliente") : "Proveedor"}</dt>
             <dd className="text-slate-900">{r.contraparte}</dd>

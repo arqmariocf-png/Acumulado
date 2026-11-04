@@ -96,6 +96,7 @@ const PreciosAnalisis = lazy(() => import("./pages/precios/Analisis").then((m) =
 const PreciosPublicados = lazy(() => import("./pages/precios/Publicados").then((m) => ({ default: m.Publicados })));
 const PreciosCatalogo = lazy(() => import("./pages/precios/Catalogo").then((m) => ({ default: m.Catalogo })));
 const PreciosDetalle = lazy(() => import("./pages/precios/Detalle").then((m) => ({ default: m.Detalle })));
+const RemisionesFacturar = lazy(() => import("./pages/contabilidad/RemisionesFacturar").then((m) => ({ default: m.RemisionesFacturar })));
 const Tableros = lazy(() => import("./pages/tareas/Tableros").then((m) => ({ default: m.Tableros })));
 const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((m) => ({ default: m.TableroDetalle })));
 const TareasArea = lazy(() => import("./pages/tareas/TareasArea").then((m) => ({ default: m.TareasArea })));
@@ -275,6 +276,10 @@ function Enrutador() {
           {/* e.firma del SAT (7-oct-2026): admin y contabilidad (Belén, permiso por persona). */}
           <Route element={<ProtectedRoute roles={[]} oPermiso={esContabilidad} />}>
             <Route path="/contabilidad/efirmas-sat" element={<EfirmasSat />} />
+          </Route>
+          {/* Remisiones por facturar (4-nov-2026): contabilidad (permiso), corporativo y dirección; admin siempre. */}
+          <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} oPermiso={esContabilidad} />}>
+            <Route path="/contabilidad/remisiones" element={<RemisionesFacturar />} />
           </Route>
           {/* Menú exclusivo de dirección (Laura): líneas de crédito con
               vencimiento. Admin siempre pasa. */}
