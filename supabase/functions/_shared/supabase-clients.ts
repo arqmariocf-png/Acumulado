@@ -92,3 +92,15 @@ export async function empresaEnMiOrganizacion(req: Request, empresaId: string): 
   const { data } = await clienteComoUsuario(req).from("empresas").select("id").eq("id", empresaId).maybeSingle();
   return !!data;
 }
+
+/** Las dos fronteras que piden las funciones de ingesta: la empresa es de la
+ * organización de quien llama (RLS de `empresas`) Y su organización tiene
+ * abierto el módulo (`grupo_modulos`, vía auth_modulo_habilitado). Se usa con
+ * la service_role solo DESPUÉS de este chequeo. Si cualquiera de las dos
+ * consultas falla se responde false: mejor rechazar una carga legítima que
+ * escribir fuera de la frontera. */
+export async function empresaOperableEnModulo(req: Request, empresaId: string, moduloClave: string): Promise<boolean> {
+  if (!(await empresaEnMiOrganizacion(req, empresaId))) return false;
+  const { data, error } = await clienteComoUsuario(req).rpc("auth_modulo_habilitado", { p_clave: moduloClave });
+  return !error && data === true;
+}

@@ -31,7 +31,7 @@ import { hojaAFilas } from "../_shared/ingesta/xlsx-cargador.ts";
 import { pdfAPosiciones, pdfATexto } from "../_shared/ingesta/pdf-cargador.ts";
 import { parsearPdfEstadoCuentaBanBajio, type ResultadoParseoPdf } from "../_shared/ingesta/pdf-estado-cuenta.ts";
 import { parsearPaginasBBVA } from "../_shared/ingesta/pdf-estado-cuenta-bbva.ts";
-import { parsearPdfEstadoCuentaBanorte } from "../_shared/ingesta/pdf-estado-cuenta-banorte.ts";
+import { parsearPdfEstadoCuentaBanorte, type SaldoPrevioConocido } from "../_shared/ingesta/pdf-estado-cuenta-banorte.ts";
 import { parsearPdfEstadoCuentaSantander } from "../_shared/ingesta/pdf-estado-cuenta-santander.ts";
 import {
   construirIndiceCampos,
@@ -102,6 +102,25 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "No se encontró la cuenta bancaria seleccionada", archivoId }, 400);
       }
 
+      // Último saldo ya cargado de la cuenta: ancla para el "Detalle de
+      // Movimientos" de Banorte cuando el export llega sin la fila "Total:"
+      // (caso real 3-nov-2026, Ergodinova). Mismo orden con que se leen los
+      // saldos del día: fecha y luego el orden dentro del archivo.
+      let saldoPrevio: SaldoPrevioConocido | null = null;
+      if (cuentaRow.banco === "Banorte") {
+        const { data: ultimo } = await dbServicio
+          .from("movimientos")
+          .select("saldo, fecha_pago")
+          .eq("cuenta_id", cuentaId)
+          .not("saldo", "is", null)
+          .order("fecha_pago", { ascending: false })
+          .order("orden_en_archivo", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (ultimo && ultimo.saldo != null) saldoPrevio = { saldo: Number(ultimo.saldo), fecha: String(ultimo.fecha_pago) };
+      }
+
       const parserPorBanco: Record<string, (bytes: Uint8Array) => Promise<ResultadoParseoPdf>> = {
         BanBajio: async (b) => parsearPdfEstadoCuentaBanBajio(await pdfATexto(b)),
         // ultimos_4 bloquea el PDF de OTRA cuenta subido por error (caso real
@@ -110,7 +129,7 @@ Deno.serve(async (req) => {
         // ultimos_4 permite desambiguar cuando el PDF trae más de un
         // producto (ej. cuenta + inversión) -- ver comentario del
         // encabezado de pdf-estado-cuenta-banorte.ts.
-        Banorte: async (b) => parsearPdfEstadoCuentaBanorte(await pdfATexto(b), cuentaRow.ultimos_4),
+        Banorte: async (b) => parsearPdfEstadoCuentaBanorte(await pdfATexto(b), cuentaRow.ultimos_4, saldoPrevio),
         Santander: async (b) => parsearPdfEstadoCuentaSantander(await pdfATexto(b)),
       };
       const parser = parserPorBanco[cuentaRow.banco];

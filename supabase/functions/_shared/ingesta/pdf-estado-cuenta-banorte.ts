@@ -377,6 +377,19 @@ function parsearFormatoEstadoCuentaMensual(textoCompleto: string, cuentaUltimos4
 // clasificación depósito/retiro falla, la cadena de saldos (que sí se lee
 // directo del texto en cada renglón, no se calcula) no va a terminar en el
 // "Saldo Actual" declarado, y se bloquea el documento.
+//
+// Caso real 3-nov-2026 (Delia, Ergodinova 7022, "ESTADO DE CUENTA AL 3 DE
+// NOVIEMBRE.pdf" de una sola página): el export llegó SIN la fila "Total:"
+// (o sin "Saldo Actual:") y la carga se bloqueaba aunque cada renglón trae
+// su saldo impreso. Como el saldo de cada renglón se lee del texto, lo
+// único que la fila "Total:" aporta es la dirección del PRIMER movimiento
+// (del segundo en adelante se deduce del saldo anterior). Así que cuando
+// falta lo declarado, el saldo inicial se resuelve entre los dos únicos
+// candidatos (saldo1 - monto1 si fue depósito, saldo1 + monto1 si fue
+// retiro) contra lo que sí haya: el "Saldo Inicial del Día" del encabezado
+// (saldo con que abrió el último día del rango) y el último saldo ya
+// cargado de la cuenta en la base (lo pasa el handler). Si nada de eso
+// empata, se bloquea igual que antes, con el detalle de qué faltó.
 const RE_ENCABEZADO_DETALLE = "Fecha Movimiento Cód. Trans. Concepto Retiros Depósitos Saldos";
 const RE_FECHA_ANCLA_DETALLE = /^(\d{2})\/([A-Za-z]{3})\.\/(\d{4})\s/gm;
 const RE_MOVIMIENTO_COD_TRANS = /^(\d+)\s+(\d+)\s*/;
@@ -384,6 +397,10 @@ const RE_CUENTA_SUCURSAL = /(\d{6,})\s\|\s\d{3,4}-SUCURSAL/;
 
 interface TotalesDetalle {
   saldoActual: number | null;
+  /** "Saldo Inicial del Día" del encabezado: con lo que abrió el último día
+   * del rango (en el PDF real de agosto, el saldo previo al único movimiento
+   * del 25/Ago). */
+  saldoInicialDia: number | null;
   totalRetiros: number | null;
   totalDepositos: number | null;
   numeroCuenta: string | null;
@@ -391,18 +408,75 @@ interface TotalesDetalle {
 
 function extraerTotalesDetalle(textoCompleto: string): TotalesDetalle {
   const mSaldoActual = textoCompleto.match(/Saldo Actual:\s*\$([\d,]+\.\d{2})/i);
-  const mTotal = textoCompleto.match(/^Total:\s*\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})/m);
+  const mSaldoInicialDia = textoCompleto.match(/Saldo Inicial del D[ií]a:\s*\$([\d,]+\.\d{2})/i);
+  // "Total:" normalmente va en su propia línea; se acepta también pegada al
+  // final del último renglón (pdf.js junta lo que queda en la misma altura).
+  const mTotal = textoCompleto.match(/(?:^|\s)Total:\s*\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})/m);
   const mCuenta = textoCompleto.match(RE_CUENTA_SUCURSAL);
   return {
     saldoActual: mSaldoActual ? aNumero(mSaldoActual[1]) : null,
+    saldoInicialDia: mSaldoInicialDia ? aNumero(mSaldoInicialDia[1]) : null,
     totalRetiros: mTotal ? aNumero(mTotal[1]) : null,
     totalDepositos: mTotal ? aNumero(mTotal[2]) : null,
     numeroCuenta: mCuenta ? mCuenta[1] : null,
   };
 }
 
-function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+/** Último saldo que ya está cargado de la cuenta en la base (lo consulta el
+ * handler antes de parsear). Sirve de ancla cuando el PDF no declara totales. */
+export interface SaldoPrevioConocido {
+  saldo: number;
+  fecha: string;
+}
+
+function igual(a: number, b: number): boolean {
+  return Math.abs(a - b) < 0.01;
+}
+
+/** Decide el saldo inicial del periodo cuando el PDF no trae "Saldo Actual" +
+ * "Total:". Devuelve el saldo y de dónde salió, o el motivo por el que no se
+ * pudo. Candidatos: el primer renglón fue depósito (saldo1 - monto1) o retiro
+ * (saldo1 + monto1). */
+function resolverSaldoInicialSinTotales(
+  declarado: TotalesDetalle,
+  monto1: number,
+  saldo1: number,
+  saldoPrevio: SaldoPrevioConocido | null | undefined,
+): { saldoInicial: number; origen: string } | { error: string } {
+  const siDeposito = Math.round((saldo1 - monto1) * 100) / 100;
+  const siRetiro = Math.round((saldo1 + monto1) * 100) / 100;
+  const elegir = (ancla: number) => {
+    const d = igual(ancla, siDeposito);
+    const r = igual(ancla, siRetiro);
+    if (d && !r) return siDeposito;
+    if (r && !d) return siRetiro;
+    return null; // ninguno (o los dos: monto 0) -- no decide
+  };
+
+  if (declarado.saldoInicialDia != null) {
+    const s = elegir(declarado.saldoInicialDia);
+    if (s != null) return { saldoInicial: s, origen: `el "Saldo Inicial del Día" del encabezado (${declarado.saldoInicialDia})` };
+  }
+  if (saldoPrevio) {
+    const s = elegir(saldoPrevio.saldo);
+    if (s != null) return { saldoInicial: s, origen: `el último saldo ya cargado de la cuenta (${saldoPrevio.saldo} al ${saldoPrevio.fecha})` };
+  }
+
+  const faltan = [
+    declarado.saldoActual == null ? "'Saldo Actual:'" : null,
+    declarado.totalRetiros == null ? "la fila 'Total: $retiros $depósitos'" : null,
+  ].filter((x): x is string => !!x).join(" y ");
+  const previo = saldoPrevio
+    ? `el último saldo cargado de la cuenta (${saldoPrevio.saldo} al ${saldoPrevio.fecha}) no empata con el primer movimiento del PDF (saldo ${saldo1}, monto ${monto1}: tendría que venir de ${siDeposito} o de ${siRetiro})`
+    : "la cuenta no tiene movimientos cargados con los que empatar el primer movimiento del PDF";
+  return {
+    error: `No se pudo determinar el saldo inicial del periodo: al PDF le falta ${faltan} y ${previo}. Vuelve a exportar el "Detalle de Movimientos" completo (con la fila Total al final) o sube un estado de cuenta que empiece el día siguiente al último cargado.`,
+  };
+}
+
+function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?: string, saldoPrevio?: SaldoPrevioConocido | null): ResultadoParseoPdf {
   const declarado = extraerTotalesDetalle(textoCompleto);
+  const totalesDeclarados = declarado.saldoActual != null && declarado.totalRetiros != null && declarado.totalDepositos != null;
 
   if (cuentaUltimos4 && declarado.numeroCuenta && !declarado.numeroCuenta.endsWith(cuentaUltimos4)) {
     return {
@@ -412,35 +486,28 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
     };
   }
 
-  if (declarado.saldoActual == null || declarado.totalRetiros == null || declarado.totalDepositos == null) {
-    return {
-      movimientos: [],
-      erroresPorFila: [],
-      errorDocumento: "No se pudo determinar el saldo inicial del periodo -- faltan 'Saldo Actual:' o la fila 'Total: $... $...' que el PDF debe declarar al final de la tabla de movimientos.",
-    };
-  }
-
   const idxHeader = textoCompleto.indexOf(RE_ENCABEZADO_DETALLE);
   const idxFinLinea = textoCompleto.indexOf("\n", idxHeader);
   const idxInicioTabla = idxFinLinea === -1 ? idxHeader + RE_ENCABEZADO_DETALLE.length : idxFinLinea + 1;
-  const mFinTabla = textoCompleto.slice(idxInicioTabla).match(/^Total:/m);
+  const mFinTabla = textoCompleto.slice(idxInicioTabla).match(/(?:^|\s)Total:\s*\$/m);
   const idxFinTabla = mFinTabla ? idxInicioTabla + mFinTabla.index! : -1;
   const seccion = textoCompleto.slice(idxInicioTabla, idxFinTabla === -1 ? undefined : idxFinTabla);
 
   const anclas = [...seccion.matchAll(RE_FECHA_ANCLA_DETALLE)];
   if (anclas.length === 0) {
-    return { movimientos: [], erroresPorFila: [], errorDocumento: "No se encontró ningún movimiento (fecha DD/Mmm./AAAA) en la tabla del PDF" };
+    return {
+      movimientos: [],
+      erroresPorFila: [],
+      errorDocumento: saldoPrevio
+        ? `El PDF no trae ningún movimiento en el periodo (no hay fechas DD/Mmm./AAAA en la tabla): no hay nada que cargar y el saldo de la cuenta sigue siendo el último cargado (${saldoPrevio.saldo} al ${saldoPrevio.fecha}).`
+        : "No se encontró ningún movimiento (fecha DD/Mmm./AAAA) en la tabla del PDF",
+    };
   }
 
-  // Ver comentario de la sección arriba: no hay "SALDO ANTERIOR" en este
-  // formato, así que el saldo inicial se deriva de lo declarado.
-  let saldoAnterior = Math.round((declarado.saldoActual - declarado.totalDepositos + declarado.totalRetiros) * 100) / 100;
-
-  const movimientos: FilaEstadoCuentaMapeada[] = [];
-  const erroresPorFila: { fila: number; errores: string[] }[] = [];
-  let filaNum = 0;
-
-  for (let i = 0; i < anclas.length; i++) {
+  // Cada bloque (de una fecha ancla a la siguiente) es un movimiento:
+  // fecha, No. de movimiento, cód. trans., descripción, monto y saldo.
+  type Renglon = { fechaIso: string; folio: string | null; descripcion: string; monto: number; saldo: number };
+  const leerRenglon = (i: number): Renglon | { error: string } => {
     const m = anclas[i];
     const inicioBloque = m.index!;
     const finBloque = i + 1 < anclas.length ? anclas[i + 1].index! : seccion.length;
@@ -448,11 +515,7 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
 
     const [, diaStr, mesAbrev, anioStr] = m;
     const mes = MESES[mesAbrev.toUpperCase()];
-    filaNum++;
-    if (!mes) {
-      erroresPorFila.push({ fila: filaNum, errores: [`Mes no reconocido: "${mesAbrev}"`] });
-      continue;
-    }
+    if (!mes) return { error: `Mes no reconocido: "${mesAbrev}"` };
     const fechaIso = `${anioStr}-${String(mes).padStart(2, "0")}-${diaStr}`;
 
     const textoSinFecha = bloque.slice(m[0].length);
@@ -461,21 +524,50 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
     const textoSinMovCod = mMovCod ? textoSinFecha.slice(mMovCod[0].length) : textoSinFecha;
     const textoSinIva = textoSinMovCod.replace(RE_IVA_EMBEBIDO, "");
     const montos = textoSinIva.match(RE_MONTO) ?? [];
+    // Sin los montos quedan "$" sueltos cuando el monto va en la misma
+    // línea que el concepto (ej. "...REFERENCIA: 0240826 $0.80 $18,695.72").
     const descripcion = textoSinIva
       .replace(RE_MONTO, "")
+      .replace(/\$(?=\s|$)/g, "")
       .replace(/\s+/g, " ")
       .trim();
 
     if (montos.length !== 2) {
-      erroresPorFila.push({
-        fila: filaNum,
-        errores: [`Se esperaban 2 montos (movimiento y saldo) y se encontraron ${montos.length} -- posible línea mal extraída: "${descripcion.slice(0, 120)}"`],
-      });
+      return { error: `Se esperaban 2 montos (movimiento y saldo) y se encontraron ${montos.length} -- posible línea mal extraída: "${descripcion.slice(0, 120)}"` };
+    }
+    return { fechaIso, folio, descripcion, monto: aNumero(montos[0]), saldo: aNumero(montos[1]) };
+  };
+
+  // Ver comentario de la sección arriba: no hay "SALDO ANTERIOR" en este
+  // formato, así que el saldo inicial se deriva de lo declarado; y si el PDF
+  // no lo declara, se resuelve contra el primer renglón.
+  let saldoAnterior: number;
+  let origenSaldoInicial: string | null = null;
+  if (totalesDeclarados) {
+    saldoAnterior = Math.round((declarado.saldoActual! - declarado.totalDepositos! + declarado.totalRetiros!) * 100) / 100;
+  } else {
+    const primero = leerRenglon(0);
+    if ("error" in primero) {
+      return { movimientos: [], erroresPorFila: [{ fila: 1, errores: [primero.error] }], errorDocumento: "No se pudo leer el primer movimiento del PDF para determinar el saldo inicial del periodo." };
+    }
+    const resuelto = resolverSaldoInicialSinTotales(declarado, primero.monto, primero.saldo, saldoPrevio);
+    if ("error" in resuelto) return { movimientos: [], erroresPorFila: [], errorDocumento: resuelto.error };
+    saldoAnterior = resuelto.saldoInicial;
+    origenSaldoInicial = resuelto.origen;
+  }
+
+  const movimientos: FilaEstadoCuentaMapeada[] = [];
+  const erroresPorFila: { fila: number; errores: string[] }[] = [];
+  let filaNum = 0;
+
+  for (let i = 0; i < anclas.length; i++) {
+    filaNum++;
+    const renglon = leerRenglon(i);
+    if ("error" in renglon) {
+      erroresPorFila.push({ fila: filaNum, errores: [renglon.error] });
       continue;
     }
-
-    const monto = aNumero(montos[0]);
-    const saldo = aNumero(montos[1]);
+    const { fechaIso, folio, descripcion, monto, saldo } = renglon;
     const delta = Math.round((saldo - saldoAnterior) * 100) / 100;
     const esDeposito = Math.abs(delta - monto) < 0.01;
     const esRetiro = Math.abs(delta + monto) < 0.01;
@@ -502,12 +594,14 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
       referenciaNumero: null,
       factura: null,
       comentarios: null,
-      observacion: "Extraído automáticamente de un PDF de Banorte (Detalle de Movimientos)",
+      observacion: origenSaldoInicial
+        ? `Extraído automáticamente de un PDF de Banorte (Detalle de Movimientos) sin fila Total; saldo inicial tomado de ${origenSaldoInicial}`
+        : "Extraído automáticamente de un PDF de Banorte (Detalle de Movimientos)",
     });
     saldoAnterior = saldo;
   }
 
-  if (Math.abs(saldoAnterior - declarado.saldoActual) > 0.01) {
+  if (declarado.saldoActual != null && Math.abs(saldoAnterior - declarado.saldoActual) > 0.01) {
     return {
       movimientos: [],
       erroresPorFila: [],
@@ -516,7 +610,7 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
   }
 
   const sumaDepositos = Math.round(movimientos.reduce((a, m) => a + (m.abonoTotal ?? 0), 0) * 100) / 100;
-  if (Math.abs(sumaDepositos - declarado.totalDepositos) > 0.01) {
+  if (declarado.totalDepositos != null && Math.abs(sumaDepositos - declarado.totalDepositos) > 0.01) {
     return {
       movimientos: [],
       erroresPorFila: [],
@@ -525,7 +619,7 @@ function parsearFormatoDetalleMovimientos(textoCompleto: string, cuentaUltimos4?
   }
 
   const sumaRetiros = Math.round(movimientos.reduce((a, m) => a + (m.cargoTotal ?? 0), 0) * 100) / 100;
-  if (Math.abs(sumaRetiros - declarado.totalRetiros) > 0.01) {
+  if (declarado.totalRetiros != null && Math.abs(sumaRetiros - declarado.totalRetiros) > 0.01) {
     return {
       movimientos: [],
       erroresPorFila: [],
@@ -793,13 +887,15 @@ function parsearFormatoCuentaChequesDetallado(textoCompleto: string, cuentaUltim
  *   de movimientos correcta cuando el PDF trae más de un producto (formato
  *   1) o para confirmar que el PDF es de la cuenta correcta (formatos 2 y 3).
  */
-export function parsearPdfEstadoCuentaBanorte(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
+/** @param saldoPrevio último saldo ya cargado de la cuenta (solo lo usa el
+ * formato "Detalle de Movimientos" cuando el PDF no declara totales). */
+export function parsearPdfEstadoCuentaBanorte(textoCompleto: string, cuentaUltimos4?: string, saldoPrevio?: SaldoPrevioConocido | null): ResultadoParseoPdf {
   const esFormatoDetallado = textoCompleto.includes(RE_ENCABEZADO_DETALLADO);
   const esFormatoDetalle = textoCompleto.includes(RE_ENCABEZADO_DETALLE);
   const esFormatoMensual = textoCompleto.includes(RE_ENCABEZADO_TABLA);
 
   if (esFormatoDetallado) return parsearFormatoCuentaChequesDetallado(textoCompleto, cuentaUltimos4);
-  if (esFormatoDetalle) return parsearFormatoDetalleMovimientos(textoCompleto, cuentaUltimos4);
+  if (esFormatoDetalle) return parsearFormatoDetalleMovimientos(textoCompleto, cuentaUltimos4, saldoPrevio);
   if (esFormatoMensual) return parsearFormatoEstadoCuentaMensual(textoCompleto, cuentaUltimos4);
 
   return {
