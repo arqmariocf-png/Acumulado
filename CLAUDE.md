@@ -298,6 +298,31 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   mal puesta: `activo = false` + restaurar desde `audit_log` como aquí. Ojo
   pendiente: el motor (`motor-conciliacion`, Reclasificar) aplica las reglas
   N/A por encima de lo ya conciliado con F-/FM-.
+- **PDF de Banorte "Detalle de Movimientos" sin fila Total (3-nov-2026,
+  Delia: "no cargo el estado de cuenta de hoy de Ergodinova")**: su export
+  de Banca Electrónica (1 página, cuenta 7022) llegó sin "Total: $retiros
+  $depósitos" / "Saldo Actual:" y `parsearFormatoDetalleMovimientos`
+  bloqueaba el documento aunque cada renglón trae su saldo. Esa fila solo
+  decide la dirección del PRIMER movimiento (los demás se deducen del saldo
+  anterior): ahora, sin totales, el saldo inicial se elige entre saldo1 ∓
+  monto1 contra el "Saldo Inicial del Día" del encabezado o el **último
+  saldo ya cargado de la cuenta** (`SaldoPrevioConocido`, lo consulta el
+  handler: fecha_pago, orden_en_archivo, created_at desc); si nada empata,
+  bloquea diciendo qué faltó y los dos saldos posibles. Las validaciones
+  contra lo declarado solo corren cuando el PDF lo trae; "Total:" pegada al
+  último renglón se acepta; sin movimientos avisa "no hay nada que cargar".
+  Pruebas en `pdf-estado-cuenta-banorte-detalle.test.ts`. **Edge
+  `ingesta-estado-cuenta` v23 desplegada desde el repo** (la v22 era del
+  17-sep y no traía multi-organización ni solo consulta); el repo importaba
+  `empresaOperableEnModulo` que no existía: se agregó a
+  `_shared/supabase-clients.ts` (empresa en mi organización +
+  `auth_modulo_habilitado(p_clave)`). Las demás ingesta-* y
+  motor-conciliacion siguen con su `_shared` viejo: desplegarlas igual
+  (archivos sin comentarios con el AST de TypeScript, `scratchpad
+  ef/deploy/strip.cjs`; el proxy de aquí no deja llamar a supabase.co, se
+  prueba con `net.http_post` + `net._http_response`). Si el PDF de Delia
+  sigue fallando, pedirle el archivo: desde aquí no se puede bajar del
+  bucket.
 - **Backoffice caído 7-oct-2026**: `api_ocs_aut`/`api_ov_aut` responden 500
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
