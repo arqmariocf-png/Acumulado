@@ -121,6 +121,7 @@ export const SECCIONES: SeccionMenu[] = [
     entradas: [
       { ruta: "/dashboard", etiqueta: "Resumen del grupo", descripcion: "KPIs, carga por empresa y saldos", uso: "Vista general para dirección; de aquí salen los reportes de Clavicón y saldos.", visible: veFinanzasCompleto , modulo: "conciliacion" },
       { ruta: "/finanzas/obras", etiqueta: "Seguimiento de obras", descripcion: "avance contra lo ejercido en OC y mano de obra, por obra", uso: "Para ver qué obra va gastando más de lo que avanza: tareas, suministro y precios unitarios contra órdenes de compra, mano de obra semanal y presupuesto.", visible: (p) => p.rol === "direccion" || esAdmin(p), modulo: "proyectos" },
+      { ruta: "/direccion/reportes-areas", etiqueta: "Reportes de las áreas", descripcion: "finanzas, contabilidad, comercial, operación, compras, mantenimiento, producción y legal con semáforos y presentación", uso: "Solo el director general: el mismo molde del reporte de RH para cada área (indicadores con liga a su origen, qué atender, resumen, presentación PDF e histórico). Primera versión, para pulirla área por área.", visible: esAdmin },
     ],
   },
   {

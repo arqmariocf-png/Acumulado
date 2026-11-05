@@ -42,15 +42,18 @@ export interface IndicadoresRh {
   con_push: number;
 }
 
-export interface HistoricoRh {
+/** Una foto guardada de cualquier reporte (RH o de un área): los indicadores
+ * numéricos por fecha de corte. La evolución funciona igual para todos. */
+export interface HistoricoGenerico<I = Record<string, number | null>> {
   id?: string;
   desde: string;
   hasta: string;
   dias: number;
-  indicadores: IndicadoresRh;
+  indicadores: I;
   generado_en?: string;
   generado_por_nombre?: string | null;
 }
+export type HistoricoRh = HistoricoGenerico<IndicadoresRh>;
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -102,8 +105,17 @@ export function tiemposParaGuardar(t: ReporteTiempos | null): Omit<ReporteTiempo
 
 export type Tendencia = "sube_bien" | "sube_mal" | "baja_bien" | "baja_mal" | "igual" | "sin_dato";
 
+export interface DefinicionRenglon<K extends string = string> {
+  clave: K;
+  etiqueta: string;
+  /** "n" conteo, "pct" porcentaje, "money" pesos, "h" horas. */
+  formato: "n" | "pct" | "money" | "h";
+  /** Si subir es bueno (asistencia) o malo (vencidas). */
+  masEsMejor: boolean;
+}
+
 export interface RenglonEvolucion {
-  clave: keyof IndicadoresRh;
+  clave: string;
   etiqueta: string;
   /** "n" conteo, "pct" porcentaje, "money" pesos, "h" horas. */
   formato: "n" | "pct" | "money" | "h";
@@ -115,7 +127,7 @@ export interface RenglonEvolucion {
   tendencia: Tendencia;
 }
 
-export const RENGLONES_EVOLUCION: { clave: keyof IndicadoresRh; etiqueta: string; formato: RenglonEvolucion["formato"]; masEsMejor: boolean }[] = [
+export const RENGLONES_EVOLUCION: DefinicionRenglon<keyof IndicadoresRh>[] = [
   { clave: "activos", etiqueta: "Plantilla activa", formato: "n", masEsMejor: true },
   { clave: "con_cuenta", etiqueta: "Con cuenta en el sistema", formato: "n", masEsMejor: true },
   { clave: "checan", etiqueta: "Personas que checan", formato: "n", masEsMejor: true },
@@ -137,16 +149,19 @@ export const RENGLONES_EVOLUCION: { clave: keyof IndicadoresRh; etiqueta: string
 
 /** Los últimos `maximo` reportes guardados (del más viejo al más reciente,
  * uno por fecha de corte) con el actual al final si no está guardado aún. */
-export function serieEvolucion(historico: HistoricoRh[], actual: HistoricoRh | null, maximo = 6): HistoricoRh[] {
-  const porFecha = new Map<string, HistoricoRh>();
+export function serieEvolucion<H extends HistoricoGenerico<object>>(historico: H[], actual: H | null, maximo = 6): H[] {
+  const porFecha = new Map<string, H>();
   for (const h of [...historico].sort((a, b) => (a.generado_en ?? "").localeCompare(b.generado_en ?? ""))) porFecha.set(`${h.dias}:${h.hasta}`, h);
   if (actual) porFecha.set(`${actual.dias}:${actual.hasta}`, actual);
   return [...porFecha.values()].sort((a, b) => a.hasta.localeCompare(b.hasta) || (a.generado_en ?? "").localeCompare(b.generado_en ?? "")).slice(-maximo);
 }
 
-export function renglonesEvolucion(serie: HistoricoRh[]): RenglonEvolucion[] {
-  return RENGLONES_EVOLUCION.map((r) => {
-    const valores = serie.map((h) => (h.indicadores[r.clave] == null ? null : Number(h.indicadores[r.clave])));
+export function renglonesEvolucion(serie: HistoricoGenerico<object>[], definiciones: DefinicionRenglon[] = RENGLONES_EVOLUCION): RenglonEvolucion[] {
+  return definiciones.map((r) => {
+    const valores = serie.map((h) => {
+      const v = (h.indicadores as Record<string, unknown>)[r.clave];
+      return v == null || Number.isNaN(Number(v)) ? null : Number(v);
+    });
     const ultimo = valores[valores.length - 1] ?? null;
     const previos = valores.slice(0, -1).filter((v): v is number => v != null);
     const anterior = previos.length ? previos[previos.length - 1] : null;

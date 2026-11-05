@@ -2484,6 +2484,40 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   "Histórico de reportes" con "Abrir presentación" (se rearma con los datos
   guardados y el histórico previo a esa fecha). Primera foto cargada por SQL:
   el reporte del 29-oct (30 días), para que la evolución arranque ahí.
+- **Reportes de las áreas para el director general (5-nov-2026, Mario:
+  "así como generaste el reporte del área de recursos humanos, haz el de
+  todas las áreas para revisarlos e irlos puliendo")**: Dirección › Tablero
+  → **Reportes de las áreas** (`/direccion/reportes-areas?area=&dias=`,
+  `pages/direccion/ReportesAreas.tsx`; menú y función solo para el admin
+  maestro). Mismo molde que el de RH para 8 áreas: finanzas, contabilidad,
+  comercial, operacion, compras (y almacén/herramienta), mantenimiento
+  (BBVA), produccion (plantas) y legal (y cumplimiento). Base
+  (`20261105120000`, aplicada como `reportes_areas_director_1_historico`,
+  `_2_funciones`, `_3/_4_mantenimiento…`): una función por área
+  `fn_reporte_area_<area>(grupo, desde, hoy)` (sql definer, revocadas) que
+  devuelve `{indicadores: {clave: número}, secciones: {nombre: [renglones]}}`
+  y `fn_reporte_area_director(p_area, p_dias)` (null si no es el admin
+  maestro; ~4 s las 8 juntas, finanzas ≈ 2.3 s). La configuración de cada
+  área (indicadores con etiqueta, formato, semáforo, destacado, `sub` y
+  **liga a su origen**; secciones con columnas y barras; alertas; resumen;
+  "por revisar con el área") vive en `lib/reporteAreas.ts`
+  (`AREAS_REPORTE`, con pruebas); la presentación horizontal genérica
+  (portada, resumen, evolución, qué atender, una lámina por sección, por
+  revisar) en `lib/presentacionArea.ts` (con pruebas). Histórico
+  `reportes_areas_historico` (grupo, area, dias, hasta únicos; indicadores +
+  datos) y la evolución reutiliza `lib/historicoRh.ts`, que quedó genérico
+  (`HistoricoGenerico`, `renglonesEvolucion(serie, definiciones)`).
+  **Indicador nuevo de un área → clave en la función SQL + entrada en
+  `AREAS_REPORTE[area].indicadores` con su liga.** Primera corrida 5-nov
+  (30 días): los ceros de CRM, legal, herramienta, deuda financiera y
+  cumplimiento son reales (módulos sin captura). **Mantenimiento**: el
+  control de Christian trae todos los folios vivos como 'Terminado' y sin
+  fecha de finalización ni primera atención; lo que avanza es la etapa
+  administrativa (Preparar fichero → Esperar autorización → Fichero
+  realizado), así que "en trámite" = sin fichero realizado (28 al 5-nov),
+  finalizado = aceptación del cliente, y la columna "saldo por cobrar" del
+  control ($2,566) no cuadra con a cobrar − cobrado ($416,377 en los 63 folios
+  con monto y sin cobro; en otros el cobro rebasa el monto): el reporte muestra los dos y lo deja en "por revisar".
 - **Tiempos y checador para RH (29-oct-2026, Mario: "genera el reporte del
   área de RH a manera de información más específica en cuanto tiempos y
   checador")**: Recursos humanos → **Tiempos y checador** (`/rh/tiempos`,
