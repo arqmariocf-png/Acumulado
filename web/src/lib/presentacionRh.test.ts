@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DECISIONES_PENDIENTES, PLAN_IMPLEMENTACION, htmlPresentacionRh } from "./presentacionRh.ts";
+import { indicadoresDe } from "./historicoRh.ts";
 import type { ReporteRh } from "./reporteRhDirector.ts";
 import type { PersonaTiempos, ReporteTiempos } from "./reporteRhTiempos.ts";
 
@@ -69,6 +70,16 @@ test("presentación: 11 láminas con los datos del periodo, sin texto fijo de ot
   assert.match(html, /38 personas no tienen empresa registrada/);
   assert.doesNotMatch(html, /29\/10\/2026|12-oct/);
   assert.ok(DECISIONES_PENDIENTES.length >= 5 && PLAN_IMPLEMENTACION.some((x) => /hecho/i.test(x.cuando)));
+});
+
+test("con histórico guardado aparece la lámina de evolución", () => {
+  const previo = { desde: "2026-09-30", hasta: "2026-10-29", dias: 30, generado_en: "2026-10-29T12:00:00Z", indicadores: { ...indicadoresDe(director(), tiempos()), pct_asistencia: 70, tareas_vencidas: 20 } };
+  const html = htmlPresentacionRh(director(), tiempos(), { organizacion: "Grupo Loma", hoy: "2026-11-05", historico: [previo] });
+  assert.equal((html.match(/<section class="slide/g) ?? []).length, 12);
+  assert.match(html, /Evolución contra los reportes anteriores/);
+  assert.match(html, /29\/10\/26/);
+  assert.match(html, /\+11 pts/);
+  assert.match(html, /Tareas vencidas: 16 \(−4 contra el reporte anterior, mejora\)/);
 });
 
 test("presentación sin reporte de tiempos: 10 láminas y sin la de horas", () => {

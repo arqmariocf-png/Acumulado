@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { htmlPresentacionRh } from "../../lib/presentacionRh";
 import type { ReporteTiempos } from "../../lib/reporteRhTiempos";
+import { formatoValor, indicadoresDe, tiemposParaGuardar, type HistoricoRh } from "../../lib/historicoRh";
 import {
   alertasReporte,
   ddmm,
@@ -33,6 +34,11 @@ import {
 // generaste aquí solo con la actualización de datos"): las 11 láminas de
 // `lib/presentacionRh`, con los datos de este reporte y los del reporte de
 // tiempos del mismo periodo (`fn_reporte_rh_tiempos`).
+// Histórico (5-nov-2026, Mario: "guarda el histórico de la presentación de
+// RH para que se vea la evolución"): cada presentación generada se guarda en
+// `rh_reportes_historico` (una por periodo y fecha de corte); la presentación
+// trae la lámina "Evolución" contra los anteriores y abajo la lista de
+// reportes guardados para abrir cualquiera tal como salió.
 
 const COLOR: Record<Semaforo, string> = {
   verde: "border-emerald-200 bg-emerald-50 text-emerald-800",
@@ -98,6 +104,16 @@ export function ReporteDirector() {
   const [dias, setDias] = useState(30);
   const [aviso, setAviso] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
+  const qc = useQueryClient();
+  const { data: historico } = useQuery({
+    queryKey: ["rh-reportes-historico"],
+    enabled: esAdminGlobal,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("rh_reportes_historico").select("id, desde, hasta, dias, indicadores, generado_en, generado_por_nombre").order("hasta", { ascending: false }).order("generado_en", { ascending: false }).limit(60);
+      if (error) throw error;
+      return (data ?? []) as HistoricoRh[];
+    },
+  });
   const { data, isLoading, error } = useQuery({
     queryKey: ["reporte-rh-director", dias],
     enabled: esAdminGlobal,
@@ -131,13 +147,38 @@ export function ReporteDirector() {
       if (error) throw error;
       const hoy = new Date();
       const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
-      const html = htmlPresentacionRh(data, (t as ReporteTiempos | null) ?? null, { organizacion: grupo?.nombre ?? "Acumulado", hoy: hoyIso });
+      const tiempos = (t as ReporteTiempos | null) ?? null;
+      const previos = (historico ?? []).filter((h) => h.dias === data.dias && h.hasta < data.hasta);
+      const html = htmlPresentacionRh(data, tiempos, { organizacion: grupo?.nombre ?? "Acumulado", hoy: hoyIso, historico: previos });
       if (!abrirParaImprimir(html, ventana)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes.");
+      // Foto para el histórico: una por periodo y fecha de corte (se reemplaza si se genera otra vez hoy).
+      const { error: errHist } = await supabase.from("rh_reportes_historico").upsert(
+        { grupo_id: grupo?.id, desde: data.desde, hasta: data.hasta, dias: data.dias, indicadores: indicadoresDe(data, tiempos), datos: data, tiempos: tiemposParaGuardar(tiempos), generado_por: perfil?.id ?? null, generado_por_nombre: perfil?.nombre ?? null, generado_en: new Date().toISOString() },
+        { onConflict: "grupo_id,dias,hasta" },
+      );
+      if (errHist) setAviso(`La presentación salió, pero no se guardó en el histórico: ${errHist.message}`);
+      else qc.invalidateQueries({ queryKey: ["rh-reportes-historico"] });
     } catch (e) {
       ventana?.close();
       setAviso(`No se pudo armar la presentación: ${(e as Error).message}`);
     } finally {
       setGenerando(false);
+    }
+  }
+
+  async function abrirGuardado(h: HistoricoRh) {
+    if (!h.id) return;
+    setAviso(null);
+    const ventana = window.open("", "_blank");
+    try {
+      const { data: fila, error } = await supabase.from("rh_reportes_historico").select("datos, tiempos, generado_en").eq("id", h.id).single();
+      if (error) throw error;
+      const previos = (historico ?? []).filter((x) => x.dias === h.dias && x.hasta < h.hasta);
+      const html = htmlPresentacionRh(fila.datos as ReporteRh, (fila.tiempos as ReporteTiempos | null) ?? null, { organizacion: grupo?.nombre ?? "Acumulado", hoy: String(fila.generado_en).slice(0, 10), historico: previos });
+      if (!abrirParaImprimir(html, ventana)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes.");
+    } catch (e) {
+      ventana?.close();
+      setAviso(`No se pudo abrir el reporte guardado: ${(e as Error).message}`);
     }
   }
 
@@ -373,6 +414,54 @@ export function ReporteDirector() {
                 <Tabla cols={["Nombre", "Rol"]} filas={data.accesos.sin_push.map((x) => [x.nombre, x.rol])} />
               </div>
             </div>
+          </Seccion>
+
+          <Seccion titulo={`Histórico de reportes (${(historico ?? []).length})`}>
+            <p className="mb-2 text-xs text-slate-500">
+              Cada presentación generada se guarda con sus datos; la presentación nueva compara contra estos y cualquiera se vuelve a abrir tal como salió. Un reporte del mismo periodo y fecha de corte se reemplaza.
+            </p>
+            {(historico ?? []).length === 0 ? (
+              <p className="text-sm text-slate-500">Todavía no hay reportes guardados: el primero se guarda al generar la presentación.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-slate-500">
+                    <tr>
+                      <th className="px-2 py-1">Corte</th>
+                      <th className="px-2 py-1">Periodo</th>
+                      <th className="px-2 py-1 text-right">Plantilla</th>
+                      <th className="px-2 py-1 text-right">Checan</th>
+                      <th className="px-2 py-1 text-right">Asistencia</th>
+                      <th className="px-2 py-1 text-right">Puntualidad</th>
+                      <th className="px-2 py-1 text-right">Tareas hechas</th>
+                      <th className="px-2 py-1 text-right">Vencidas</th>
+                      <th className="px-2 py-1 text-right">Nómina fiscal</th>
+                      <th className="px-2 py-1">Generó</th>
+                      <th className="px-2 py-1" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(historico ?? []).map((h) => (
+                      <tr key={h.id ?? `${h.dias}-${h.hasta}`} className="border-t border-slate-100">
+                        <td className="px-2 py-1.5 whitespace-nowrap">{ddmm(h.hasta)}/{h.hasta.slice(0, 4)}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">{h.dias} días</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{formatoValor(h.indicadores.activos, "n")}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{formatoValor(h.indicadores.checan, "n")}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{formatoValor(h.indicadores.pct_asistencia, "pct")}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{formatoValor(h.indicadores.pct_puntualidad, "pct")}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{formatoValor(h.indicadores.pct_cumplimiento, "pct")}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{formatoValor(h.indicadores.tareas_vencidas, "n")}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{formatoValor(h.indicadores.nomina_fiscal, "money")}</td>
+                        <td className="px-2 py-1.5 text-xs text-slate-600">{h.generado_por_nombre ?? "—"} · {h.generado_en ? ddmm(h.generado_en.slice(0, 10)) : ""}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          <button type="button" onClick={() => abrirGuardado(h)} className="text-xs text-blue-700 underline">Abrir presentación</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Seccion>
         </>
       )}

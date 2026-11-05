@@ -12,6 +12,7 @@
 
 import { alertasReporte, resumenEjecutivo, totalesNomina, variacionSemanal, type Alerta, type ReporteRh, type Semaforo } from "./reporteRhDirector.ts";
 import { diaSemana, horas, semaforoPersona, type PersonaTiempos, type ReporteTiempos } from "./reporteRhTiempos.ts";
+import { cambiosDestacados, formatoValor, indicadoresDe, renglonesEvolucion, serieEvolucion, textoDelta, type HistoricoRh } from "./historicoRh.ts";
 
 const C = { s1: "#2a78d6", s2: "#eb6834", s3: "#1baf7a", good: "#0ca30c", warn: "#fab219", serious: "#ec835a", crit: "#d03b3b", ink: "#0b0b0b", ink2: "#52514e", mute: "#8a8984", grid: "#e6e5e1", surf: "#fcfcfb" };
 
@@ -136,6 +137,9 @@ export interface OpcionesPresentacion {
   organizacion: string;
   /** Fecha de generación (AAAA-MM-DD). */
   hoy: string;
+  /** Reportes guardados antes (histórico): con al menos uno sale la lámina
+   * "Evolución" comparando este reporte contra los anteriores. */
+  historico?: HistoricoRh[];
 }
 
 /** Las 11 láminas (10 si no hay reporte de tiempos) en una hoja carta horizontal. */
@@ -171,7 +175,26 @@ export function htmlPresentacionRh(d: ReporteRh, t: ReporteTiempos | null, o: Op
 </div>
 <ol class="bullets">${bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ol>`);
 
-  // 3 Qué atender
+  // 3 Evolución contra los reportes guardados (5-nov-2026)
+  const serie = serieEvolucion(o.historico ?? [], { desde: d.desde, hasta: d.hasta, dias: d.dias, indicadores: indicadoresDe(d, t), generado_en: `${o.hoy}T23:59:59Z` });
+  if (serie.length >= 2) {
+    const renglones = renglonesEvolucion(serie);
+    const cambios = cambiosDestacados(renglones, 5);
+    const spark = (vals: (number | null)[], masEsMejor: boolean) => {
+      const nums = vals.filter((v): v is number => v != null);
+      const max = Math.max(1, ...nums);
+      const w = 10, gap = 3;
+      return `<svg viewBox="0 0 ${vals.length * (w + gap)} 18" width="${vals.length * (w + gap)}" height="18">${vals.map((v, i) => (v == null ? "" : `<rect x="${i * (w + gap)}" y="${18 - Math.max(2, (v / max) * 16)}" width="${w}" height="${Math.max(2, (v / max) * 16)}" rx="2" fill="${i === vals.length - 1 ? (masEsMejor ? C.s3 : C.s2) : C.grid}"/>`)).join("")}</svg>`;
+    };
+    const claseTend = (tnd: string) => (tnd.endsWith("bien") ? "ok" : tnd.endsWith("mal") ? "mal" : "mute");
+    slide("Evolución contra los reportes anteriores", `
+<table class="list evo"><thead><tr><th>Indicador</th>${serie.map((h) => `<th class="n">${esc(ddmm(h.hasta))}/${esc(h.hasta.slice(2, 4))}</th>`).join("")}<th class="n">Cambio</th><th></th></tr></thead>
+<tbody>${renglones.map((r) => `<tr><td>${esc(r.etiqueta)}</td>${r.valores.map((v, i) => `<td class="n${i === r.valores.length - 1 ? " b" : ""}">${esc(formatoValor(v, r.formato))}</td>`).join("")}<td class="n ${claseTend(r.tendencia)}">${esc(textoDelta(r))}</td><td>${spark(r.valores, r.masEsMejor)}</td></tr>`).join("")}</tbody></table>
+${cambios.length ? `<h3>Lo que más cambió contra el reporte anterior</h3><ul class="bullets small">${cambios.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>` : ""}`,
+      `Cada columna es un reporte guardado (fecha de corte); verde = mejora, rojo = empeora. ${serie.length} reportes de ${ddmm(serie[0].hasta)} a ${ddmm(serie[serie.length - 1].hasta)}.`);
+  }
+
+  // 4 Qué atender
   const alertas = alertasReporte(d);
   slide(
     "Qué atender",
@@ -346,7 +369,9 @@ export function htmlPresentacionRh(d: ReporteRh, t: ReporteTiempos | null, o: Op
   table.list{width:100%;border-collapse:collapse;font-size:13px} table.list th{text-align:left;font-size:10px;text-transform:uppercase;color:${C.mute};border-bottom:1px solid ${C.grid};padding:4px 6px}
   table.list td{padding:7px 6px;border-bottom:1px solid ${C.grid};vertical-align:top;line-height:1.35} table.list.def td{font-size:12px;padding:6px}
   .dot{display:inline-block;width:11px;height:11px;border-radius:50%} .dot.rojo{background:${C.crit}} .dot.ambar{background:${C.warn}}
-  .mute{color:${C.mute};font-size:10.5px;white-space:nowrap} .mute.ok{color:${C.good};font-weight:600} .crit{color:${C.crit};font-weight:600} .note{font-size:10.5px;color:${C.ink2};margin:4px 0 0;line-height:1.35} .small{font-size:10.5px;line-height:1.4;color:${C.ink2}}
+  .mute{color:${C.mute};font-size:10.5px;white-space:nowrap} .mute.ok{color:${C.good};font-weight:600} .crit{color:${C.crit};font-weight:600}
+  table.evo{font-size:11px} table.evo td,table.evo th{padding:3px 5px;white-space:nowrap} table.evo td.n{text-align:right;font-variant-numeric:tabular-nums} table.evo td.b{font-weight:700} table.evo .ok{color:${C.good};font-weight:600} table.evo .mal{color:${C.crit};font-weight:600}
+  ul.bullets.small{font-size:11.5px;line-height:1.35;margin-top:4px} .note{font-size:10.5px;color:${C.ink2};margin:4px 0 0;line-height:1.35} .small{font-size:10.5px;line-height:1.4;color:${C.ink2}}
   svg text{font-family:inherit}
   @media print{.btn{display:none}}
 </style></head><body><button class="btn" onclick="window.print()">Imprimir / guardar PDF</button>${slides.join("")}</body></html>`;
