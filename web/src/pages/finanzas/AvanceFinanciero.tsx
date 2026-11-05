@@ -341,13 +341,18 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct }: { obraId: string
   return (
     <div className="grid gap-4 pt-3 lg:grid-cols-5">
       <div className="lg:col-span-3">
-        <p className="mb-1 text-sm font-semibold text-slate-800">
-          {nombre} · por categoría
-          <span className="ml-2 text-xs font-normal text-slate-500">
-            toda la obra: {dinero(total.real)} de {dinero(total.presupuesto)}
-            {total.ejercidoPct != null ? ` (${total.ejercidoPct}%)` : ""} · físico {fisicoPct != null ? `${fisicoPct}%` : "sin avance"}
-          </span>
-        </p>
+        <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-800">
+            {nombre} · por categoría
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              toda la obra: {dinero(total.real)} de {dinero(total.presupuesto)}
+              {total.ejercidoPct != null ? ` (${total.ejercidoPct}%)` : ""} · físico {fisicoPct != null ? `${fisicoPct}%` : "sin avance"}
+            </span>
+          </p>
+          <Link to={`/finanzas/avance-financiero?vista=capturar&obra=${obraId}`} className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-800">
+            {total.presupuesto > 0 ? "Editar presupuesto" : "Capturar presupuesto"}
+          </Link>
+        </div>
         <table className="w-full text-xs">
           <thead className="text-left text-slate-500">
             <tr>
