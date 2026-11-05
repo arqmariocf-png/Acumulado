@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { csvOrigen, filtrarOrigen, ligasGenerales, ligasRenglon, pendienteDe, resumenOrigen, tituloOrigen, type RenglonOrigen } from "./origenDato.ts";
+import { CLIENTE_DE_LA_OBRA, agruparManoObra, csvOrigen, filtrarOrigen, gastoPorCliente, ligasGenerales, ligasRenglon, opcionesCliente, pendienteDe, resumenOrigen, tituloOrigen, type RenglonOrigen } from "./origenDato.ts";
 
 const base: RenglonOrigen = {
   origen: "oc", proyecto_id: "obra-1", obra: "Parque Real 63", empresa_id: "mcf", empresa_codigo: "MCF", mes: "2026-09-01", categoria: "materiales",
@@ -57,5 +57,41 @@ test("título y CSV", () => {
   assert.equal(tituloOrigen({ anio: 2026 }, null, null, t), "Real (ejercido) · todas las obras · 2026");
   const csv = csvOrigen(renglones.slice(0, 2));
   assert.match(csv, /^Origen,Obra,Empresa/);
-  assert.match(csv, /Órdenes de compra y de servicio,Parque Real 63,MCF,2026-09,materiales,OC,40957,MERCADO LIBRE,2026-09-28,,,Pendiente de Pago,api,1551.72,0,1551.72/);
+  assert.match(csv, /Órdenes de compra y de servicio,Parque Real 63,MCF,2026-09,materiales,OC,40957,MERCADO LIBRE,2026-09-28,,,,,,Pendiente de Pago,api,1551.72,0,1551.72/);
+});
+
+const mo = (cambios: Partial<RenglonOrigen>): RenglonOrigen => ({ ...base, origen: "mano_obra", orden_compra_id: null, folio: null, tipo: null, categoria: "mano_obra", proveedor: "CSC", fuente: "api", estatus: "Pagada", ...cambios });
+
+test("mano de obra clasificada: partida → puesto → persona → semana, con subtotales y orden por monto", () => {
+  const rows = [
+    mo({ descripcion: "Administrativo y Operativo", subpartida: "Auxiliar técnico", trabajador: "Jonathan", tipo_trabajador: "Empleado", semana: "2026-10-25 a 2026-10-31", fecha: "2026-10-31", num_sem: 44, monto: 1741.07, pagado: 1741.07 }),
+    mo({ descripcion: "Administrativo y Operativo", subpartida: "Auxiliar técnico", trabajador: "Jonathan", tipo_trabajador: "Empleado", semana: "2026-10-18 a 2026-10-24", fecha: "2026-10-24", num_sem: 43, monto: 1741.07, pagado: 1741.07 }),
+    mo({ descripcion: "Administrativo y Operativo", subpartida: "Coordinador", trabajador: "Christian", tipo_trabajador: "Empleado", semana: "2026-10-25 a 2026-10-31", fecha: "2026-10-31", num_sem: 44, monto: 2330.36, pagado: 2330.36 }),
+    mo({ descripcion: "Albañilería", subpartida: null, trabajador: "Pedro", tipo_trabajador: "Destajo", semana: "2026-10-25 a 2026-10-31", fecha: "2026-10-31", num_sem: 44, monto: 9000, pagado: 9000 }),
+    base, // una OC no entra
+  ];
+  const g = agruparManoObra(rows);
+  assert.deepEqual(g.map((p) => [p.partida, p.monto, p.semanas]), [["Albañilería", 9000, 1], ["Administrativo y Operativo", 5812.5, 2]]);
+  assert.deepEqual(g[1].subpartidas.map((s) => [s.subpartida, s.monto]), [["Auxiliar técnico", 3482.14], ["Coordinador", 2330.36]]);
+  const jon = g[1].subpartidas[0].personas[0];
+  assert.equal(jon.trabajador, "Jonathan");
+  assert.equal(jon.semanas, 2);
+  assert.equal(jon.renglones[0].num_sem, 44); // la más reciente primero
+  assert.equal(g[0].subpartidas[0].subpartida, "Sin clasificar");
+});
+
+test("gasto por cliente: lo sin cliente y la mano de obra van al cliente de la obra", () => {
+  const rows = [
+    { ...base, gasto_cliente: "Oficinas Grupo Loma" },
+    { ...base, orden_compra_id: "oc-2", folio: "40957", monto: 1551.72, pagado: 0 },
+    { ...base, orden_compra_id: "oc-3", folio: "40958", monto: 100, pagado: 100, gasto_cliente: "Obra privada · Casa Pérez" },
+    mo({ monto: 25000, pagado: 25000 }),
+  ];
+  const g = gastoPorCliente(rows);
+  assert.deepEqual(g.map((x) => [x.cliente, x.oc, x.manoObra, x.total, x.ordenes]), [
+    [CLIENTE_DE_LA_OBRA, 1551.72, 25000, 26551.72, 1],
+    ["Oficinas Grupo Loma", 2120, 0, 2120, 1],
+    ["Obra privada · Casa Pérez", 100, 0, 100, 1],
+  ]);
+  assert.deepEqual(opcionesCliente(rows, ["BBVA"]), ["BBVA", "Obra privada", "Obra privada · Casa Pérez", "Oficinas Grupo Loma"]);
 });

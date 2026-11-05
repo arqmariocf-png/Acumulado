@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { avanceFisicoDe, type DatosResumenObra } from "../../lib/resumenObra";
 import { useAuth } from "../../lib/auth";
-import { CifraOrigen, PanelOrigen } from "../../components/Origen";
+import { CifraOrigen, PanelOrigen, TablaGastoPorCliente } from "../../components/Origen";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { filtrarOrigen, ligasGenerales, tituloOrigen, type FiltroOrigen, type RenglonOrigen } from "../../lib/origenDato";
 import {
@@ -96,6 +96,22 @@ export function AvanceFinanciero() {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [puedeCapturar],
+  );
+  const qc = useQueryClient();
+  // Cliente del gasto de una OC/OS (BBVA Mantenimiento en oficinas u obras
+  // privadas; 5-nov-2026): lo cambia quien captura o es responsable.
+  const puedeCliente = !soloConsulta && !!perfil && ["admin", "direccion", "corporativo", "empresa", "responsable"].includes(perfil.rol);
+  const cambiarCliente = useCallback(
+    async (ordenCompraId: string, cliente: string | null) => {
+      const { error } = await supabase.rpc("fn_oc_gasto_cliente", { p_oc: ordenCompraId, p_cliente: cliente });
+      if (error) {
+        window.alert(error.message);
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ["avance-financiero", "origen"] });
+      await qc.invalidateQueries({ queryKey: ["avance-financiero", "detalle-obra"] });
+    },
+    [qc],
   );
   const detalleOrigen = useQuery({
     queryKey: ["avance-financiero", "origen", origen?.filtro.obraId ?? "todas"],
@@ -300,6 +316,7 @@ export function AvanceFinanciero() {
           ligas={ligasGenerales(origen.filtro, origen.filtro.obraId ? (obras.find((o) => o.id === origen.filtro.obraId)?.nombre ?? null) : null)}
           nota="Importes sin IVA. Mismo cruce que la pantalla: OC/OS con el nombre de la obra y de la empresa que la contrata, mano de obra de la API por semana y compras del control de obra sin OC."
           onCerrar={cerrarOrigen}
+          onCliente={puedeCliente ? cambiarCliente : undefined}
         />
       )}
     </div>
@@ -413,6 +430,17 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct, verOrigen, irACapt
       return (data ?? []) as { orden_compra_id: string; folio: string; tipo: string; proveedor: string | null; fecha: string | null; total: number; saldo: number; pendiente_sin_iva: number; vence: string | null; programado: number | null }[];
     },
   });
+  // Gasto por cliente de la obra (BBVA Mantenimiento: oficinas y obras privadas; 5-nov-2026).
+  const detalleObra = useQuery({
+    queryKey: ["avance-financiero", "detalle-obra", obraId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_avance_financiero_detalle", { p_proyecto: obraId, p_mes: null, p_categoria: null });
+      if (error) throw error;
+      return ((data ?? []) as RenglonOrigen[]).map((r) => ({ ...r, monto: Number(r.monto) || 0, pagado: Number(r.pagado) || 0 }));
+    },
+  });
+  const renglonesObra = useMemo(() => filtrarOrigen(detalleObra.data ?? [], { obraId, anio: res.porMes.length ? undefined : undefined }), [detalleObra.data, obraId]);
+  const conCliente = renglonesObra.some((r) => r.gasto_cliente);
   const hoy = new Date().toISOString().slice(0, 10);
   const lista = pendientes.data ?? [];
   return (
@@ -465,6 +493,15 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct, verOrigen, irACapt
           </tbody>
         </table>
       </div>
+      {conCliente && (
+        <div className="lg:col-span-5">
+          <p className="mb-1 text-sm font-semibold text-slate-800">
+            Gasto por cliente (toda la obra)
+            <span className="ml-2 text-xs font-normal text-slate-500">las OC/OS con cliente del gasto se separan; la mano de obra y lo demás van al cliente de la obra. El cliente se elige en cada orden desde "de dónde sale".</span>
+          </p>
+          <TablaGastoPorCliente renglones={renglonesObra} />
+        </div>
+      )}
       <div className="lg:col-span-2">
         <p className="mb-1 text-sm font-semibold text-slate-800">
           Pendiente de pago de la obra

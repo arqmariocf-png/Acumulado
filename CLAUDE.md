@@ -3407,3 +3407,31 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   de inventario (detalle por día). **Pantalla o cifra nueva → `CifraOrigen` (o
   un `Link`) a su origen; si la cifra es una suma calculada en SQL, una
   función `fn_<reporte>_detalle` con sus renglones y `PanelOrigen`.**
+  **Mano de obra clasificada y gasto por cliente (5-nov-2026, Mario: "no se
+  ve el desglose de mano de obra; sería bueno clasificarlo para una mejor
+  lectura" y "en BBVA Mantenimiento hay que poder seleccionar porque hay
+  tareas que hace ese equipo en oficinas y obras privadas, entonces debe
+  separar el gasto por cliente")** (`20261105110000`, aplicada como
+  `mano_obra_desglose_gasto_cliente_1/_2/_3`): `fn_avance_financiero_detalle`
+  devuelve además `trabajador`, `subpartida` (puesto), `num_sem`,
+  `tipo_trabajador` y `gasto_cliente`; la mano de obra se pinta partida →
+  puesto → persona → semana con subtotales (`agruparManoObra`, `TablaManoObra`
+  en `components/Origen.tsx`; también en el resumen de la obra `#mano-obra`).
+  Con una obra en concreto, la función admite también corporativo y
+  responsable que la ven (como `fn_obra_ordenes`; Christian ve BBVA Puebla).
+  `ordenes_compra.gasto_cliente` = a quién se le carga esa OC/OS si no es el
+  cliente de la obra; lo cambia `fn_oc_gasto_cliente(oc, cliente|null)`
+  (definer; admin, dirección, corporativo, empresa o responsable en su
+  alcance; Alma bloqueada) desde el selector "Cliente del gasto"
+  (`SelectorClienteGasto`: (cliente de la obra) / usados / "Oficinas Grupo
+  Loma" / "Obra privada" / Otro…) en el panel "de dónde sale" y en la lista de
+  OC del resumen de la obra; `fn_obra_ordenes` trae `gasto_cliente`. Tabla
+  "Gasto por cliente" (`gastoPorCliente`, `TablaGastoPorCliente`: OC/OS, mano
+  de obra, otras compras, total, pagado) en el panel, en el detalle de la obra
+  del avance financiero y en el resumen de la obra; la mano de obra de la API
+  viene por obra y va completa al cliente de la obra (si se quiere repartir,
+  hace falta que el backoffice la separe). Lo real de la obra NO cambia: es un
+  desglose. Como el MCP no deja DROP, las versiones anteriores de las dos
+  funciones quedaron renombradas `*_v1` y revocadas. Probado en rollback:
+  Christian (responsable, CSC) pone "Oficinas Grupo Loma" a una OC de BBVA
+  Puebla; Alma no puede.

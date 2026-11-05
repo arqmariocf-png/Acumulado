@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BotonVerOc } from "../pages/requisiciones/VerOrdenCompra";
 import { descargarCsv } from "../lib/descargarArchivo";
-import { csvOrigen, ligasRenglon, pendienteDe, resumenOrigen, type LigaOrigen, type RenglonOrigen } from "../lib/origenDato";
+import { CLIENTE_DE_LA_OBRA, agruparManoObra, csvOrigen, gastoPorCliente, ligasRenglon, opcionesCliente, pendienteDe, resumenOrigen, type LigaOrigen, type RenglonOrigen } from "../lib/origenDato";
 
 // "De dónde sale" (5-nov-2026, Mario: "generar hipervínculos en todos los
 // gastos, ventanas y menús para que podamos consultar de dónde viene esa
@@ -66,10 +66,178 @@ export interface PanelOrigenProps {
   ligas?: LigaOrigen[];
   nota?: string;
   onCerrar: () => void;
+  /** Si viene, cada OC/OS trae el selector "cliente del gasto" (BBVA
+   * Mantenimiento en oficinas u obras privadas; 5-nov-2026). */
+  onCliente?: (ordenCompraId: string, cliente: string | null) => Promise<void> | void;
+}
+
+/** Selector de a quién se le carga el gasto de una OC/OS. */
+export function SelectorClienteGasto({ valor, opciones, onCambiar, className = "" }: { valor: string | null; opciones: string[]; onCambiar: (cliente: string | null) => Promise<void> | void; className?: string }) {
+  const [guardando, setGuardando] = useState(false);
+  async function cambiar(v: string) {
+    let cliente: string | null = v || null;
+    if (v === "__otro__") {
+      const t = window.prompt("¿A qué cliente se le carga este gasto? (por ejemplo: Obra privada · Casa Pérez)");
+      if (t == null) return;
+      cliente = t.trim() || null;
+    }
+    setGuardando(true);
+    try {
+      await onCambiar(cliente);
+    } finally {
+      setGuardando(false);
+    }
+  }
+  const lista = valor && !opciones.includes(valor) ? [valor, ...opciones] : opciones;
+  return (
+    <select value={valor ?? ""} disabled={guardando} onChange={(e) => void cambiar(e.target.value)} title="Cliente al que se le carga este gasto" className={`rounded border border-slate-300 bg-white px-1 py-0.5 text-[11px] ${valor ? "text-violet-800" : "text-slate-500"} ${className}`}>
+      <option value="">{CLIENTE_DE_LA_OBRA}</option>
+      {lista.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+      <option value="__otro__">Otro cliente…</option>
+    </select>
+  );
+}
+
+/** Mano de obra de la API clasificada: partida → puesto → persona → semana. */
+export function TablaManoObra({ renglones, conLigas = true }: { renglones: RenglonOrigen[]; conLigas?: boolean }) {
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  const grupos = agruparManoObra(renglones);
+  const alternar = (k: string) =>
+    setAbiertas((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  if (!grupos.length) return null;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead className="text-left text-slate-500">
+          <tr>
+            <th className="py-1 pr-2">Partida · puesto · persona</th>
+            <th className="pr-2">Tipo</th>
+            <th className="pr-2 text-right">Semanas</th>
+            <th className="pr-2 text-right">Monto</th>
+            {conLigas && <th>Corroborar</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {grupos.map((p) => (
+            <Fragmento key={p.partida}>
+              <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-800">
+                <td className="py-1 pr-2">{p.partida}</td>
+                <td className="pr-2" />
+                <td className="pr-2 text-right tabular-nums">{p.semanas}</td>
+                <td className="pr-2 text-right tabular-nums">{dinero(p.monto)}</td>
+                {conLigas && <td />}
+              </tr>
+              {p.subpartidas.map((sp) => (
+                <Fragmento key={`${p.partida}|${sp.subpartida}`}>
+                  {(p.subpartidas.length > 1 || sp.subpartida !== "Sin clasificar") && (
+                    <tr className="border-t border-slate-100 text-slate-700">
+                      <td className="py-1 pl-4 pr-2 font-medium">{sp.subpartida}</td>
+                      <td className="pr-2" />
+                      <td className="pr-2" />
+                      <td className="pr-2 text-right tabular-nums">{dinero(sp.monto)}</td>
+                      {conLigas && <td />}
+                    </tr>
+                  )}
+                  {sp.personas.map((per) => {
+                    const k = `${p.partida}|${sp.subpartida}|${per.trabajador}`;
+                    const abierta = abiertas.has(k);
+                    return (
+                      <Fragmento key={k}>
+                        <tr className="border-t border-slate-100">
+                          <td className="py-1 pl-8 pr-2">
+                            <button type="button" onClick={() => alternar(k)} className="text-left underline decoration-dotted hover:text-sky-800" title="Ver semana por semana">
+                              {abierta ? "▾" : "▸"} {per.trabajador}
+                            </button>
+                          </td>
+                          <td className="pr-2 text-slate-500">{per.tipo ?? "—"}</td>
+                          <td className="pr-2 text-right tabular-nums">{per.semanas}</td>
+                          <td className="pr-2 text-right tabular-nums">{dinero(per.monto)}</td>
+                          {conLigas && (
+                            <td className="whitespace-nowrap">
+                              {ligasRenglon(per.renglones[0]).map((l) => (
+                                <Link key={l.a} to={l.a} className={`${liga} mr-2`}>
+                                  {l.texto}
+                                </Link>
+                              ))}
+                            </td>
+                          )}
+                        </tr>
+                        {abierta &&
+                          per.renglones.map((r, i) => (
+                            <tr key={`${k}|${i}`} className="border-t border-slate-50 text-slate-600">
+                              <td className="py-0.5 pl-12 pr-2">
+                                {r.num_sem != null ? `Sem ${r.num_sem} · ` : ""}
+                                {r.semana ?? fechaCorta(r.fecha)}
+                              </td>
+                              <td className="pr-2">{r.proveedor ?? ""}</td>
+                              <td className="pr-2" />
+                              <td className="pr-2 text-right tabular-nums">{dinero(r.monto)}</td>
+                              {conLigas && <td />}
+                            </tr>
+                          ))}
+                      </Fragmento>
+                    );
+                  })}
+                </Fragmento>
+              ))}
+            </Fragmento>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Fragmento({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+/** Tabla "gasto por cliente" de una obra (OC/OS con cliente del gasto; lo demás al cliente de la obra). */
+export function TablaGastoPorCliente({ renglones, clienteObra }: { renglones: RenglonOrigen[]; clienteObra?: string | null }) {
+  const filas = gastoPorCliente(renglones);
+  if (filas.length < 2 && !filas.some((f) => f.cliente !== CLIENTE_DE_LA_OBRA)) return null;
+  return (
+    <table className="w-full text-xs">
+      <thead className="text-left text-slate-500">
+        <tr>
+          <th className="py-1 pr-2">Cliente del gasto</th>
+          <th className="pr-2 text-right">OC/OS</th>
+          <th className="pr-2 text-right">Mano de obra</th>
+          <th className="pr-2 text-right">Otras compras</th>
+          <th className="pr-2 text-right">Total</th>
+          <th className="pr-2 text-right">Pagado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filas.map((f) => (
+          <tr key={f.cliente} className="border-t border-slate-100">
+            <td className="py-1 pr-2 font-medium text-slate-800">
+              {f.cliente === CLIENTE_DE_LA_OBRA ? (clienteObra ? `${clienteObra} (cliente de la obra)` : CLIENTE_DE_LA_OBRA) : f.cliente}
+              <span className="ml-1 font-normal text-slate-400">{f.ordenes} orden{f.ordenes === 1 ? "" : "es"}</span>
+            </td>
+            <td className="pr-2 text-right tabular-nums">{dinero(f.oc)}</td>
+            <td className="pr-2 text-right tabular-nums">{dinero(f.manoObra)}</td>
+            <td className="pr-2 text-right tabular-nums">{dinero(f.control)}</td>
+            <td className="pr-2 text-right font-semibold tabular-nums">{dinero(f.total)}</td>
+            <td className="pr-2 text-right tabular-nums">{dinero(f.pagado)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 /** Panel con los renglones que forman una cifra del avance financiero. */
-export function PanelOrigen({ titulo, cifra, renglones, cargando, error, ligas = [], nota, onCerrar }: PanelOrigenProps) {
+export function PanelOrigen({ titulo, cifra, renglones, cargando, error, ligas = [], nota, onCerrar, onCliente }: PanelOrigenProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCerrar();
@@ -82,6 +250,9 @@ export function PanelOrigen({ titulo, cifra, renglones, cargando, error, ligas =
   const mo = renglones.filter((r) => r.origen === "mano_obra");
   const control = renglones.filter((r) => r.origen === "control");
   const cuadra = cifra == null || Math.abs(res.real - cifra) < 0.5 || Math.abs(res.pagado - cifra) < 0.5 || Math.abs(res.pendiente - cifra) < 0.5;
+  const opcionesClientes = opcionesCliente(renglones);
+  const porCliente = gastoPorCliente(renglones);
+  const hayClientes = porCliente.some((f) => f.cliente !== CLIENTE_DE_LA_OBRA);
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-3 sm:p-6" onClick={onCerrar} role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="w-full max-w-5xl rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -131,6 +302,13 @@ export function PanelOrigen({ titulo, cifra, renglones, cargando, error, ligas =
               ))}
             </ul>
           )}
+          {hayClientes && (
+            <section>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Gasto por cliente</h3>
+              <TablaGastoPorCliente renglones={renglones} />
+              <p className="mt-1 text-[11px] text-slate-500">Las OC/OS con "cliente del gasto" se separan; la mano de obra y lo sin cliente van al cliente de la obra.</p>
+            </section>
+          )}
           {oc.length > 0 && (
             <section>
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Órdenes de compra y de servicio ({oc.length})</h3>
@@ -144,6 +322,7 @@ export function PanelOrigen({ titulo, cifra, renglones, cargando, error, ligas =
                       <th className="pr-2">Fecha</th>
                       <th className="pr-2">Categoría</th>
                       <th className="pr-2">Estatus</th>
+                      {(onCliente || hayClientes) && <th className="pr-2">Cliente del gasto</th>}
                       <th className="pr-2 text-right">Monto s/IVA</th>
                       <th className="pr-2 text-right">Pagado</th>
                       <th className="pr-2 text-right">Pendiente</th>
@@ -164,6 +343,15 @@ export function PanelOrigen({ titulo, cifra, renglones, cargando, error, ligas =
                         <td className="pr-2 whitespace-nowrap">{fechaCorta(r.fecha)}</td>
                         <td className="pr-2">{r.categoria}</td>
                         <td className="pr-2">{r.estatus ?? "—"}</td>
+                        {(onCliente || hayClientes) && (
+                          <td className="pr-2">
+                            {onCliente && r.orden_compra_id ? (
+                              <SelectorClienteGasto valor={r.gasto_cliente ?? null} opciones={opcionesClientes} onCambiar={(c) => onCliente(r.orden_compra_id!, c)} />
+                            ) : (
+                              <span className={r.gasto_cliente ? "text-violet-800" : "text-slate-400"}>{r.gasto_cliente ?? CLIENTE_DE_LA_OBRA}</span>
+                            )}
+                          </td>
+                        )}
                         <td className="pr-2 text-right tabular-nums">{dinero(r.monto)}</td>
                         <td className="pr-2 text-right tabular-nums">{dinero(r.pagado)}</td>
                         <td className={`pr-2 text-right tabular-nums ${pendienteDe(r) > 0 ? "text-amber-700" : ""}`}>{dinero(pendienteDe(r))}</td>
@@ -185,40 +373,11 @@ export function PanelOrigen({ titulo, cifra, renglones, cargando, error, ligas =
           )}
           {mo.length > 0 && (
             <section>
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Mano de obra pagada por semana ({mo.length})</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="text-left text-slate-500">
-                    <tr>
-                      <th className="py-1 pr-2">Semana</th>
-                      <th className="pr-2">Obra</th>
-                      <th className="pr-2">Empresa (API)</th>
-                      <th className="pr-2">Partida</th>
-                      <th className="pr-2 text-right">Monto</th>
-                      <th>Corroborar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mo.map((r, i) => (
-                      <tr key={`${r.proyecto_id}-${r.semana}-${r.descripcion}-${i}`} className="border-t border-slate-100">
-                        <td className="py-1 pr-2 whitespace-nowrap">{r.semana ?? fechaCorta(r.fecha)}</td>
-                        <td className="pr-2 text-slate-600">{r.obra}</td>
-                        <td className="pr-2">{r.proveedor ?? "—"}</td>
-                        <td className="pr-2">{r.descripcion ?? "—"}</td>
-                        <td className="pr-2 text-right tabular-nums">{dinero(r.monto)}</td>
-                        <td className="whitespace-nowrap">
-                          {ligasRenglon(r).map((l) => (
-                            <Link key={l.a} to={l.a} className={`${liga} mr-2`}>
-                              {l.texto}
-                            </Link>
-                          ))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-1 text-[11px] text-slate-500">Lo que la API del backoffice reporta como pagado (api_MO_period_aut), en el mes en que termina la semana. Se cruza con la obra por el nombre del proyecto.</p>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Mano de obra pagada ({mo.length} renglones · {dinero(mo.reduce((t, r) => t + (Number(r.monto) || 0), 0))})
+              </h3>
+              <TablaManoObra renglones={mo} />
+              <p className="mt-1 text-[11px] text-slate-500">Lo que la API del backoffice reporta como pagado (api_MO_period_aut), clasificado por partida, puesto y persona; clic en la persona para ver semana por semana. Se cruza con la obra por el nombre del proyecto y cae en el mes en que termina la semana.</p>
             </section>
           )}
           {control.length > 0 && (
