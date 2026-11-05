@@ -240,7 +240,7 @@ export function AvanceFinanciero() {
         </>
       )}
       <p className="mt-4 text-xs text-slate-500">
-        Real = OC y OS de la obra (mismo nombre de proyecto) en el mes en que se emiten, a subtotal sin IVA, repartidas por categoría según sus partidas (flete,
+        Real = OC y OS de la obra (mismo nombre de proyecto y de la misma empresa que contrata la obra; las de otras empresas del grupo con ese nombre no cuentan, para no duplicar la operación entre empresas) en el mes en que se emiten, a subtotal sin IVA, repartidas por categoría según sus partidas (flete,
         renta, combustible/viáticos…), más la mano de obra pagada por semana. Pagado = lo ya pagado de esas órdenes (aquí o en el backoffice) y la mano de obra.
         El semáforo compara lo ejercido de toda la obra contra su avance físico (tareas hechas de su tablero).
       </p>

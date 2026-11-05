@@ -13,6 +13,7 @@ export const FUENTES_ARCHIVO = {
   pago: { funcion: "pagos-comprobante", param: "id", titulo: "Comprobante de pago" },
   cotizacion: { funcion: "requisiciones-cotizacion", param: "id", titulo: "Cotización" },
   gasto: { funcion: "gastos-comprobar", param: "id", titulo: "Comprobante de gasto" },
+  cxc: { funcion: "cxc-archivos", param: "id", titulo: "Estado de cuenta de clientes" },
 } as const;
 
 export type FuenteArchivo = keyof typeof FUENTES_ARCHIVO;

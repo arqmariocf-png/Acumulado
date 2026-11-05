@@ -216,7 +216,7 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Las que en el backoffice o aquí llevan el nombre de esta obra; sin canceladas.</p>
+              <p className="mt-1 text-[11px] text-slate-400">Las que en el backoffice o aquí llevan el nombre de esta obra y son de la empresa que la contrata (las de otras empresas del grupo no cuentan, para no duplicar la operación entre empresas); sin canceladas.</p>
             </div>
           ) : (
             <p className="text-sm text-slate-400">No hay órdenes con el nombre de esta obra.</p>

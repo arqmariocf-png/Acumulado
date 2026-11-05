@@ -442,6 +442,47 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   bandeja. Las pantallas de detalle muestran "Facturación: …". Probado en
   rollback: Belén ve 22, factura, no factura y reabre; Alma 0 y bloqueada.
   Pendiente: KPI con conteo y `?ver=` para la bandeja.
+- **Cuentas por cobrar: estado de cuenta de Laura como base, corte y filtros
+  (4-nov-2026, Mario: "poder consultar el archivo que adjunto para tomar esta
+  base para la conciliación y de ahí arrancamos de ceros; aplícales un filtro
+  por empresa y clientes específicos")** (`20261104120000`, aplicada como
+  `cxc_estados_cuenta_archivos_corte`): tabla `cxc_archivos` (estado de cuenta
+  por empresa con `corte`, `resumen` jsonb; bucket `cargas/cxc/<empresa>/…`;
+  edge **`cxc-archivos`** POST multipart / GET ?id= firmada / DELETE; visor
+  `/archivo?f=cxc`) y `cxc_documentos.archivo_id`. **Corte**: si un cliente de
+  una empresa tiene un documento `saldo_inicial` vigente, `fn_cxc_cartera` deja
+  fuera las facturas del SAT con fecha ≤ corte y `fn_cxc_ov_pendientes` las OV
+  ≤ corte de ese cliente (están dentro del saldo); lo posterior sí entra. El
+  jsonb trae `cortes` [{empresa_id, cliente_clave, corte}] y en cada documento
+  `concepto`/`archivo_id`. Pantalla: barra de filtro **Empresa** (`?empresa=`)
+  y **Clientes específicos** (`?clientes=clave,clave`, pastillas) sobre
+  Cartera, Registrar cobro y Agenda; sección "Estados de cuenta de clientes"
+  (`finanzas/CxcEstadosCuenta.tsx`): sube el Excel, lee en el navegador la hoja
+  resumen Cliente · Total (`saldosDesdeHoja`, `emparejarCliente` por nombre con
+  empresas del grupo por RFC, `folioSaldoInicial` en `lib/cuentasPorCobrar.ts`,
+  con pruebas) y crea los saldos iniciales con esa fecha de corte (o liga el
+  archivo a los que ya existan con ese corte). **Base cargada**: "ESTADO DE
+  CUENTA CLIENTES AEP 2026" de Laura (hoja CxC, corte 29-oct-2026) → 8 saldos
+  iniciales en AEP, $2,122,770.35 (Ventosa 58,678.02 · Ventosa paga Mario
+  51,016.29 a MCF obra Oaxaca #44 · Ergodinova 705,074.18 · CSC 107,118.61 ·
+  Clavicón 397,663.05 · MCF 664,354.15 · Africam 61,829.88 · Balken 77,036.17),
+  vence = corte; el archivo lo sube Laura desde la pantalla (desde aquí no se
+  puede subir a Storage) y queda ligado solo. Ojo: en el Excel la pestaña
+  "Resumen MCF por obras" suma 395,742 y la hoja CxC dice 664,354 para MCF: se
+  tomó la hoja CxC. Probado en rollback: Laura ve 7 cortes, sube y liga; Alma
+  no ve ni inserta.
+- **Gasto de obra solo de la empresa que contrata (4-nov-2026, Mario: "lo
+  único que necesita impactar en gasto son las órdenes relacionadas a la
+  empresa que contrata porque como hay operación entre empresas se duplican
+  pasos")** (`20261104120000`, aplicada como
+  `obras_gasto_solo_empresa_contratante`): `fn_avance_financiero_real`,
+  `fn_obra_gasto_backoffice`, `fn_obra_ordenes` y
+  `fn_avance_financiero_pendientes` cruzan las OC/OS por nombre de obra **y**
+  `ordenes_compra.empresa_id = proyectos.empresa_id`. Antes, en una obra de ERG
+  contaban la OC de AEP (compra el material) y la de ERG a AEP (lo recompra).
+  Ej. Pisos Falla geológica N21 (ERG): 146 OC → 107, $874,677 s/IVA; Parque
+  Real 63 (MCF): 84 OC. La mano de obra no cambió. Pies de página de Avance
+  financiero y del resumen de la obra lo dicen.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el

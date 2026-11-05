@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { useEmpresasAlcance } from "../../components/SelectorEmpresa";
+import { rutaVerArchivo } from "../../lib/verArchivo";
 import {
   RANGOS,
   TIPOS_GESTION,
@@ -11,23 +12,28 @@ import {
   antiguedadPorCliente,
   aplicarCobro,
   cobranzaEsperada,
+  corteDe,
   cuadreEntreEmpresas,
   docDesdeOv,
   estatusDocumento,
+  filtrarCartera,
   filtrarClientes,
   filtrarOvPendientes,
+  opcionesClientes,
   sumaOv,
   indicadores,
   revisarDocumento,
   textoGestion,
   totalesAntiguedad,
   type ClienteCxc,
+  type CorteCxc,
   type DocumentoCxc,
   type FiltroClientes,
   type GestionCxc,
   type OvPendiente,
   type ParEntreEmpresas,
 } from "../../lib/cuentasPorCobrar";
+import { CxcEstadosCuenta } from "./CxcEstadosCuenta";
 
 // Cuentas por cobrar (23-oct-2026, Laura con el diseño Comercial / Cobranza).
 // Cartera (antigüedad por cliente, cobranza esperada, documentos del cliente),
@@ -36,6 +42,11 @@ import {
 // promesa) y Entre empresas (lo vendido contra lo que la otra registró como
 // OC). Todo sale de fn_cxc_cartera(): facturas PPD del SAT con sus
 // complementos y las estimaciones capturadas con su retenido.
+//
+// 4-nov-2026 (Mario): filtro por empresa (?empresa=) y por clientes
+// específicos (?clientes=clave,clave) arriba de todo, y sección "Estados de
+// cuenta de clientes": el Excel con el que se concilia, consultable, y los
+// saldos iniciales con fecha de corte desde la que la cartera arranca de ceros.
 
 type Vista = "cartera" | "cobro" | "agenda" | "entre";
 const VISTAS: { clave: Vista; titulo: string }[] = [
@@ -68,6 +79,7 @@ interface Cartera {
   hoy: string;
   documentos: DocumentoCxc[];
   clientes: ClienteCxc[];
+  cortes?: CorteCxc[];
 }
 
 export function CuentasPorCobrar() {
@@ -75,6 +87,9 @@ export function CuentasPorCobrar() {
   const [params, setParams] = useSearchParams();
   const vista = (VISTAS.some((v) => v.clave === params.get("vista")) ? params.get("vista") : "cartera") as Vista;
   const clienteParam = params.get("cliente");
+  const empresaParam = params.get("empresa") || null;
+  const clientesParam = useMemo(() => (params.get("clientes") ?? "").split(",").map((c) => c.trim()).filter(Boolean), [params]);
+  const { data: empresas } = useEmpresasAlcance();
   const puedeOperar = !soloConsulta && !!perfil && ["admin", "direccion", "corporativo"].includes(perfil.rol);
 
   const { data: cartera, isLoading, error } = useQuery({
@@ -101,10 +116,24 @@ export function CuentasPorCobrar() {
     else p.delete("cliente");
     setParams(p, { replace: true });
   }
+  function ponerFiltro(empresa: string | null, clientesSel: string[]) {
+    const p = new URLSearchParams(params);
+    if (empresa) p.set("empresa", empresa);
+    else p.delete("empresa");
+    if (clientesSel.length > 0) p.set("clientes", clientesSel.join(","));
+    else p.delete("clientes");
+    setParams(p, { replace: true });
+  }
 
   const hoy = cartera?.hoy ?? hoyIso();
-  const docs = cartera?.documentos ?? [];
+  const todosDocs = cartera?.documentos ?? [];
   const clientes = cartera?.clientes ?? [];
+  const cortes = cartera?.cortes ?? [];
+  // Filtro por empresa y clientes específicos: aplica a Cartera, Registrar cobro y Agenda.
+  const docs = useMemo(() => filtrarCartera(todosDocs, { empresaId: empresaParam, clientes: clientesParam }), [todosDocs, empresaParam, clientesParam]);
+  const opcionesCli = useMemo(() => opcionesClientes(filtrarCartera(todosDocs, { empresaId: empresaParam, clientes: [] }), clientes), [todosDocs, empresaParam, clientes]);
+  const [buscarCliente, setBuscarCliente] = useState("");
+  const hayFiltro = !!empresaParam || clientesParam.length > 0;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5">
@@ -124,7 +153,53 @@ export function CuentasPorCobrar() {
       </div>
       {error && <p className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{(error as Error).message}</p>}
       {isLoading && <p className="text-sm text-slate-500">Cargando cartera…</p>}
-      {cartera && vista === "cartera" && <VistaCartera docs={docs} clientes={clientes} gestiones={gestiones ?? []} hoy={hoy} clienteParam={clienteParam} irA={irA} puedeOperar={puedeOperar} />}
+      {cartera && vista !== "entre" && (
+        <section className={`${tarjeta} mb-4 p-3`}>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className={etiqueta}>
+              Empresa que cobra
+              <select value={empresaParam ?? ""} onChange={(e) => ponerFiltro(e.target.value || null, clientesParam)} className={`${campo} w-56`}>
+                <option value="">Todas</option>
+                {(empresas ?? []).map((e) => <option key={e.id} value={e.id}>{e.codigo} · {e.nombre}</option>)}
+              </select>
+            </label>
+            <label className={etiqueta}>
+              Clientes específicos
+              <input value={buscarCliente} onChange={(e) => setBuscarCliente(e.target.value)} placeholder="Buscar cliente para agregar…" className={`${campo} w-64`} list="cxc-filtro-clientes" />
+              <datalist id="cxc-filtro-clientes">{opcionesCli.filter((o) => !clientesParam.includes(o.clave)).map((o) => <option key={o.clave} value={o.nombre} />)}</datalist>
+            </label>
+            <button
+              type="button"
+              className={btnSecundario}
+              disabled={!buscarCliente.trim()}
+              onClick={() => {
+                const t = buscarCliente.trim().toLowerCase();
+                const o = opcionesCli.find((x) => x.nombre.toLowerCase() === t) ?? opcionesCli.find((x) => x.nombre.toLowerCase().includes(t));
+                if (o && !clientesParam.includes(o.clave)) ponerFiltro(empresaParam, [...clientesParam, o.clave]);
+                setBuscarCliente("");
+              }}
+            >
+              Agregar
+            </button>
+            {hayFiltro && <button type="button" onClick={() => ponerFiltro(null, [])} className="text-sm text-slate-600 underline">Quitar filtros</button>}
+            <span className="ml-auto text-xs text-slate-500">{docs.filter((d) => d.saldo > 0.5).length} documentos con saldo{hayFiltro ? " con este filtro" : ""}</span>
+          </div>
+          {clientesParam.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {clientesParam.map((c) => {
+                const o = opcionesCli.find((x) => x.clave === c) ?? opcionesClientes(todosDocs, clientes).find((x) => x.clave === c);
+                return (
+                  <span key={c} className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+                    {o?.nombre ?? c}
+                    <button type="button" onClick={() => ponerFiltro(empresaParam, clientesParam.filter((x) => x !== c))} aria-label={`Quitar ${o?.nombre ?? c}`} className="text-slate-300">×</button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+      {cartera && vista === "cartera" && <VistaCartera docs={docs} todosDocs={todosDocs} cortes={cortes} clientes={clientes} gestiones={gestiones ?? []} hoy={hoy} clienteParam={clienteParam} irA={irA} puedeOperar={puedeOperar} empresas={empresas ?? []} empresaFiltro={empresaParam} />}
       {cartera && vista === "cobro" && <VistaCobro docs={docs} clientes={clientes} hoy={hoy} clienteParam={clienteParam} puedeOperar={puedeOperar} />}
       {cartera && vista === "agenda" && <VistaAgenda docs={docs} clientes={clientes} gestiones={gestiones ?? []} hoy={hoy} clienteParam={clienteParam} irA={irA} puedeOperar={puedeOperar} />}
       {vista === "entre" && <VistaEntreEmpresas />}
@@ -139,8 +214,8 @@ export function CuentasPorCobrar() {
 // ---------- Cartera ----------
 
 function VistaCartera({
-  docs, clientes, gestiones, hoy, clienteParam, irA, puedeOperar,
-}: { docs: DocumentoCxc[]; clientes: ClienteCxc[]; gestiones: GestionCxc[]; hoy: string; clienteParam: string | null; irA: (v: Vista, c?: string | null) => void; puedeOperar: boolean }) {
+  docs, todosDocs, cortes, clientes, gestiones, hoy, clienteParam, irA, puedeOperar, empresas, empresaFiltro,
+}: { docs: DocumentoCxc[]; todosDocs: DocumentoCxc[]; cortes: CorteCxc[]; clientes: ClienteCxc[]; gestiones: GestionCxc[]; hoy: string; clienteParam: string | null; irA: (v: Vista, c?: string | null) => void; puedeOperar: boolean; empresas: { id: string; codigo: string; nombre: string }[]; empresaFiltro: string | null }) {
   const [filtro, setFiltro] = useState<FiltroClientes>("externos");
   const filtrados = useMemo(() => filtrarClientes(docs, filtro), [docs, filtro]);
   const ind = useMemo(() => indicadores(docs, hoy, filtro), [docs, hoy, filtro]);
@@ -247,12 +322,14 @@ function VistaCartera({
           nombre={elegido.cliente}
           docs={docs.filter((d) => d.cliente_clave === elegido.cliente_clave)}
           cliente={clientes.find((c) => c.clave === elegido.cliente_clave) ?? null}
+          cortes={cortes}
           hoy={hoy}
           puedeOperar={puedeOperar}
           irA={irA}
           cerrar={() => irA("cartera")}
         />
       )}
+      <CxcEstadosCuenta empresas={empresas} clientes={clientes} docs={todosDocs} puedeOperar={puedeOperar} empresaFiltro={empresaFiltro} />
     </div>
   );
 }
@@ -268,8 +345,8 @@ function Tarjeta({ titulo, valor, nota, rojo = false }: { titulo: string; valor:
 }
 
 function DocumentosCliente({
-  clave, nombre, docs, cliente, hoy, puedeOperar, irA, cerrar,
-}: { clave: string; nombre: string; docs: DocumentoCxc[]; cliente: ClienteCxc | null; hoy: string; puedeOperar: boolean; irA: (v: Vista, c?: string | null) => void; cerrar: () => void }) {
+  clave, nombre, docs, cliente, cortes, hoy, puedeOperar, irA, cerrar,
+}: { clave: string; nombre: string; docs: DocumentoCxc[]; cliente: ClienteCxc | null; cortes: CorteCxc[]; hoy: string; puedeOperar: boolean; irA: (v: Vista, c?: string | null) => void; cerrar: () => void }) {
   const qc = useQueryClient();
   const [editar, setEditar] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -285,6 +362,7 @@ function DocumentosCliente({
     onError: (e) => setErr((e as Error).message),
   });
   const orden = [...docs].sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+  const cortesCliente = [...new Set(docs.map((d) => d.empresa_id))].map((e) => ({ empresa: docs.find((d) => d.empresa_id === e)?.empresa ?? "", corte: corteDe(cortes, e, clave) })).filter((c) => c.corte);
   return (
     <section className={`${tarjeta} p-4`} id="documentos">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -338,6 +416,11 @@ function DocumentosCliente({
           </div>
         </form>
       )}
+      {cortesCliente.length > 0 && (
+        <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Arranque de ceros: {cortesCliente.map((c) => `${c.empresa} al ${fechaCorta(c.corte)}`).join(" · ")}. El saldo inicial trae lo que se debía a esa fecha; las facturas y OV anteriores ya no se cuentan aparte.
+        </p>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs text-slate-500">
@@ -361,6 +444,12 @@ function DocumentosCliente({
                   <td className="px-2 py-2 font-semibold text-slate-900" title={d.uuid ?? undefined}>
                     {d.origen === "cfdi" ? `Factura ${d.folio.slice(0, 8)}…` : d.folio}
                     {d.origen === "cfdi" && <span className="ml-1 text-[10px] font-normal text-slate-400">SAT</span>}
+                    {d.tipo === "saldo_inicial" && (
+                      <div className="text-xs font-normal text-slate-500">
+                        {d.concepto}
+                        {d.archivo_id && <button type="button" onClick={() => window.open(rutaVerArchivo("cxc", d.archivo_id!), "_blank")} className="ml-1 text-sky-700 underline">ver archivo</button>}
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-2 text-slate-700">
                     {d.empresa}
