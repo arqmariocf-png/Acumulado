@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calendarioAusencias, diaDeRegreso, diasDeLey, diasHabiles, revisarSolicitud, situacion, sumarDias, type Ausencia } from "./vacaciones.ts";
+import { calendarioAusencias, diaDeRegreso, diasDeLey, diasHabiles, revisarSolicitud, situacion, sumarDias, vacacionesDesde, vacacionesHabilitadas, type Ausencia } from "./vacaciones.ts";
 
 test("días hábiles: lun-sáb sin domingos ni festivos; lun-vie tampoco sábados", () => {
   // 16-nov-2026 es el tercer lunes de noviembre (festivo); la semana tiene 5 hábiles en jornada de 6 días.
@@ -22,13 +22,26 @@ test("días de ley art. 76: 12, 14, 16, 18, 20, luego +2 cada 5 años", () => {
 });
 
 test("revisar solicitud: fechas, hábiles y saldo", () => {
-  const saldo = { anio_servicio: 1, anios_cumplidos: 0, periodo_desde: "2026-09-21", periodo_hasta: "2027-09-20", dias_ley: 12, tomados: 0, pendientes: 10, disponibles: 2, dias_semana: 6 };
+  const saldo = { anio_servicio: 2, anios_cumplidos: 1, periodo_desde: "2026-09-21", periodo_hasta: "2027-09-20", dias_ley: 12, tomados: 0, pendientes: 10, disponibles: 2, dias_semana: 6, habilitado: true, habilitado_desde: "2026-09-21" };
   assert.ok(revisarSolicitud({ tipo: "vacaciones", desde: "", hasta: "2026-11-20" }));
   assert.ok(revisarSolicitud({ tipo: "vacaciones", desde: "2026-11-22", hasta: "2026-11-22" })?.includes("hábiles"));
   assert.ok(revisarSolicitud({ tipo: "vacaciones", desde: "2026-11-17", hasta: "2026-11-20", saldo })?.includes("2 disponibles"));
   assert.equal(revisarSolicitud({ tipo: "vacaciones", desde: "2026-11-17", hasta: "2026-11-20", saldo, puedeExceder: true }), null);
   assert.equal(revisarSolicitud({ tipo: "permiso_sin_goce", desde: "2026-11-17", hasta: "2026-11-20", saldo }), null);
   assert.equal(revisarSolicitud({ tipo: "vacaciones", desde: "2026-11-17", hasta: "2026-11-18", saldo }), null);
+});
+
+test("vacaciones solo al cumplir un año (5-nov-2026); RH puede antes; permisos no cambian", () => {
+  const nuevo = { anio_servicio: 1, anios_cumplidos: 0, periodo_desde: "2026-06-01", periodo_hasta: "2027-05-31", dias_ley: 0, tomados: 0, pendientes: 0, disponibles: 0, dias_semana: 6, habilitado: false, habilitado_desde: "2027-06-01" };
+  const msj = revisarSolicitud({ tipo: "vacaciones", desde: "2026-11-17", hasta: "2026-11-18", saldo: nuevo });
+  assert.ok(msj?.includes("cumplir un año") && msj.includes("01/06/2027"), msj ?? "");
+  assert.equal(revisarSolicitud({ tipo: "vacaciones", desde: "2026-11-17", hasta: "2026-11-18", saldo: nuevo, puedeExceder: true }), null);
+  assert.equal(revisarSolicitud({ tipo: "permiso_con_goce", desde: "2026-11-17", hasta: "2026-11-18", saldo: nuevo }), null);
+  assert.equal(vacacionesHabilitadas(nuevo), false);
+  assert.equal(vacacionesHabilitadas({ anios_cumplidos: 1 }), true); // saldo viejo sin la marca
+  assert.equal(vacacionesHabilitadas(null), false);
+  assert.equal(vacacionesDesde("2026-06-01"), "2027-06-01");
+  assert.equal(vacacionesDesde("2024-02-29"), "2025-03-01");
 });
 
 const a = (nombre: string, desde: string, hasta: string, estado: Ausencia["estado"] = "autorizada"): Ausencia => ({

@@ -2852,6 +2852,28 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   manda una vez y no repite. Al 3-nov nadie tiene perfil de jornada: todos
   cuentan lun-sáb.
 
+- **Vacaciones al cumplir el año y financiamiento a los dos (5-nov-2026,
+  Mario: "el botón de las vacaciones se activa después del año trabajando de
+  antigüedad y el botón de financiamiento después de dos")**
+  (`20261105130000`): `fn_vacaciones_saldo` ya no da los 12 días desde el
+  día uno: los días de ley se ganan al cumplir cada aniversario (0 con menos
+  de un año; 12 al cumplir el 1, 14 al cumplir el 2…) y trae
+  `habilitado`/`habilitado_desde`; `fn_vacaciones_solicitar` rechaza
+  vacaciones antes del año (RH/dirección/admin sí pueden registrarlas;
+  permisos e incapacidades igual). Pantalla: aviso con la fecha y botón
+  bloqueado (`vacacionesHabilitadas`, `vacacionesDesde` en
+  `lib/vacaciones.ts`, con pruebas). Financiamiento:
+  `nomina_financiamiento_config.antiguedad_minima_meses` pasa de 3 a **24**
+  (por defecto y en `fn_nomina_config`; editable en Reglas) y la exige la
+  base: `cuentas_nomina_antes` no deja autorizar o subir una línea sin esa
+  antigüedad (`fn_antiguedad_meses(profile)` del expediente activo) y
+  `fn_credito_firmar` no deja firmar afiliación/consentimiento;
+  `fn_credito_datos_documentos` trae `financiamiento_habilitado/_desde` y la
+  app del trabajador muestra "se habilita el dd/mm/aaaa" en vez de "Leer y
+  firmar". Al 5-nov: 57 activos, 17 con ≥1 año (11 con cuenta) y 12 con ≥2
+  años (7 con cuenta); las 2 solicitudes de vacaciones pendientes (Carlos
+  Sánchez, Christian) tienen más de un año.
+
 ## Cuentas de nómina y financiamiento (18-oct-2026)
 - Mario: "llevaría una cuenta para descontarse vía nómina; por antigüedad y
   por buen comportamiento y pago daremos financiamiento estilo Mercado
