@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
@@ -241,19 +241,21 @@ export function DeudaFinanciera() {
       {vista === "resumen" && (
         <>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Indicador titulo="Deuda total (saldo)" valor={dinero(resumen.deuda, "MXN", 0)} detalle={`${resumen.creditos} crédito(s) vigente(s)${resumen.otrasMonedas.map((o) => ` · ${dinero(o.saldo, o.moneda, 0)}`).join("")}`} />
+            <Indicador titulo="Deuda total (saldo)" valor={dinero(resumen.deuda, "MXN", 0)} detalle={`${resumen.creditos} crédito(s) vigente(s)${resumen.otrasMonedas.map((o) => ` · ${dinero(o.saldo, o.moneda, 0)}`).join("")}`} a="#creditos" ayuda="Suma del saldo de cada crédito de la lista (monto o saldo de corte menos el capital pagado)" />
             <Indicador
               titulo="Pagos próximos 30 días"
               valor={dinero(resumen.pagos30, "MXN", 0)}
               detalle={`${resumen.n30} pago(s)${resumen.vencidos ? " (incluye vencidos)" : ""}`}
               tonoDetalle={resumen.vencidos ? "text-red-700" : undefined}
+              onVer={() => irA("calendario")}
+              ayuda="Ver pago por pago en el Calendario de pagos"
             />
-            <Indicador titulo="Tasa promedio ponderada" valor={resumen.tasaPonderada != null ? `${resumen.tasaPonderada.toFixed(2)}%` : "—"} detalle="Anual, ponderada por saldo" />
-            <Indicador titulo="Vence en los próximos 12 meses" valor={dinero(resumen.vence12, "MXN", 0)} detalle={`${resumen.cortoPlazoPct}% de la deuda es de corto plazo`} />
+            <Indicador titulo="Tasa promedio ponderada" valor={resumen.tasaPonderada != null ? `${resumen.tasaPonderada.toFixed(2)}%` : "—"} detalle="Anual, ponderada por saldo" a="#creditos" ayuda="Tasa de cada crédito ponderada por su saldo" />
+            <Indicador titulo="Vence en los próximos 12 meses" valor={dinero(resumen.vence12, "MXN", 0)} detalle={`${resumen.cortoPlazoPct}% de la deuda es de corto plazo`} onVer={() => irA("calendario")} ayuda="Ver el perfil de los próximos 12 meses en el Calendario de pagos" />
           </div>
 
           <div className="mb-4 grid gap-4 lg:grid-cols-3">
-            <section className={`${tarjeta} p-4 lg:col-span-2`}>
+            <section id="creditos" className={`${tarjeta} p-4 lg:col-span-2`}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">Créditos {verCerrados ? "" : "vigentes"}</h2>
                 {puedeCapturar && (
@@ -384,14 +386,31 @@ export function DeudaFinanciera() {
   );
 }
 
-function Indicador({ titulo, valor, detalle, tonoDetalle }: { titulo: string; valor: string; detalle?: string; tonoDetalle?: string }) {
-  return (
-    <div className={`${tarjeta} px-5 py-4`}>
-      <div className="text-sm text-slate-600">{titulo}</div>
+function Indicador({ titulo: encabezado, valor, detalle, tonoDetalle, a, onVer, ayuda }: { titulo: string; valor: string; detalle?: string; tonoDetalle?: string; a?: string; onVer?: () => void; ayuda?: string }) {
+  // Toda cifra lleva a donde se corrobora (5-nov-2026): ancla, otra vista o nada.
+  const cuerpo = (
+    <>
+      <div className="text-sm text-slate-600">{encabezado}</div>
       <div className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{valor}</div>
       {detalle && <div className={`mt-1 text-sm ${tonoDetalle ?? "text-slate-500"}`}>{detalle}</div>}
-    </div>
+    </>
   );
+  const clase = `${tarjeta} block w-full px-5 py-4 text-left`;
+  if (a) {
+    return (
+      <a href={a} title={ayuda} className={`${clase} hover:shadow-sm`}>
+        {cuerpo}
+      </a>
+    );
+  }
+  if (onVer) {
+    return (
+      <button type="button" onClick={onVer} title={ayuda} className={`${clase} hover:shadow-sm`}>
+        {cuerpo}
+      </button>
+    );
+  }
+  return <div className={clase}>{cuerpo}</div>;
 }
 
 function Dato({ titulo, valor }: { titulo: string; valor: string }) {
@@ -605,6 +624,8 @@ function PanelAmortizacion({ c, hoy, puedeCapturar, onEditar }: { c: Credito; ho
                   <td className="px-3 py-2">
                     {proximo?.numero === t.numero && estatus === "pendiente" ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Próximo</span>
+                    ) : estatus === "programado" ? (
+                      <Link to="/finanzas/pagos" title="Ver el pago en Programación de pagos" className={`rounded-full px-2 py-0.5 text-xs font-medium underline decoration-dotted ${ESTATUS_PAGO.programado.clase}`}>{ESTATUS_PAGO.programado.texto}</Link>
                     ) : (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTATUS_PAGO[estatus].clase}`}>{ESTATUS_PAGO[estatus].texto}</span>
                     )}
@@ -799,7 +820,9 @@ function Calendario({ creditos, hoy, puedeCapturar }: { creditos: Credito[]; hoy
                           </td>
                           <td className="py-1.5 text-right font-semibold tabular-nums">{dinero(r.renglon.pago, r.credito.moneda)}</td>
                           <td className="w-44 py-1.5 text-right">
-                            {r.estatus === "programado" || !puedeCapturar ? (
+                            {r.estatus === "programado" ? (
+                              <Link to="/finanzas/pagos" title="Ver el pago en Programación de pagos" className={`rounded-full px-2 py-0.5 text-xs font-medium underline decoration-dotted ${ESTATUS_PAGO.programado.clase}`}>{ESTATUS_PAGO.programado.texto}</Link>
+                            ) : !puedeCapturar ? (
                               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTATUS_PAGO[r.estatus].clase}`}>{ESTATUS_PAGO[r.estatus].texto}</span>
                             ) : (
                               <span className="inline-flex items-center gap-2">

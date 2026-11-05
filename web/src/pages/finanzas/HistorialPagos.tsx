@@ -211,7 +211,16 @@ export function HistorialPagos() {
                         <div className="font-medium text-slate-900">{p.beneficiario}</div>
                         <div className="text-[11px] text-slate-500">
                           {p.empresa_nombre}
-                          {p.id_orden ? ` · OC ${p.id_orden}` : ""}
+                          {p.id_orden ? (
+                            <>
+                              {" · OC "}
+                              <Link to={`/ordenes?tipo=OC&buscar=${encodeURIComponent(p.id_orden)}&backoffice=1`} title="Ver la orden" className="underline decoration-dotted hover:text-sky-800">
+                                {p.id_orden}
+                              </Link>
+                            </>
+                          ) : (
+                            ""
+                          )}
                           {p.oc_proyecto ? ` · ${p.oc_proyecto}` : ""}
                           {p.concepto && !p.id_orden ? ` · ${p.concepto}` : ""}
                         </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
@@ -43,8 +44,11 @@ export function CuentasPorPagar() {
   const { perfil } = useAuth();
   const puedeEditar = !!perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol);
   const { data: empresas } = useEmpresas();
-  const [texto, setTexto] = useState("");
-  const [empresaId, setEmpresaId] = useState("");
+  // ?buscar=<proveedor>&empresa=<id> llega desde el inicio de dirección y de
+  // "de dónde sale" de otros reportes (5-nov-2026).
+  const [paramsLiga] = useSearchParams();
+  const [texto, setTexto] = useState(paramsLiga.get("buscar") ?? "");
+  const [empresaId, setEmpresaId] = useState(paramsLiga.get("empresa") ?? "");
   const [orden, setOrden] = useState<OrdenCxp>("por_pagar");
   const [soloConSaldo, setSoloConSaldo] = useState(true);
   // Laura (21-oct-2026): "cuentas por pagar solo son proveedores con línea de
@@ -88,10 +92,10 @@ export function CuentasPorPagar() {
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <Tarjeta etiqueta="Líneas de crédito" valor={lista.reduce((t, f) => t + Number(f.linea_credito ?? 0), 0)} nota={`${lista.length} proveedores`} />
-        <Tarjeta etiqueta="Se debe" valor={totales.deuda} destacado nota={`${lista.filter((f) => f.saldo_proveedor != null).length} con saldo del estado de cuenta`} />
-        <Tarjeta etiqueta="Disponible" valor={lista.reduce((t, f) => t + (f.linea_credito != null ? Number(f.linea_credito) - deudaCxp(f) : 0), 0)} />
-        <Tarjeta etiqueta="Proveedores en rojo" valor={totales.rojos} entero />
+        <Tarjeta etiqueta="Líneas de crédito" valor={lista.reduce((t, f) => t + Number(f.linea_credito ?? 0), 0)} nota={`${lista.length} proveedores`} a={perfil?.rol === "direccion" ? "/finanzas/lineas-credito" : "#proveedores"} titulo="Las líneas se capturan en Líneas de crédito (dirección) o en cada proveedor" />
+        <Tarjeta etiqueta="Se debe" valor={totales.deuda} destacado nota={`${lista.filter((f) => f.saldo_proveedor != null).length} con saldo del estado de cuenta`} a="#proveedores" titulo="Suma del saldo de cada proveedor de la lista; abre cada uno para ver sus OC, facturas y pagos" />
+        <Tarjeta etiqueta="Disponible" valor={lista.reduce((t, f) => t + (f.linea_credito != null ? Number(f.linea_credito) - deudaCxp(f) : 0), 0)} a="#proveedores" titulo="Línea menos lo que se debe, proveedor por proveedor" />
+        <Tarjeta etiqueta="Proveedores en rojo" valor={totales.rojos} entero a="#proveedores" titulo="Proveedores con la línea rebasada o casi agotada" />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -122,7 +126,7 @@ export function CuentasPorPagar() {
       {isLoading && <p className="text-sm text-slate-400">Cargando proveedores…</p>}
 
       {filas && (
-        <div className="overflow-x-auto rounded border border-slate-200 bg-white">
+        <div id="proveedores" className="overflow-x-auto rounded border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -169,13 +173,29 @@ export function CuentasPorPagar() {
   );
 }
 
-function Tarjeta({ etiqueta, valor, destacado = false, entero = false, nota }: { etiqueta: string; valor: number; destacado?: boolean; entero?: boolean; nota?: string }) {
-  return (
-    <div className={`rounded border px-3 py-2 ${destacado ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white"}`}>
+function Tarjeta({ etiqueta, valor, destacado = false, entero = false, nota, a, titulo }: { etiqueta: string; valor: number; destacado?: boolean; entero?: boolean; nota?: string; a?: string; titulo?: string }) {
+  const cuerpo = (
+    <>
       <p className={`text-[11px] uppercase ${destacado ? "text-slate-300" : "text-slate-500"}`}>{etiqueta}</p>
       <p className="text-lg font-semibold tabular-nums">{entero ? valor : moneda(valor)}</p>
       {nota && <p className={`text-[11px] ${destacado ? "text-slate-300" : "text-slate-400"}`}>{nota}</p>}
-    </div>
+    </>
+  );
+  const clase = `block rounded border px-3 py-2 ${destacado ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white"}`;
+  // Toda cifra lleva a donde se corrobora (5-nov-2026).
+  if (a?.startsWith("#")) {
+    return (
+      <a href={a} title={titulo} className={`${clase} hover:shadow-sm`}>
+        {cuerpo}
+      </a>
+    );
+  }
+  return a ? (
+    <Link to={a} title={titulo} className={`${clase} hover:shadow-sm`}>
+      {cuerpo}
+    </Link>
+  ) : (
+    <div className={clase}>{cuerpo}</div>
   );
 }
 
@@ -375,6 +395,14 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
                   <td className="px-2 py-1">
                     {o.tipo ?? "OC"} {o.id_orden ?? ""}
                     <span className="text-slate-400"> · {nombreEmpresa.get(o.empresa_id) ?? ""}</span>
+                    <span className="ml-2 whitespace-nowrap">
+                      <BotonVerOc ocId={o.id} etiqueta="ver orden" className="text-sky-700 underline" />
+                      {o.id_orden && (
+                        <Link to={`/ordenes?tipo=${o.tipo === "OS" ? "OS" : "OC"}&buscar=${encodeURIComponent(o.id_orden)}&backoffice=1`} className="ml-2 text-sky-700 underline">
+                          en Órdenes
+                        </Link>
+                      )}
+                    </span>
                   </td>
                   <td className="px-2 py-1 text-slate-500">{o.proyecto ?? "—"}</td>
                   <td className="px-2 py-1 text-right tabular-nums">
@@ -404,6 +432,11 @@ function DetalleProveedor({ fila: f, puedeEditar, nombreEmpresa }: { fila: FilaC
                   <td className="px-2 py-1">
                     {p.nombre ?? "—"}
                     <span className="text-slate-400"> · {nombreEmpresa.get(p.empresa_id) ?? ""}</span>
+                    {p.fecha && (
+                      <Link to={`/movimientos?empresa=${p.empresa_id}&periodo=dia&fecha=${p.fecha.slice(0, 10)}`} className="ml-2 text-sky-700 underline">
+                        ver en el banco
+                      </Link>
+                    )}
                   </td>
                   <td className="max-w-xs truncate px-2 py-1 text-slate-500" title={p.factura ?? undefined}>
                     {p.referencia ?? p.factura ?? "—"}

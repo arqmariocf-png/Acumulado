@@ -143,12 +143,30 @@ function ResumenCxp() {
                 {vencen.map((v) => (
                   <tr key={`${v.empresa_id}|${v.proveedor}`} className="border-t border-slate-100">
                     <td className="py-1.5">{nombre.get(v.empresa_id) ?? "—"}</td>
-                    <td className="py-1.5">{v.proveedor}</td>
-                    <td className="py-1.5 text-xs text-slate-600">{v.ocs.slice(0, 4).join(", ")}{v.ocs.length > 4 ? ` y ${v.ocs.length - 4} más` : ""}</td>
+                    <td className="py-1.5">
+                      <Link to={`/finanzas/proveedores?buscar=${encodeURIComponent(v.proveedor)}&empresa=${v.empresa_id}`} title="Ver sus OC, facturas y pagos en Cuentas por pagar" className="underline decoration-dotted hover:text-sky-800">
+                        {v.proveedor}
+                      </Link>
+                    </td>
+                    <td className="py-1.5 text-xs text-slate-600">
+                      {v.ocs.slice(0, 4).map((oc, i) => (
+                        <span key={oc}>
+                          {i > 0 ? ", " : ""}
+                          <Link to={`/ordenes?tipo=OC&buscar=${encodeURIComponent(oc)}&backoffice=1`} title="Ver la orden" className="underline decoration-dotted hover:text-sky-800">
+                            {oc}
+                          </Link>
+                        </span>
+                      ))}
+                      {v.ocs.length > 4 ? ` y ${v.ocs.length - 4} más` : ""}
+                    </td>
                     <td className={`py-1.5 text-xs ${v.estado === "vencida" ? "font-medium text-red-700" : "text-amber-700"}`}>
                       {v.estado === "vencida" ? `vencida hace ${v.dias} día${v.dias === 1 ? "" : "s"}` : "hoy"}
                     </td>
-                    <td className="py-1.5 text-right font-medium tabular-nums">{moneda(v.saldo)}</td>
+                    <td className="py-1.5 text-right font-medium tabular-nums">
+                      <Link to={`/finanzas/pagos?buscar=${encodeURIComponent(v.proveedor)}`} title="Ver estas OC en Programación de pagos" className="underline decoration-dotted hover:text-sky-800">
+                        {moneda(v.saldo)}
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -175,11 +193,17 @@ function ResumenCxp() {
             <tbody>
               {conLinea.map(({ f, s }) => (
                 <tr key={`${f.empresa_id}|${f.clave}`} className="border-t border-slate-100">
-                  <td className="py-1.5">{f.proveedor}</td>
+                  <td className="py-1.5">
+                    <Link to={`/finanzas/proveedores?buscar=${encodeURIComponent(f.proveedor)}&empresa=${f.empresa_id}`} title="Ver sus OC, facturas y pagos en Cuentas por pagar" className="underline decoration-dotted hover:text-sky-800">
+                      {f.proveedor}
+                    </Link>
+                  </td>
                   <td className="py-1.5 text-xs text-slate-600">{nombre.get(f.empresa_id) ?? "—"}</td>
                   <td className="py-1.5 text-right tabular-nums">{moneda(Number(f.linea_credito))}</td>
                   <td className="py-1.5 text-right font-medium tabular-nums">
-                    {moneda(deudaCxp(f))}
+                    <Link to={`/finanzas/proveedores?buscar=${encodeURIComponent(f.proveedor)}&empresa=${f.empresa_id}`} title="Ver de dónde sale: OC, facturas, pagos y saldo del estado de cuenta" className="underline decoration-dotted hover:text-sky-800">
+                      {moneda(deudaCxp(f))}
+                    </Link>
                     {f.saldo_proveedor != null && f.saldo_proveedor_al && <div className="text-[11px] font-normal text-slate-400">edo. de cuenta {f.saldo_proveedor_al.split("-").reverse().join("/")}</div>}
                   </td>
                   <td className={`py-1.5 text-right tabular-nums ${Number(f.linea_credito) - deudaCxp(f) < 0 ? "text-red-700" : ""}`}>{moneda(Number(f.linea_credito) - deudaCxp(f))}</td>

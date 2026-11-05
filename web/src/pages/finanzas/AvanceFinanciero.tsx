@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { avanceFisicoDe, type DatosResumenObra } from "../../lib/resumenObra";
 import { useAuth } from "../../lib/auth";
+import { CifraOrigen, PanelOrigen } from "../../components/Origen";
+import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
+import { filtrarOrigen, ligasGenerales, tituloOrigen, type FiltroOrigen, type RenglonOrigen } from "../../lib/origenDato";
 import {
   CATEGORIAS_OBRA,
   FILTRO_INICIAL,
@@ -25,6 +28,11 @@ import {
 // (OC, OS y mano de obra), lo pagado y lo pendiente de pago, por obra,
 // empresa, periodo y categoría. Solo el presupuesto se captura aquí; lo demás
 // sale de lo que Acumulado ya registra (fn_avance_financiero).
+// De dónde sale cada cifra (5-nov-2026, Mario: "hipervínculos en todos los
+// gastos, ventanas y menús para corroborar qué es correcto"): toda cifra de
+// real, pagado o pendiente abre el panel con los renglones que la forman
+// (fn_avance_financiero_detalle: cada OC/OS, semana de mano de obra y compra
+// del control), el presupuesto lleva a su captura y el físico al tablero.
 
 type Vista = "obra" | "empresa" | "categoria" | "periodo" | "capturar";
 
@@ -72,6 +80,32 @@ export function AvanceFinanciero() {
   const [filtro, setFiltro] = useState<FiltroAvance>({ ...FILTRO_INICIAL, obraId: params.get("obra") || null, empresaId: params.get("empresa") || null });
   const [elegida, setElegida] = useState<string | null>(params.get("obra") || null);
   const puedeCapturar = !soloConsulta && !!perfil && ["admin", "direccion", "empresa"].includes(perfil.rol);
+  // Panel "de dónde sale": el filtro de la cifra que se quiere corroborar y la cifra misma.
+  const [origen, setOrigen] = useState<{ filtro: FiltroOrigen; cifra: number | null } | null>(null);
+  const verOrigen = useCallback(
+    (f: FiltroOrigen, cifra: number | null = null) => setOrigen({ filtro: { ...filtro, ...f }, cifra }),
+    [filtro],
+  );
+  const cerrarOrigen = useCallback(() => setOrigen(null), []);
+  // El presupuesto de una obra lleva a su captura (o, si no captura, a la vista por obra).
+  const irACapturar = useCallback(
+    (id: string) => {
+      setElegida(id);
+      setFiltro((f) => ({ ...f, obraId: id, empresaId: null }));
+      irA(puedeCapturar ? "capturar" : "obra");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [puedeCapturar],
+  );
+  const detalleOrigen = useQuery({
+    queryKey: ["avance-financiero", "origen", origen?.filtro.obraId ?? "todas"],
+    enabled: origen != null,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_avance_financiero_detalle", { p_proyecto: origen?.filtro.obraId ?? null, p_mes: null, p_categoria: null });
+      if (error) throw error;
+      return ((data ?? []) as RenglonOrigen[]).map((r) => ({ ...r, monto: Number(r.monto) || 0, pagado: Number(r.pagado) || 0 }));
+    },
+  });
 
   const datos = useQuery({
     queryKey: ["avance-financiero"],
@@ -201,12 +235,12 @@ export function AvanceFinanciero() {
       {!cargando && (
         <>
           <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <Indicador titulo="Presupuesto" valor={dinero(res.total.presupuesto)} detalle={`${res.porObra.length} obras${sinPresupuesto ? ` · ${sinPresupuesto} sin presupuesto` : ""}`} />
-            <Indicador titulo="Real (ejercido)" valor={dinero(res.total.real)} detalle={res.total.ejercidoPct != null ? `${res.total.ejercidoPct}% del presupuesto` : "sin presupuesto"} />
-            <Indicador titulo="Pagado" valor={dinero(res.total.pagado)} detalle={res.total.real > 0 ? `${Math.round((res.total.pagado / res.total.real) * 100)}% de lo ejercido` : undefined} />
-            <Indicador titulo="Pendiente de pago" valor={dinero(res.total.pendiente)} detalle="ejercido aún sin pagar" tono={res.total.pendiente > 0 ? "text-amber-700" : undefined} />
-            <Indicador titulo="Disponible" valor={dinero(res.total.disponible)} detalle="presupuesto menos real" tono={res.total.disponible < 0 ? "text-red-700" : undefined} />
-            <Indicador titulo="Obras con alerta" valor={String(res.obrasConAlerta)} detalle="desfase o presupuesto rebasado" tono={res.obrasConAlerta ? "text-red-700" : undefined} />
+            <Indicador titulo="Presupuesto" valor={dinero(res.total.presupuesto)} detalle={`${res.porObra.length} obras${sinPresupuesto ? ` · ${sinPresupuesto} sin presupuesto` : ""}`} onVer={() => irA(puedeCapturar ? "capturar" : "obra")} tituloLiga={puedeCapturar ? "Ver y capturar el presupuesto por obra" : "Ver por obra"} />
+            <Indicador titulo="Real (ejercido)" valor={dinero(res.total.real)} detalle={res.total.ejercidoPct != null ? `${res.total.ejercidoPct}% del presupuesto` : "sin presupuesto"} onVer={() => verOrigen({ campo: "real" }, res.total.real)} />
+            <Indicador titulo="Pagado" valor={dinero(res.total.pagado)} detalle={res.total.real > 0 ? `${Math.round((res.total.pagado / res.total.real) * 100)}% de lo ejercido` : undefined} onVer={() => verOrigen({ campo: "pagado" }, res.total.pagado)} />
+            <Indicador titulo="Pendiente de pago" valor={dinero(res.total.pendiente)} detalle="ejercido aún sin pagar" tono={res.total.pendiente > 0 ? "text-amber-700" : undefined} onVer={() => verOrigen({ campo: "pendiente" }, res.total.pendiente)} />
+            <Indicador titulo="Disponible" valor={dinero(res.total.disponible)} detalle="presupuesto menos real" tono={res.total.disponible < 0 ? "text-red-700" : undefined} onVer={() => irA("obra")} tituloLiga="Ver por obra" />
+            <Indicador titulo="Obras con alerta" valor={String(res.obrasConAlerta)} detalle="desfase o presupuesto rebasado" tono={res.obrasConAlerta ? "text-red-700" : undefined} onVer={() => irA("obra")} tituloLiga="Ver por obra (las de alerta van primero)" />
           </div>
 
           <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 text-sm">
@@ -231,11 +265,22 @@ export function AvanceFinanciero() {
               elegida={elegida}
               onElegir={(id) => setElegida((x) => (x === id ? null : id))}
               detalle={(id) => calcularAvance(obras, datos.data?.real ?? [], presupuestos.data ?? [], { ...filtro, obraId: id, empresaId: null })}
+              verOrigen={verOrigen}
+              irACapturar={irACapturar}
             />
           )}
-          {vista === "empresa" && <PorEmpresa res={res} />}
-          {vista === "categoria" && <PorCategoria res={res} />}
-          {vista === "periodo" && <PorPeriodo res={res} />}
+          {vista === "empresa" && (
+            <PorEmpresa
+              res={res}
+              verOrigen={verOrigen}
+              onVerObras={(id) => {
+                cambiar({ empresaId: id, obraId: null });
+                irA("obra");
+              }}
+            />
+          )}
+          {vista === "categoria" && <PorCategoria res={res} verOrigen={verOrigen} />}
+          {vista === "periodo" && <PorPeriodo res={res} verOrigen={verOrigen} />}
           {vista === "capturar" && puedeCapturar && <CapturarPresupuesto obras={obras} presupuestos={presupuestos.data ?? []} obraInicial={filtro.obraId ?? elegida} />}
         </>
       )}
@@ -243,29 +288,45 @@ export function AvanceFinanciero() {
         Real = OC y OS de la obra (mismo nombre de proyecto y de la misma empresa que contrata la obra; las de otras empresas del grupo con ese nombre no cuentan, para no duplicar la operación entre empresas) en el mes en que se emiten, a subtotal sin IVA, repartidas por categoría según sus partidas (flete,
         renta, combustible/viáticos…), más la mano de obra pagada por semana. Pagado = lo ya pagado de esas órdenes (aquí o en el backoffice) y la mano de obra.
         El semáforo compara lo ejercido de toda la obra contra su avance físico (tareas hechas de su tablero).
+        <span className="block">Toda cifra con liga punteada abre "de dónde sale": los renglones exactos que la forman, con liga a cada orden, semana de nómina o compra para corroborarla.</span>
       </p>
+      {origen && (
+        <PanelOrigen
+          titulo={tituloOrigen(origen.filtro, origen.filtro.obraId ? (obras.find((o) => o.id === origen.filtro.obraId)?.nombre ?? null) : null, origen.filtro.empresaId ? (empresas.find(([id]) => id === origen.filtro.empresaId)?.[1].split(" · ")[0] ?? null) : null, (c) => TITULO_CATEGORIA[c])}
+          cifra={origen.cifra}
+          renglones={filtrarOrigen(detalleOrigen.data ?? [], origen.filtro)}
+          cargando={detalleOrigen.isLoading}
+          error={detalleOrigen.error ? (detalleOrigen.error as Error).message : null}
+          ligas={ligasGenerales(origen.filtro, origen.filtro.obraId ? (obras.find((o) => o.id === origen.filtro.obraId)?.nombre ?? null) : null)}
+          nota="Importes sin IVA. Mismo cruce que la pantalla: OC/OS con el nombre de la obra y de la empresa que la contrata, mano de obra de la API por semana y compras del control de obra sin OC."
+          onCerrar={cerrarOrigen}
+        />
+      )}
     </div>
   );
 }
 
-function Indicador({ titulo, valor, detalle, tono }: { titulo: string; valor: string; detalle?: string; tono?: string }) {
+function Indicador({ titulo, valor, detalle, tono, onVer, tituloLiga }: { titulo: string; valor: string; detalle?: string; tono?: string; onVer?: () => void; tituloLiga?: string }) {
   return (
     <div className={`${tarjeta} p-4`}>
       <p className="text-xs text-slate-500">{titulo}</p>
-      <p className={`text-xl font-semibold tabular-nums ${tono ?? "text-slate-900"}`}>{valor}</p>
+      <p className={`text-xl font-semibold tabular-nums ${tono ?? "text-slate-900"}`}>
+        <CifraOrigen onVer={onVer} titulo={tituloLiga}>{valor}</CifraOrigen>
+      </p>
       {detalle && <p className="text-xs text-slate-500">{detalle}</p>}
     </div>
   );
 }
 
 type Res = ReturnType<typeof calcularAvance>;
+type VerOrigen = (f: FiltroOrigen, cifra?: number | null) => void;
 
-function PorObra({ res, elegida, onElegir, detalle }: { res: Res; elegida: string | null; onElegir: (id: string) => void; detalle: (id: string) => Res }) {
+function PorObra({ res, elegida, onElegir, detalle, verOrigen, irACapturar }: { res: Res; elegida: string | null; onElegir: (id: string) => void; detalle: (id: string) => Res; verOrigen: VerOrigen; irACapturar: (id: string) => void }) {
   if (!res.porObra.length) return <p className={`${tarjeta} p-6 text-center text-sm text-slate-400`}>No hay obras con presupuesto ni gasto con estos filtros.</p>;
   return (
     <section className={`${tarjeta} p-4`}>
       <h2 className="text-lg font-semibold text-slate-900">Por obra</h2>
-      <p className="mb-3 text-xs text-slate-500">El semáforo compara el avance financiero acumulado de toda la obra contra su avance físico. Clic en una obra para ver su detalle.</p>
+      <p className="mb-3 text-xs text-slate-500">El semáforo compara el avance financiero acumulado de toda la obra contra su avance físico. Clic en una obra para ver su detalle; clic en una cifra para ver de dónde sale.</p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs text-slate-500">
@@ -283,7 +344,7 @@ function PorObra({ res, elegida, onElegir, detalle }: { res: Res; elegida: strin
           </thead>
           <tbody>
             {res.porObra.map((o) => (
-              <FilaObraTabla key={o.obra.id} o={o} abierta={elegida === o.obra.id} onClick={() => onElegir(o.obra.id)} detalle={elegida === o.obra.id ? detalle(o.obra.id) : null} />
+              <FilaObraTabla key={o.obra.id} o={o} abierta={elegida === o.obra.id} onClick={() => onElegir(o.obra.id)} detalle={elegida === o.obra.id ? detalle(o.obra.id) : null} verOrigen={verOrigen} irACapturar={irACapturar} />
             ))}
           </tbody>
         </table>
@@ -292,18 +353,32 @@ function PorObra({ res, elegida, onElegir, detalle }: { res: Res; elegida: strin
   );
 }
 
-function FilaObraTabla({ o, abierta, onClick, detalle }: { o: Res["porObra"][number]; abierta: boolean; onClick: () => void; detalle: Res | null }) {
+function FilaObraTabla({ o, abierta, onClick, detalle, verOrigen, irACapturar }: { o: Res["porObra"][number]; abierta: boolean; onClick: () => void; detalle: Res | null; verOrigen: VerOrigen; irACapturar: (id: string) => void }) {
+  const id = o.obra.id;
   return (
     <>
       <tr onClick={onClick} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${abierta ? "bg-slate-50" : ""}`}>
         <td className="py-2 pr-2">
           <span className="font-medium text-slate-900 underline decoration-slate-300">{o.obra.nombre}</span>
-          <span className="block text-xs text-slate-500">{o.obra.empresa_codigo}</span>
+          <span className="block text-xs text-slate-500">
+            {o.obra.empresa_codigo} ·{" "}
+            <Link to={`/proyectos/${id}?tab=resumen`} onClick={(e) => e.stopPropagation()} className="text-sky-700 underline">
+              resumen de la obra
+            </Link>
+          </span>
         </td>
-        <td className="px-2 text-right tabular-nums">{dinero(o.presupuesto)}</td>
-        <td className="px-2 text-right tabular-nums">{dinero(o.real)}</td>
-        <td className="px-2 text-right tabular-nums">{dinero(o.pagado)}</td>
-        <td className={`px-2 text-right tabular-nums ${o.pendiente > 0 ? "text-amber-700" : ""}`}>{dinero(o.pendiente)}</td>
+        <td className="px-2 text-right tabular-nums">
+          <CifraOrigen onVer={() => irACapturar(id)} titulo="Ver o capturar el presupuesto de la obra">{dinero(o.presupuesto)}</CifraOrigen>
+        </td>
+        <td className="px-2 text-right tabular-nums">
+          <CifraOrigen onVer={() => verOrigen({ obraId: id, empresaId: null, campo: "real" }, o.real)}>{dinero(o.real)}</CifraOrigen>
+        </td>
+        <td className="px-2 text-right tabular-nums">
+          <CifraOrigen onVer={() => verOrigen({ obraId: id, empresaId: null, campo: "pagado" }, o.pagado)}>{dinero(o.pagado)}</CifraOrigen>
+        </td>
+        <td className={`px-2 text-right tabular-nums ${o.pendiente > 0 ? "text-amber-700" : ""}`}>
+          <CifraOrigen onVer={() => verOrigen({ obraId: id, empresaId: null, campo: "pendiente" }, o.pendiente)}>{dinero(o.pendiente)}</CifraOrigen>
+        </td>
         <td className={`px-2 text-right tabular-nums ${o.disponible < 0 ? "text-red-700" : ""}`}>{o.presupuesto > 0 ? dinero(o.disponible) : "—"}</td>
         <td className="px-2">
           <div className="flex items-center gap-2">
@@ -311,7 +386,9 @@ function FilaObraTabla({ o, abierta, onClick, detalle }: { o: Res["porObra"][num
             <span className="text-xs tabular-nums text-slate-600">{o.ejercidoPct != null ? `${o.ejercidoPct}%` : "—"}</span>
           </div>
         </td>
-        <td className="px-2 text-right text-xs tabular-nums text-slate-600">{o.fisicoPct != null ? `${o.fisicoPct}%` : "sin avance"}</td>
+        <td className="px-2 text-right text-xs tabular-nums text-slate-600">
+          <CifraOrigen a={`/proyectos/${id}?tab=avance`} titulo="Ver el tablero de seguimiento (de ahí sale el avance físico)">{o.fisicoPct != null ? `${o.fisicoPct}%` : "sin avance"}</CifraOrigen>
+        </td>
         <td className="px-2">
           <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${SEMAFOROS[o.semaforo].clase}`}>{SEMAFOROS[o.semaforo].texto}</span>
         </td>
@@ -319,7 +396,7 @@ function FilaObraTabla({ o, abierta, onClick, detalle }: { o: Res["porObra"][num
       {abierta && detalle && (
         <tr>
           <td colSpan={9} className="bg-slate-50 px-3 pb-4">
-            <DetalleObra obraId={o.obra.id} nombre={o.obra.nombre} res={detalle} total={o.obraTotal} fisicoPct={o.fisicoPct} />
+            <DetalleObra obraId={o.obra.id} nombre={o.obra.nombre} res={detalle} total={o.obraTotal} fisicoPct={o.fisicoPct} verOrigen={verOrigen} irACapturar={irACapturar} />
           </td>
         </tr>
       )}
@@ -327,7 +404,7 @@ function FilaObraTabla({ o, abierta, onClick, detalle }: { o: Res["porObra"][num
   );
 }
 
-function DetalleObra({ obraId, nombre, res, total, fisicoPct }: { obraId: string; nombre: string; res: Res; total: Res["total"]; fisicoPct: number | null }) {
+function DetalleObra({ obraId, nombre, res, total, fisicoPct, verOrigen, irACapturar }: { obraId: string; nombre: string; res: Res; total: Res["total"]; fisicoPct: number | null; verOrigen: VerOrigen; irACapturar: (id: string) => void }) {
   const pendientes = useQuery({
     queryKey: ["avance-financiero", "pendientes", obraId],
     queryFn: async () => {
@@ -345,13 +422,15 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct }: { obraId: string
           <p className="text-sm font-semibold text-slate-800">
             {nombre} · por categoría
             <span className="ml-2 text-xs font-normal text-slate-500">
-              toda la obra: {dinero(total.real)} de {dinero(total.presupuesto)}
-              {total.ejercidoPct != null ? ` (${total.ejercidoPct}%)` : ""} · físico {fisicoPct != null ? `${fisicoPct}%` : "sin avance"}
+              toda la obra: <CifraOrigen onVer={() => verOrigen({ obraId, empresaId: null, anio: null, periodo: "todo", categoria: null, campo: "real" }, total.real)}>{dinero(total.real)}</CifraOrigen> de{" "}
+              <CifraOrigen onVer={() => irACapturar(obraId)} titulo="Ver o capturar el presupuesto">{dinero(total.presupuesto)}</CifraOrigen>
+              {total.ejercidoPct != null ? ` (${total.ejercidoPct}%)` : ""} · físico{" "}
+              <CifraOrigen a={`/proyectos/${obraId}?tab=avance`} titulo="Ver el tablero de seguimiento">{fisicoPct != null ? `${fisicoPct}%` : "sin avance"}</CifraOrigen>
             </span>
           </p>
-          <Link to={`/finanzas/avance-financiero?vista=capturar&obra=${obraId}`} className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-800">
+          <button type="button" onClick={() => irACapturar(obraId)} className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-800">
             {total.presupuesto > 0 ? "Editar presupuesto" : "Capturar presupuesto"}
-          </Link>
+          </button>
         </div>
         <table className="w-full text-xs">
           <thead className="text-left text-slate-500">
@@ -368,10 +447,18 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct }: { obraId: string
             {res.porCategoria.map((c) => (
               <tr key={c.categoria} className="border-t border-slate-200">
                 <td className="py-1">{c.titulo}</td>
-                <td className="text-right tabular-nums">{dinero(c.presupuesto)}</td>
-                <td className="text-right tabular-nums">{dinero(c.real)}</td>
-                <td className="text-right tabular-nums">{dinero(c.pagado)}</td>
-                <td className="text-right tabular-nums">{dinero(c.pendiente)}</td>
+                <td className="text-right tabular-nums">
+                  <CifraOrigen onVer={() => irACapturar(obraId)} titulo="Ver o capturar el presupuesto">{dinero(c.presupuesto)}</CifraOrigen>
+                </td>
+                <td className="text-right tabular-nums">
+                  <CifraOrigen onVer={() => verOrigen({ obraId, empresaId: null, categoria: c.categoria, campo: "real" }, c.real)}>{dinero(c.real)}</CifraOrigen>
+                </td>
+                <td className="text-right tabular-nums">
+                  <CifraOrigen onVer={() => verOrigen({ obraId, empresaId: null, categoria: c.categoria, campo: "pagado" }, c.pagado)}>{dinero(c.pagado)}</CifraOrigen>
+                </td>
+                <td className="text-right tabular-nums">
+                  <CifraOrigen onVer={() => verOrigen({ obraId, empresaId: null, categoria: c.categoria, campo: "pendiente" }, c.pendiente)}>{dinero(c.pendiente)}</CifraOrigen>
+                </td>
                 <td className={`text-right tabular-nums ${c.disponible < 0 ? "text-red-700" : ""}`}>{c.presupuesto > 0 ? dinero(c.disponible) : "—"}</td>
               </tr>
             ))}
@@ -398,6 +485,10 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct }: { obraId: string
                 <div className="flex justify-between gap-2">
                   <span className="font-medium text-slate-800">
                     {x.tipo} {x.folio} · {x.proveedor ?? "sin proveedor"}
+                    <BotonVerOc ocId={x.orden_compra_id} etiqueta="Ver orden" className="ml-2 font-normal text-sky-700 underline" />
+                    <Link to={`/ordenes?tipo=${x.tipo === "OS" ? "OS" : "OC"}&buscar=${encodeURIComponent(x.folio)}&backoffice=1`} className="ml-2 font-normal text-sky-700 underline">
+                      en Órdenes
+                    </Link>
                   </span>
                   <span className="tabular-nums font-semibold">{dinero(x.saldo, 2)}</span>
                 </div>
@@ -420,7 +511,7 @@ function DetalleObra({ obraId, nombre, res, total, fisicoPct }: { obraId: string
   );
 }
 
-function PorEmpresa({ res }: { res: Res }) {
+function PorEmpresa({ res, verOrigen, onVerObras }: { res: Res; verOrigen: VerOrigen; onVerObras: (empresaId: string) => void }) {
   if (!res.porEmpresa.length) return <p className={`${tarjeta} p-6 text-center text-sm text-slate-400`}>Sin datos con estos filtros.</p>;
   return (
     <section className={`${tarjeta} overflow-x-auto p-4`}>
@@ -446,11 +537,19 @@ function PorEmpresa({ res }: { res: Res }) {
                 {e.codigo}
                 {e.nombre && <span className="block text-xs font-normal text-slate-500">{e.nombre}</span>}
               </td>
-              <td className="px-2 text-right tabular-nums">{e.obras}</td>
+              <td className="px-2 text-right tabular-nums">
+                <CifraOrigen onVer={() => onVerObras(e.empresa_id)} titulo="Ver las obras de la empresa">{e.obras}</CifraOrigen>
+              </td>
               <td className="px-2 text-right tabular-nums">{dinero(e.presupuesto)}</td>
-              <td className="px-2 text-right tabular-nums">{dinero(e.real)}</td>
-              <td className="px-2 text-right tabular-nums">{dinero(e.pagado)}</td>
-              <td className="px-2 text-right tabular-nums">{dinero(e.pendiente)}</td>
+              <td className="px-2 text-right tabular-nums">
+                <CifraOrigen onVer={() => verOrigen({ empresaId: e.empresa_id, obraId: null, campo: "real" }, e.real)}>{dinero(e.real)}</CifraOrigen>
+              </td>
+              <td className="px-2 text-right tabular-nums">
+                <CifraOrigen onVer={() => verOrigen({ empresaId: e.empresa_id, obraId: null, campo: "pagado" }, e.pagado)}>{dinero(e.pagado)}</CifraOrigen>
+              </td>
+              <td className="px-2 text-right tabular-nums">
+                <CifraOrigen onVer={() => verOrigen({ empresaId: e.empresa_id, obraId: null, campo: "pendiente" }, e.pendiente)}>{dinero(e.pendiente)}</CifraOrigen>
+              </td>
               <td className={`px-2 text-right tabular-nums ${e.disponible < 0 ? "text-red-700" : ""}`}>{dinero(e.disponible)}</td>
               <td className="px-2">
                 <div className="flex items-center gap-2">
@@ -480,12 +579,12 @@ function Leyenda() {
   );
 }
 
-function PorCategoria({ res }: { res: Res }) {
+function PorCategoria({ res, verOrigen }: { res: Res; verOrigen: VerOrigen }) {
   const maximo = Math.max(...res.porCategoria.map((c) => Math.max(c.presupuesto, c.real)), 0);
   return (
     <section className={`${tarjeta} p-4`}>
       <h2 className="text-lg font-semibold text-slate-900">Por categoría</h2>
-      <p className="mb-2 text-xs text-slate-500">Presupuesto contra real en cada categoría.</p>
+      <p className="mb-2 text-xs text-slate-500">Presupuesto contra real en cada categoría. Clic en la cifra o en la barra para ver de dónde sale.</p>
       <Leyenda />
       {maximo === 0 ? (
         <p className="py-6 text-center text-sm text-slate-400">Sin datos con estos filtros.</p>
@@ -496,11 +595,13 @@ function PorCategoria({ res }: { res: Res }) {
               <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <span className="font-medium text-slate-800">{c.titulo}</span>
                 <span className="text-xs tabular-nums text-slate-600">
-                  {dinero(c.real)} de {dinero(c.presupuesto)}
+                  <CifraOrigen onVer={() => verOrigen({ categoria: c.categoria, campo: "real" }, c.real)}>{dinero(c.real)}</CifraOrigen> de {dinero(c.presupuesto)}
                   {c.ejercidoPct != null && <span className={c.ejercidoPct > 100 ? "font-semibold text-red-700" : ""}> · {c.ejercidoPct}%</span>}
+                  {" · "}
+                  <CifraOrigen onVer={() => verOrigen({ categoria: c.categoria, campo: "pagado" }, c.pagado)}>pagado {dinero(c.pagado)}</CifraOrigen>
                 </span>
               </div>
-              <div className="space-y-0.5">
+              <div className="cursor-pointer space-y-0.5" role="button" tabIndex={0} title="Ver de dónde sale" onClick={() => verOrigen({ categoria: c.categoria, campo: "real" }, c.real)} onKeyDown={(e) => e.key === "Enter" && verOrigen({ categoria: c.categoria, campo: "real" }, c.real)}>
                 <div className="h-2.5 rounded-r bg-slate-300" style={{ width: `${(c.presupuesto / maximo) * 100}%` }} />
                 <div className={`h-2.5 rounded-r ${c.presupuesto > 0 && c.real > c.presupuesto ? "bg-red-600" : "bg-slate-800"}`} style={{ width: `${(c.real / maximo) * 100}%` }} />
               </div>
@@ -512,13 +613,13 @@ function PorCategoria({ res }: { res: Res }) {
   );
 }
 
-function PorPeriodo({ res }: { res: Res }) {
+function PorPeriodo({ res, verOrigen }: { res: Res; verOrigen: VerOrigen }) {
   const meses = res.porMes;
   const maximo = Math.max(...meses.map((m) => Math.max(m.presupuesto, m.real)), 0);
   return (
     <section className={`${tarjeta} p-4`}>
       <h2 className="text-lg font-semibold text-slate-900">Por periodo</h2>
-      <p className="mb-2 text-xs text-slate-500">Presupuesto contra real por mes, con acumulados y la diferencia acumulada.</p>
+      <p className="mb-2 text-xs text-slate-500">Presupuesto contra real por mes, con acumulados y la diferencia acumulada. Clic en una barra o cifra para ver de dónde sale ese mes.</p>
       <Leyenda />
       {maximo === 0 ? (
         <p className="py-6 text-center text-sm text-slate-400">Sin datos con estos filtros.</p>
@@ -526,7 +627,7 @@ function PorPeriodo({ res }: { res: Res }) {
         <div className="mb-4 overflow-x-auto">
           <div className="flex h-48 items-end gap-2" style={{ minWidth: `${meses.length * 34}px` }} role="img" aria-label="Presupuesto contra real por mes">
             {meses.map((m) => (
-              <div key={m.mes} className="flex h-full min-w-6 flex-1 flex-col items-center justify-end" title={`${nombreMes(m.mes)}: presupuesto ${dinero(m.presupuesto)} · real ${dinero(m.real)}`}>
+              <div key={m.mes} className="flex h-full min-w-6 flex-1 cursor-pointer flex-col items-center justify-end" role="button" tabIndex={0} title={`${nombreMes(m.mes)}: presupuesto ${dinero(m.presupuesto)} · real ${dinero(m.real)} · clic para ver de dónde sale`} onClick={() => verOrigen({ mes: m.mes, anio: null, periodo: "todo", campo: "real" }, m.real)} onKeyDown={(e) => e.key === "Enter" && verOrigen({ mes: m.mes, anio: null, periodo: "todo", campo: "real" }, m.real)}>
                 <div className="flex h-full w-full items-end justify-center gap-0.5">
                   <div className="w-1/2 max-w-4 rounded-t bg-slate-300" style={{ height: `${(m.presupuesto / maximo) * 100}%` }} />
                   <div className={`w-1/2 max-w-4 rounded-t ${m.real > m.presupuesto && m.presupuesto > 0 ? "bg-red-600" : "bg-slate-800"}`} style={{ height: `${(m.real / maximo) * 100}%` }} />
@@ -556,8 +657,12 @@ function PorPeriodo({ res }: { res: Res }) {
                 <tr key={m.mes} className="border-t border-slate-100">
                   <td className="py-1.5 capitalize">{nombreMes(m.mes)}</td>
                   <td className="px-2 text-right tabular-nums">{dinero(m.presupuesto)}</td>
-                  <td className="px-2 text-right tabular-nums">{dinero(m.real)}</td>
-                  <td className="px-2 text-right tabular-nums">{dinero(m.pagado)}</td>
+                  <td className="px-2 text-right tabular-nums">
+                    <CifraOrigen onVer={() => verOrigen({ mes: m.mes, anio: null, periodo: "todo", campo: "real" }, m.real)}>{dinero(m.real)}</CifraOrigen>
+                  </td>
+                  <td className="px-2 text-right tabular-nums">
+                    <CifraOrigen onVer={() => verOrigen({ mes: m.mes, anio: null, periodo: "todo", campo: "pagado" }, m.pagado)}>{dinero(m.pagado)}</CifraOrigen>
+                  </td>
                   <td className="px-2 text-right tabular-nums">{dinero(m.presupuestoAcum)}</td>
                   <td className="px-2 text-right tabular-nums">{dinero(m.realAcum)}</td>
                   <td className={`px-2 text-right font-medium tabular-nums ${m.diferenciaAcum < 0 ? "text-red-700" : "text-slate-800"}`}>{dinero(m.diferenciaAcum)}</td>

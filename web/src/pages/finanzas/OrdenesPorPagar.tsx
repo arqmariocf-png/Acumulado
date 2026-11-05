@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
@@ -83,11 +84,15 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
   // programar a pago también": la primera pestaña trae además las ya
   // autorizadas (backoffice "Pendiente de Pago", RQ, IA) que no tienen pago
   // programado ni están pagadas en el backoffice.
-  const [pestana, setPestana] = useState<"autorizar" | "hoy" | "saldo" | "credito">("autorizar");
+  // ?buscar=<proveedor o folio> llega desde el inicio de dirección ("vence hoy
+  // o ya venció"): abre "Con saldo pendiente" ya filtrada (5-nov-2026).
+  const [paramsLiga] = useSearchParams();
+  const buscarLiga = paramsLiga.get("buscar") ?? "";
+  const [pestana, setPestana] = useState<"autorizar" | "hoy" | "saldo" | "credito">(buscarLiga ? "saldo" : "autorizar");
   const [verAutorizacion, setVerAutorizacion] = useState<"todas" | "pendiente" | "autorizada">(soloAutorizadas ? "autorizada" : "todas");
   const [verPendientesPago, setVerPendientesPago] = useState(false);
   const [verRechazar, setVerRechazar] = useState(false);
-  const [busqueda, setBusqueda] = useState("");
+  const [busqueda, setBusqueda] = useState(buscarLiga);
   const [soloConLinea, setSoloConLinea] = useState(false);
   // El backoffice ya registra pagadas las que están en Pendiente Factura /
   // Pendiente Comprobante / Completada: se ocultan de "Con saldo" salvo

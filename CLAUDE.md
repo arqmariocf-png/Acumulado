@@ -3368,3 +3368,42 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   expone ningún avance físico (probados api_proyectos/_project/_projects/
   _avance/_avances/_avance_fisico/_estimaciones/_estim/_obras/_avance_obra_aut
   → 404): el físico sale solo de Acumulado.
+- **De dónde sale cada cifra, regla general (5-nov-2026, Mario: "en el
+  avance financiero de obras generar hipervínculos en todos los gastos,
+  ventanas y menús para que podamos consultar de dónde viene esa información
+  para corroborar qué es correcto; aplícala en todas las ventanas para todas
+  las áreas")**: **toda cifra de un reporte liga a los renglones que la
+  forman o a la pantalla donde se captura** (liga punteada, título "ver de
+  dónde sale"); nunca un número suelto. Piezas: `components/Origen.tsx`
+  (`CifraOrigen` = cifra con `a` a otra pantalla u `onVer` que abre un panel;
+  `PanelOrigen` = panel con los renglones, totales que cuadran contra la cifra,
+  ligas a cada pantalla y "Descargar Excel") y `lib/origenDato.ts` (con
+  pruebas: `filtrarOrigen` con los mismos filtros de la pantalla,
+  `resumenOrigen`, `ligasRenglon`, `ligasGenerales`, `tituloOrigen`,
+  `csvOrigen`). **Avance financiero** (`20261105100000`, aplicada como
+  `avance_financiero_detalle_origen` y `_2`): `fn_avance_financiero_detalle(
+  p_proyecto|null, p_mes|null, p_categoria|null)` (definer; mismo alcance que
+  `fn_avance_financiero`; una OC por categoría con su parte, cada semana de
+  mano de obra de la API y cada compra del control sin OC; cuadra al centavo
+  con `fn_avance_financiero_real`: 427 obra/categoría/mes, 0 descuadres; ojo:
+  una OC empata con dos obras del mismo nombre —una activa y una desactivada—
+  por eso montos y reparto se calculan en `oc_unicas`). En la pantalla:
+  indicadores, Por obra (real/pagado/pendiente → panel; presupuesto → captura;
+  físico → tablero), detalle por categoría, pendientes de pago (Ver orden + en
+  Órdenes), Por empresa, Por categoría (cifra y barra), Por periodo (cifra y
+  barra) → panel "De dónde sale" con Ver orden, "en Órdenes" (`/ordenes?tipo=
+  &buscar=<folio>&backoffice=1`), Mano de obra (`/rh/mano-de-obra?buscar=
+  <obra>`, ya lo lee) y Control de obra. Mismo día se aplicó en: Cuentas por
+  pagar (tarjetas → `#proveedores` / Líneas de crédito; OC del proveedor → Ver
+  orden + en Órdenes; cargos del banco → `/movimientos?empresa=&periodo=dia&
+  fecha=`; acepta `?buscar=&empresa=`), Inicio de dirección (proveedor y "se
+  debe" → Cuentas por pagar filtrada; cada OC → Órdenes; saldo vencido →
+  `/finanzas/pagos?buscar=<proveedor>`, que abre "Con saldo pendiente" ya
+  filtrada), Deuda financiera (tarjetas → `#creditos` / Calendario; "En hoja
+  de pagos" → Programación de pagos), Historial de pagos (OC → Órdenes) y
+  Cuentas por cobrar (documento OV → la orden de venta). Ya lo tenían: resumen
+  de obras, resumen de la obra, KPIs del inicio/organigrama (`?ver=`),
+  Tesorería, Saldos por empresa, reporte de RH (alertas y tarjetas) y Resumen
+  de inventario (detalle por día). **Pantalla o cifra nueva → `CifraOrigen` (o
+  un `Link`) a su origen; si la cifra es una suma calculada en SQL, una
+  función `fn_<reporte>_detalle` con sus renglones y `PanelOrigen`.**
