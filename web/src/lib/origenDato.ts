@@ -33,6 +33,14 @@ export interface RenglonOrigen {
   semana: string | null;
   monto: number;
   pagado: number;
+  /** Mano de obra de la API: quién, puesto (subpartida), semana y tipo. */
+  trabajador?: string | null;
+  subpartida?: string | null;
+  num_sem?: number | null;
+  tipo_trabajador?: string | null;
+  /** A quién se le carga el gasto si no es el cliente de la obra (BBVA
+   * Mantenimiento en oficinas u obras privadas; 5-nov-2026). */
+  gasto_cliente?: string | null;
 }
 
 /** Qué cifra se quiere corroborar: lo ejercido, lo pagado o lo que falta por pagar. */
@@ -175,15 +183,126 @@ export function nombreMesCorto(mes: string): string {
   return `${MESES[m - 1] ?? mes} ${a}`;
 }
 
+// ── Mano de obra clasificada ────────────────────────────────────────────
+// 5-nov-2026, Mario: "no se ve el desglose de mano de obra; sería bueno
+// clasificarlo para una mejor lectura": partida → puesto (subpartida) →
+// persona → semana, con subtotales.
+
+export interface PersonaManoObra {
+  trabajador: string;
+  tipo: string | null;
+  semanas: number;
+  monto: number;
+  renglones: RenglonOrigen[];
+}
+export interface SubpartidaManoObra {
+  subpartida: string;
+  monto: number;
+  personas: PersonaManoObra[];
+}
+export interface PartidaManoObra {
+  partida: string;
+  monto: number;
+  semanas: number;
+  subpartidas: SubpartidaManoObra[];
+}
+
+const SIN = "Sin clasificar";
+
+export function agruparManoObra(renglones: RenglonOrigen[]): PartidaManoObra[] {
+  const partidas = new Map<string, Map<string, Map<string, PersonaManoObra>>>();
+  for (const r of renglones) {
+    if (r.origen !== "mano_obra") continue;
+    const p = r.descripcion?.trim() || SIN;
+    const sp = r.subpartida?.trim() || SIN;
+    const t = r.trabajador?.trim() || SIN;
+    const mp = partidas.get(p) ?? new Map();
+    partidas.set(p, mp);
+    const ms = mp.get(sp) ?? new Map();
+    mp.set(sp, ms);
+    const per = ms.get(t) ?? { trabajador: t, tipo: r.tipo_trabajador ?? null, semanas: 0, monto: 0, renglones: [] };
+    per.renglones.push(r);
+    per.monto = r2(per.monto + (Number(r.monto) || 0));
+    ms.set(t, per);
+  }
+  const ordenar = <T,>(xs: T[], monto: (x: T) => number, nombre: (x: T) => string) => xs.sort((a, b) => monto(b) - monto(a) || nombre(a).localeCompare(nombre(b), "es"));
+  return ordenar(
+    [...partidas.entries()].map(([partida, mp]) => {
+      const subpartidas = ordenar(
+        [...mp.entries()].map(([subpartida, ms]) => {
+          const personas = ordenar(
+            [...ms.values()].map((per) => ({ ...per, semanas: new Set(per.renglones.map((x) => x.semana ?? x.fecha ?? "")).size, renglones: [...per.renglones].sort((a, b) => (b.fecha ?? "").localeCompare(a.fecha ?? "")) })),
+            (x) => x.monto,
+            (x) => x.trabajador,
+          );
+          return { subpartida, monto: r2(personas.reduce((s, x) => s + x.monto, 0)), personas };
+        }),
+        (x) => x.monto,
+        (x) => x.subpartida,
+      );
+      const todas = subpartidas.flatMap((sp) => sp.personas.flatMap((x) => x.renglones));
+      return { partida, monto: r2(subpartidas.reduce((s, x) => s + x.monto, 0)), semanas: new Set(todas.map((x) => x.semana ?? x.fecha ?? "")).size, subpartidas };
+    }),
+    (x) => x.monto,
+    (x) => x.partida,
+  );
+}
+
+// ── Gasto por cliente ───────────────────────────────────────────────────
+// 5-nov-2026, Mario: "en BBVA Mantenimiento hay que poder seleccionar porque
+// hay tareas que hace ese equipo en oficinas y obras privadas; debe separar el
+// gasto por cliente". Cada OC/OS puede llevar `gasto_cliente`; lo que no lo
+// trae (y la mano de obra, que viene por obra) va al cliente de la obra.
+
+export const CLIENTE_DE_LA_OBRA = "(cliente de la obra)";
+export const CLIENTES_SUGERIDOS = ["Oficinas Grupo Loma", "Obra privada"];
+
+export interface GastoCliente {
+  cliente: string;
+  oc: number;
+  manoObra: number;
+  control: number;
+  total: number;
+  pagado: number;
+  ordenes: number;
+}
+
+export function gastoPorCliente(renglones: RenglonOrigen[]): GastoCliente[] {
+  const m = new Map<string, GastoCliente>();
+  for (const r of renglones) {
+    const c = r.origen === "oc" && r.gasto_cliente?.trim() ? r.gasto_cliente.trim() : CLIENTE_DE_LA_OBRA;
+    const g = m.get(c) ?? { cliente: c, oc: 0, manoObra: 0, control: 0, total: 0, pagado: 0, ordenes: 0 };
+    const monto = Number(r.monto) || 0;
+    if (r.origen === "oc") {
+      g.oc = r2(g.oc + monto);
+      g.ordenes += 1;
+    } else if (r.origen === "mano_obra") g.manoObra = r2(g.manoObra + monto);
+    else g.control = r2(g.control + monto);
+    g.total = r2(g.total + monto);
+    g.pagado = r2(g.pagado + (Number(r.pagado) || 0));
+    m.set(c, g);
+  }
+  return [...m.values()].sort((a, b) => (a.cliente === CLIENTE_DE_LA_OBRA ? -1 : b.cliente === CLIENTE_DE_LA_OBRA ? 1 : b.total - a.total));
+}
+
+/** Opciones del selector de cliente: lo ya usado en la obra + sugerencias. */
+export function opcionesCliente(renglones: RenglonOrigen[], extra: string[] = []): string[] {
+  const usados = new Set<string>();
+  for (const r of renglones) if (r.gasto_cliente?.trim()) usados.add(r.gasto_cliente.trim());
+  for (const e of extra) if (e.trim()) usados.add(e.trim());
+  for (const s of CLIENTES_SUGERIDOS) usados.add(s);
+  return [...usados].sort((a, b) => a.localeCompare(b, "es"));
+}
+
 /** CSV de los renglones para cotejar en Excel. */
 export function csvOrigen(renglones: RenglonOrigen[]): string {
   const esc = (v: string | number | null | undefined) => {
     const t = String(v ?? "");
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
-  const cab = ["Origen", "Obra", "Empresa", "Mes", "Categoría", "Tipo", "Folio", "Proveedor", "Fecha", "Semana", "Descripción", "Estatus", "Fuente", "Monto s/IVA", "Pagado", "Pendiente"];
+  const cab = ["Origen", "Obra", "Empresa", "Mes", "Categoría", "Tipo", "Folio", "Proveedor", "Fecha", "Semana", "Partida / descripción", "Puesto", "Persona", "Cliente del gasto", "Estatus", "Fuente", "Monto s/IVA", "Pagado", "Pendiente"];
   const filas = renglones.map((r) =>
-    [TITULO_ORIGEN[r.origen], r.obra, r.empresa_codigo, r.mes.slice(0, 7), r.categoria, r.tipo, r.folio, r.proveedor, r.fecha, r.semana, r.descripcion, r.estatus, r.fuente, r.monto, r.pagado, pendienteDe(r)].map(esc).join(","),
+    [TITULO_ORIGEN[r.origen], r.obra, r.empresa_codigo, r.mes.slice(0, 7), r.categoria, r.tipo, r.folio, r.proveedor, r.fecha, r.semana, r.descripcion, r.subpartida, r.trabajador, r.gasto_cliente, r.estatus, r.fuente, r.monto, r.pagado, pendienteDe(r)].map(esc).join(","),
   );
   return [cab.join(","), ...filas].join("\n");
 }

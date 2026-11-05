@@ -5,6 +5,10 @@ import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { contarSemaforoPu } from "../../lib/puSemaforo";
 import { type EtapaRequisicion } from "../../lib/requisicionEtapa";
 import { calcularResumenObra } from "../../lib/resumenObra";
+import { useAuth } from "../../lib/auth";
+import { useQueryClient } from "@tanstack/react-query";
+import { SelectorClienteGasto, TablaGastoPorCliente, TablaManoObra } from "../../components/Origen";
+import { CLIENTE_DE_LA_OBRA, opcionesCliente, type RenglonOrigen } from "../../lib/origenDato";
 import type { Proyecto, ProyectoControl, PuEstado, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 
 // Resumen físico-financiero de la obra (Mario, 26-sep-2026): pestaña
@@ -35,6 +39,8 @@ interface OrdenObra {
   pagada: boolean;
   estatus: string | null;
   fuente: string;
+  /** A quién se le carga el gasto si no es el cliente de la obra (5-nov-2026). */
+  gasto_cliente: string | null;
 }
 
 interface GastoObra {
@@ -101,7 +107,33 @@ function useResumenObra(proyectoId: string) {
   });
 }
 
+/** Renglones de fn_avance_financiero_detalle de la obra (mano de obra clasificada y gasto por cliente). */
+function useDetalleObra(proyectoId: string) {
+  return useQuery({
+    queryKey: ["avance-financiero", "detalle-obra", proyectoId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_avance_financiero_detalle", { p_proyecto: proyectoId, p_mes: null, p_categoria: null });
+      if (error) throw error;
+      return ((data ?? []) as RenglonOrigen[]).map((r) => ({ ...r, monto: Number(r.monto) || 0, pagado: Number(r.pagado) || 0 }));
+    },
+  });
+}
+
 export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
+  const { perfil, soloConsulta } = useAuth();
+  const qc = useQueryClient();
+  const detalleObra = useDetalleObra(proyecto.id);
+  const renglonesObra = detalleObra.data ?? [];
+  const puedeCliente = !soloConsulta && !!perfil && ["admin", "direccion", "corporativo", "empresa", "responsable"].includes(perfil.rol);
+  async function cambiarCliente(ordenCompraId: string, cliente: string | null) {
+    const { error } = await supabase.rpc("fn_oc_gasto_cliente", { p_oc: ordenCompraId, p_cliente: cliente });
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["resumen-obra", proyecto.id] });
+    await qc.invalidateQueries({ queryKey: ["avance-financiero", "detalle-obra", proyecto.id] });
+  }
   const q = useResumenObra(proyecto.id);
   const d = q.data;
   if (q.isPending) return <p className="text-sm text-slate-500">Calculando…</p>;
@@ -200,7 +232,7 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
               <div className="mt-2 max-h-64 overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead className="text-left text-slate-500">
-                    <tr><th className="py-0.5 pr-2">Orden</th><th className="py-0.5 pr-2">Proveedor</th><th className="py-0.5 pr-2">Fecha</th><th className="py-0.5 pr-2 text-right">Total</th><th className="py-0.5 pr-2 text-right">Saldo</th><th className="py-0.5" /></tr>
+                    <tr><th className="py-0.5 pr-2">Orden</th><th className="py-0.5 pr-2">Proveedor</th><th className="py-0.5 pr-2">Fecha</th><th className="py-0.5 pr-2" title="A quién se le carga el gasto si no es el cliente de la obra (BBVA Mantenimiento en oficinas u obras privadas)">Cliente del gasto</th><th className="py-0.5 pr-2 text-right">Total</th><th className="py-0.5 pr-2 text-right">Saldo</th><th className="py-0.5" /></tr>
                   </thead>
                   <tbody>
                     {d.ordenes.map((o) => (
@@ -208,6 +240,13 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
                         <td className="py-0.5 pr-2 font-medium text-slate-800">{o.tipo} {o.id_orden} <span className="font-normal text-slate-400">{o.empresa_codigo}</span></td>
                         <td className="py-0.5 pr-2 text-slate-600">{o.proveedor}</td>
                         <td className="py-0.5 pr-2 text-slate-500">{o.fecha_creacion?.split("-").reverse().join("/")}</td>
+                        <td className="py-0.5 pr-2">
+                          {puedeCliente ? (
+                            <SelectorClienteGasto valor={o.gasto_cliente} opciones={opcionesCliente(renglonesObra, d.ordenes.map((x) => x.gasto_cliente ?? ""))} onCambiar={(c) => cambiarCliente(o.id, c)} />
+                          ) : (
+                            <span className={o.gasto_cliente ? "text-violet-800" : "text-slate-400"}>{o.gasto_cliente ?? CLIENTE_DE_LA_OBRA}</span>
+                          )}
+                        </td>
                         <td className="py-0.5 pr-2 text-right tabular-nums">{mxn.format(Number(o.total))}</td>
                         <td className={`py-0.5 pr-2 text-right tabular-nums ${o.pagada ? "text-emerald-700" : "text-amber-700"}`}>{o.pagada ? "pagada" : mxn.format(Number(o.saldo))}</td>
                         <td className="py-0.5 text-right"><BotonVerOc ocId={o.id} etiqueta="Ver orden" className={liga} /></td>
@@ -216,7 +255,13 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Las que en el backoffice o aquí llevan el nombre de esta obra y son de la empresa que la contrata (las de otras empresas del grupo no cuentan, para no duplicar la operación entre empresas); sin canceladas.</p>
+              <p className="mt-1 text-[11px] text-slate-400">Las que en el backoffice o aquí llevan el nombre de esta obra y son de la empresa que la contrata (las de otras empresas del grupo no cuentan, para no duplicar la operación entre empresas); sin canceladas. "Cliente del gasto": cuando el equipo de la obra trabaja para otro cliente (oficinas, una obra privada), elige a quién se le carga esa orden.</p>
+              {renglonesObra.some((r) => r.gasto_cliente) && (
+                <div className="mt-3">
+                  <h4 className="mb-1 text-xs font-semibold uppercase text-slate-500">Gasto por cliente (OC/OS, mano de obra y otras compras, s/IVA)</h4>
+                  <TablaGastoPorCliente renglones={renglonesObra} clienteObra={proyecto.cliente ?? null} />
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-slate-400">No hay órdenes con el nombre de esta obra.</p>
@@ -246,15 +291,21 @@ export function ResumenObra({ proyecto }: { proyecto: Proyecto }) {
                   </tbody>
                 </table>
               </div>
-              <h4 className="mt-3 text-xs font-semibold uppercase text-slate-500">Por partida</h4>
-              <ul className="text-xs">
-                {g.mo_partidas.map((x) => (
-                  <li key={x.partida} className="flex justify-between border-t border-slate-100 py-0.5">
-                    <span>{x.partida}</span>
-                    <span className="tabular-nums">{mxn.format(Number(x.monto))}</span>
-                  </li>
-                ))}
-              </ul>
+              <h4 className="mt-3 text-xs font-semibold uppercase text-slate-500">Por partida, puesto y persona</h4>
+              {detalleObra.isLoading && <p className="text-xs text-slate-400">Cargando desglose…</p>}
+              {renglonesObra.some((r) => r.origen === "mano_obra") ? (
+                <TablaManoObra renglones={renglonesObra.filter((r) => r.origen === "mano_obra")} conLigas={false} />
+              ) : (
+                <ul className="text-xs">
+                  {g.mo_partidas.map((x) => (
+                    <li key={x.partida} className="flex justify-between border-t border-slate-100 py-0.5">
+                      <span>{x.partida}</span>
+                      <span className="tabular-nums">{mxn.format(Number(x.monto))}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-1 text-[11px] text-slate-400">Clic en una persona para ver semana por semana. Es lo que la API del backoffice reporta como pagado; se cruza por el nombre del proyecto.</p>
             </>
           ) : (
             <p className="text-sm text-slate-400">El módulo de mano de obra del backoffice no tiene pagos para esta obra.</p>
