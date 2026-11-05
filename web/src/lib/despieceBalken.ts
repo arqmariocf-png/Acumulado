@@ -45,6 +45,9 @@ export interface ParametrosDespiece {
   traslapeMalla: number;
   /** Redondeo de la longitud de vigueta hacia arriba (m), ej. 0.10. */
   redondeoVigueta: number;
+  /** Cómo se llama la vigueta en la cotización (Balken produce vigueta
+   * reforzada: 3 varillas con celosía; 5-nov-2026). */
+  nombreVigueta?: string;
 }
 
 export const PARAMETROS_BASE: ParametrosDespiece = {
@@ -58,6 +61,7 @@ export const PARAMETROS_BASE: ParametrosDespiece = {
   concretoNervios: 0.02,
   traslapeMalla: 1.1,
   redondeoVigueta: 0.1,
+  nombreVigueta: "Vigueta reforzada",
 };
 
 /** Claro máximo orientativo por peralte (m). Es una referencia práctica,
@@ -208,7 +212,7 @@ export function cotizar(d: Despiece, p: ParametrosDespiece, precios: PreciosCoti
   const lineas: LineaCotizacion[] = [];
   for (const v of d.viguetasPorLongitud) {
     lineas.push({
-      concepto: `Vigueta pretensada ${p.peralteVigueta} cm × ${v.longitud.toFixed(2)} m`,
+      concepto: `${p.nombreVigueta || "Vigueta reforzada"} ${p.peralteVigueta} cm × ${v.longitud.toFixed(2)} m`,
       unidad: "PZA",
       cantidad: v.piezas,
       precioUnitario: r2(v.longitud * precios.viguetaPorMetro),
@@ -266,7 +270,9 @@ export interface EncabezadoCotizacion {
   notas: string;
 }
 
-export function htmlCotizacionBalken(enc: EncabezadoCotizacion, p: ParametrosDespiece, d: Despiece, c: Cotizacion): string {
+/** `anexo`: HTML y estilos extra que se imprimen como hoja aparte después de la
+ * cotización (la ficha técnica de la vigueta, 5-nov-2026). */
+export function htmlCotizacionBalken(enc: EncabezadoCotizacion, p: ParametrosDespiece, d: Despiece, c: Cotizacion, anexo?: { html: string; estilos: string }): string {
   const filasTableros = d.tableros
     .map(
       (t) => `<tr><td>${esc(t.tablero.nombre)}</td><td class="r">${num(t.tablero.claro)}</td><td class="r">${num(t.tablero.ancho)}</td><td class="r">${t.tablero.cantidad}</td><td class="r">${num(t.area)}</td><td class="r">${t.viguetas} × ${num(t.longitudVigueta)} m</td><td class="r">${t.bovedillas}</td></tr>`,
@@ -295,6 +301,7 @@ export function htmlCotizacionBalken(enc: EncabezadoCotizacion, p: ParametrosDes
   .notas { margin-top: 10px; white-space: pre-wrap; }
   .btn { position: fixed; top: 10px; right: 10px; padding: 8px 14px; background: #0f172a; color: #fff; border: 0; border-radius: 6px; font-size: 13px; cursor: pointer; }
   @media print { .btn { display: none; } .hoja { padding: 0; } }
+  ${anexo?.estilos ?? ""}
 </style></head><body>
 <button class="btn" onclick="window.print()">Imprimir / guardar PDF</button>
 <div class="hoja">
@@ -329,6 +336,6 @@ export function htmlCotizacionBalken(enc: EncabezadoCotizacion, p: ParametrosDes
     </tfoot>
   </table>
   ${enc.notas ? `<div class="notas"><strong>Notas:</strong> ${esc(enc.notas)}</div>` : ""}
-  <p class="param">Las cantidades son un despiece estimado a partir de las medidas indicadas; se confirman con el plano y la visita a obra. El claro máximo por peralte es orientativo y no sustituye el cálculo estructural.</p>
-</div></body></html>`;
+  <p class="param">Las cantidades son un despiece estimado a partir de las medidas indicadas; se confirman con el plano y la visita a obra. El claro máximo por peralte es orientativo y no sustituye el cálculo estructural.${anexo ? " Se anexa la ficha técnica de la vigueta." : ""}</p>
+</div>${anexo?.html ?? ""}</body></html>`;
 }

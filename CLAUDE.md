@@ -483,6 +483,32 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Ej. Pisos Falla geológica N21 (ERG): 146 OC → 107, $874,677 s/IVA; Parque
   Real 63 (MCF): 84 OC. La mano de obra no cambió. Pies de página de Avance
   financiero y del resumen de la obra lo dicen.
+- **Vigueta de Balken: costeo con 3 varillas y ficha técnica (3 y 5-nov-2026,
+  Mario: "vamos a hacer el costeo de vigueta, 12 metros y 56 charolas"; "revisa
+  si la varilla está considerada por tres y generemos una ficha técnica de la
+  vigueta que estamos produciendo para agregarlo al cotizador de Balken")**:
+  Balken produce **vigueta reforzada** (armada): 3 varillas de 3/8" (2 en el
+  patín + 1 superior) con celosía de alambrón 1/4", colada en charolas de 12 m
+  con concreto premezclado (una colada = 56 charolas = 7 m³, el mínimo de la
+  olla). Calculadora del costeo (artefacto
+  https://claude.ai/artifact/NPFLtverWffXU8dAw3CcWP, fuera del repo): el acero
+  entra por varillas × kg/m × $/kg (varilla R42 3/8 $122/pza de 12 m = $18.26/kg,
+  AEP oct-26) + celosía (1.4 m de alambrón por m × 0.248 kg × $20) = 2.02 kg/m,
+  $38.61/m; antes era un bulto de 1.8 kg/m. Costo ≈ $76/m contra venta $150
+  s/IVA ($161.88/m es lo que AEP le compra a Balken, OC 41264). En la app:
+  `lib/fichaVigueta.ts` (con pruebas: `aceroVigueta`, `pesoVigueta`,
+  `costoAceroPorMetro`, `htmlFichaVigueta`/`cuerpoFicha` con sección en SVG) y
+  en Producción › Balken › Despiece (`DespieceBalken.tsx`, el cotizador de
+  Balken) la sección "Ficha técnica de la vigueta": datos editables (se
+  recuerdan en el navegador, `balken-ficha-vigueta-v1`), "Imprimir ficha
+  técnica" y casilla "Anexar la ficha técnica a la cotización" (segunda hoja;
+  `htmlCotizacionBalken` acepta `anexo`). La cotización ya dice "Vigueta
+  reforzada" (`ParametrosDespiece.nombreVigueta`), no "pretensada". Por
+  confirmar con Jaime: ancho de patín/alma (12/8 cm), f'c (300), carga de
+  servicio (sale "por confirmar" hasta que se capture) y si la celosía es
+  sencilla o doble. VBB no tiene productos ni lotes de producción en la base:
+  el costeo por colada sigue en la calculadora hasta que se dé de alta la
+  vigueta como producto con receta.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el

@@ -64,7 +64,7 @@ test("cotizar arma líneas, IVA y precio por m²", () => {
   assert.deepEqual(
     c.lineas.map((l) => [l.concepto, l.cantidad, l.importe]),
     [
-      ["Vigueta pretensada 15 cm × 4.20 m", 6, 2520],
+      ["Vigueta reforzada 15 cm × 4.20 m", 6, 2520],
       ["Bovedilla de cemento 15×25×56", 83, 1660],
       ["Flete a obra", 1, 500],
     ],
@@ -83,6 +83,9 @@ test("htmlCotizacionBalken escapa y muestra totales", () => {
   const html = htmlCotizacionBalken({ empresa: "Balken", cliente: "Cliente & Cía", obra: "Casa", fecha: "22/09/2026", vigencia: "15 días", elaboro: "Jaime", notas: "" }, p, d, c);
   assert.match(html, /Recámara &lt;1&gt;/);
   assert.match(html, /Cliente &amp; Cía/);
-  assert.match(html, /Vigueta pretensada 15 cm × 4\.20 m/);
+  assert.match(html, /Vigueta reforzada 15 cm × 4\.20 m/);
+  const conAnexo = htmlCotizacionBalken({ empresa: "Balken", cliente: "C", obra: "", fecha: "", vigencia: "", elaboro: null, notas: "" }, p, d, c, { html: "<div class=\"ficha\">FICHA</div>", estilos: ".ficha{}" });
+  assert.match(conAnexo, /Se anexa la ficha técnica/);
+  assert.match(conAnexo, /<div class="ficha">FICHA<\/div><\/body>/);
   assert.match(html, /Precio por m²/);
 });

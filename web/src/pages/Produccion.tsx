@@ -177,7 +177,7 @@ function ProduccionPlanta({ planta }: { planta: Planta }) {
       {pestana === "inventario" && <PestanaInventario empresa={empresa} planta={planta} />}
       {pestana === "ordenes" && <PestanaOrdenes empresa={empresa} />}
       {pestana === "costeo" && <PestanaCosteo empresa={empresa} />}
-      {pestana === "despiece" && planta.codigo === "VBB" && <DespieceBalken empresaNombre={empresa.nombre} />}
+      {pestana === "despiece" && planta.codigo === "VBB" && <DespieceBalken empresaNombre={empresa.nombre} empresaCodigo={planta.codigo} />}
       {pestana === "cotizador" && planta.codigo === "MCC" && <CotizadorPlanta empresa={empresa} />}
       {pestana === "calendario" && <CalendarioMaquinas empresaId={empresa.id} />}
       {pestana === "proyeccion" && esAdminGlobal && <ProyeccionAnualPlanta empresaId={empresa.id} />}
