@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ExcelJS from "exceljs";
 import { supabase } from "../../lib/supabase";
@@ -137,7 +137,9 @@ export function ManoDeObra() {
   const [error, setError] = useState<string | null>(null);
   const [syncResults, setSyncResults] = useState<ResultadoSincronizacion[] | null>(null);
   const [activeKey, setActiveKey] = useState<NominaExternaOrigenKey>("mano_obra");
-  const [search, setSearch] = useState("");
+  // ?buscar=<obra> llega desde "de dónde sale" del avance financiero (5-nov-2026).
+  const [paramsLiga] = useSearchParams();
+  const [search, setSearch] = useState(paramsLiga.get("buscar") ?? "");
   const [costCenterFilter, setCostCenterFilter] = useState("");
   const [periodFilter, setPeriodFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | Row["status"]>("todos");

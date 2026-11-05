@@ -444,6 +444,11 @@ function DocumentosCliente({
                   <td className="px-2 py-2 font-semibold text-slate-900" title={d.uuid ?? undefined}>
                     {d.origen === "cfdi" ? `Factura ${d.folio.slice(0, 8)}…` : d.folio}
                     {d.origen === "cfdi" && <span className="ml-1 text-[10px] font-normal text-slate-400">SAT</span>}
+                    {d.tipo === "orden_venta" && d.folio.startsWith("OV ") && (
+                      <Link to={`/ordenes?tipo=OV&buscar=${encodeURIComponent(d.folio.slice(3))}&backoffice=1`} title="Ver la orden de venta" className="ml-1 text-xs font-normal text-sky-700 underline">
+                        ver OV
+                      </Link>
+                    )}
                     {d.tipo === "saldo_inicial" && (
                       <div className="text-xs font-normal text-slate-500">
                         {d.concepto}
