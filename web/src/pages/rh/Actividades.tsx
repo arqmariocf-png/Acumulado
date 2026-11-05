@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
+import { moverOSolicitarCierre } from "../../lib/cierreTarjeta";
 import { cambiarFechaOSolicitar } from "../../lib/fechaCompromiso";
 import { ETIQUETA_CUMPLIMIENTO, clasificar, porPersona, porSemana, type ActividadBase, type EstadoCumplimiento } from "../../lib/cumplimiento";
 import type { Tablero, TableroColumna, Tarjeta } from "../../types/database";
@@ -194,8 +195,11 @@ export function Actividades() {
   const mover = useMutation({
     mutationFn: async (p: { tarjeta: Tarjeta; columnaId: string }) => {
       const userId = await usuarioActualId();
-      const { error: err } = await supabase.from("tarjetas").update({ columna_id: p.columnaId }).eq("id", p.tarjeta.id);
-      if (err) throw err;
+      const resultado = await moverOSolicitarCierre(p.tarjeta.id, { columna_id: p.columnaId });
+      if (resultado !== "movida") {
+        if (resultado === "solicitada") setError("Se le pidió al jefe autorizar que la tarea quede terminada; cuando la autorice pasa a Hecho sola.");
+        return;
+      }
       await supabase.from("tarjeta_actividad").insert({
         tarjeta_id: p.tarjeta.id,
         tipo: "movida",

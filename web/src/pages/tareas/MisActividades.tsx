@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { clasificar, type EstadoCumplimiento } from "../../lib/cumplimiento";
 import { AREAS_TAREAS, esAreaTareas } from "../../lib/tareasArea";
+import { cierresPendientes, resolverCierre, textoCierre } from "../../lib/cierreTarjeta";
 import type { Tarjeta } from "../../types/database";
 
 // Panel personal de tareas (Mario, 26-sep-2026): lo que tengo asignado como
@@ -139,6 +140,7 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
         </div>
       </div>
       {nuevaPropia && <NuevaActividadPropia profileId={perfil.id} onListo={() => setNuevaPropia(false)} />}
+      <CierresPorAutorizar />
 
       {q.isPending && <p className="text-sm text-slate-500">Cargando…</p>}
       {q.error && <p className="text-sm text-red-600">{(q.error as Error).message}</p>}
@@ -182,6 +184,75 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
         </>
       )}
     </section>
+  );
+}
+
+// Candado de cierre (Mario, 5-nov-2026): lo que la persona tiene por autorizar
+// como jefe (tareas que su gente dio por terminadas) y lo que ella pidió.
+function CierresPorAutorizar() {
+  const queryClient = useQueryClient();
+  const { soloConsulta } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const q = useQuery({ queryKey: ["cierres-pendientes"], queryFn: cierresPendientes, staleTime: 30_000 });
+  const resolver = useMutation({
+    mutationFn: async ({ id, aprobar }: { id: string; aprobar: boolean }) => {
+      const comentario = window.prompt(aprobar ? "Comentario (opcional):" : "Motivo del rechazo (opcional):");
+      if (comentario === null) return;
+      await resolverCierre(id, aprobar, comentario);
+    },
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["cierres-pendientes"] });
+      queryClient.invalidateQueries({ queryKey: ["mis-tarjetas"] });
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+  const porResolver = (q.data ?? []).filter((c) => c.puedo_resolver);
+  const mias = (q.data ?? []).filter((c) => c.es_mia);
+  if (porResolver.length === 0 && mias.length === 0) return null;
+  return (
+    <div className="mb-4 space-y-2">
+      {porResolver.length > 0 && (
+        <div className="rounded border border-amber-200 bg-amber-50 p-3">
+          <h3 className="mb-1 text-xs font-semibold uppercase text-amber-800">
+            Por autorizar como terminadas <span className="font-normal text-amber-600">({porResolver.length})</span>
+          </h3>
+          <ul className="divide-y divide-amber-100">
+            {porResolver.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-sm">
+                <Link to={`/tareas/${c.tablero_id}?tarjeta=${c.tarjeta_id}`} className="text-slate-800 hover:underline">
+                  {textoCierre(c)}
+                </Link>
+                {!soloConsulta && (
+                  <span className="flex gap-1.5 text-xs">
+                    <button type="button" onClick={() => resolver.mutate({ id: c.id, aprobar: true })} disabled={resolver.isPending} className="rounded bg-emerald-600 px-2 py-1 text-white disabled:opacity-50">
+                      Autorizar
+                    </button>
+                    <button type="button" onClick={() => resolver.mutate({ id: c.id, aprobar: false })} disabled={resolver.isPending} className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 disabled:opacity-50">
+                      Rechazar
+                    </button>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        </div>
+      )}
+      {mias.length > 0 && (
+        <p className="text-xs text-slate-500">
+          Esperando autorización de tu jefe:{" "}
+          {mias.map((c, i) => (
+            <span key={c.id}>
+              {i > 0 && " · "}
+              <Link to={`/tareas/${c.tablero_id}?tarjeta=${c.tarjeta_id}`} className="underline">
+                {c.titulo}
+              </Link>
+            </span>
+          ))}
+        </p>
+      )}
+    </div>
   );
 }
 

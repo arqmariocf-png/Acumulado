@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { Recurrentes } from "./Recurrentes";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
+import { moverOSolicitarCierre } from "../../lib/cierreTarjeta";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { TarjetaPanel } from "./TarjetaPanel";
@@ -164,6 +165,7 @@ export function TableroDetalle({ tableroId: idDelArea }: { tableroId?: string } 
   const [nuevaColumna, setNuevaColumna] = useState(false);
   const [editandoTablero, setEditandoTablero] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const puedeAdministrar = perfil?.rol === "admin" || perfil?.rol === "corporativo";
   const nombrePorId = new Map((directorio ?? []).map((p) => [p.id, p.nombre]));
@@ -240,19 +242,22 @@ export function TableroDetalle({ tableroId: idDelArea }: { tableroId?: string } 
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
       const enDestino = (tarjetas ?? []).filter((t) => t.columna_id === columnaDestinoId).length;
-      const { error: errUpdate } = await supabase
-        .from("tarjetas")
-        .update({ columna_id: columnaDestinoId, orden: enDestino })
-        .eq("id", tarjeta.id);
-      if (errUpdate) throw errUpdate;
+      // Candado (5-nov-2026): a Hecho solo el jefe o quien la asignó; los demás piden terminarla.
+      const resultado = await moverOSolicitarCierre(tarjeta.id, { columna_id: columnaDestinoId, orden: enDestino });
+      if (resultado !== "movida") return resultado;
       const origen = columnas?.find((c) => c.id === tarjeta.columna_id)?.nombre;
       const destino = columnas?.find((c) => c.id === columnaDestinoId)?.nombre;
       await supabase
         .from("tarjeta_actividad")
         .insert({ tarjeta_id: tarjeta.id, tipo: "movida", detalle: { de: origen, a: destino }, actor_id: userId });
       notificarTarjeta(tarjeta.id, "movida", destino);
+      return resultado;
     },
-    onSuccess: invalidarTarjetas,
+    onSuccess: (resultado) => {
+      invalidarTarjetas();
+      queryClient.invalidateQueries({ queryKey: ["cierres-pendientes"] });
+      setAviso(resultado === "solicitada" ? "Se le pidió a tu jefe autorizar que la tarea quede terminada; cuando la autorice pasa a Hecho sola." : null);
+    },
     onError: (err) => setError((err as Error).message),
   });
 
@@ -355,6 +360,14 @@ export function TableroDetalle({ tableroId: idDelArea }: { tableroId?: string } 
       )}
 
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {aviso && (
+        <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {aviso}{" "}
+          <button type="button" onClick={() => setAviso(null)} className="ml-2 text-xs underline">
+            cerrar
+          </button>
+        </p>
+      )}
 
       <CalendarioVencimientos tarjetas={tarjetas ?? []} onSeleccionar={setTarjetaSeleccionada} />
 
