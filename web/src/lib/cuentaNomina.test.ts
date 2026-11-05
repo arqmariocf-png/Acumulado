@@ -64,7 +64,9 @@ test("dictamen: nivel, línea dentro de ley y lo que falta para subir", () => {
 });
 
 test("bloqueos: antigüedad, atraso, sin sueldo o salario mínimo", () => {
-  assert.deepEqual(bloqueos({ ...base, meses_antiguedad: 1 }), ["Menos de 3 meses de antigüedad"]);
+  assert.deepEqual(bloqueos({ ...base, meses_antiguedad: 1 }), ["Menos de 24 meses de antigüedad (lleva 1)"]);
+  assert.deepEqual(bloqueos({ ...base, meses_antiguedad: 23 }), ["Menos de 24 meses de antigüedad (lleva 23)"]);
+  assert.deepEqual(bloqueos({ ...base, meses_antiguedad: 24 }), []);
   assert.deepEqual(bloqueos({ ...base, sueldo_semanal: null }), ["Falta el sueldo semanal"]);
   assert.deepEqual(bloqueos({ ...base, sueldo_semanal: 2100 }), ["Gana el mínimo: la ley no permite descontarle"]);
   const d = dictamen({ ...base, atraso: 50 });

@@ -54,7 +54,7 @@ export interface ConfigFinanciamiento {
 export const CONFIG_LEY_2026: ConfigFinanciamiento = {
   salario_minimo_diario: 315.04,
   pct_excedente: 30,
-  antiguedad_minima_meses: 3,
+  antiguedad_minima_meses: 24, // dos años (5-nov-2026, Mario)
   acreditante_empresa_id: null,
   tasa_anual_prestamos: 0,
   tasa_moratoria_anual: 0,
@@ -149,7 +149,7 @@ export function puntaje(f: FactoresEstudio): { total: number; partes: ParteDelPu
 /** Lo que impide prestar aunque el puntaje alcance. */
 export function bloqueos(f: FactoresEstudio, c: ConfigFinanciamiento = CONFIG_LEY_2026): string[] {
   const b: string[] = [];
-  if (f.meses_antiguedad < c.antiguedad_minima_meses) b.push(`Menos de ${c.antiguedad_minima_meses} meses de antigüedad`);
+  if (f.meses_antiguedad < c.antiguedad_minima_meses) b.push(`Menos de ${c.antiguedad_minima_meses} meses de antigüedad (lleva ${f.meses_antiguedad})`);
   if (f.atraso > 0) b.push("Tiene descuentos atrasados");
   if (!f.sueldo_semanal) b.push("Falta el sueldo semanal");
   else if (topesLegales(f.sueldo_semanal, c).descuentoMaximo <= 0) b.push("Gana el mínimo: la ley no permite descontarle");

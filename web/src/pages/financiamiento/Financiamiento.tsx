@@ -733,6 +733,7 @@ function Reglas() {
         <label>
           Antigüedad mínima (meses)
           <input type="number" min={0} disabled={!puedeEditar} className={`${campo} block w-full`} value={v.antiguedad_minima_meses} onChange={(e) => setF({ ...v, antiguedad_minima_meses: Number(e.target.value) })} />
+          <span className="text-xs text-slate-500">24 = dos años (regla del 5-nov-2026); la base no autoriza líneas ni firmas antes</span>
         </label>
       </div>
       <div className="rounded border border-slate-200 bg-white p-3">

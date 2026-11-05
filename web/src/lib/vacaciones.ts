@@ -51,7 +51,24 @@ export interface SaldoVacaciones {
   tomados: number;
   pendientes: number;
   disponibles: number;
+  /** Las vacaciones se habilitan al cumplir un año (5-nov-2026, Mario); RH
+   * puede registrarlas antes. Opcionales por si llega un saldo viejo. */
+  habilitado?: boolean;
+  habilitado_desde?: string;
   dias_semana: number;
+}
+
+/** Fecha en que una persona cumple un año y se le habilitan las vacaciones. */
+export function vacacionesDesde(fechaIngreso: string): string {
+  const d = fecha(fechaIngreso);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return iso(d);
+}
+
+/** ¿Ya cumplió el año? (la base manda `habilitado`; si no viene, se calcula). */
+export function vacacionesHabilitadas(saldo: Pick<SaldoVacaciones, "habilitado" | "anios_cumplidos"> | null | undefined): boolean {
+  if (!saldo) return false;
+  return saldo.habilitado ?? saldo.anios_cumplidos >= 1;
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -103,6 +120,9 @@ export function revisarSolicitud(p: { tipo: TipoAusencia; desde: string; hasta: 
   if (p.hasta < p.desde) return "El último día no puede ser antes del primero.";
   const dias = diasHabiles(p.desde, p.hasta, p.diasSemana ?? 6);
   if (dias === 0) return "Esas fechas no tienen días hábiles (domingos o festivos).";
+  if (p.tipo === "vacaciones" && p.saldo && !p.puedeExceder && !vacacionesHabilitadas(p.saldo)) {
+    return `Las vacaciones se habilitan al cumplir un año de antigüedad${p.saldo.habilitado_desde ? ` (a partir del ${p.saldo.habilitado_desde.slice(8, 10)}/${p.saldo.habilitado_desde.slice(5, 7)}/${p.saldo.habilitado_desde.slice(0, 4)})` : ""}. Mientras, pide un permiso o habla con RH.`;
+  }
   if (p.tipo === "vacaciones" && p.saldo && !p.puedeExceder && dias > p.saldo.disponibles) {
     return `Pides ${dias} días y tienes ${p.saldo.disponibles} disponibles en tu periodo (${p.saldo.dias_ley} de ley). Habla con RH.`;
   }

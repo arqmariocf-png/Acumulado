@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import {
-  calendarioAusencias, diaDeRegreso, diasHabiles, ETIQUETA_ESTADO, ETIQUETA_TIPO, fechaCorta, resumenAusencia, revisarSolicitud, sumarDias,
+  calendarioAusencias, diaDeRegreso, diasHabiles, ETIQUETA_ESTADO, ETIQUETA_TIPO, fechaCorta, resumenAusencia, revisarSolicitud, sumarDias, vacacionesHabilitadas,
   type Ausencia, type EstadoAusencia, type SaldoVacaciones, type TipoAusencia,
 } from "../../lib/vacaciones";
 
@@ -75,7 +75,7 @@ export function Vacaciones() {
     <div className="mx-auto max-w-5xl">
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Vacaciones y permisos</h1>
       <p className="mb-3 text-sm text-slate-500">
-        Días de ley según tu antigüedad (art. 76 LFT); se descuentan solo días hábiles de tu jornada, sin domingos ni festivos. El día anterior a salir y a regresar llega un recordatorio a ti, a tu jefe y a RH.
+        Los días de ley se ganan al cumplir cada año de antigüedad (art. 76 LFT; con menos de un año solo permisos); se descuentan solo días hábiles de tu jornada, sin domingos ni festivos. El día anterior a salir y a regresar llega un recordatorio a ti, a tu jefe y a RH.
       </p>
       {pestanas.length > 1 && (
         <div className="mb-4 flex gap-1 border-b border-slate-200">
@@ -108,9 +108,14 @@ function Saldo({ s, titulo }: { s: SaldoVacaciones | null; titulo: string }) {
   return (
     <div className="rounded border border-slate-200 bg-white px-3 py-2 text-sm">
       <div className="font-medium text-slate-900">{titulo}</div>
+      {!vacacionesHabilitadas(s) && (
+        <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+          Las vacaciones se habilitan al cumplir un año de antigüedad{s.habilitado_desde ? `: a partir del ${fechaCorta(s.habilitado_desde)} ${s.habilitado_desde.slice(0, 4)}` : ""}. Mientras, se piden permisos.
+        </p>
+      )}
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 tabular-nums text-slate-700">
         <span><b className="text-lg">{s.disponibles}</b> disponibles</span>
-        <span>{s.dias_ley} de ley (año {s.anio_servicio} de servicio)</span>
+        <span>{s.dias_ley} de ley ({s.anios_cumplidos >= 1 ? `${s.anios_cumplidos} año${s.anios_cumplidos === 1 ? "" : "s"} cumplido${s.anios_cumplidos === 1 ? "" : "s"}` : "menos de un año"})</span>
         <span>{s.tomados} tomados</span>
         {s.pendientes > 0 && <span className="text-amber-700">{s.pendientes} por autorizar</span>}
       </div>

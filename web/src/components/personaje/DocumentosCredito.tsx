@@ -25,6 +25,11 @@ interface DatosDocumentos {
   patron: ParteDocumento | null;
   financiera: ParteDocumento | null;
   ciudad: string;
+  /** Antigüedad mínima para financiamiento (5-nov-2026: 24 meses). */
+  antiguedad_minima_meses?: number;
+  meses_antiguedad?: number | null;
+  financiamiento_habilitado?: boolean;
+  financiamiento_desde?: string | null;
   cargo: null | {
     id: string;
     concepto: string;
@@ -103,15 +108,29 @@ export function DocumentosCredito() {
     },
   });
   const [abierto, setAbierto] = useState<null | { tipo: "afiliacion" } | { tipo: "pagare"; cargo: string }>(null);
+  const habilitacion = useQuery({
+    queryKey: ["financiamiento-habilitado", perfilReal?.id],
+    enabled: !!perfilReal?.id,
+    queryFn: () => datosDocumentos(),
+  });
   const vigentes = (firmas.data ?? []).filter((f) => !f.revocada_en);
   const tiene = (t: string) => vigentes.some((f) => f.tipo === t);
   const afiliado = tiene("afiliacion") && tiene("consentimiento");
+  const h = habilitacion.data;
+  const puedeAfiliarse = h?.financiamiento_habilitado ?? true;
+  const fechaHab = h?.financiamiento_desde ? `${h.financiamiento_desde.slice(8, 10)}/${h.financiamiento_desde.slice(5, 7)}/${h.financiamiento_desde.slice(0, 4)}` : null;
   if (!perfilReal) return null;
 
   return (
     <section className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
       <h2 className="font-semibold text-slate-800">✍️ Mis documentos de crédito</h2>
-      {!afiliado && (
+      {!afiliado && h && !puedeAfiliarse && (
+        <div className="rounded border border-slate-200 bg-slate-50 p-2 text-slate-700">
+          El financiamiento vía nómina se habilita con {h.antiguedad_minima_meses ?? 24} meses de antigüedad
+          {h.meses_antiguedad == null ? " (tu expediente de RH no tiene fecha de ingreso: pídesela a RH)" : `; llevas ${h.meses_antiguedad}${fechaHab ? ` y se habilita el ${fechaHab}` : ""}`}.
+        </div>
+      )}
+      {!afiliado && puedeAfiliarse && (
         <div className="rounded border border-amber-300 bg-amber-50 p-2">
           <p>Para usar tu cuenta de nómina primero firma tu <b>afiliación</b> y tu <b>consentimiento de descuento</b>. Se firman aquí, con tu dedo.</p>
           {!soloConsulta && (
