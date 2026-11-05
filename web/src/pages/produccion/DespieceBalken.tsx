@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir } from "../../lib/imprimir";
+import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
+import { CALIBRES_CELOSIA, CALIBRES_VARILLA, FICHA_BASE, aceroVigueta, cuerpoFicha, estilosFicha, htmlFichaVigueta, pesoVigueta, type FichaVigueta } from "../../lib/fichaVigueta";
 import {
   CLARO_MAXIMO_POR_PERALTE,
   PARAMETROS_BASE,
@@ -14,6 +16,7 @@ import {
 } from "../../lib/despieceBalken";
 
 const CLAVE_LOCAL = "balken-despiece-config-v1";
+const CLAVE_FICHA = "balken-ficha-vigueta-v1";
 
 const campo = "w-full rounded border border-slate-300 px-2 py-1 text-sm";
 const etiqueta = "mb-0.5 block text-[11px] font-medium text-slate-600";
@@ -38,10 +41,36 @@ function leerConfig(): { parametros: ParametrosDespiece; precios: PreciosCotizac
 
 const TABLERO_NUEVO = (): Tablero => ({ nombre: "", claro: 0, ancho: 0, cantidad: 1 });
 
+function leerFicha(): FichaVigueta {
+  try {
+    const crudo = localStorage.getItem(CLAVE_FICHA);
+    return crudo ? { ...FICHA_BASE, ...JSON.parse(crudo) } : FICHA_BASE;
+  } catch {
+    return FICHA_BASE;
+  }
+}
+
 /** Despiece de losa de vigueta y bovedilla + cotización rápida (Balken).
  * Los parámetros y precios se recuerdan en este navegador. */
-export function DespieceBalken({ empresaNombre }: { empresaNombre: string }) {
+export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre: string; empresaCodigo?: string }) {
   const { perfil } = useAuth();
+  // Ficha técnica de la vigueta (5-nov-2026): se edita aquí, se imprime sola o
+  // se anexa a la cotización.
+  const [ficha, setFicha] = useState<FichaVigueta>(leerFicha);
+  const [fichaAbierta, setFichaAbierta] = useState(false);
+  const [anexarFicha, setAnexarFicha] = useState(true);
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLAVE_FICHA, JSON.stringify(ficha));
+    } catch {
+      /* sin almacenamiento local */
+    }
+  }, [ficha]);
+  const acero = useMemo(() => aceroVigueta(ficha), [ficha]);
+  const peso = useMemo(() => pesoVigueta(ficha), [ficha]);
+  function setF<K extends keyof FichaVigueta>(k: K, v: FichaVigueta[K]) {
+    setFicha((prev) => ({ ...prev, [k]: v }));
+  }
   const guardado = useMemo(leerConfig, []);
   const [parametros, setParametros] = useState<ParametrosDespiece>(guardado?.parametros ?? PARAMETROS_BASE);
   const [precios, setPrecios] = useState<PreciosCotizacion>(guardado?.precios ?? PRECIOS_BASE);
@@ -74,23 +103,27 @@ export function DespieceBalken({ empresaNombre }: { empresaNombre: string }) {
     setPrecios((prev) => ({ ...prev, [k]: Number.isFinite(v) ? v : 0 }));
   }
 
-  function imprimir() {
+  async function imprimir() {
     setAviso(null);
+    // La pestaña se abre en el clic (móvil) y se llena cuando llega el logo.
+    const ventana = window.open("", "_blank");
+    const fecha = new Date().toLocaleDateString("es-MX");
+    const logoUrl = anexarFicha ? await logoDeEmpresa(empresaCodigo ?? "VBB") : null;
     const html = htmlCotizacionBalken(
-      {
-        empresa: empresaNombre,
-        cliente,
-        obra,
-        fecha: new Date().toLocaleDateString("es-MX"),
-        vigencia,
-        elaboro: perfil?.nombre ?? null,
-        notas,
-      },
+      { empresa: empresaNombre, cliente, obra, fecha, vigencia, elaboro: perfil?.nombre ?? null, notas },
       parametros,
       despiece,
       cotizacion,
+      anexarFicha ? { html: cuerpoFicha(ficha, { empresa: empresaNombre, empresaCodigo, logoUrl, fecha, elaboro: perfil?.nombre ?? null }), estilos: estilosFicha() } : undefined,
     );
-    if (!abrirParaImprimir(html)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes para imprimir.");
+    if (!abrirParaImprimir(html, ventana)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes para imprimir.");
+  }
+  async function imprimirFicha() {
+    setAviso(null);
+    const ventana = window.open("", "_blank");
+    const logoUrl = await logoDeEmpresa(empresaCodigo ?? "VBB");
+    const html = htmlFichaVigueta(ficha, { empresa: empresaNombre, empresaCodigo, logoUrl, fecha: new Date().toLocaleDateString("es-MX"), elaboro: perfil?.nombre ?? null });
+    if (!abrirParaImprimir(html, ventana)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes para imprimir.");
   }
 
   return (
@@ -295,8 +328,63 @@ export function DespieceBalken({ empresaNombre }: { empresaNombre: string }) {
             </button>
           </div>
           <div className="sm:col-span-4"><label className={etiqueta}>Notas</label><textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} className={campo} /></div>
+          <label className="flex items-center gap-2 text-xs text-slate-700 sm:col-span-4">
+            <input type="checkbox" checked={anexarFicha} onChange={(e) => setAnexarFicha(e.target.checked)} /> Anexar la ficha técnica de la vigueta a la cotización (segunda hoja)
+          </label>
         </div>
         {aviso && <p className="mt-2 text-sm text-red-600">{aviso}</p>}
+      </div>
+
+      {/* Ficha técnica de la vigueta */}
+      <div className="rounded border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Ficha técnica de la vigueta</h3>
+            <p className="text-xs text-slate-500">
+              {ficha.nombre} · {acero.descripcion} · acero {num(acero.totalKgM)} kg/m · peso {num(peso.totalKgM, 1)} kg/m · hasta {num(ficha.largoMaximo)} m
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setFichaAbierta((v) => !v)} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800">{fichaAbierta ? "Cerrar" : "Editar datos"}</button>
+            <button onClick={imprimirFicha} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Imprimir ficha técnica</button>
+          </div>
+        </div>
+        {fichaAbierta && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            <div className="col-span-2"><label className={etiqueta}>Nombre comercial</label><input value={ficha.nombre} onChange={(e) => setF("nombre", e.target.value)} className={campo} /></div>
+            <div><label className={etiqueta}>Peralte (cm)</label><input type="number" step="1" value={ficha.peralte} onChange={(e) => setF("peralte", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Patín inferior (cm)</label><input type="number" step="0.5" value={ficha.anchoPatin} onChange={(e) => setF("anchoPatin", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Alma (cm)</label><input type="number" step="0.5" value={ficha.anchoAlma} onChange={(e) => setF("anchoAlma", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Sección concreto (cm²)</label><input type="number" step="1" value={ficha.seccionCm2} onChange={(e) => setF("seccionCm2", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Largo máximo (m)</label><input type="number" step="0.5" value={ficha.largoMaximo} onChange={(e) => setF("largoMaximo", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Cortes en múltiplos de (cm)</label><input type="number" step="1" value={ficha.multiploCorte} onChange={(e) => setF("multiploCorte", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>f'c concreto (kg/cm²)</label><input type="number" step="50" value={ficha.fcConcreto} onChange={(e) => setF("fcConcreto", Number(e.target.value) || 0)} className={campo} /></div>
+            <div className="col-span-2 sm:col-span-3"><label className={etiqueta}>Concreto (descripción)</label><input value={ficha.concretoTexto} onChange={(e) => setF("concretoTexto", e.target.value)} className={campo} /></div>
+            <div><label className={etiqueta}>Varillas inferiores</label><input type="number" step="1" min="0" value={ficha.varillasInferiores} onChange={(e) => setF("varillasInferiores", Math.max(0, Math.round(Number(e.target.value) || 0)))} className={campo} /></div>
+            <div><label className={etiqueta}>Calibre inferior</label><select value={ficha.calibreInferior} onChange={(e) => setF("calibreInferior", e.target.value)} className={campo}>{CALIBRES_VARILLA.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+            <div><label className={etiqueta}>Varillas superiores</label><input type="number" step="1" min="0" value={ficha.varillasSuperiores} onChange={(e) => setF("varillasSuperiores", Math.max(0, Math.round(Number(e.target.value) || 0)))} className={campo} /></div>
+            <div><label className={etiqueta}>Calibre superior</label><select value={ficha.calibreSuperior} onChange={(e) => setF("calibreSuperior", e.target.value)} className={campo}>{CALIBRES_VARILLA.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+            <div><label className={etiqueta}>Celosía (alambrón)</label><select value={ficha.calibreCelosia} onChange={(e) => setF("calibreCelosia", e.target.value)} className={campo}>{CALIBRES_CELOSIA.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+            <div><label className={etiqueta}>Celosía: m de alambrón por m</label><input type="number" step="0.1" value={ficha.celosiaMetrosPorMetro} onChange={(e) => setF("celosiaMetrosPorMetro", Number(e.target.value) || 0)} className={campo} /></div>
+            <div className="col-span-2"><label className={etiqueta}>Grado de la varilla</label><input value={ficha.gradoVarilla} onChange={(e) => setF("gradoVarilla", e.target.value)} className={campo} /></div>
+            <div><label className={etiqueta}>Separación ejes (m)</label><input type="number" step="0.01" value={ficha.separacionEjes} onChange={(e) => setF("separacionEjes", Number(e.target.value) || 0)} className={campo} /></div>
+            <div className="col-span-2"><label className={etiqueta}>Bovedilla</label><input value={ficha.bovedilla} onChange={(e) => setF("bovedilla", e.target.value)} className={campo} /></div>
+            <div><label className={etiqueta}>Capa de compresión (cm)</label><input type="number" step="1" value={ficha.capaCompresion} onChange={(e) => setF("capaCompresion", Number(e.target.value) || 0)} className={campo} /></div>
+            <div className="col-span-2"><label className={etiqueta}>Malla de la capa</label><input value={ficha.mallaCapa} onChange={(e) => setF("mallaCapa", e.target.value)} className={campo} /></div>
+            <div><label className={etiqueta}>Claro recomendado (m)</label><input type="number" step="0.1" value={ficha.claroMaximo} onChange={(e) => setF("claroMaximo", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Carga de servicio (kg/m²)</label><input type="number" step="10" value={ficha.cargaServicio || ""} placeholder="por confirmar" onChange={(e) => setF("cargaServicio", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Apoyo mínimo (cm)</label><input type="number" step="1" value={ficha.apoyoMinimo} onChange={(e) => setF("apoyoMinimo", Number(e.target.value) || 0)} className={campo} /></div>
+            <div className="col-span-2 sm:col-span-4 lg:col-span-6"><label className={etiqueta}>Apuntalamiento</label><input value={ficha.apuntalamiento} onChange={(e) => setF("apuntalamiento", e.target.value)} className={campo} /></div>
+            <div className="col-span-2 sm:col-span-4 lg:col-span-3"><label className={etiqueta}>Usos</label><input value={ficha.usos} onChange={(e) => setF("usos", e.target.value)} className={campo} /></div>
+            <div className="col-span-2 sm:col-span-4 lg:col-span-3"><label className={etiqueta}>Manejo y estiba</label><input value={ficha.manejo} onChange={(e) => setF("manejo", e.target.value)} className={campo} /></div>
+            <div className="col-span-2 sm:col-span-4 lg:col-span-3"><label className={etiqueta}>Normas de referencia</label><input value={ficha.normas} onChange={(e) => setF("normas", e.target.value)} className={campo} /></div>
+            <div className="col-span-2 sm:col-span-4 lg:col-span-3"><label className={etiqueta}>Notas</label><input value={ficha.notas} onChange={(e) => setF("notas", e.target.value)} className={campo} /></div>
+            <div className="col-span-2 sm:col-span-4 lg:col-span-6 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              <span>Acero calculado: {num(acero.varillasKgM)} kg/m de varilla + {num(acero.celosiaKgM)} kg/m de celosía = <b>{num(acero.totalKgM)} kg/m</b>. Peso ≈ {num(peso.totalKgM, 1)} kg/m.</span>
+              <button onClick={() => setFicha(FICHA_BASE)} className="text-slate-500 underline">Restablecer ficha base</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
