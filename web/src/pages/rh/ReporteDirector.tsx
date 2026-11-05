@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir } from "../../lib/imprimir";
+import { htmlPresentacionRh } from "../../lib/presentacionRh";
+import type { ReporteTiempos } from "../../lib/reporteRhTiempos";
 import {
   alertasReporte,
   ddmm,
@@ -27,6 +29,10 @@ import {
 // backoffice, EPP, herramienta, financiamiento y accesos. Los datos salen de
 // `fn_reporte_rh_director(p_dias)` (null para cualquiera que no sea él) y las
 // reglas (semáforos, alertas, resumen, impresión) de `lib/reporteRhDirector`.
+// "Presentación (PDF)" (5-nov-2026, Mario: "que sea la presentación que
+// generaste aquí solo con la actualización de datos"): las 11 láminas de
+// `lib/presentacionRh`, con los datos de este reporte y los del reporte de
+// tiempos del mismo periodo (`fn_reporte_rh_tiempos`).
 
 const COLOR: Record<Semaforo, string> = {
   verde: "border-emerald-200 bg-emerald-50 text-emerald-800",
@@ -91,6 +97,7 @@ export function ReporteDirector() {
   const { perfil, esAdminGlobal, grupo } = useAuth();
   const [dias, setDias] = useState(30);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [generando, setGenerando] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["reporte-rh-director", dias],
     enabled: esAdminGlobal,
@@ -112,6 +119,26 @@ export function ReporteDirector() {
   function imprimir() {
     if (!data) return;
     setAviso(abrirParaImprimir(htmlReporteRh(data, grupo?.nombre ?? "Acumulado", perfil?.nombre ?? null)) ? null : "El navegador bloqueó la ventana. Permite ventanas emergentes.");
+  }
+  async function presentacion() {
+    if (!data) return;
+    // La pestaña se abre durante el clic (móvil) y se llena cuando llegan los tiempos.
+    const ventana = window.open("", "_blank");
+    setGenerando(true);
+    setAviso(null);
+    try {
+      const { data: t, error } = await supabase.rpc("fn_reporte_rh_tiempos", { p_desde: data.desde, p_hasta: data.hasta });
+      if (error) throw error;
+      const hoy = new Date();
+      const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+      const html = htmlPresentacionRh(data, (t as ReporteTiempos | null) ?? null, { organizacion: grupo?.nombre ?? "Acumulado", hoy: hoyIso });
+      if (!abrirParaImprimir(html, ventana)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes.");
+    } catch (e) {
+      ventana?.close();
+      setAviso(`No se pudo armar la presentación: ${(e as Error).message}`);
+    } finally {
+      setGenerando(false);
+    }
   }
 
   return (
@@ -138,8 +165,11 @@ export function ReporteDirector() {
             <option value={60}>60 días</option>
             <option value={90}>90 días</option>
           </select>
-          <button type="button" onClick={imprimir} disabled={!data} className="rounded bg-slate-800 px-3 py-1 text-xs text-white hover:bg-slate-700 disabled:opacity-50">
-            Imprimir / PDF
+          <button type="button" onClick={presentacion} disabled={!data || generando} className="rounded bg-slate-800 px-3 py-1 text-xs text-white hover:bg-slate-700 disabled:opacity-50">
+            {generando ? "Armando…" : "Presentación (PDF)"}
+          </button>
+          <button type="button" onClick={imprimir} disabled={!data} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-800 hover:bg-slate-100 disabled:opacity-50">
+            Hoja completa
           </button>
         </div>
       </div>

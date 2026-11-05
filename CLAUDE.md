@@ -2417,6 +2417,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (semanal $71.7 mil + quincenal $148.3 mil), mano de obra $210 mil/semana,
   2 bajas con cuenta activa (Daissy, Josafat), 2 expedientes sin documentos
   (Delia, Jaime), 14 sin cuenta.
+  **Presentación (PDF) (5-nov-2026, Mario: "cuando genere el PDF que sea la
+  presentación que generaste aquí solo con la actualización de datos")**: el
+  botón principal de la pantalla ahora abre `lib/presentacionRh.ts` (con
+  pruebas): las mismas 11 láminas horizontales del 29-oct (portada, resumen
+  ejecutivo, qué atender, plantilla, asistencia, tiempos, tareas, nómina,
+  evaluaciones/EPP/financiamiento/accesos, por definir, por implementar) con
+  gráficas SVG y TODO el texto calculado de `fn_reporte_rh_director` más
+  `fn_reporte_rh_tiempos` del mismo periodo (sin tiempos, 10 láminas). Las dos
+  últimas láminas son listas acordadas (`DECISIONES_PENDIENTES`,
+  `PLAN_IMPLEMENTACION`): se editan ahí cuando algo se decide o se hace. La
+  hoja carta por secciones sigue como "Hoja completa".
 - **Tiempos y checador para RH (29-oct-2026, Mario: "genera el reporte del
   área de RH a manera de información más específica en cuanto tiempos y
   checador")**: Recursos humanos → **Tiempos y checador** (`/rh/tiempos`,
