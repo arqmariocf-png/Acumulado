@@ -32,6 +32,9 @@ export interface DocumentoCxc {
   proyecto_id: string | null;
   obra: string | null;
   cfdi_id: string | null;
+  concepto?: string | null;
+  /** Estado de cuenta (cxc_archivos) del que salió un saldo inicial. */
+  archivo_id?: string | null;
 }
 
 export interface ClienteCxc {
@@ -465,4 +468,136 @@ export function filtrarOvPendientes(ovs: OvPendiente[], f: FiltroOv): OvPendient
 export function sumaOv(ovs: OvPendiente[], ids: Iterable<string>): number {
   const set = new Set(ids);
   return r2(ovs.filter((o) => set.has(o.id)).reduce((s, o) => s + o.saldo, 0));
+}
+
+// ---------- Filtro por empresa y clientes específicos (4-nov-2026, Mario) ----------
+
+export interface FiltroCartera {
+  empresaId: string | null;
+  /** Claves de cliente; vacío = todos. */
+  clientes: string[];
+}
+
+/** Deja solo los documentos de esa empresa y de esos clientes. */
+export function filtrarCartera<T extends Pick<DocumentoCxc, "empresa_id" | "cliente_clave">>(docs: T[], f: FiltroCartera): T[] {
+  const set = new Set(f.clientes);
+  return docs.filter((d) => (!f.empresaId || d.empresa_id === f.empresaId) && (set.size === 0 || set.has(d.cliente_clave)));
+}
+
+/** Opciones de cliente para el filtro: una por clave, con su nombre y las empresas donde aparece. */
+export function opcionesClientes(docs: DocumentoCxc[], clientes: ClienteCxc[]): { clave: string; nombre: string; empresas: string[] }[] {
+  const porClave = new Map(clientes.map((c) => [c.clave, c]));
+  const m = new Map<string, { clave: string; nombre: string; empresas: string[] }>();
+  for (const d of docs) {
+    let o = m.get(d.cliente_clave);
+    if (!o) {
+      o = { clave: d.cliente_clave, nombre: porClave.get(d.cliente_clave)?.nombre ?? d.cliente, empresas: [] };
+      m.set(d.cliente_clave, o);
+    }
+    if (!o.empresas.includes(d.empresa)) o.empresas.push(d.empresa);
+  }
+  return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+// ---------- Estado de cuenta de clientes (Excel) y saldos iniciales ----------
+// Mario, 4-nov-2026: "poder consultar el archivo que adjunto para tomar esta
+// base para la conciliación y de ahí arrancamos de ceros". El Excel de Laura
+// ("ESTADO DE CUENTA CLIENTES AEP 2026") trae una hoja resumen con Cliente y
+// Total por cliente; de ahí salen los saldos iniciales con fecha de corte. Lo
+// facturado hasta el corte ya está dentro del saldo y la cartera no lo repite.
+
+export interface CorteCxc {
+  empresa_id: string;
+  cliente_clave: string;
+  corte: string;
+}
+
+export function corteDe(cortes: CorteCxc[], empresaId: string, clienteClave: string): string | null {
+  let c: string | null = null;
+  for (const k of cortes) if (k.empresa_id === empresaId && k.cliente_clave === clienteClave && (!c || k.corte > c)) c = k.corte;
+  return c;
+}
+
+/** Misma idea que fn_proveedor_clave: sin acentos, sin puntuación ni S.A. de C.V. */
+export function claveNombre(t: string): string {
+  return (t ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\b(S ?A ?B?|S ?A ?P ?I|S ?DE ?R ?L|S ?C|S ?A|DE|C ?V|SRL|SAPI|SAB|SA|CV|RL|SC|MI|R ?L)\b/g, " ")
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+export interface SaldoHoja {
+  fila: number;
+  nombre: string;
+  saldo: number;
+  /** Texto entre paréntesis del nombre ("PAGA MARIO"), por si cambia a quién se cobra. */
+  nota: string | null;
+}
+
+const numero = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const t = v.replace(/[$,\s]/g, "");
+    if (!t || !/^-?\d+(\.\d+)?$/.test(t)) return null;
+    return Number(t);
+  }
+  return null;
+};
+
+/** Lee la hoja resumen: a partir del encabezado "Cliente" toma cada renglón con
+ * nombre y total hasta el renglón TOTAL (lo que siga, como una tabla dinámica
+ * de obras, no entra). Sin encabezado, toma cualquier renglón texto + número
+ * hasta el primer TOTAL. Acepta filas como arreglos de celdas. */
+export function saldosDesdeHoja(filas: (string | number | null | undefined)[][]): SaldoHoja[] {
+  const out: SaldoHoja[] = [];
+  let desde = 0;
+  for (let i = 0; i < filas.length; i++) {
+    if ((filas[i] ?? []).some((c) => typeof c === "string" && /^cliente$/i.test(c.trim()))) { desde = i + 1; break; }
+  }
+  for (let i = desde; i < filas.length; i++) {
+    const f = filas[i] ?? [];
+    const iTexto = f.findIndex((c) => typeof c === "string" && c.trim() !== "");
+    if (iTexto < 0) continue;
+    const texto = String(f[iTexto]).trim();
+    if (/^total/i.test(texto)) break;
+    let saldo: number | null = null;
+    for (let j = iTexto + 1; j < f.length; j++) { const n = numero(f[j]); if (n !== null) { saldo = n; break; } }
+    if (saldo === null || /^(etiquetas de fila|columna\d*)$/i.test(texto)) continue;
+    const m = texto.match(/\(([^)]+)\)/);
+    out.push({ fila: i + 1, nombre: texto.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim(), saldo: Math.round(saldo * 100) / 100, nota: m ? m[1].trim() : null });
+  }
+  return out;
+}
+
+export interface CandidatoCliente {
+  clave: string;
+  nombre: string;
+  rfc?: string | null;
+  /** Otros nombres con los que se conoce (razón social, código). */
+  alias?: string[];
+}
+
+/** Para cada saldo leído, la clave de cliente que mejor empata por nombre
+ * (igual, o uno contiene al otro, sin acentos ni S.A. de C.V.); null si no hay. */
+export function emparejarCliente(nombre: string, candidatos: CandidatoCliente[]): CandidatoCliente | null {
+  const k = claveNombre(nombre);
+  if (!k) return null;
+  const nombres = (c: CandidatoCliente) => [c.nombre, ...(c.alias ?? [])].map(claveNombre).filter(Boolean);
+  const exacto = candidatos.find((c) => nombres(c).includes(k));
+  if (exacto) return exacto;
+  const parcial = candidatos.filter((c) => nombres(c).some((n) => n.length >= 4 && (n.includes(k) || k.includes(n))));
+  if (parcial.length === 1) return parcial[0];
+  if (parcial.length > 1) parcial.sort((a, b) => Math.max(...nombres(b).map((n) => n.length)) - Math.max(...nombres(a).map((n) => n.length)));
+  return parcial[0] ?? null;
+}
+
+/** Folio único por empresa y tipo: "Saldo inicial 29-oct-2026 · Ventosa". */
+export function folioSaldoInicial(corte: string, nombre: string): string {
+  const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const d = Number(corte.slice(8, 10)), m = Number(corte.slice(5, 7)) - 1, a = corte.slice(0, 4);
+  return `Saldo inicial ${d}-${meses[m] ?? "?"}-${a} · ${nombre.trim().slice(0, 60)}`;
 }

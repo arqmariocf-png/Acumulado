@@ -4,7 +4,14 @@ import {
   agendaCobranza,
   antiguedadPorCliente,
   aplicarCobro,
+  claveNombre,
   cobranzaEsperada,
+  corteDe,
+  emparejarCliente,
+  filtrarCartera,
+  folioSaldoInicial,
+  opcionesClientes,
+  saldosDesdeHoja,
   cuadreEntreEmpresas,
   docDesdeOv,
   estatusDocumento,
@@ -170,4 +177,60 @@ test("OV pendientes: filtro por empresa y cliente, documento para aplicar y suma
   // El cobro se aplica solo a las OV elegidas, la más vencida primero.
   const r = aplicarCobro([OVS[0], OVS[1]].map((o) => docDesdeOv(o, HOY)), 1_500);
   assert.deepEqual(r.aplicaciones.map((a) => [a.doc.folio, a.aplica]), [["OV IA-OV-0003", 1_000], ["OV IA-OV-0010", 500]]);
+});
+
+test("filtro por empresa y clientes específicos, y opciones de cliente", () => {
+  const docs = [
+    doc({ folio: "A", total: 100, fecha: "2026-10-01", vence: "2026-10-31", empresa_id: "aep", empresa: "AEP", cliente_clave: "VAR", cliente: "Ventosa" }),
+    doc({ folio: "B", total: 100, fecha: "2026-10-01", vence: "2026-10-31", empresa_id: "aep", empresa: "AEP", cliente_clave: "ERG", cliente: "Ergodinova" }),
+    doc({ folio: "C", total: 100, fecha: "2026-10-01", vence: "2026-10-31", empresa_id: "csc", empresa: "CSC", cliente_clave: "VAR", cliente: "Ventosa" }),
+  ];
+  assert.deepEqual(filtrarCartera(docs, { empresaId: "aep", clientes: [] }).map((d) => d.folio), ["A", "B"]);
+  assert.deepEqual(filtrarCartera(docs, { empresaId: null, clientes: ["VAR"] }).map((d) => d.folio), ["A", "C"]);
+  assert.deepEqual(filtrarCartera(docs, { empresaId: "csc", clientes: ["VAR", "ERG"] }).map((d) => d.folio), ["C"]);
+  const op = opcionesClientes(docs, [{ clave: "VAR", nombre: "Ventosa Arquitectos", rfc: null, dias_credito: 30, linea_credito: null, pue_a_credito: false, area: null, responsable: null, notas: null }]);
+  assert.deepEqual(op, [{ clave: "ERG", nombre: "Ergodinova", empresas: ["AEP"] }, { clave: "VAR", nombre: "Ventosa Arquitectos", empresas: ["AEP", "CSC"] }]);
+});
+
+test("saldos desde la hoja resumen del estado de cuenta de clientes", () => {
+  const hoja: (string | number | null)[][] = [
+    [null, "Cuentas Por Cobrar"],
+    [null, null, null, "Periodo", "Agosto2026"],
+    [null, "Cliente", "Total ", "Columna1"],
+    [null, "Ventosa Arquitectos ", 58678.02],
+    [null, "Ventosa Arquitectos (PAGA MARIO)", 51016.28679999999],
+    [null, "Ergodinova ", "705,074.18"],
+    [null, "Sin número", null],
+    [null, "TOTAL CUENTAS POR COBRAR", 814768.48],
+    [null, "SALDOS MARIO", "SALDOS MARIO"],
+    [null, "Etiquetas de fila", "Saldo Pendiente"],
+    [null, "Parque Real", 9299.95],
+  ];
+  const s = saldosDesdeHoja(hoja);
+  assert.deepEqual(s.map((x) => [x.nombre, x.saldo, x.nota]), [
+    ["Ventosa Arquitectos", 58678.02, null],
+    ["Ventosa Arquitectos", 51016.29, "PAGA MARIO"],
+    ["Ergodinova", 705074.18, null],
+  ]);
+  assert.equal(s[0].fila, 4);
+  // Sin encabezado "Cliente": texto + número hasta TOTAL.
+  assert.deepEqual(saldosDesdeHoja([["Africam", 61829.88], ["Total", 61829.88]]).map((x) => x.saldo), [61829.88]);
+});
+
+test("emparejar el nombre de la hoja con un cliente conocido", () => {
+  const cand = [
+    { clave: "ERG080519940", nombre: "ERGODINOVA", rfc: "ERG080519940", alias: ["Ergodinova S.A. de C.V."] },
+    { clave: "CSC100514JB7", nombre: "CONSTRUCTORA SUPERVISION Y CONSULTORIA LOMA", alias: ["Constructora, Supervisión y Consultoría LOMA"] },
+    { clave: "VAR170831QZ0", nombre: "VENTOSA ARQUITECTOS" },
+    { clave: "COFM890711MGA", nombre: "MARIO CONTRERAS FARFAN", alias: ["MCF"] },
+  ];
+  assert.equal(emparejarCliente("Ergodinova ", cand)?.clave, "ERG080519940");
+  assert.equal(emparejarCliente("Constructora, Supervisión y Consultoría Loma", cand)?.clave, "CSC100514JB7");
+  assert.equal(emparejarCliente("Ventosa", cand)?.clave, "VAR170831QZ0");
+  assert.equal(emparejarCliente("MCF", cand)?.clave, "COFM890711MGA");
+  assert.equal(emparejarCliente("Africam", cand), null);
+  assert.equal(claveNombre("Mallas y Clavos Clavicón, S.A. de C.V."), "MALLAS Y CLAVOS CLAVICON");
+  assert.equal(corteDe([{ empresa_id: "aep", cliente_clave: "X", corte: "2026-09-30" }, { empresa_id: "aep", cliente_clave: "X", corte: "2026-10-29" }], "aep", "X"), "2026-10-29");
+  assert.equal(corteDe([], "aep", "X"), null);
+  assert.equal(folioSaldoInicial("2026-10-29", "Ventosa"), "Saldo inicial 29-oct-2026 · Ventosa");
 });
