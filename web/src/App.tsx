@@ -77,6 +77,7 @@ const SuscripcionAdmin = lazy(() => import("./pages/admin/Suscripcion").then((m)
 const RH = lazy(() => import("./pages/RH").then((m) => ({ default: m.RH })));
 const EvaluacionDesempeno = lazy(() => import("./pages/rh/EvaluacionDesempeno").then((m) => ({ default: m.EvaluacionDesempeno })));
 const ReporteDirectorRh = lazy(() => import("./pages/rh/ReporteDirector").then((m) => ({ default: m.ReporteDirector })));
+const ReportesAreasDireccion = lazy(() => import("./pages/direccion/ReportesAreas").then((m) => ({ default: m.ReportesAreas })));
 const ReporteTiemposRh = lazy(() => import("./pages/rh/ReporteTiempos").then((m) => ({ default: m.ReporteTiempos })));
 const RequisicionesLayout = lazy(() => import("./pages/requisiciones/RequisicionesLayout").then((m) => ({ default: m.RequisicionesLayout })));
 const MisRequisiciones = lazy(() => import("./pages/requisiciones/MisRequisiciones").then((m) => ({ default: m.MisRequisiciones })));
@@ -351,6 +352,7 @@ function Enrutador() {
           {/* Reporte de RH para el director general (29-oct-2026): la función devuelve null a quien no sea el admin maestro. */}
           <Route element={<ProtectedRoute roles={["admin"]} modulo="rh" />}>
             <Route path="/rh/reporte-director" element={<ReporteDirectorRh />} />
+            <Route path="/direccion/reportes-areas" element={<ReportesAreasDireccion />} />
           </Route>
           {/* Tiempos y checador (29-oct-2026): RH, dirección y admin. */}
           <Route element={<ProtectedRoute roles={["rh", "direccion"]} modulo="rh" />}>
