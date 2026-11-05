@@ -135,13 +135,11 @@ export function Tableros() {
         )}
       </div>
 
-      <MisActividades />
-
       {mostrarForm && (
-        <form onSubmit={onSubmit} className="mb-6 max-w-xl rounded border border-slate-200 bg-white p-4">
+        <form onSubmit={onSubmit} className="mb-6 max-w-xl rounded border border-slate-300 bg-white p-4 shadow-sm">
           <div className="mb-3">
             <label className={etiquetaCampo}>Nombre *</label>
-            <input name="nombre" required className={campoTexto} placeholder="Ej. Ventas septiembre, Obra Cholula…" />
+            <input name="nombre" required autoFocus className={campoTexto} placeholder="Ej. Ventas septiembre, Obra Cholula…" />
           </div>
           <div className="mb-3">
             <label className={etiquetaCampo}>Descripción</label>
@@ -176,6 +174,9 @@ export function Tableros() {
           {error && <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         </form>
       )}
+
+      <MisActividades />
+
 
       {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
