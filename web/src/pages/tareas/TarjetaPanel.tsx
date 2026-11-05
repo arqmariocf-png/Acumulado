@@ -4,6 +4,8 @@ import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
 import { FechaCompromiso } from "./FechaCompromiso";
+import { CierreTarjeta } from "./CierreTarjeta";
+import { moverOSolicitarCierre } from "../../lib/cierreTarjeta";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, TableroColumna, Tarjeta, TarjetaActividad, TarjetaArchivo, TarjetaComentario } from "../../types/database";
 import { rutaVerArchivo } from "../../lib/verArchivo";
@@ -150,6 +152,22 @@ export function TarjetaPanel({
       if (errUpdate) throw errUpdate;
     },
     onSuccess: invalidarTodo,
+    onError: (err) => setError((err as Error).message),
+  });
+
+  // Mover de columna con el candado (5-nov-2026): a Hecho solo el jefe o
+  // quien la asignó; los demás piden terminarla y el jefe la autoriza.
+  const mover = useMutation({
+    mutationFn: async ({ columnaId, destino }: { columnaId: string; destino?: string }) => {
+      const resultado = await moverOSolicitarCierre(tarjetaId, { columna_id: columnaId });
+      if (resultado === "movida") notificarTarjeta(tarjetaId, "movida", destino);
+      return resultado;
+    },
+    onSuccess: () => {
+      invalidarTodo();
+      queryClient.invalidateQueries({ queryKey: ["tarjeta-cierres", tarjetaId] });
+      queryClient.invalidateQueries({ queryKey: ["cierres-pendientes"] });
+    },
     onError: (err) => setError((err as Error).message),
   });
 
@@ -364,8 +382,7 @@ export function TarjetaPanel({
               value={tarjeta.columna_id}
               onChange={(e) => {
                 const destino = columnas.find((c) => c.id === e.target.value)?.nombre;
-                actualizar.mutate({ columna_id: e.target.value });
-                notificarTarjeta(tarjetaId, "movida", destino);
+                mover.mutate({ columnaId: e.target.value, destino });
               }}
               className={campoTexto}
             >
@@ -428,6 +445,7 @@ export function TarjetaPanel({
             </details>
           </div>
           <FechaCompromiso tarjeta={tarjeta} nombrePorId={nombrePorId} onCambio={invalidarTodo} />
+          <CierreTarjeta tarjeta={tarjeta} columnas={columnas} nombrePorId={nombrePorId} onCambio={invalidarTodo} />
           <div>
             <label className={etiquetaCampo}>Orden de venta</label>
             {ordenVenta ? (

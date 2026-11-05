@@ -124,9 +124,9 @@ returns jsonb language sql stable security definer set search_path = public as $
   cf as (select c.*, e.codigo as empresa from public.cfdi c join emp e on e.id = c.empresa_id
           where c.fecha between p_desde and p_hoy and coalesce(c.tipo_comprobante, 'I') <> 'N'),
   sat as (
-    select e.id as empresa_id, e.codigo as empresa, s.tipo, s.hasta, s.estado, s.mensaje
+    select e.id as empresa_id, e.codigo as empresa, t.tipo, s.hasta, s.estado, s.mensaje
       from emp e
-      cross join (values ('emitidos'), ('recibidos')) t(tipo)
+      cross join (values ('emitido'), ('recibido')) t(tipo)
       left join lateral (
         select max(fecha_final)::date as hasta,
                (select estado from public.sat_descargas x where x.empresa_id = e.id and x.tipo = t.tipo order by created_at desc limit 1) as estado,

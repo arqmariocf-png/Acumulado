@@ -825,6 +825,10 @@ export interface Tarjeta {
   fecha_limite: string | null;
   /** Veces que se movió la fecha compromiso con autorización (KPI). */
   fecha_cambios: number;
+  /** Candado de cierre (5-nov-2026): quién la terminó y quién lo autorizó. */
+  terminada_en?: string | null;
+  terminada_por?: string | null;
+  terminada_autorizada_por?: string | null;
   orden: number;
   archivada: boolean;
   /** Eliminada sin borrar (6-oct-2026): se ve y se restaura desde el tablero. */

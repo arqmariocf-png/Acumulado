@@ -109,6 +109,42 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Eliminar ya no borra: `tarjetas.eliminada_en/_por` (+ archivada) y el
   tablero tiene "Ver archivadas y eliminadas" para reabrir/restaurar
   (`20261006170000`).
+- **Candado para terminar tareas (5-nov-2026, Mario: "vamos a meter un
+  candado para mover las tarjetas de en proceso a hecho únicamente con
+  autorización de su jefe directo porque están haciéndolo de manera mañosa
+  para saltarse el proceso")** (`20261105140000`, aplicada como
+  `tarjetas_cierre_autorizado` y `_2_columnas_cierre`): mismo molde que la
+  fecha compromiso. Trigger `tarjetas_cierre_guard` (before update of
+  columna_id): entrar a una **columna de cierre** (`fn_tablero_columnas_cierre`:
+  las que se llaman Hecho/Terminado/Listo/Completado/Finalizado + la última
+  del tablero; en "RH · Actividades" Hecho → Archivados las dos cierran y
+  moverse entre ellas es libre) solo lo hace directo `auth_puede_cerrar_tarjeta`
+  = `auth_es_jefe_de_tarjeta` (supervisor de la tarjeta, jefe RH del
+  responsable, responsable del proyecto, rol empresa, admin/corporativo/
+  dirección) o quien la creó y la asignó a OTRA persona (no a sí mismo ni como
+  corresponsable). Los demás piden terminarla con nota
+  (`fn_tarjeta_terminar_solicitar` → `tarjeta_cierres` pendiente + push a
+  supervisor/jefe RH/creador/responsable del proyecto, si nadie a dirección) y
+  el jefe autoriza o rechaza (`fn_tarjeta_terminar_resolver`: pasa la tarjeta a
+  `fn_tablero_columna_hecha` —primera columna de cierre por nombre, si no la
+  última— con `tarjetas.terminada_por` = quien pidió y
+  `terminada_autorizada_por` = quien autorizó; nadie autoriza lo suyo salvo
+  admin/corporativo/dirección). Cron y cierres automáticos por trigger
+  (Adquira, recurrentes) pasan (`pg_trigger_depth() > 1` o sin uid). Sacar de
+  Hecho no cambia (limpia `terminada_*`). Pantallas: `lib/cierreTarjeta.ts`
+  (`moverOSolicitarCierre`: intenta el update y, si la base dice "requiere
+  autorización", pide la nota y crea la solicitud; reglas puras en
+  `lib/cierreTarjetaReglas.ts`, con pruebas) en el tablero (arrastrar), el
+  panel (selector de columna + `tareas/CierreTarjeta.tsx`: pendiente con
+  Autorizar/Rechazar para el jefe, "Pedir terminar" para los demás, quién la
+  terminó y quién autorizó, historial) y RH › Actividades; Mis actividades
+  trae arriba "Por autorizar como terminadas" (`fn_tarjeta_cierres_pendientes`)
+  y "Esperando autorización de tu jefe". Probado en rollback: Jonathan
+  bloqueado y pide; no se autoriza solo; Alma no puede; su jefe RH ve la
+  pendiente y autoriza (queda terminada_por Jonathan); el jefe y Mario mueven
+  directo; Eréndira (RH, no jefa) bloqueada. **Tarjeta con jefe = nadie**
+  (sin supervisor, sin jefe RH, creada por la misma persona): el aviso va a
+  dirección y la resuelve admin/dirección/corporativo.
 - **Quien está etiquetado ve su tarjeta (21-oct-2026, Mario: "etiqueté a
   Fernanda en una tarea en un proyecto que ella no participa; debería salirle
   como pendiente"; "cuando dan click a sus pendientes no los redirige")**:
@@ -2518,6 +2554,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   finalizado = aceptación del cliente, y la columna "saldo por cobrar" del
   control ($2,566) no cuadra con a cobrar − cobrado ($416,377 en los 63 folios
   con monto y sin cobro; en otros el cobro rebasa el monto): el reporte muestra los dos y lo deja en "por revisar".
+  **Ojo (5-nov, tarde)**: la primera versión de contabilidad comparaba
+  `sat_descargas.tipo` con 'emitidos'/'recibidos' (la tabla guarda
+  'emitido'/'recibido') y "SAT al día" salía 0 de 8; corregido
+  (`_5_contabilidad_sat`). Y `./scripts/validar-sql.sh` se corre desde la
+  raíz del repo: desde `web/` da exit 127 sin aplicar nada, y el wrapper en
+  segundo plano reporta exit 0 igual; **revisar siempre la línea `EXIT=` del
+  log**, no la notificación.
 - **Tiempos y checador para RH (29-oct-2026, Mario: "genera el reporte del
   área de RH a manera de información más específica en cuanto tiempos y
   checador")**: Recursos humanos → **Tiempos y checador** (`/rh/tiempos`,
