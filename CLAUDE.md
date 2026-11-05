@@ -1439,6 +1439,29 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   método efectivo sin cuenta (sale de Tesorería → Efectivo por confirmar)
   (`20261021260000`). La corrección de la 41381 por SQL se quedó esperando
   autorización del MCP (UPDATE de datos): la hace Delia o Laura con el botón.
+  **Regresar un pago con error (5-nov-2026, Mario: "Delia me comenta que
+  se agregue un botón en los pagos porque hay errores y le llegan en
+  transferencia cuando debería ser en efectivo; con esto regresa el error y
+  lo documenta")** (`20261105150000`, aplicada como `pagos_regresar_error`):
+  en Tesorería cada pago pendiente trae "Regresar con error"
+  (`components/RegresarPagoError.tsx`; reglas y textos en
+  `lib/regresarPago.ts`, con pruebas): tipo de error (debe ser en efectivo /
+  cuenta / monto / proveedor / otro) + motivo (obligatorio salvo efectivo) →
+  `fn_pago_regresar_error(pago, tipo, motivo)` (definer; admin, dirección o
+  corporativo en su alcance; solo pendientes; no se repite): marca
+  `pagos_programados.devuelto_en/_por/_por_nombre/_tipo/_motivo`, anota en
+  `notas` "[dd/mm/aaaa: X regresó el pago: motivo]" y avisa por push a
+  dirección (`fn_push_aviso` a `fn_direccion_de`). Con "debe ser en efectivo"
+  además pasa el pago a método efectivo sin cuenta y la OC a condición
+  efectivo: sale de Tesorería y entra a Efectivo por confirmar. Los demás
+  tipos lo esconden de Tesorería (`visibleEnTesoreria`) hasta que dirección lo
+  corrija en Programación de pagos, sección ámbar "Regresados por tesorería
+  con error" (`#pagos-devueltos`) y pulse "Ya quedó corregido"
+  (`fn_pago_devolucion_resolver(pago, nota)`: limpia la marca, anota y vuelve
+  a Tesorería). Nunca se cancela ni se borra. `v_pagos_programados` trae las
+  5 columnas al final. Probado en rollback: Delia regresa por efectivo (pago y
+  OC a efectivo, aviso a Laura) y por cuenta (exige motivo; repetir bloqueado);
+  Laura lo da por corregido; almacén bloqueado.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI

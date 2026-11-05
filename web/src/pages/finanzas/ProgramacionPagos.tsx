@@ -11,6 +11,7 @@ import { AltaOcManual } from "../../components/AltaOcManual";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
 import { TraspasosNomina } from "./TraspasosNomina";
+import { estaDevuelto, textoDevolucion } from "../../lib/regresarPago";
 
 interface PagoProgramado {
   id: string;
@@ -31,6 +32,11 @@ interface PagoProgramado {
   clabe: string | null;
   banco_proveedor: string | null;
   comprobante_nombre: string | null;
+  /** Regresado por tesorería con error (5-nov-2026). */
+  devuelto_en: string | null;
+  devuelto_por_nombre: string | null;
+  devuelto_tipo: string | null;
+  devuelto_motivo: string | null;
 }
 
 interface Cuenta {
@@ -135,6 +141,22 @@ export function ProgramacionPagos() {
   const nombreEmpresa = useMemo(() => new Map((empresas ?? []).map((e) => [e.id, e.nombre])), [empresas]);
   const cuentaTexto = useMemo(() => new Map((cuentas ?? []).map((c) => [c.id, `${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`])), [cuentas]);
 
+  // Regresados por tesorería con error (5-nov-2026, Delia): dirección los
+  // corrige aquí y los da por corregidos; mientras, no salen en Tesorería.
+  const resolverDevolucion = useMutation({
+    mutationFn: async (p: PagoProgramado) => {
+      const nota = window.prompt(`¿Qué se corrigió del pago a ${p.beneficiario}? (opcional)`, "");
+      if (nota === null) return;
+      const { error: err } = await supabase.rpc("fn_pago_devolucion_resolver", { p_pago: p.id, p_nota: nota.trim() || null });
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      invalidar();
+      queryClient.invalidateQueries({ queryKey: ["tesoreria"] });
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+  const devueltos = (pagos ?? []).filter((p) => p.estatus === "pendiente" && estaDevuelto(p) && (!filtroEmpresa || p.empresa_id === filtroEmpresa));
   const visibles = (pagos ?? []).filter((p) => (!filtroEmpresa || p.empresa_id === filtroEmpresa) && (verCerrados || p.estatus === "pendiente"));
   const pendientes = (pagos ?? []).filter((p) => p.estatus === "pendiente");
   const grupos = useMemo(() => {
@@ -279,6 +301,51 @@ export function ProgramacionPagos() {
       <TraspasosNomina modo="nomina" empresas={empresas ?? []} cuentas={cuentas ?? []} hoy={hoy} filtroEmpresa={filtroEmpresa} />
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+      {devueltos.length > 0 && (
+        <div id="pagos-devueltos" className="mb-4 scroll-mt-20 rounded border border-amber-300 bg-amber-50">
+          <div className="flex items-center justify-between border-b border-amber-200 px-3 py-2">
+            <p className="text-sm font-semibold text-amber-900">Regresados por tesorería con error ({devueltos.length})</p>
+            <p className="text-sm tabular-nums text-amber-800">{moneda(devueltos.reduce((s, p) => s + Number(p.monto), 0))}</p>
+          </div>
+          <p className="px-3 pt-2 text-xs text-amber-800">Corrige el pago (cuenta, monto, proveedor…) y dalo por corregido para que regrese a Tesorería. Los que pasaron a efectivo se confirman en Efectivo por confirmar.</p>
+          <table className="w-full text-sm">
+            <tbody>
+              {devueltos.map((p) => (
+                <tr key={p.id} className="border-t border-amber-200">
+                  <td className="whitespace-nowrap px-3 py-2">{fechaCorta(p.fecha_programada)}</td>
+                  <td className="px-3 py-2">
+                    {p.beneficiario}
+                    <div className="text-xs text-slate-500">
+                      {nombreEmpresa.get(p.empresa_id)}
+                      {p.cuenta_id && ` · ${cuentaTexto.get(p.cuenta_id) ?? ""}`}
+                      {p.concepto && ` · ${p.concepto}`}
+                      {p.metodo === "efectivo" && " · efectivo"}
+                    </div>
+                    <div className="mt-0.5 text-xs font-medium text-amber-800">{textoDevolucion(p)}</div>
+                    {p.orden_compra_id && (
+                      <div className="mt-0.5 text-xs">
+                        <BotonVerOc ocId={p.orden_compra_id} etiqueta={`ver OC ${p.id_orden ?? ""}`} className="text-slate-600 underline" />
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-medium tabular-nums">{moneda(Number(p.monto))}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
+                    {p.metodo === "efectivo" ? (
+                      <Link to="/finanzas/efectivo" className="text-emerald-700 underline">
+                        Efectivo por confirmar
+                      </Link>
+                    ) : (
+                      <button onClick={() => resolverDevolucion.mutate(p)} disabled={resolverDevolucion.isPending} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
+                        Ya quedó corregido
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {(
         [
           ["vencidos", "Vencidos", "border-red-200"],
@@ -311,6 +378,7 @@ export function ProgramacionPagos() {
                         {p.estatus === "pagado" && p.pagado_en && ` · pagado ${p.pagado_en}`}
                         {p.estatus === "cancelado" && " · cancelado"}
                       </div>
+                      {p.estatus === "pendiente" && estaDevuelto(p) && <div className="mt-0.5 text-xs font-medium text-amber-800">{textoDevolucion(p)}</div>}
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs">
                         {p.orden_compra_id && <BotonVerOc ocId={p.orden_compra_id} etiqueta={`ver OC ${p.id_orden ?? ""}`} className="text-slate-600 underline" />}
                         <ComprobantePago pagoId={p.id} nombre={p.comprobante_nombre} compacto />

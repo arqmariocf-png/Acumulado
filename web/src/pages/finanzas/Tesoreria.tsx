@@ -12,6 +12,8 @@ import { PagosSinComprobante } from "../../components/PagosSinComprobante";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
 import { ConfirmarPagos } from "../../components/ConfirmarPagos";
+import { RegresarPagoError } from "../../components/RegresarPagoError";
+import { visibleEnTesoreria } from "../../lib/regresarPago";
 
 interface PagoVista {
   id: string;
@@ -44,6 +46,9 @@ interface PagoVista {
   oc_subtotal: number | null;
   oc_iva: number | null;
   oc_total: number | null;
+  /** Regresado a dirección con error (5-nov-2026): no se muestra hasta que lo corrijan. */
+  devuelto_en: string | null;
+  devuelto_motivo: string | null;
 }
 
 /** "Transferencia electrónica de fondos" → etiqueta corta; la tarjeta no
@@ -122,7 +127,9 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
         .order("fecha_programada")
         .order("beneficiario");
       if (err) throw err;
-      return (data ?? []) as PagoVista[];
+      // Los regresados a dirección con error (5-nov-2026) salen de aquí hasta
+      // que dirección los dé por corregidos.
+      return ((data ?? []) as PagoVista[]).filter(visibleEnTesoreria);
     },
   });
 
@@ -157,6 +164,10 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
     onError: (e: Error) => setAviso(e.message),
   });
 
+  const regresar = (mensaje: string) => {
+    setAviso(mensaje);
+    for (const k of [["tesoreria"], ["pagos-programados"], ["oc-pagos"]]) queryClient.invalidateQueries({ queryKey: k });
+  };
   const pendientes = (pagos ?? []).filter((p) => p.estatus === "pendiente" && p.fecha_programada <= hoy && (!filtroEmpresa || p.empresa_id === filtroEmpresa));
   // Todo lo que dirección dejó "programado a pago" para después: Delia lo ve
   // venir aunque no sea de hoy (Mario, 29-sep-2026).
@@ -273,9 +284,9 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
               </button>
             </p>
           )}
-          <Seccion id="por-pagar" titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
-          <Seccion titulo="Pagados hoy" grupos={porEmpresa(pagadosHoy)} vacio="Todavía no se marca ningún pago hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
-          <Seccion titulo="Programados a pago para después" grupos={porEmpresa(proximos)} vacio="Dirección no ha programado pagos para los próximos días." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} ocupado={marcar.isPending} />} />
+          <Seccion id="por-pagar" titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
+          <Seccion titulo="Pagados hoy" grupos={porEmpresa(pagadosHoy)} vacio="Todavía no se marca ningún pago hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
+          <Seccion titulo="Programados a pago para después" grupos={porEmpresa(proximos)} vacio="Dirección no ha programado pagos para los próximos días." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
           <ConfirmarPagos
             metodo="transferencia"
             id="confirmar-transferencias"
@@ -312,7 +323,7 @@ function Seccion({ id, titulo, grupos, vacio, render }: { id?: string; titulo: s
   );
 }
 
-function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta: string | null; hoy: string; onMarcar: (pagado: boolean) => void; ocupado: boolean }) {
+function FilaPago({ p, cuenta, hoy, onMarcar, onRegresado, ocupado }: { p: PagoVista; cuenta: string | null; hoy: string; onMarcar: (pagado: boolean) => void; onRegresado: (mensaje: string) => void; ocupado: boolean }) {
   const vencido = p.estatus === "pendiente" && p.fecha_programada < hoy;
   const forma = formaDePago(p.tipo_pago_backoffice);
   const desglose = desgloseIvaPago(Number(p.monto), p.oc_total, p.oc_iva);
@@ -378,9 +389,15 @@ function FilaPago({ p, cuenta, hoy, onMarcar, ocupado }: { p: PagoVista; cuenta:
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right align-top text-xs">
         {p.estatus === "pendiente" ? (
-          <button type="button" onClick={() => onMarcar(true)} disabled={ocupado} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
-            Pagado
-          </button>
+          <>
+            <button type="button" onClick={() => onMarcar(true)} disabled={ocupado} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
+              Pagado
+            </button>
+            {/* Regresar con error (5-nov-2026, Delia): llega como transferencia y debía ser efectivo, cuenta equivocada, monto… */}
+            <div className="mt-1">
+              <RegresarPagoError pagoId={p.id} beneficiario={p.beneficiario} monto={moneda(Number(p.monto))} onHecho={onRegresado} />
+            </div>
+          </>
         ) : (
           <button type="button" onClick={() => onMarcar(false)} disabled={ocupado} className="text-slate-500 underline disabled:opacity-50">
             Reabrir
