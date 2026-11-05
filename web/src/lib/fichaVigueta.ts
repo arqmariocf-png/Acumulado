@@ -1,10 +1,14 @@
 // Ficha técnica de la vigueta que produce Balken (5-nov-2026, Mario: "generemos
 // una ficha técnica de la vigueta que estamos produciendo para agregarlo al
-// cotizador de Balken"). Vigueta armada (reforzada): 3 varillas, 2 en el patín
-// inferior y 1 superior, unidas con celosía de alambrón, coladas en charola de
-// 12 m con concreto premezclado. Los datos de la ficha se editan en pantalla y
-// se recuerdan en el navegador; el acero y el peso se calculan de la armadura.
-// Puro, sin DOM: se prueba en node.
+// cotizador de Balken"). Vigueta armada: 3 varillas, 2 en el patín inferior y
+// 1 superior, unidas con celosía de alambrón, coladas en charola de 12 m con
+// concreto premezclado f'c 200. Dos versiones (5-nov-2026, Mario: "la varilla
+// es de 1/2" porque es la versión reforzada, esa que generaste es la sencilla y
+// se sugiere hasta claros máximos de 3 m, la demás sería reforzada"):
+// sencilla = varilla 3/8", claros hasta 3 m; reforzada = varilla 1/2", claros
+// mayores. Los datos de cada ficha se editan en pantalla y se recuerdan en el
+// navegador; el acero y el peso se calculan de la armadura. Puro, sin DOM: se
+// prueba en node.
 
 /** Peso por metro (kg/m) de varilla corrugada y alambrón por calibre. */
 export const PESO_KG_M: Record<string, number> = {
@@ -18,7 +22,12 @@ export const PESO_KG_M: Record<string, number> = {
 export const CALIBRES_VARILLA = ['5/16"', '3/8"', '1/2"'];
 export const CALIBRES_CELOSIA = ['1/4"', "5.5 mm", "6.0 mm"];
 
+export type VersionVigueta = "sencilla" | "reforzada";
+export const VERSIONES_VIGUETA: VersionVigueta[] = ["sencilla", "reforzada"];
+export const NOMBRE_VERSION: Record<VersionVigueta, string> = { sencilla: "Vigueta sencilla", reforzada: "Vigueta reforzada" };
+
 export interface FichaVigueta {
+  version: VersionVigueta;
   nombre: string;
   /** Peralte de la vigueta (cm). */
   peralte: number;
@@ -50,6 +59,8 @@ export interface FichaVigueta {
   bovedilla: string;
   capaCompresion: number;
   mallaCapa: string;
+  /** Claro a partir del cual se recomienda esta versión (m); 0 = desde cualquier claro. */
+  claroDesde: number;
   claroMaximo: number;
   /** Carga de servicio para la que se recomienda (kg/m²), 0 = por confirmar. */
   cargaServicio: number;
@@ -62,15 +73,17 @@ export interface FichaVigueta {
   notas: string;
 }
 
-export const FICHA_BASE: FichaVigueta = {
-  nombre: "Vigueta reforzada Balken V-12",
+/** Versión sencilla: varilla 3/8", claros hasta 3 m. */
+export const FICHA_SENCILLA: FichaVigueta = {
+  version: "sencilla",
+  nombre: "Vigueta sencilla Balken V-12",
   peralte: 12,
   anchoPatin: 12,
   anchoAlma: 8,
   seccionCm2: 100,
   largoMaximo: 12,
   multiploCorte: 10,
-  fcConcreto: 300,
+  fcConcreto: 200,
   concretoTexto: "Concreto premezclado, agregado máximo 3/8\", colado en charola metálica y curado húmedo",
   varillasInferiores: 2,
   calibreInferior: '3/8"',
@@ -83,15 +96,37 @@ export const FICHA_BASE: FichaVigueta = {
   bovedilla: "Bovedilla de cemento 15×25×56",
   capaCompresion: 5,
   mallaCapa: "Malla electrosoldada 6-6/10-10",
-  claroMaximo: 3.5,
+  claroDesde: 0,
+  claroMaximo: 3,
   cargaServicio: 0,
   apoyoMinimo: 10,
   apuntalamiento: "Puntales a cada 1.50 m como máximo, con contraflecha de 1 cm por cada metro de claro; se retiran cuando la capa de compresión alcanza su resistencia (14 días con cemento normal).",
-  usos: "Losas de entrepiso y azotea en vivienda, comercio y naves ligeras, con bovedilla de cemento o de poliestireno.",
+  usos: "Losas de entrepiso y azotea en vivienda, comercio y naves ligeras, con bovedilla de cemento o de poliestireno; claros cortos (hasta 3 m).",
   manejo: "Estibar sobre polines a 1/5 del largo por cada extremo, con el patín (varillas inferiores) hacia abajo. Izar siempre por los extremos; nunca al centro.",
   normas: "NMX-C-406-ONNCCE (sistemas de vigueta y bovedilla) · NMX-B-506 (varilla corrugada) · NMX-C-155 (concreto hidráulico).",
   notas: "",
 };
+
+/** Versión reforzada: varilla 1/2", para claros mayores a 3 m. */
+export const FICHA_REFORZADA: FichaVigueta = {
+  ...FICHA_SENCILLA,
+  version: "reforzada",
+  nombre: "Vigueta reforzada Balken V-12",
+  calibreInferior: '1/2"',
+  calibreSuperior: '1/2"',
+  claroDesde: 3,
+  claroMaximo: 3.5,
+  usos: "Losas de entrepiso y azotea en vivienda, comercio y naves ligeras, con bovedilla de cemento o de poliestireno; claros mayores a 3 m.",
+};
+
+export const FICHAS_VIGUETA: Record<VersionVigueta, FichaVigueta> = { sencilla: FICHA_SENCILLA, reforzada: FICHA_REFORZADA };
+/** La ficha de siempre (compatibilidad): la sencilla. */
+export const FICHA_BASE = FICHA_SENCILLA;
+
+/** Qué versión toca según el claro (m): hasta el claro máximo de la sencilla, sencilla; más, reforzada. */
+export function versionPorClaro(claro: number, fichas: Record<VersionVigueta, FichaVigueta> = FICHAS_VIGUETA): VersionVigueta {
+  return claro <= fichas.sencilla.claroMaximo + 1e-9 ? "sencilla" : "reforzada";
+}
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -180,13 +215,19 @@ export function svgSeccionVigueta(f: FichaVigueta): string {
 </svg>`;
 }
 
-/** Ficha técnica en una carta, para imprimir sola o anexar a la cotización. */
-export function htmlFichaVigueta(f: FichaVigueta, enc: EncabezadoFicha): string {
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha técnica · ${esc(f.nombre)}</title>
+/** Ficha técnica en carta (una hoja por versión), para imprimir sola o anexar a la cotización. */
+export function htmlFichaVigueta(f: FichaVigueta | FichaVigueta[], enc: EncabezadoFicha): string {
+  const fichas = Array.isArray(f) ? f : [f];
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha técnica · ${esc(fichas.map((x) => x.nombre).join(" · "))}</title>
 <style>${estilosFicha()}</style></head><body>
 <button class="btn" onclick="window.print()">Imprimir / guardar PDF</button>
-${cuerpoFicha(f, enc)}
+${fichas.map((x) => cuerpoFicha(x, enc)).join("\n")}
 </body></html>`;
+}
+
+/** "Hasta 3 m" o "De 3 a 3.5 m", según la versión. */
+export function textoClaro(f: FichaVigueta): string {
+  return f.claroDesde > 0 ? `De ${num(f.claroDesde, 2)} a ${num(f.claroMaximo, 2)} m` : `Hasta ${num(f.claroMaximo, 2)} m`;
 }
 
 export function estilosFicha(): string {
@@ -195,6 +236,7 @@ export function estilosFicha(): string {
   body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; margin: 0; }
   .ficha { max-width: 190mm; margin: 0 auto; padding: 12px; break-before: page; }
   .ficha:first-child { break-before: auto; }
+  .ficha .version { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 10px; background: #dbeafe; color: #1e3a8a; font-size: 11px; font-weight: 600; }
   .ficha .cab { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 3px solid #1d4ed8; padding-bottom: 8px; margin-bottom: 10px; }
   .ficha .cab img { height: 52px; max-width: 170px; object-fit: contain; }
   .ficha .emp { font-size: 18px; font-weight: 800; color: #1d4ed8; }
@@ -224,7 +266,7 @@ export function cuerpoFicha(f: FichaVigueta, enc: EncabezadoFicha): string {
       ${enc.logoUrl ? `<img src="${esc(enc.logoUrl)}" alt="" onerror="this.style.display='none'">` : ""}
       <div><div class="emp">${esc(enc.empresa)}</div>${enc.telefono ? `<div style="font-size:11px;color:#555">Tel. ${esc(enc.telefono)}</div>` : ""}${enc.correo ? `<div style="font-size:11px;color:#555">${esc(enc.correo)}</div>` : ""}</div>
     </div>
-    <div class="tit"><div class="t">FICHA TÉCNICA</div><div class="n">${esc(f.nombre)}</div><div style="font-size:11px;color:#555">${esc(enc.fecha)}</div></div>
+    <div class="tit"><div class="t">FICHA TÉCNICA</div><div class="n">${esc(f.nombre)}</div><div class="version">Versión ${esc(f.version)} · varilla ${esc(f.calibreInferior)} · claros ${esc(textoClaro(f).toLowerCase())}</div><div style="font-size:11px;color:#555">${esc(enc.fecha)}</div></div>
   </div>
   <div class="chips">
     <div class="chip"><div class="v">${esc(num(f.peralte, 0))} cm</div><div class="k">Peralte</div></div>
@@ -255,7 +297,7 @@ export function cuerpoFicha(f: FichaVigueta, enc: EncabezadoFicha): string {
   <table>
     <tr><th>Separación entre ejes</th><td>${esc(num(f.separacionEjes, 2))} m con ${esc(f.bovedilla)}</td></tr>
     <tr><th>Capa de compresión</th><td>${esc(num(f.capaCompresion, 0))} cm de concreto con ${esc(f.mallaCapa)}</td></tr>
-    <tr><th>Claro recomendado</th><td>Hasta ${esc(num(f.claroMaximo, 2))} m${f.cargaServicio > 0 ? ` para una carga de servicio de ${esc(num(f.cargaServicio, 0))} kg/m²` : ` <span class="ojo">(carga de servicio por confirmar con cálculo estructural)</span>`}</td></tr>
+    <tr><th>Claro recomendado</th><td>${esc(textoClaro(f))}${f.cargaServicio > 0 ? ` para una carga de servicio de ${esc(num(f.cargaServicio, 0))} kg/m²` : ` <span class="ojo">(carga de servicio por confirmar con cálculo estructural)</span>`}</td></tr>
     <tr><th>Apoyo mínimo</th><td>${esc(num(f.apoyoMinimo, 0))} cm en cada extremo</td></tr>
     <tr><th>Apuntalamiento</th><td>${esc(f.apuntalamiento)}</td></tr>
   </table>
@@ -264,6 +306,6 @@ export function cuerpoFicha(f: FichaVigueta, enc: EncabezadoFicha): string {
   <p><strong>Manejo y estiba:</strong> ${esc(f.manejo)}</p>
   <p><strong>Normas de referencia:</strong> ${esc(f.normas)}</p>
   ${f.notas ? `<p><strong>Notas:</strong> ${esc(f.notas)}</p>` : ""}
-  <div class="pie">Los claros y cargas son orientativos para el sistema descrito; el diseño de cada losa se confirma con cálculo estructural. Elaboró: ${esc(enc.elaboro ?? "—")}.</div>
+  <div class="pie">Los claros y cargas son orientativos para el sistema descrito; el diseño de cada losa se confirma con cálculo estructural. ${f.version === "sencilla" ? "Para claros mayores se usa la versión reforzada (varilla 1/2\")." : "Para claros cortos (hasta 3 m) se usa la versión sencilla (varilla 3/8\")."} Elaboró: ${esc(enc.elaboro ?? "—")}.</div>
 </div>`;
 }

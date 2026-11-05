@@ -75,6 +75,33 @@ test("cotizar arma líneas, IVA y precio por m²", () => {
   assert.equal(c.precioPorM2, Number((4680 / 14).toFixed(2)));
 });
 
+test("sencilla hasta 3 m de claro y reforzada en claros mayores, una línea por versión y longitud", () => {
+  const d = despiezar(
+    [
+      { nombre: "Baño", claro: 2.5, ancho: 1.4, cantidad: 1 },
+      { nombre: "Recámara", claro: 3, ancho: 2.8, cantidad: 1 },
+      { nombre: "Sala", claro: 3.4, ancho: 2.8, cantidad: 1 },
+    ],
+    PARAMETROS_BASE,
+  );
+  assert.deepEqual(
+    d.tableros.map((t) => t.version),
+    ["sencilla", "sencilla", "reforzada"],
+  );
+  assert.deepEqual(
+    d.viguetasPorLongitud.map((v) => [v.version, v.longitud, v.piezas]),
+    [["sencilla", 2.7, 3], ["sencilla", 3.2, 5], ["reforzada", 3.6, 5]],
+  );
+  const c = cotizar(d, PARAMETROS_BASE, { ...PRECIOS_BASE, viguetaPorMetro: 100 });
+  assert.deepEqual(
+    c.lineas.map((l) => l.concepto),
+    ["Vigueta sencilla 12 cm × 2.70 m", "Vigueta sencilla 12 cm × 3.20 m", "Vigueta reforzada 12 cm × 3.60 m", "Bovedilla de cemento 15×25×56"],
+  );
+  // Sin claro de sencilla, todo es reforzada
+  const sin = despiezar([{ nombre: "A", claro: 2.5, ancho: 1.4, cantidad: 1 }], { ...PARAMETROS_BASE, claroSencillaHasta: undefined });
+  assert.equal(sin.viguetasPorLongitud[0].version, "reforzada");
+});
+
 test("htmlCotizacionBalken escapa y muestra totales", () => {
   const p = { ...PARAMETROS_BASE, peralteVigueta: 15 };
   const t = [{ nombre: "Recámara <1>", claro: 4, ancho: 3.5, cantidad: 1 }];

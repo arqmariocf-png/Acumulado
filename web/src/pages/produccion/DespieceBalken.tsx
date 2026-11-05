@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
-import { CALIBRES_CELOSIA, CALIBRES_VARILLA, FICHA_BASE, aceroVigueta, cuerpoFicha, estilosFicha, htmlFichaVigueta, pesoVigueta, type FichaVigueta } from "../../lib/fichaVigueta";
+import { CALIBRES_CELOSIA, CALIBRES_VARILLA, FICHAS_VIGUETA, NOMBRE_VERSION, VERSIONES_VIGUETA, aceroVigueta, cuerpoFicha, estilosFicha, htmlFichaVigueta, pesoVigueta, textoClaro, type FichaVigueta, type VersionVigueta } from "../../lib/fichaVigueta";
 import {
   CLARO_MAXIMO_POR_PERALTE,
   PARAMETROS_BASE,
@@ -16,7 +16,7 @@ import {
 } from "../../lib/despieceBalken";
 
 const CLAVE_LOCAL = "balken-despiece-config-v1";
-const CLAVE_FICHA = "balken-ficha-vigueta-v1";
+const CLAVE_FICHA = "balken-fichas-vigueta-v2";
 
 const campo = "w-full rounded border border-slate-300 px-2 py-1 text-sm";
 const etiqueta = "mb-0.5 block text-[11px] font-medium text-slate-600";
@@ -41,12 +41,19 @@ function leerConfig(): { parametros: ParametrosDespiece; precios: PreciosCotizac
 
 const TABLERO_NUEVO = (): Tablero => ({ nombre: "", claro: 0, ancho: 0, cantidad: 1 });
 
-function leerFicha(): FichaVigueta {
+type Fichas = Record<VersionVigueta, FichaVigueta>;
+
+function leerFichas(): Fichas {
   try {
     const crudo = localStorage.getItem(CLAVE_FICHA);
-    return crudo ? { ...FICHA_BASE, ...JSON.parse(crudo) } : FICHA_BASE;
+    if (!crudo) return FICHAS_VIGUETA;
+    const v = JSON.parse(crudo);
+    return {
+      sencilla: { ...FICHAS_VIGUETA.sencilla, ...(v.sencilla ?? {}), version: "sencilla" },
+      reforzada: { ...FICHAS_VIGUETA.reforzada, ...(v.reforzada ?? {}), version: "reforzada" },
+    };
   } catch {
-    return FICHA_BASE;
+    return FICHAS_VIGUETA;
   }
 }
 
@@ -54,22 +61,25 @@ function leerFicha(): FichaVigueta {
  * Los parámetros y precios se recuerdan en este navegador. */
 export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre: string; empresaCodigo?: string }) {
   const { perfil } = useAuth();
-  // Ficha técnica de la vigueta (5-nov-2026): se edita aquí, se imprime sola o
-  // se anexa a la cotización.
-  const [ficha, setFicha] = useState<FichaVigueta>(leerFicha);
+  // Fichas técnicas de la vigueta (5-nov-2026): sencilla (varilla 3/8", claros
+  // hasta 3 m) y reforzada (varilla 1/2", claros mayores). Se editan aquí, se
+  // imprimen solas o se anexan a la cotización.
+  const [fichas, setFichas] = useState<Fichas>(leerFichas);
+  const [versionFicha, setVersionFicha] = useState<VersionVigueta>("sencilla");
   const [fichaAbierta, setFichaAbierta] = useState(false);
   const [anexarFicha, setAnexarFicha] = useState(true);
   useEffect(() => {
     try {
-      localStorage.setItem(CLAVE_FICHA, JSON.stringify(ficha));
+      localStorage.setItem(CLAVE_FICHA, JSON.stringify(fichas));
     } catch {
       /* sin almacenamiento local */
     }
-  }, [ficha]);
+  }, [fichas]);
+  const ficha = fichas[versionFicha];
   const acero = useMemo(() => aceroVigueta(ficha), [ficha]);
   const peso = useMemo(() => pesoVigueta(ficha), [ficha]);
   function setF<K extends keyof FichaVigueta>(k: K, v: FichaVigueta[K]) {
-    setFicha((prev) => ({ ...prev, [k]: v }));
+    setFichas((prev) => ({ ...prev, [versionFicha]: { ...prev[versionFicha], [k]: v } }));
   }
   const guardado = useMemo(leerConfig, []);
   const [parametros, setParametros] = useState<ParametrosDespiece>(guardado?.parametros ?? PARAMETROS_BASE);
@@ -89,8 +99,13 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
     }
   }, [parametros, precios]);
 
-  const despiece = useMemo(() => despiezar(tableros, parametros), [tableros, parametros]);
-  const cotizacion = useMemo(() => cotizar(despiece, parametros, precios), [despiece, parametros, precios]);
+  // El claro hasta el que se cotiza la sencilla sale de su ficha técnica.
+  const parametrosEfectivos = useMemo<ParametrosDespiece>(
+    () => ({ ...parametros, claroSencillaHasta: fichas.sencilla.claroMaximo, nombreViguetaSencilla: "Vigueta sencilla", nombreVigueta: "Vigueta reforzada" }),
+    [parametros, fichas.sencilla.claroMaximo],
+  );
+  const despiece = useMemo(() => despiezar(tableros, parametrosEfectivos), [tableros, parametrosEfectivos]);
+  const cotizacion = useMemo(() => cotizar(despiece, parametrosEfectivos, precios), [despiece, parametrosEfectivos, precios]);
   const claroMaximo = CLARO_MAXIMO_POR_PERALTE[parametros.peralteVigueta];
 
   function setTablero(i: number, cambio: Partial<Tablero>) {
@@ -103,26 +118,34 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
     setPrecios((prev) => ({ ...prev, [k]: Number.isFinite(v) ? v : 0 }));
   }
 
+  /** Las fichas que van en la cotización: las versiones que aparecen en el despiece (si no hay tableros, las dos). */
+  const fichasCotizadas = useMemo(() => {
+    const usadas = new Set(despiece.viguetasPorLongitud.map((v) => v.version));
+    const lista = VERSIONES_VIGUETA.filter((v) => usadas.size === 0 || usadas.has(v));
+    return lista.map((v) => fichas[v]);
+  }, [despiece, fichas]);
+
   async function imprimir() {
     setAviso(null);
     // La pestaña se abre en el clic (móvil) y se llena cuando llega el logo.
     const ventana = window.open("", "_blank");
     const fecha = new Date().toLocaleDateString("es-MX");
     const logoUrl = anexarFicha ? await logoDeEmpresa(empresaCodigo ?? "VBB") : null;
+    const enc = { empresa: empresaNombre, empresaCodigo, logoUrl, fecha, elaboro: perfil?.nombre ?? null };
     const html = htmlCotizacionBalken(
       { empresa: empresaNombre, cliente, obra, fecha, vigencia, elaboro: perfil?.nombre ?? null, notas },
-      parametros,
+      parametrosEfectivos,
       despiece,
       cotizacion,
-      anexarFicha ? { html: cuerpoFicha(ficha, { empresa: empresaNombre, empresaCodigo, logoUrl, fecha, elaboro: perfil?.nombre ?? null }), estilos: estilosFicha() } : undefined,
+      anexarFicha ? { html: fichasCotizadas.map((f) => cuerpoFicha(f, enc)).join("\n"), estilos: estilosFicha() } : undefined,
     );
     if (!abrirParaImprimir(html, ventana)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes para imprimir.");
   }
-  async function imprimirFicha() {
+  async function imprimirFicha(cuales: FichaVigueta[]) {
     setAviso(null);
     const ventana = window.open("", "_blank");
     const logoUrl = await logoDeEmpresa(empresaCodigo ?? "VBB");
-    const html = htmlFichaVigueta(ficha, { empresa: empresaNombre, empresaCodigo, logoUrl, fecha: new Date().toLocaleDateString("es-MX"), elaboro: perfil?.nombre ?? null });
+    const html = htmlFichaVigueta(cuales, { empresa: empresaNombre, empresaCodigo, logoUrl, fecha: new Date().toLocaleDateString("es-MX"), elaboro: perfil?.nombre ?? null });
     if (!abrirParaImprimir(html, ventana)) setAviso("El navegador bloqueó la ventana. Permite ventanas emergentes para imprimir.");
   }
 
@@ -260,8 +283,8 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
             <div className="flex justify-between"><dt className="text-slate-500">Área de losa</dt><dd>{num(despiece.area)} m²</dd></div>
             <div className="flex justify-between"><dt className="text-slate-500">Viguetas</dt><dd>{despiece.viguetas} pzas · {num(despiece.metrosVigueta)} m</dd></div>
             {despiece.viguetasPorLongitud.map((v) => (
-              <div key={v.longitud} className="flex justify-between pl-3 text-xs text-slate-600">
-                <dt>{num(v.longitud)} m</dt>
+              <div key={`${v.version}:${v.longitud}`} className="flex justify-between pl-3 text-xs text-slate-600">
+                <dt>{v.version === "sencilla" ? "Sencilla" : "Reforzada"} · {num(v.longitud)} m</dt>
                 <dd>{v.piezas} pzas</dd>
               </div>
             ))}
@@ -329,7 +352,7 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
           </div>
           <div className="sm:col-span-4"><label className={etiqueta}>Notas</label><textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} className={campo} /></div>
           <label className="flex items-center gap-2 text-xs text-slate-700 sm:col-span-4">
-            <input type="checkbox" checked={anexarFicha} onChange={(e) => setAnexarFicha(e.target.checked)} /> Anexar la ficha técnica de la vigueta a la cotización (segunda hoja)
+            <input type="checkbox" checked={anexarFicha} onChange={(e) => setAnexarFicha(e.target.checked)} /> Anexar la ficha técnica de la vigueta a la cotización ({fichasCotizadas.map((f) => f.version).join(" y ")}; una hoja por versión)
           </label>
         </div>
         {aviso && <p className="mt-2 text-sm text-red-600">{aviso}</p>}
@@ -339,15 +362,26 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
       <div className="rounded border border-slate-200 bg-white p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Ficha técnica de la vigueta</h3>
+            <h3 className="text-sm font-semibold text-slate-800">Fichas técnicas de la vigueta</h3>
             <p className="text-xs text-slate-500">
-              {ficha.nombre} · {acero.descripcion} · acero {num(acero.totalKgM)} kg/m · peso {num(peso.totalKgM, 1)} kg/m · hasta {num(ficha.largoMaximo)} m
+              Sencilla (varilla {fichas.sencilla.calibreInferior}, claros {textoClaro(fichas.sencilla).toLowerCase()}) y reforzada (varilla {fichas.reforzada.calibreInferior}, claros {textoClaro(fichas.reforzada).toLowerCase()}). El cotizador usa la sencilla hasta {num(fichas.sencilla.claroMaximo)} m de claro y la reforzada en claros mayores.
             </p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => setFichaAbierta((v) => !v)} className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800">{fichaAbierta ? "Cerrar" : "Editar datos"}</button>
-            <button onClick={imprimirFicha} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Imprimir ficha técnica</button>
+            <button onClick={() => imprimirFicha([fichas.sencilla, fichas.reforzada])} className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Imprimir las dos fichas</button>
           </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {VERSIONES_VIGUETA.map((v) => (
+            <button key={v} onClick={() => setVersionFicha(v)} className={`rounded-full border px-3 py-1 text-xs font-medium ${versionFicha === v ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>
+              {NOMBRE_VERSION[v]} · {fichas[v].calibreInferior}
+            </button>
+          ))}
+          <span className="text-xs text-slate-500">
+            {ficha.nombre} · {acero.descripcion} · acero {num(acero.totalKgM)} kg/m · peso {num(peso.totalKgM, 1)} kg/m · f'c {num(ficha.fcConcreto, 0)}
+          </span>
+          <button onClick={() => imprimirFicha([ficha])} className="text-xs text-blue-700 underline">Imprimir solo esta</button>
         </div>
         {fichaAbierta && (
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
@@ -371,7 +405,8 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
             <div className="col-span-2"><label className={etiqueta}>Bovedilla</label><input value={ficha.bovedilla} onChange={(e) => setF("bovedilla", e.target.value)} className={campo} /></div>
             <div><label className={etiqueta}>Capa de compresión (cm)</label><input type="number" step="1" value={ficha.capaCompresion} onChange={(e) => setF("capaCompresion", Number(e.target.value) || 0)} className={campo} /></div>
             <div className="col-span-2"><label className={etiqueta}>Malla de la capa</label><input value={ficha.mallaCapa} onChange={(e) => setF("mallaCapa", e.target.value)} className={campo} /></div>
-            <div><label className={etiqueta}>Claro recomendado (m)</label><input type="number" step="0.1" value={ficha.claroMaximo} onChange={(e) => setF("claroMaximo", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Claro desde (m, 0 = cualquiera)</label><input type="number" step="0.1" value={ficha.claroDesde} onChange={(e) => setF("claroDesde", Number(e.target.value) || 0)} className={campo} /></div>
+            <div><label className={etiqueta}>Claro máximo (m)</label><input type="number" step="0.1" value={ficha.claroMaximo} onChange={(e) => setF("claroMaximo", Number(e.target.value) || 0)} className={campo} /></div>
             <div><label className={etiqueta}>Carga de servicio (kg/m²)</label><input type="number" step="10" value={ficha.cargaServicio || ""} placeholder="por confirmar" onChange={(e) => setF("cargaServicio", Number(e.target.value) || 0)} className={campo} /></div>
             <div><label className={etiqueta}>Apoyo mínimo (cm)</label><input type="number" step="1" value={ficha.apoyoMinimo} onChange={(e) => setF("apoyoMinimo", Number(e.target.value) || 0)} className={campo} /></div>
             <div className="col-span-2 sm:col-span-4 lg:col-span-6"><label className={etiqueta}>Apuntalamiento</label><input value={ficha.apuntalamiento} onChange={(e) => setF("apuntalamiento", e.target.value)} className={campo} /></div>
@@ -381,7 +416,7 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
             <div className="col-span-2 sm:col-span-4 lg:col-span-3"><label className={etiqueta}>Notas</label><input value={ficha.notas} onChange={(e) => setF("notas", e.target.value)} className={campo} /></div>
             <div className="col-span-2 sm:col-span-4 lg:col-span-6 flex flex-wrap items-center gap-3 text-xs text-slate-600">
               <span>Acero calculado: {num(acero.varillasKgM)} kg/m de varilla + {num(acero.celosiaKgM)} kg/m de celosía = <b>{num(acero.totalKgM)} kg/m</b>. Peso ≈ {num(peso.totalKgM, 1)} kg/m.</span>
-              <button onClick={() => setFicha(FICHA_BASE)} className="text-slate-500 underline">Restablecer ficha base</button>
+              <button onClick={() => setFichas((prev) => ({ ...prev, [versionFicha]: FICHAS_VIGUETA[versionFicha] }))} className="text-slate-500 underline">Restablecer la ficha {versionFicha}</button>
             </div>
           </div>
         )}

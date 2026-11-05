@@ -45,9 +45,26 @@ export interface ParametrosDespiece {
   traslapeMalla: number;
   /** Redondeo de la longitud de vigueta hacia arriba (m), ej. 0.10. */
   redondeoVigueta: number;
-  /** Cómo se llama la vigueta en la cotización (Balken produce vigueta
-   * reforzada: 3 varillas con celosía; 5-nov-2026). */
+  /** Cómo se llama la vigueta reforzada en la cotización (3 varillas de 1/2"
+   * con celosía; 5-nov-2026). */
   nombreVigueta?: string;
+  /** Cómo se llama la sencilla (3 varillas de 3/8"). */
+  nombreViguetaSencilla?: string;
+  /** Claro (m) hasta el que se cotiza la vigueta sencilla; más largo = reforzada
+   * (5-nov-2026, Mario: "se sugiere hasta claros máximos de 3 m, la demás sería
+   * reforzada"). Sin valor, todo se cotiza con `nombreVigueta`. */
+  claroSencillaHasta?: number;
+}
+
+export type VersionViguetaCotizada = "sencilla" | "reforzada";
+
+/** Qué versión lleva un tablero según su claro. */
+export function versionVigueta(claro: number, p: ParametrosDespiece): VersionViguetaCotizada {
+  return p.claroSencillaHasta != null && claro <= p.claroSencillaHasta + 1e-9 ? "sencilla" : "reforzada";
+}
+
+export function nombreVigueta(version: VersionViguetaCotizada, p: ParametrosDespiece): string {
+  return version === "sencilla" ? p.nombreViguetaSencilla || "Vigueta sencilla" : p.nombreVigueta || "Vigueta reforzada";
 }
 
 export const PARAMETROS_BASE: ParametrosDespiece = {
@@ -62,6 +79,8 @@ export const PARAMETROS_BASE: ParametrosDespiece = {
   traslapeMalla: 1.1,
   redondeoVigueta: 0.1,
   nombreVigueta: "Vigueta reforzada",
+  nombreViguetaSencilla: "Vigueta sencilla",
+  claroSencillaHasta: 3,
 };
 
 /** Claro máximo orientativo por peralte (m). Es una referencia práctica,
@@ -79,9 +98,11 @@ export interface DespieceTablero {
   bovedillasPorClaro: number;
   bovedillas: number;
   excedeClaro: boolean;
+  version: VersionViguetaCotizada;
 }
 
 export interface LineaVigueta {
+  version: VersionViguetaCotizada;
   longitud: number;
   piezas: number;
   metros: number;
@@ -131,6 +152,7 @@ export function despiezarTablero(t: Tablero, p: ParametrosDespiece): DespieceTab
     bovedillasPorClaro,
     bovedillas,
     excedeClaro: maximo != null && t.claro > maximo + EPS,
+    version: versionVigueta(t.claro, p),
   };
 }
 
@@ -141,11 +163,17 @@ export function despiezar(tableros: Tablero[], p: ParametrosDespiece): Despiece 
   const viguetas = detalle.reduce((s, d) => s + d.viguetas, 0);
   const metrosVigueta = detalle.reduce((s, d) => s + d.metrosVigueta, 0);
   const bovedillas = detalle.reduce((s, d) => s + d.bovedillas, 0);
-  const porLongitud = new Map<number, number>();
-  for (const d of detalle) porLongitud.set(d.longitudVigueta, (porLongitud.get(d.longitudVigueta) ?? 0) + d.viguetas);
-  const viguetasPorLongitud = [...porLongitud.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([longitud, piezas]) => ({ longitud, piezas, metros: Number((longitud * piezas).toFixed(2)) }));
+  // Una línea por versión (sencilla primero) y longitud.
+  const porLongitud = new Map<string, LineaVigueta>();
+  for (const d of detalle) {
+    const clave = `${d.version}:${d.longitudVigueta}`;
+    const linea = porLongitud.get(clave) ?? { version: d.version, longitud: d.longitudVigueta, piezas: 0, metros: 0 };
+    linea.piezas += d.viguetas;
+    porLongitud.set(clave, linea);
+  }
+  const viguetasPorLongitud = [...porLongitud.values()]
+    .sort((a, b) => (a.version === b.version ? a.longitud - b.longitud : a.version === "sencilla" ? -1 : 1))
+    .map((l) => ({ ...l, metros: Number((l.longitud * l.piezas).toFixed(2)) }));
   return {
     tableros: detalle,
     area,
@@ -212,7 +240,7 @@ export function cotizar(d: Despiece, p: ParametrosDespiece, precios: PreciosCoti
   const lineas: LineaCotizacion[] = [];
   for (const v of d.viguetasPorLongitud) {
     lineas.push({
-      concepto: `${p.nombreVigueta || "Vigueta reforzada"} ${p.peralteVigueta} cm × ${v.longitud.toFixed(2)} m`,
+      concepto: `${nombreVigueta(v.version, p)} ${p.peralteVigueta} cm × ${v.longitud.toFixed(2)} m`,
       unidad: "PZA",
       cantidad: v.piezas,
       precioUnitario: r2(v.longitud * precios.viguetaPorMetro),
