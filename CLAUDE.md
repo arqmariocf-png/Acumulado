@@ -500,13 +500,26 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `costoAceroPorMetro`, `htmlFichaVigueta`/`cuerpoFicha` con sección en SVG) y
   en Producción › Balken › Despiece (`DespieceBalken.tsx`, el cotizador de
   Balken) la sección "Ficha técnica de la vigueta": datos editables (se
-  recuerdan en el navegador, `balken-ficha-vigueta-v1`), "Imprimir ficha
-  técnica" y casilla "Anexar la ficha técnica a la cotización" (segunda hoja;
-  `htmlCotizacionBalken` acepta `anexo`). La cotización ya dice "Vigueta
-  reforzada" (`ParametrosDespiece.nombreVigueta`), no "pretensada". Por
-  confirmar con Jaime: ancho de patín/alma (12/8 cm), f'c (300), carga de
-  servicio (sale "por confirmar" hasta que se capture) y si la celosía es
-  sencilla o doble. VBB no tiene productos ni lotes de producción en la base:
+  recuerdan en el navegador, `balken-fichas-vigueta-v2`), "Imprimir las dos
+  fichas" / "Imprimir solo esta" y casilla "Anexar la ficha técnica a la
+  cotización" (una hoja por versión usada; `htmlCotizacionBalken` acepta
+  `anexo`). **Dos versiones y f'c 200 (5-nov-2026, Mario: "la varilla es de
+  1/2" porque es la versión reforzada, esa que generaste es la sencilla y se
+  sugiere hasta claros máximos de 3 m, la demás sería reforzada. Ahora el
+  concreto se manejaría en f'c 200")**: `FICHA_SENCILLA` (3 varillas de 3/8",
+  2.02 kg/m, claros hasta 3 m) y `FICHA_REFORZADA` (3 varillas de 1/2", 3.33
+  kg/m, claros de 3 a 3.5 m; `claroDesde`), las dos con f'c 200;
+  `FICHAS_VIGUETA`, `versionPorClaro`, `textoClaro`. El cotizador cotiza cada
+  tablero según su claro (`ParametrosDespiece.claroSencillaHasta` = claro
+  máximo de la ficha sencilla; `versionVigueta`, `nombreVigueta`;
+  `LineaVigueta.version`): "Vigueta sencilla 12 cm × 2.70 m" / "Vigueta
+  reforzada 12 cm × 3.60 m". La calculadora del costeo (artefacto) tiene
+  selector sencilla/reforzada y concreto f'c 200 estimado en $2,150 s/IVA
+  (sencilla ≈ $71/m, reforzada ≈ $96/m contra venta $150). Por confirmar con
+  Jaime: hasta qué claro llega la reforzada (hoy 3.5 m, el orientativo del
+  peralte 12), precio del concreto f'c 200, ancho de patín/alma (12/8 cm),
+  carga de servicio (sale "por confirmar" hasta que se capture) y si la
+  celosía es sencilla o doble. VBB no tiene productos ni lotes de producción en la base:
   el costeo por colada sigue en la calculadora hasta que se dé de alta la
   vigueta como producto con receta.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
