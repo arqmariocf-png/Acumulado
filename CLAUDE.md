@@ -2454,6 +2454,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   últimas láminas son listas acordadas (`DECISIONES_PENDIENTES`,
   `PLAN_IMPLEMENTACION`): se editan ahí cuando algo se decide o se hace. La
   hoja carta por secciones sigue como "Hoja completa".
+  **Histórico (5-nov-2026, Mario: "guarda el histórico de la presentación de
+  RH para que se vea la evolución conforme pasa el tiempo")**
+  (`20261105090000`, aplicada como `rh_reportes_historico`): tabla
+  `rh_reportes_historico` (grupo, desde/hasta/dias, `indicadores` jsonb,
+  `datos` = fn_reporte_rh_director, `tiempos` = fn_reporte_rh_tiempos sin
+  `detalle`; único por grupo, dias y hasta: generar dos veces el mismo corte
+  reemplaza; solo el admin maestro lee y escribe; frontera por grupo,
+  espectador, director_general, solo_consulta). Al generar la presentación
+  la pantalla hace upsert de la foto (`indicadoresDe`, `tiemposParaGuardar`
+  en `lib/historicoRh.ts`, con pruebas) y la presentación trae la lámina
+  **"Evolución contra los reportes anteriores"** (tabla de 17 indicadores por
+  fecha de corte, cambio contra el anterior verde/rojo, barras y "lo que más
+  cambió"; `serieEvolucion`, `renglonesEvolucion`, `cambiosDestacados`;
+  solo compara reportes del mismo periodo en días). Abajo de la pantalla,
+  "Histórico de reportes" con "Abrir presentación" (se rearma con los datos
+  guardados y el histórico previo a esa fecha). Primera foto cargada por SQL:
+  el reporte del 29-oct (30 días), para que la evolución arranque ahí.
 - **Tiempos y checador para RH (29-oct-2026, Mario: "genera el reporte del
   área de RH a manera de información más específica en cuanto tiempos y
   checador")**: Recursos humanos → **Tiempos y checador** (`/rh/tiempos`,
