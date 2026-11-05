@@ -145,6 +145,13 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   directo; Eréndira (RH, no jefa) bloqueada. **Tarjeta con jefe = nadie**
   (sin supervisor, sin jefe RH, creada por la misma persona): el aviso va a
   dirección y la resuelve admin/dirección/corporativo.
+- **"El botón de crear tablero no funciona" (5-nov-2026, Mario)**: la base
+  creaba bien (probado como Mario y Belén en rollback; última creación real
+  4-nov 19:23) y hoy no llegó ningún POST: el formulario de "+ Nuevo tablero"
+  se pintaba DEBAJO de Mis actividades (largo, y ahora con "por autorizar") y
+  quedaba fuera de la vista. Ahora el formulario sale arriba, justo bajo el
+  encabezado, con foco en el nombre. **Un formulario que abre un botón va
+  pegado al botón, nunca después de un bloque largo.**
 - **Quien está etiquetado ve su tarjeta (21-oct-2026, Mario: "etiqueté a
   Fernanda en una tarea en un proyecto que ella no participa; debería salirle
   como pendiente"; "cuando dan click a sus pendientes no los redirige")**:
