@@ -16,5 +16,10 @@ export async function errorDeFuncion(respuesta: Response, json?: { error?: strin
     }
     return new Error("Tu sesión ya no es válida (por ejemplo, cambiaste tu contraseña en otro dispositivo). Vuelve a entrar.");
   }
+  // 546 = la función se pasó del límite de CPU/memoria del servidor (p. ej. un
+  // Excel muy pesado); 504 = se agotó el tiempo. Que se entienda qué hacer.
+  if (respuesta.status === 546 || respuesta.status === 504) {
+    return new Error("El servidor no alcanzó a procesar el archivo (se pasó del límite de tiempo). Vuelve a intentarlo; si sigue igual, avísale a Mario con el nombre del archivo.");
+  }
   return new Error(json?.error ?? `Error ${respuesta.status}`);
 }

@@ -585,6 +585,19 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   2026-13-05" (una fecha escrita como texto mm/dd/aaaa). `fechaIso` ya
   voltea día/mes si el mes pasa de 12 y deja en blanco fechas que no
   existen; `bbva-importar-folios` v7.
+  **Error 546 al subir el control (9-nov-2026, Christian: captura "Error
+  546" en Mantenimiento BBVA › Control BBVA)**: 546 = "CPU Time exceeded" de
+  la edge function: `XLSX.read` leía el `.xlsm` completo (Histórico OM, KPIs,
+  macros, HTML y fórmulas por celda) y rebasaba el límite de CPU (3.3 s). Ahora
+  `leerLibroBbva` (`_shared/bbva-folios.ts`) lee primero solo los nombres de
+  hoja (`bookSheets`) y luego únicamente BBVA Mantto / Obra Menor / DB sin
+  `cellHTML`/`cellFormula`/`cellText` y en modo `dense` (≈ 8× menos CPU,
+  mismas filas y fechas; verificado con un libro de prueba);
+  `bbva-importar-folios` **v8** desplegada desde el repo (ya con
+  `respuestaSoloConsulta`). `errorDeFuncion` (`lib/funciones.ts`) traduce
+  546/504 a "el servidor no alcanzó a procesar el archivo…". Si vuelve a
+  pasar, pedirle a Christian el archivo y medir el parse con
+  `scratchpad bbva/bench.cjs`.
 - **Alberto Temalatzi (13-oct-2026, Mario: "necesita acceso a
   requisiciones")**: era operativo (ERG); un operativo no puede crear
   requisiciones aunque tenga el módulo (`auth_opera_proyectos_empresa` pide
