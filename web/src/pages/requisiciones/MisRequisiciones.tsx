@@ -130,7 +130,8 @@ export function MisRequisiciones() {
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [empresaFiltro, setEmpresaFiltro] = useEmpresaFiltro();
-  const [abierta, setAbierta] = useState<string | null>(null);
+  // ?abrir=<id> abre esa requisición (aviso push "EPP por comprar", 9-nov-2026).
+  const [abierta, setAbierta] = useState<string | null>(() => new URLSearchParams(window.location.search).get("abrir"));
   // Herramienta y equipo (17-oct-2026, Mario: "en las requisiciones agrega
   // la opción de herramienta y equipo"): no se compra, se presta del
   // almacén; se envía como solicitud SH-… del módulo Herramienta y equipo.

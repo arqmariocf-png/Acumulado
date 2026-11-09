@@ -1804,6 +1804,29 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   cambia). Operan RH y admin (`auth_opera_epp`); almacén solo ve
   (`20261006100000`, prueba `supabase/tests/epp.sql`). Pendiente: salida de
   inventario de bodega ligada a la entrega.
+  **EPP a Alma, OC y finanzas (9-nov-2026, Mario: "en el flujo de EPP lo
+  suben supervisores, lo autoriza RH y se queda ahí; hay que hacer que llegue
+  a Alma con la OC correspondiente y el flujo de finanzas para autorización y
+  pago")**: al atender una solicitud todas las piezas nacían "de bodega", así
+  que "Pedir a compras" nunca salía y la entrega se quedaba por surtir en RH
+  (4 entregas abiertas, 0 requisiciones). `20261109100000` (aplicada como
+  `epp_a_compras_y_finanzas`): `fn_epp_atender_solicitud(solicitud, obra,
+  origen 'compra'|'bodega')` (la de 2 parámetros quedó `_v1` revocada): con
+  'compra' (lo normal; selector en "Solicitudes por atender") crea de una vez
+  la requisición con `fn_epp_pedir_compra(asignacion, p_todas)` y avisa por
+  push a almacén (`fn_almacen_de`) con liga `/requisiciones?abrir=<id>`
+  (`MisRequisiciones` la abre); `p_todas` pasa a compra lo que estaba "de
+  bodega" (botón "No hay en bodega: pedir a compras"). De ahí la cadena de
+  siempre: Alma "Comprar en un paso" → OC (fuente requisicion) → Laura la
+  autoriza en Por autorizar (crea el pago programado; requisición →
+  autorizada) → Delia paga → almacén recibe. Trigger `requisiciones_epp_llego`:
+  al pasar a en_bodega/recibida, push a RH y a quien pidió el EPP
+  ("entrégalo y márcalo") → `/rh?tab=epp`. La pantalla de EPP muestra la
+  requisición (liga), sus OC y si están por autorizar / autorizadas / pagadas
+  (`v_requisicion_ordenes`). Probado en rollback: Eréndira pide (req 127,
+  aviso a Alma), Alma genera IA-OC-0429, Laura autoriza (pago, req autorizada),
+  en_bodega avisa a RH + Christian; Christian pide SE-CSC-0003 y al atender con
+  'compra' sale la requisición con "EPP: Casco | EPP: Botas talla 27".
   **Solicitud de EPP (21-oct-2026, Mario: "da de alta a los supervisores y
   revisa que Christian tenga habilitada la solicitud de EPP"; eligió "que
   pidan EPP")**: menú RH → **Solicitar EPP** (`/epp/solicitar`,
@@ -2826,6 +2849,50 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (los que procesan) siguen viendo todas, con casilla "solo las que yo
   pedí". Es filtro de pantalla, no RLS: el responsable de la obra todavía
   confirma lo recibido de requisiciones de otros.
+
+## Logística (9-nov-2026)
+- Mario: "agreguemos el módulo de logística donde cargaremos las unidades
+  consultadas en el calendario de reservas; va a poner el API del sistema
+  actual de reservas, y ahí vamos a reportar averías".
+  `20261109110000_modulo_logistica.sql` (aplicada como
+  `modulo_logistica_1_tablas` y `_2_policies`; en el MCP la palabra prohibida
+  se concatenó `'dr' || 'op'` en `execute`): módulo `logistica` (`modulos` +
+  `grupo_modulos`, abierto a LOMA; `ModuloClave`), permiso por persona
+  'logistica' (en `permisos_modulo` y `MODULOS_ASIGNABLES`).
+  - `logistica_unidades` (folio **UN-<emp>-0001**, tipo, marca/modelo/año,
+    placas normalizadas, chofer habitual, estado activa/taller/baja,
+    `externo_id` = id en el sistema de reservas), `logistica_reservas`
+    (desde/hasta, para qué, destino, obra, cliente, chofer, estado programada
+    → en_curso → terminada | cancelada; `origen` manual|api y `externo_id`
+    único para la sincronización; trigger `logistica_reservas_antes` impide
+    encimar reservas vivas de la misma unidad) y `logistica_averias` (folio
+    **AV-<emp>-0001**, gravedad leve/media/grave, kilometraje, quién reportó,
+    estado abierta → en_taller → resuelta | descartada, resolución y costo).
+    Trigger `logistica_averias_despues`: avería grave viva o en taller →
+    unidad 'taller'; sin ninguna → 'activa'; al reportar, push a
+    `fn_logistica_de` (permiso logistica + dirección) → `/logistica?tab=averias`.
+  - Ve toda la organización (`auth_ve_logistica`: no pendiente ni espectador)
+    y cualquiera reporta averías a su nombre (policy `logistica_averias_reportar`);
+    opera (unidades, reservas, atender averías) `auth_opera_logistica` = admin,
+    corporativo, dirección, empresa, almacén o permiso 'logistica', en su
+    alcance. Frontera, espectador, director_general y solo_consulta.
+  - Pantalla Operación › **Logística** (`/logistica?tab=calendario|unidades|
+    averias`, `pages/logistica/Logistica.tsx`; la sección `fletes` del menú se
+    llama ahora Logística): calendario semana × unidad (clic en celda =
+    reservar; clic en reserva = editar / salió / regresó / cancelar), unidades
+    con semáforo (rojo taller o avería grave, ámbar avería abierta), averías
+    (reportar; al taller / resuelta con qué se hizo y costo / descartar).
+    Reglas puras en `lib/logistica.ts` (con pruebas: `revisarUnidad`,
+    `choqueReserva`, `revisarReserva`, `semanaDe`, `reservasDelDia`,
+    `semaforoUnidad`, `resumenAverias`, `unidadesLibres`).
+  - **Pendiente**: el API del sistema de reservas (Mario lo va a poner).
+    Cuando llegue: edge `logistica-reservas-sync` (cron) que haga upsert en
+    `logistica_reservas` por `externo_id` con `origen = 'api'` y ligue la
+    unidad por `logistica_unidades.externo_id`; la llave va a
+    `config_sistema`, nunca a git. Probado en rollback: Laura da de alta
+    UN-AEP-0001 y reserva, la encimada se bloquea, Alberto (administrativo) ve
+    y reporta AV-AEP-0001 grave (unidad a taller, push a Laura) pero no da de
+    alta unidades ni resuelve; Laura resuelve y la unidad vuelve a activa.
 
 ## Personajes: avatar y misiones del día (18-oct-2026)
 - Mario: "ponernos a todos un avatar, que tengan que tomarse su foto de

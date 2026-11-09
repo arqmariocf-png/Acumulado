@@ -4,8 +4,9 @@ import { supabase } from "../../lib/supabase";
 
 // Solicitudes de EPP que mandan supervisores y responsables de obra
 // (21-oct-2026). Atender = se vuelve una entrega EPP-… con sus piezas por
-// surtir (luego bodega o "Pedir a compras" como cualquier entrega); rechazar
-// lleva motivo para quien pidió.
+// surtir; con origen "compra" (lo normal, 9-nov-2026) la requisición se crea
+// de inmediato y Alma genera la OC, que pasa por autorización y pago de
+// finanzas; con "bodega" RH la entrega de lo que hay. Rechazar lleva motivo.
 
 interface SolicitudRh {
   id: string;
@@ -29,6 +30,7 @@ const campo = "rounded border border-slate-300 px-2 py-1 text-sm";
 export function SolicitudesEppPorAtender({ obras, nombrePersona, onAtendida }: Props) {
   const qc = useQueryClient();
   const [obraDe, setObraDe] = useState<Record<string, string>>({});
+  const [origenDe, setOrigenDe] = useState<Record<string, "compra" | "bodega">>({});
   const [rechazando, setRechazando] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -54,13 +56,19 @@ export function SolicitudesEppPorAtender({ obras, nombrePersona, onAtendida }: P
     mutationFn: async (s: SolicitudRh) => {
       const obra = obraDe[s.id] || s.proyecto_id;
       if (!obra) throw new Error(`Elige la obra a la que se carga la ${s.folio}.`);
-      const { error } = await supabase.rpc("fn_epp_atender_solicitud", { p_solicitud: s.id, p_proyecto: obra });
+      const origen = origenDe[s.id] ?? "compra";
+      const { error } = await supabase.rpc("fn_epp_atender_solicitud", { p_solicitud: s.id, p_proyecto: obra, p_origen: origen });
       if (error) throw error;
-      return s.folio;
+      return { folio: s.folio, origen };
     },
-    onSuccess: (folio) => {
-      onAtendida(`Solicitud ${folio} atendida: quedó como entrega por surtir abajo. Entrégala de bodega o usa "Pedir a compras".`);
+    onSuccess: ({ folio, origen }) => {
+      onAtendida(
+        origen === "compra"
+          ? `Solicitud ${folio} atendida: ya hay requisición para Alma; ella genera la OC, dirección la autoriza y programa el pago, y al llegar te avisamos para entregarla.`
+          : `Solicitud ${folio} atendida: quedó como entrega por surtir abajo; entrégala de bodega o pídela a compras.`,
+      );
       refrescar();
+      qc.invalidateQueries({ queryKey: ["epp-requisiciones"] });
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -112,6 +120,10 @@ export function SolicitudesEppPorAtender({ obras, nombrePersona, onAtendida }: P
                   {o.empresas?.codigo ? ` (${o.empresas.codigo})` : ""}
                 </option>
               ))}
+            </select>
+            <select value={origenDe[s.id] ?? "compra"} onChange={(e) => setOrigenDe((o) => ({ ...o, [s.id]: e.target.value as "compra" | "bodega" }))} className={campo} title="De dónde sale el equipo">
+              <option value="compra">Comprar (requisición a Alma → OC → finanzas)</option>
+              <option value="bodega">Hay en bodega: RH lo entrega</option>
             </select>
             <button
               type="button"

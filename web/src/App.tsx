@@ -54,6 +54,7 @@ const RespaldoDropbox = lazy(() => import("./pages/admin/RespaldoDropbox").then(
 const Vacaciones = lazy(() => import("./pages/rh/Vacaciones").then((m) => ({ default: m.Vacaciones })));
 const SolicitarEpp = lazy(() => import("./pages/rh/SolicitarEpp").then((m) => ({ default: m.SolicitarEpp })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
+const Logistica = lazy(() => import("./pages/logistica/Logistica").then((m) => ({ default: m.Logistica })));
 const PuntoVenta = lazy(() => import("./pages/puntoVenta/PuntoVenta").then((m) => ({ default: m.PuntoVenta })));
 const Legal = lazy(() => import("./pages/legal/Legal").then((m) => ({ default: m.Legal })));
 const Financiamiento = lazy(() => import("./pages/financiamiento/Financiamiento").then((m) => ({ default: m.Financiamiento })));
@@ -178,6 +179,8 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["almacen", "corporativo", "empresa", "direccion", "responsable", "supervisor", "administrativo", "directivo"]} oPermiso={(p) => (p.modulos ?? []).includes("herramienta")} />}>
             <Route path="/almacen/herramienta" element={<Herramienta />} />
           </Route>
+          {/* Logística (9-nov-2026): toda la organización ve el calendario y reporta averías; opera quien tiene rol o permiso 'logistica'. */}
+          <Route path="/logistica" element={<Logistica />} />
           <Route element={<ProtectedRoute roles={["almacen", "corporativo"]} oPermiso={(p) => (p.modulos ?? []).includes("punto_venta")} />}>
             <Route path="/punto-venta" element={<PuntoVenta />} />
           </Route>
