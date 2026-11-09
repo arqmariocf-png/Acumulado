@@ -1497,6 +1497,27 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   5 columnas al final. Probado en rollback: Delia regresa por efectivo (pago y
   OC a efectivo, aviso a Laura) y por cuenta (exige motivo; repetir bloqueado);
   Laura lo da por corregido; almacén bloqueado.
+  **De qué cuenta sale cada pago (9-nov-2026, Mario: "en programación de
+  pagos necesito un apartado visible para tesorería (Delia) para ver a qué
+  cuenta se va a pagar de manera específica")**: al 9-nov solo 1 de 11
+  transferencias pendientes traía `cuenta_id`: "Programar a pago N",
+  "Autorizar" y "solo autorizar" mandaban `p_cuenta_id: null` y el formulario
+  por OC la dejaba en "Por definir". Ahora (`lib/cuentaCargo.ts`, con
+  pruebas: `revisarCuentaCargo`, `cuentaSugerida`, `agruparPorCuenta`,
+  `quedaEnCuenta`, `textoCuenta`): la cuenta es **obligatoria** para
+  transferencia/cheque al programar (por OC: se propone la única de la
+  empresa o la última usada —localStorage `pagos-cuenta-por-empresa`—; en el
+  lote: un selector por empresa); `components/CuentasDeCargo.tsx` pinta el
+  bloque **"De qué cuenta sale cada pago"** por cuenta (empresa · banco ·
+  últimos 4 · alias, pagos, hoy y vencidos, total; en Tesorería además saldo
+  del banco de esa cuenta y "queda") y en ámbar "Sin cuenta definida" con la
+  lista: en Programación de pagos (`#cuenta-cargo`) dirección elige la cuenta
+  ahí mismo (update directo a `pagos_programados.cuenta_id`, policy
+  `pagos_programados_write`); en Tesorería (`#cuentas-cargo`) Delia solo ve y
+  la liga manda a Programación. En cada renglón: "desde BBVA 5859" o "sin
+  cuenta de cargo" / "cuenta por definir" con liga al bloque. Los pagos que
+  nacen por `fn_oc_autorizar` (RQ) siguen sin cuenta hasta que dirección la
+  asigne en ese bloque. Sin cambios de base.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI

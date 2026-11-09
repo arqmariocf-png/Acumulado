@@ -9,6 +9,7 @@ import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 import { useAuth } from "../../lib/auth";
+import { cuentaSugerida, revisarCuentaCargo, textoCuenta } from "../../lib/cuentaCargo";
 
 export interface OcPago {
   id: string;
@@ -53,6 +54,25 @@ function condicionInicialDe(oc: OcPago): CondicionPago {
   if (esOcEfectivo(oc)) return "efectivo";
   if (oc.condicion_pago) return oc.condicion_pago;
   return oc.dias_credito != null ? "credito" : "contado";
+}
+
+// Última cuenta de cargo usada por empresa (en este navegador), para
+// proponerla la siguiente vez (9-nov-2026: tesorería necesita saber de qué
+// cuenta sale cada pago, así que ya no se programa sin cuenta).
+const LLAVE_CUENTAS = "pagos-cuenta-por-empresa";
+function cuentasRecordadas(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(LLAVE_CUENTAS) ?? "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+function recordarCuenta(empresaId: string, cuentaId: string) {
+  try {
+    localStorage.setItem(LLAVE_CUENTAS, JSON.stringify({ ...cuentasRecordadas(), [empresaId]: cuentaId }));
+  } catch {
+    /* sin almacenamiento: no pasa nada */
+  }
 }
 
 interface Cuenta {
@@ -183,6 +203,12 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
   // monto editable; en blanco = todo lo que falta por programar.
   const [verLote, setVerLote] = useState(false);
   const [montosLote, setMontosLote] = useState<Record<string, string>>({});
+  // Cuenta de la que sale el pago, por empresa, para las que no son en efectivo.
+  const [cuentasLote, setCuentasLote] = useState<Record<string, string>>(() => cuentasRecordadas());
+  const empresasLote = useMemo(() => {
+    const ids = [...new Set(programables.filter((o) => condicionInicialDe(o) !== "efectivo").map((o) => o.empresa_id))];
+    return ids.map((id) => ({ id, cuentas: cuentas.filter((c) => c.empresa_id === id) }));
+  }, [programables, cuentas]);
   const montoLote = (o: OcPago) => {
     const t = (montosLote[o.id] ?? "").trim();
     return t === "" ? porProgramarOc(o) : Number(t);
@@ -194,14 +220,23 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
       for (const o of programables) {
         const m = montoLote(o);
         if (!(m > 0) || m > porProgramarOc(o) + 0.005) throw new Error(`${o.id_orden}: el monto debe ser mayor a 0 y no pasar de ${moneda(porProgramarOc(o))}.`);
+        const c = condicionInicialDe(o);
+        const cuentaId = cuentasLote[o.empresa_id] ?? "";
+        const falta = revisarCuentaCargo(c, cuentaId);
+        if (falta) throw new Error(`${nombreEmpresa.get(o.empresa_id) ?? o.id_orden}: ${falta}`);
+        if (cuentaId && !cuentas.some((x) => x.id === cuentaId && x.empresa_id === o.empresa_id)) throw new Error(`${nombreEmpresa.get(o.empresa_id) ?? ""}: la cuenta elegida no es de esa empresa.`);
       }
       const errores: string[] = [];
       let n = 0;
       for (const o of programables) {
         const c = condicionInicialDe(o);
-        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: Math.round(montoLote(o) * 100) / 100, p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: null, p_notas: null });
+        const cuentaId = c === "efectivo" ? null : cuentasLote[o.empresa_id] || null;
+        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: Math.round(montoLote(o) * 100) / 100, p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: cuentaId, p_notas: null });
         if (err) errores.push(`${o.id_orden}: ${err.message}`);
-        else n += 1;
+        else {
+          n += 1;
+          if (cuentaId) recordarCuenta(o.empresa_id, cuentaId);
+        }
       }
       return { n, errores };
     },
@@ -297,6 +332,26 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
         {verLote && programables.length > 0 && (
           <div className="w-full rounded border border-emerald-300 bg-white p-2 text-xs">
             <p className="mb-1 font-medium text-emerald-900">Programar a pago · monto de cada orden (parcial si pones menos del saldo)</p>
+            {empresasLote.length > 0 && (
+              <div className="mb-2 flex flex-wrap items-end gap-3 rounded border border-slate-200 bg-slate-50 p-2">
+                <span className="text-slate-700">
+                  <b>Cuenta de la que sale el pago</b> (la ve tesorería):
+                </span>
+                {empresasLote.map((e) => (
+                  <label key={e.id} className="flex items-center gap-1 text-slate-700">
+                    {nombreEmpresa.get(e.id) ?? ""}
+                    <select value={cuentasLote[e.id] ?? ""} onChange={(ev) => setCuentasLote((m) => ({ ...m, [e.id]: ev.target.value }))} className={`rounded border px-1.5 py-0.5 ${cuentasLote[e.id] ? "border-slate-300" : "border-amber-400 bg-amber-50"}`}>
+                      <option value="">Elegir cuenta…</option>
+                      {e.cuentas.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {textoCuenta(c)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            )}
             <table className="w-full">
               <thead className="text-left text-[11px] uppercase text-slate-500">
                 <tr>
@@ -464,7 +519,7 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
   const [condicion, setCondicion] = useState<CondicionPago>(condicionInicial);
   const [monto, setMonto] = useState(String(montoPagoSugerido(condicionInicial, oc)));
   const [fecha, setFecha] = useState(fechaPagoSugerida(condicionInicial, oc, hoy));
-  const [cuentaId, setCuentaId] = useState("");
+  const [cuentaId, setCuentaId] = useState(() => cuentaSugerida(cuentas, cuentasRecordadas()[oc.empresa_id]));
   const [notas, setNotas] = useState("");
   const saldo = saldoOc(oc);
   // Autorizar desde la lista (Laura, 30-sep-2026); rechazar sigue en "Por autorizar".
@@ -515,8 +570,12 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
     mutationFn: async () => {
       const m = Number(monto);
       if (!(m > 0)) throw new Error("El monto debe ser mayor a 0.");
-      const { error } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: oc.id, p_condicion: condicion, p_monto: m, p_fecha: fecha, p_cuenta_id: cuentaId || null, p_notas: notas.trim() || null });
+      const faltaCuenta = revisarCuentaCargo(condicion, cuentaId);
+      if (faltaCuenta) throw new Error(faltaCuenta);
+      const cuenta = condicion === "efectivo" ? null : cuentaId || null;
+      const { error } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: oc.id, p_condicion: condicion, p_monto: m, p_fecha: fecha, p_cuenta_id: cuenta, p_notas: notas.trim() || null });
       if (error) throw error;
+      if (cuenta) recordarCuenta(oc.empresa_id, cuenta);
       return m;
     },
     onSuccess: (m) => {
@@ -652,16 +711,16 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
                 <input type="date" value={fecha} min={hoy} onChange={(e) => setFecha(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
               </div>
               <div className={condicion === "efectivo" ? "hidden" : ""}>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Cuenta de salida</label>
-                <select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
-                  <option value="">Por definir</option>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Cuenta de la que sale el pago (la ve tesorería)</label>
+                <select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)} required={condicion !== "efectivo"} className={`rounded border px-2 py-1 text-sm ${cuentaId ? "border-slate-300" : "border-amber-400 bg-amber-50"}`}>
+                  <option value="">Elegir cuenta…</option>
                   {cuentas.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.banco} {c.ultimos_4}
-                      {c.alias ? ` · ${c.alias}` : ""}
+                      {textoCuenta(c)}
                     </option>
                   ))}
                 </select>
+                {cuentas.length === 0 && <p className="mt-0.5 text-xs text-amber-700">La empresa no tiene cuentas bancarias activas.</p>}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Notas</label>

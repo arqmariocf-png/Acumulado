@@ -14,6 +14,7 @@ import { ComprobantePago } from "../../components/ComprobantePago";
 import { ConfirmarPagos } from "../../components/ConfirmarPagos";
 import { RegresarPagoError } from "../../components/RegresarPagoError";
 import { visibleEnTesoreria } from "../../lib/regresarPago";
+import { CuentasDeCargo } from "../../components/CuentasDeCargo";
 
 interface PagoVista {
   id: string;
@@ -143,6 +144,15 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
     [saldos, pagos, hoy],
   );
   const cuentaTexto = useMemo(() => new Map((cuentas ?? []).map((c) => [c.id, `${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`])), [cuentas]);
+  // Saldo del banco por cuenta (último estado de cuenta) y nombre de cada empresa,
+  // para el bloque "de qué cuenta sale cada pago" (9-nov-2026, Mario).
+  const saldoPorCuenta = useMemo(() => new Map((saldos ?? []).map((s) => [s.cuenta_id, Number(s.saldo_final)])), [saldos]);
+  const nombreEmpresa = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of saldos ?? []) m.set(s.empresa_id, s.empresa_nombre);
+    for (const p of pagos ?? []) if (!m.has(p.empresa_id)) m.set(p.empresa_id, p.empresa_nombre);
+    return m;
+  }, [saldos, pagos]);
 
   const marcar = useMutation({
     mutationFn: async ({ p, pagado }: { p: PagoVista; pagado: boolean }) => {
@@ -284,6 +294,15 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
               </button>
             </p>
           )}
+          <CuentasDeCargo
+            id="cuentas-cargo"
+            titulo="De qué cuenta sale cada pago"
+            pagos={(pagos ?? []).filter((p) => p.estatus === "pendiente" && (!filtroEmpresa || p.empresa_id === filtroEmpresa))}
+            cuentas={cuentas ?? []}
+            nombreEmpresa={nombreEmpresa}
+            hoy={hoy}
+            saldos={saldoPorCuenta}
+          />
           <Seccion id="por-pagar" titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
           <Seccion titulo="Pagados hoy" grupos={porEmpresa(pagadosHoy)} vacio="Todavía no se marca ningún pago hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
           <Seccion titulo="Programados a pago para después" grupos={porEmpresa(proximos)} vacio="Dirección no ha programado pagos para los próximos días." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
@@ -368,7 +387,17 @@ function FilaPago({ p, cuenta, hoy, onMarcar, onRegresado, ocupado }: { p: PagoV
         </div>
       </td>
       <td className="whitespace-nowrap px-3 py-2 align-top text-xs text-slate-500">
-        {p.metodo === "efectivo" ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">efectivo</span> : cuenta ? `desde ${cuenta}` : <span className="text-amber-700">cuenta por definir</span>}
+        {p.metodo === "efectivo" ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">efectivo</span>
+        ) : cuenta ? (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-800" title="Cuenta bancaria de la que sale este pago">
+            desde {cuenta}
+          </span>
+        ) : (
+          <a href="#cuentas-cargo" className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800" title="Dirección todavía no dice de qué cuenta sale; se define en Programación de pagos">
+            cuenta por definir
+          </a>
+        )}
         <div className={vencido ? "text-red-700" : ""}>{vencido ? `vencido ${p.fecha_programada}` : p.fecha_programada}</div>
         {p.estatus === "pagado" && p.referencia && <div>ref. {p.referencia}</div>}
       </td>
