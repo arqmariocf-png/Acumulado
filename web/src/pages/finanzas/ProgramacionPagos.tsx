@@ -12,6 +12,8 @@ import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { ComprobantePago } from "../../components/ComprobantePago";
 import { TraspasosNomina } from "./TraspasosNomina";
 import { estaDevuelto, textoDevolucion } from "../../lib/regresarPago";
+import { CuentasDeCargo } from "../../components/CuentasDeCargo";
+import { necesitaCuenta } from "../../lib/cuentaCargo";
 
 interface PagoProgramado {
   id: string;
@@ -119,6 +121,20 @@ export function ProgramacionPagos() {
       if (err) throw err;
     },
     onSuccess: invalidar,
+    onError: (err) => setError((err as Error).message),
+  });
+
+  // Cuenta de cargo a un pago que quedó sin ella (9-nov-2026): tesorería
+  // necesita saber de qué banco sale cada pago.
+  const asignarCuenta = useMutation({
+    mutationFn: async ({ id, cuentaId }: { id: string; cuentaId: string }) => {
+      const { error: err } = await supabase.from("pagos_programados").update({ cuenta_id: cuentaId }).eq("id", id).eq("estatus", "pendiente");
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      invalidar();
+      queryClient.invalidateQueries({ queryKey: ["tesoreria"] });
+    },
     onError: (err) => setError((err as Error).message),
   });
 
@@ -301,6 +317,17 @@ export function ProgramacionPagos() {
       <TraspasosNomina modo="nomina" empresas={empresas ?? []} cuentas={cuentas ?? []} hoy={hoy} filtroEmpresa={filtroEmpresa} />
 
       {isLoading && <p className="text-sm text-slate-400">Cargando…</p>}
+      {/* De qué cuenta sale cada pago (9-nov-2026, Mario): lo que no tiene
+          cuenta se asigna aquí; Delia ve el mismo bloque en Tesorería. */}
+      <CuentasDeCargo
+        titulo="De qué cuenta sale cada pago (lo ve tesorería)"
+        pagos={pendientes.filter((p) => (!filtroEmpresa || p.empresa_id === filtroEmpresa) && !estaDevuelto(p))}
+        cuentas={cuentas ?? []}
+        nombreEmpresa={nombreEmpresa}
+        hoy={hoy}
+        onAsignar={(id, cuentaId) => asignarCuenta.mutate({ id, cuentaId })}
+        ocupado={asignarCuenta.isPending}
+      />
       {devueltos.length > 0 && (
         <div id="pagos-devueltos" className="mb-4 scroll-mt-20 rounded border border-amber-300 bg-amber-50">
           <div className="flex items-center justify-between border-b border-amber-200 px-3 py-2">
@@ -370,7 +397,15 @@ export function ProgramacionPagos() {
                       {p.beneficiario}
                       <div className="text-xs text-slate-400">
                         {nombreEmpresa.get(p.empresa_id)}
-                        {p.cuenta_id && ` · ${cuentaTexto.get(p.cuenta_id) ?? ""}`}
+                        {p.cuenta_id && ` · desde ${cuentaTexto.get(p.cuenta_id) ?? ""}`}
+                        {!p.cuenta_id && p.estatus === "pendiente" && necesitaCuenta(p.metodo) && (
+                          <>
+                            {" · "}
+                            <a href="#cuenta-cargo" className="font-medium text-amber-700 underline">
+                              sin cuenta de cargo
+                            </a>
+                          </>
+                        )}
                         {p.concepto && ` · ${p.concepto}`}
                         {p.referencia && ` · ref. ${p.referencia}`}
                         {p.metodo === "efectivo" && " · efectivo"}
