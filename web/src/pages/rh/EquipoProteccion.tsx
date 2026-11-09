@@ -92,7 +92,15 @@ export function EquipoProteccion() {
       const ids = (asignaciones ?? []).map((a) => a.requisicion_id).filter(Boolean) as string[];
       const { data, error } = await supabase.from("requisiciones").select("id, folio, etapa").in("id", ids);
       if (error) throw error;
-      return new Map((data ?? []).map((r: { id: string; folio: number | string | null; etapa: string }) => [r.id, r]));
+      // La OC de cada requisición y si ya está autorizada/pagada (9-nov-2026:
+      // el EPP sigue el flujo de compras y finanzas).
+      const { data: ocs, error: errOc } = await supabase.from("v_requisicion_ordenes").select("requisicion_id, id_orden, autorizada_en, pagado, saldo, total").in("requisicion_id", ids);
+      if (errOc) throw errOc;
+      const ocPorReq = new Map<string, { id_orden: string | null; autorizada_en: string | null; pagado: number | null; saldo: number | null; total: number | null }[]>();
+      for (const o of (ocs ?? []) as { requisicion_id: string; id_orden: string | null; autorizada_en: string | null; pagado: number | null; saldo: number | null; total: number | null }[]) {
+        ocPorReq.set(o.requisicion_id, [...(ocPorReq.get(o.requisicion_id) ?? []), o]);
+      }
+      return new Map((data ?? []).map((r: { id: string; folio: number | string | null; etapa: string }) => [r.id, { ...r, ocs: ocPorReq.get(r.id) ?? [] }]));
     },
   });
 
@@ -174,12 +182,12 @@ export function EquipoProteccion() {
   });
 
   const pedirCompra = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc("fn_epp_pedir_compra", { p_asignacion: id });
+    mutationFn: async ({ id, todas }: { id: string; todas: boolean }) => {
+      const { error } = await supabase.rpc("fn_epp_pedir_compra", { p_asignacion: id, p_todas: todas });
       if (error) throw error;
     },
     onSuccess: () => {
-      setAviso("Requisición creada en la obra. Alma la ve en Requisiciones para comprarla.");
+      setAviso("Requisición creada y aviso a Alma: ella genera la OC, dirección la autoriza y programa el pago, y al llegar te avisamos para entregarla.");
       refrescar();
       qc.invalidateQueries({ queryKey: ["epp-requisiciones"] });
     },
@@ -392,6 +400,7 @@ export function EquipoProteccion() {
         const obra = obraDe.get(a.proyecto_id);
         const req = a.requisicion_id ? requisiciones?.get(a.requisicion_id) : null;
         const porComprar = a.epp_asignacion_lineas.some((l) => l.origen === "compra" && l.estado === "por_surtir");
+        const porSurtir = a.epp_asignacion_lineas.some((l) => l.estado === "por_surtir");
         const lineas = [...a.epp_asignacion_lineas].sort((x, y) => x.descripcion.localeCompare(y.descripcion));
         return (
           <div key={a.id} className="rounded border border-slate-200 bg-white p-3">
@@ -403,11 +412,21 @@ export function EquipoProteccion() {
                 {obra?.nombre ?? "—"}
               </span>
               <span className="text-xs text-slate-500">en su poder {pesos(valorEnPoder(a.epp_asignacion_lineas))}</span>
-              {req && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800">Requisición {req.folio ?? ""} · {req.etapa}</span>}
+              {req && (
+                <a href={`/requisiciones?abrir=${a.requisicion_id}`} className="rounded bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800 underline" title="Abrir la requisición">
+                  Requisición {req.folio ?? ""} · {req.etapa}
+                  {req.ocs.length === 0 && " · Alma genera la OC"}
+                </a>
+              )}
+              {req?.ocs.map((o) => (
+                <span key={o.id_orden ?? ""} className="rounded bg-violet-50 px-1.5 py-0.5 text-xs text-violet-800">
+                  OC {o.id_orden} · {Number(o.saldo ?? 0) <= 0 && Number(o.total ?? 0) > 0 ? "pagada" : o.autorizada_en ? "autorizada, por pagar" : "por autorizar (dirección)"}
+                </span>
+              ))}
               <span className="flex-1" />
-              {porComprar && !a.requisicion_id && (
-                <button onClick={() => pedirCompra.mutate(a.id)} disabled={pedirCompra.isPending} className="rounded border border-sky-300 px-2 py-1 text-xs text-sky-800">
-                  Pedir a compras
+              {porSurtir && !a.requisicion_id && (
+                <button onClick={() => pedirCompra.mutate({ id: a.id, todas: !porComprar })} disabled={pedirCompra.isPending} className="rounded border border-sky-300 px-2 py-1 text-xs text-sky-800" title={porComprar ? "Manda a compras las piezas marcadas para comprar" : "No hay en bodega: manda a compras todo lo que falta por surtir"}>
+                  {porComprar ? "Pedir a compras" : "No hay en bodega: pedir a compras"}
                 </button>
               )}
               <button onClick={() => imprimir(a)} className="rounded border border-slate-300 px-2 py-1 text-xs">

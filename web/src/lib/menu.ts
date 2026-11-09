@@ -77,6 +77,8 @@ const veClientes = (p: Profile) =>
 const veHerramienta = (p: Profile) =>
   esAdmin(p) || ["almacen", "corporativo", "empresa", "direccion", "responsable", "supervisor", "administrativo", "directivo"].includes(p.rol) || (p.modulos ?? []).includes("herramienta");
 const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || modulo("produccion")(p);
+// Logística (9-nov-2026): la ve toda la organización (choferes y supervisores reportan averías).
+const veLogistica = (p: Profile) => p.rol !== "pendiente";
 
 /** Los 7 grupos de la barra superior (21-oct-2026, Excel "Acumulado deber
  * ser" de Mario: "toda la lógica de ventanas, menús y orden del sistema").
@@ -280,9 +282,13 @@ export const SECCIONES: SeccionMenu[] = [
     clave: "fletes",
     grupo: "operacion",
     area: "logistica",
-    titulo: "Fletes",
-    proposito: "Viajes, unidades, choferes y combustible de Loma Racing.",
-    entradas: [],
+    titulo: "Logística",
+    proposito: "Unidades, calendario de reservas y averías.",
+    entradas: [
+      { ruta: "/logistica", etiqueta: "Calendario de reservas", descripcion: "semana por unidad: qué sale, a dónde y con quién", uso: "Reserva una unidad para un viaje u obra; cuando se conecte el API del sistema de reservas, entran solas.", visible: veLogistica, modulo: "logistica" },
+      { ruta: "/logistica?tab=unidades", etiqueta: "Unidades", descripcion: "la flotilla por empresa con folio, placas y chofer", uso: "Da de alta cada unidad una vez; el semáforo dice si tiene averías abiertas o está en taller.", visible: veLogistica, modulo: "logistica" },
+      { ruta: "/logistica?tab=averias", etiqueta: "Averías", descripcion: "reporta y atiende fallas de las unidades", uso: "Cualquiera reporta una avería (una grave manda la unidad al taller); logística la atiende y registra la reparación.", visible: veLogistica, modulo: "logistica" },
+    ],
   },
   {
     clave: "mantenimiento_bbva",
