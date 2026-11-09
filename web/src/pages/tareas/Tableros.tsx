@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
-import { administraProyectosDe } from "../../lib/modulos";
+import { puedeCrearTablero } from "../../lib/altaObra";
 import { AREAS_TAREAS, agruparPorArea, buscarTableros, tablerosDondeParticipa, type TarjetaParticipante } from "../../lib/tareasArea";
 import type { Tablero } from "../../types/database";
 import { MisActividades } from "./MisActividades";
@@ -43,7 +43,7 @@ function useTableros() {
 }
 
 export function Tableros() {
-  const { perfil } = useAuth();
+  const { perfil, empresasAlcance } = useAuth();
   const queryClient = useQueryClient();
   const { data: empresas } = useEmpresas();
   const { data: tableros, isLoading } = useTableros();
@@ -75,10 +75,11 @@ export function Tableros() {
   const [error, setError] = useState<string | null>(null);
 
   // Quien administra proyectos de su empresa (empresa, responsable, básicos
-  // con módulo proyectos) crea tableros solo de esa empresa; la base lo
-  // exige (auth_administra_tableros_de) y el selector se le fija.
-  const soloSuEmpresa = perfil?.rol !== "admin" && perfil?.rol !== "corporativo" && !!perfil?.empresa_id && administraProyectosDe(perfil, perfil.empresa_id);
-  const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "corporativo" || soloSuEmpresa;
+  // con módulo proyectos) crea tableros en las empresas de su alcance
+  // (principal + "maneja también"; Timoteo: CSC y MCF, 9-nov-2026); la base
+  // lo exige (auth_administra_tableros_de) y el selector se acota.
+  const { puede: puedeCrear, soloEnAlcance: soloSuEmpresa } = puedeCrearTablero(perfil, empresasAlcance);
+  const empresasForm = soloSuEmpresa ? (empresas ?? []).filter((e) => empresasAlcance.includes(e.id)) : empresas ?? [];
 
   const crear = useMutation({
     mutationFn: async (payload: { nombre: string; descripcion: string; empresaId: string; area: string }) => {
@@ -119,7 +120,7 @@ export function Tableros() {
     crear.mutate({
       nombre: String(fd.get("nombre") ?? "").trim(),
       descripcion: String(fd.get("descripcion") ?? "").trim(),
-      empresaId: soloSuEmpresa ? (perfil.empresa_id ?? "") : String(fd.get("empresa_id") ?? ""),
+      empresaId: String(fd.get("empresa_id") ?? "") || (soloSuEmpresa ? perfil?.empresa_id ?? "" : ""),
       area: String(fd.get("area") ?? ""),
     });
   }
@@ -147,9 +148,9 @@ export function Tableros() {
           </div>
           <div className="mb-3">
             <label className={etiquetaCampo}>Empresa</label>
-            <select name="empresa_id" className={campoTexto} defaultValue={soloSuEmpresa ? perfil.empresa_id ?? "" : ""} disabled={soloSuEmpresa}>
+            <select name="empresa_id" className={campoTexto} defaultValue={soloSuEmpresa ? perfil?.empresa_id ?? "" : ""} disabled={soloSuEmpresa && empresasForm.length <= 1}>
               {!soloSuEmpresa && <option value="">Corporativo (visible a todas las empresas)</option>}
-              {empresas?.map((e) => (
+              {empresasForm.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.nombre}
                 </option>
