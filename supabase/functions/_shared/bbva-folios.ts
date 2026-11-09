@@ -96,11 +96,25 @@ export interface ResultadoLibroBbva {
 /** Acepta el maestro plano (hoja "DB") o el control nuevo (hoja "BBVA
  * Mantto" con una fila por trabajo y el estatus de cada paso). En ambos
  * casos el dashboard recibe los mismos agregados. */
+/** Hojas que se usan: el control nuevo (BBVA Mantto + Obra Menor) o el maestro
+ * viejo (DB o la primera). El resto del libro (Histórico OM, KPIs, macros) no
+ * se parsea: 9-nov-2026 el `.xlsm` de Christian rebasó el límite de CPU de la
+ * edge function ("CPU Time exceeded", error 546) leyendo el libro completo;
+ * leer solo estas hojas, sin HTML ni fórmulas por celda, baja el CPU ~8×. */
+const HOJAS_BBVA = ["BBVA MANTTO", "OBRA MENOR", "DB"];
+
+export function leerLibroBbva(bytes: Uint8Array) {
+  const nombres = (XLSX.read(bytes, { type: "array", bookSheets: true }).SheetNames ?? []) as string[];
+  const quiero = nombres.filter((n) => HOJAS_BBVA.includes(n.trim().toUpperCase()));
+  if (quiero.length === 0 && nombres[0]) quiero.push(nombres[0]);
+  return XLSX.read(bytes, { type: "array", cellDates: true, sheets: quiero, cellHTML: false, cellFormula: false, cellText: false, dense: true });
+}
+
 export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string, fechaCorte: string, kpiAntes: unknown): ResultadoLibroBbva {
-  const libro = XLSX.read(bytes, { type: "array", cellDates: true });
+  const libro = leerLibroBbva(bytes);
   const leer = (nombre: string): unknown[][] | null => {
     const n = libro.SheetNames.find((x: string) => x.trim().toUpperCase() === nombre.toUpperCase());
-    return n ? (XLSX.utils.sheet_to_json(libro.Sheets[n], { header: 1, raw: true, defval: null }) as unknown[][]) : null;
+    return n && libro.Sheets[n] ? (XLSX.utils.sheet_to_json(libro.Sheets[n], { header: 1, raw: true, defval: null }) as unknown[][]) : null;
   };
 
   const mantto = leer("BBVA Mantto");
@@ -115,6 +129,7 @@ export function procesarLibroFoliosBbva(bytes: Uint8Array, nombreArchivo: string
 
   const nombreHoja = libro.SheetNames.find((n: string) => n.trim().toUpperCase() === "DB") ?? libro.SheetNames[0];
   const hoja = libro.Sheets[nombreHoja];
+  if (!hoja) throw new Error("El libro no trae la hoja BBVA Mantto ni una hoja DB con el maestro de folios.");
   const filas: unknown[][] = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: true, defval: null });
   return { datos: agregarRegistros(leerRegistrosMaestro(filas), nombreArchivo, fechaCorte, kpiAntes), folios_control: null, obra_menor: null };
 }
