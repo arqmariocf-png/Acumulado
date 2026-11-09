@@ -1226,6 +1226,28 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   sin encargado asignado quedaron **77 desactivadas** (21-oct; Parque Real 42 se
   quedó activa por tener encargado). Quedan 67 obras activas, cada una con su
   tablero; las 77 tienen el tablero archivado. Se reactivan desde la obra.
+- **Dar de alta obras desde la app y tableros en todo el alcance (9-nov-2026,
+  Mario: "permite a Timo abrir tableros y proyectos")**: no existía pantalla
+  para crear obras (llegaban del backoffice o por SQL) y la policy de insert
+  era solo admin/corporativo; Timoteo (administrativo CSC, módulo proyectos,
+  "maneja también" MCF) tampoco podía crear tableros fuera de CSC (la base sí
+  lo dejaba por `auth_administra_tableros_de`; la pantalla fijaba la empresa
+  principal). `20261109090000` (aplicada como `proyectos_alta_desde_la_app`):
+  policy `proyectos_insert_empresa` (dirección, empresa, responsable y básicos
+  con módulo proyectos —`auth_opera_proyectos_empresa`— en las empresas de su
+  alcance, módulo habilitado y suscripción) y trigger
+  `proyectos_alta_responsable` (si un básico o responsable da de alta sin
+  responsable, queda él, así la ve en "sus obras asignadas"; el trigger
+  `proyectos_tablero_por_default` le crea su tablero). Pantalla: botón **"+
+  Nueva obra"** arriba de `/proyectos` (nombre, empresa del alcance, cliente,
+  tipo; avisa si ya existe una con el mismo nombre en esa empresa —las OC del
+  backoffice se cruzan por nombre— y abre la obra al crearla); en Tareas el
+  selector de empresa del tablero nuevo ofrece todas las del alcance
+  (`puedeCrearObra`, `puedeCrearTablero`, `revisarObra` en `lib/altaObra.ts`,
+  con pruebas). Ojo: también lo pueden Jonathan Cáceres y los demás básicos
+  con módulo proyectos, Mauro (responsable), Jorge (empresa) y Laura. Probado
+  en rollback como Timoteo: obra en CSC (queda responsable, con tablero) y en
+  MCF; AEP bloqueada; tablero en MCF sí, en AEP no; Alma no da de alta.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y

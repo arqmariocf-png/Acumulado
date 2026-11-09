@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
 import { esRolBasico } from "../../lib/modulos";
-import { SelectorEmpresa } from "../../components/SelectorEmpresa";
+import { SelectorEmpresa, useEmpresasAlcance } from "../../components/SelectorEmpresa";
+import { puedeCrearObra, revisarObra } from "../../lib/altaObra";
 import type { Proyecto, PuEstado } from "../../types/database";
 import { PuntosSemaforoPu } from "./SemaforoPreciosUnitarios";
 import { AlmacenPorProyecto, PuntosAlmacen, useRequisicionesPorProyecto } from "./AlmacenProyectos";
@@ -45,9 +46,50 @@ function useSemaforoProyectos(ids: string[]) {
 }
 
 export function Proyectos() {
-  const { perfil, veTodasLasEmpresas, eligeEmpresa, esAdminGlobal } = useAuth();
+  const { perfil, veTodasLasEmpresas, eligeEmpresa, esAdminGlobal, empresaActiva } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [empresaId, setEmpresaId] = useEmpresaFiltro();
+  const [mostrarAlta, setMostrarAlta] = useState(false);
+  const { data: empresasAlta } = useEmpresasAlcance();
+  // Dar de alta obras desde la app (9-nov-2026, Mario: "permite a Timo abrir
+  // tableros y proyectos"): antes todas llegaban del backoffice. La base
+  // (proyectos_insert_empresa) acota a las empresas del alcance y, a un rol
+  // básico o responsable, lo deja como responsable de la obra para que la vea.
+  const puedeAlta = puedeCrearObra(perfil);
+  const crearObra = useMutation({
+    mutationFn: async (o: { nombre: string; empresa_id: string; cliente: string; tipo: string }) => {
+      const { data: existentes, error: errEx } = await supabase.from("proyectos").select("nombre, empresa_id, activo").eq("empresa_id", o.empresa_id).limit(1000);
+      if (errEx) throw errEx;
+      const falta = revisarObra(o, (existentes ?? []) as { nombre: string; empresa_id: string; activo: boolean }[]);
+      if (falta) throw new Error(falta);
+      const { data, error: err } = await supabase
+        .from("proyectos")
+        .insert({ nombre: o.nombre.trim(), empresa_id: o.empresa_id, cliente: o.cliente.trim() || null, tipo: o.tipo.trim() || null, activo: true })
+        .select("id")
+        .single();
+      if (err) throw err;
+      return data.id as string;
+    },
+    onSuccess: (id) => {
+      setError(null);
+      setMostrarAlta(false);
+      queryClient.invalidateQueries({ queryKey: ["proyectos-ventana"] });
+      queryClient.invalidateQueries({ queryKey: ["tableros"] });
+      navigate(`/proyectos/${id}`);
+    },
+    onError: (err) => setError((err as Error).message),
+  });
+  function onAlta(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    crearObra.mutate({
+      nombre: String(fd.get("nombre") ?? ""),
+      empresa_id: String(fd.get("empresa_id") ?? ""),
+      cliente: String(fd.get("cliente") ?? ""),
+      tipo: String(fd.get("tipo") ?? ""),
+    });
+  }
   const [busqueda, setBusqueda] = useState("");
   const [verInactivos, setVerInactivos] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +135,50 @@ export function Proyectos() {
             {a.etiqueta} ↓
           </button>
         ))}
+        {puedeAlta && (
+          <button type="button" onClick={() => setMostrarAlta((v) => !v)} className="ml-auto rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
+            {mostrarAlta ? "Cancelar" : "+ Nueva obra"}
+          </button>
+        )}
       </div>
+
+      {/* El formulario va pegado al botón (regla del 5-nov-2026). */}
+      {mostrarAlta && (
+        <form onSubmit={onAlta} className="mb-6 max-w-xl rounded border border-slate-300 bg-white p-4 shadow-sm">
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-700">Nombre de la obra *</label>
+            <input name="nombre" required autoFocus className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="Ej. Abarrotes Neto Apizaco" />
+          </div>
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-slate-700">Empresa *</label>
+            <select name="empresa_id" required className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" defaultValue={empresaActiva && empresaActiva !== "todas" ? empresaActiva : perfil?.empresa_id ?? ""}>
+              <option value="">Elige…</option>
+              {(empresasAlta ?? []).map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-700">Cliente</label>
+              <input name="cliente" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="A quién se le hace la obra" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-700">Tipo de obra</label>
+              <input name="tipo" className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder="Ej. Construcciones no residenciales" />
+            </div>
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            La obra se crea con su tablero de seguimiento. Si las OC del backoffice llegan con este mismo nombre, se le cargan a ella.
+            {perfil && !["admin", "corporativo", "direccion", "empresa"].includes(perfil.rol) ? " Quedas como responsable de la obra." : ""}
+          </p>
+          <button type="submit" disabled={crearObra.isPending} className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            {crearObra.isPending ? "Creando…" : "Crear obra"}
+          </button>
+        </form>
+      )}
 
       {/* Solo el director general: resumen físico-financiero de todas las obras. */}
       {veResumenObras && (
