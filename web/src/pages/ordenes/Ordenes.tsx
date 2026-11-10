@@ -45,6 +45,20 @@ interface FilaOrden {
  * Compras y servicios van en UNA lista (19-oct-2026, Mario: "órdenes de
  * compra y órdenes de servicio dentro del mismo menú para revisarlo en un solo
  * archivo"): ?tipo=OC u OS solo filtra; ?tipo=OV es la pestaña de ventas. */
+/** Trae TODAS las filas por páginas de 1,000 (PostgREST no regresa más por
+ * consulta). Antes la lista cortaba en 300 y, con 449 órdenes IA, las folios
+ * más viejos no salían (Mario, 10-nov-2026: "solo a partir de la 100"). */
+async function todasLasPaginas<T>(pagina: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const todas: T[] = [];
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await pagina(desde, desde + 999);
+    if (error) throw error;
+    todas.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return todas;
+}
+
 export function Ordenes() {
   const [params, setParams] = useSearchParams();
   const tipoParam = params.get("tipo");
@@ -79,17 +93,18 @@ export function Ordenes() {
     queryKey: ["ordenes-ia", vista, filtro, empresaId, verBackoffice],
     queryFn: async (): Promise<FilaOrden[]> => {
       if (vista === "OV") {
-        let q = supabase
-          .from("ordenes_venta")
-          .select("id, id_ov, empresa_id, cliente, forma_pago, proyecto, total, fecha_ov, fuente, creada_por, cancelada_en, created_at")
-          .order("fecha_ov", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(300);
-        if (!verBackoffice) q = q.eq("fuente", "acumulado");
-        if (empresaId) q = q.eq("empresa_id", empresaId);
-        const { data, error: e } = await q;
-        if (e) throw e;
-        return (data ?? []).map((o) => {
+        const data = await todasLasPaginas((desde, hasta) => {
+          let q = supabase
+            .from("ordenes_venta")
+            .select("id, id_ov, empresa_id, cliente, forma_pago, proyecto, total, fecha_ov, fuente, creada_por, cancelada_en, created_at")
+            .order("fecha_ov", { ascending: false })
+            .order("created_at", { ascending: false })
+            .range(desde, hasta);
+          if (!verBackoffice) q = q.eq("fuente", "acumulado");
+          if (empresaId) q = q.eq("empresa_id", empresaId);
+          return q;
+        });
+        return data.map((o) => {
           const cancelada = !!o.cancelada_en;
           return {
             id: o.id as string,
@@ -109,23 +124,25 @@ export function Ordenes() {
           };
         });
       }
-      let q = supabase
-        .from("v_oc_pagos")
-        .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice, tipo_pago_backoffice, estatus_backoffice")
-        .in("tipo", filtro === "todas" ? ["OC", "OS"] : [filtro])
-        .order("fecha_creacion", { ascending: false })
-        .limit(300);
-      if (!verBackoffice) q = q.eq("fuente", "acumulado");
-      if (empresaId) q = q.eq("empresa_id", empresaId);
-      const { data, error: e } = await q;
-      if (e) throw e;
-      const ids = (data ?? []).filter((o) => o.fuente === "acumulado").map((o) => o.id as string);
+      const data = await todasLasPaginas((desde, hasta) => {
+        let q = supabase
+          .from("v_oc_pagos")
+          .select("id, id_orden, tipo, empresa_id, proveedor, proyecto, total, fecha_creacion, fuente, autorizacion, rechazo_motivo, saldo, programado, recepcion_estado, pagada_backoffice, tipo_pago_backoffice, estatus_backoffice")
+          .in("tipo", filtro === "todas" ? ["OC", "OS"] : [filtro])
+          .order("fecha_creacion", { ascending: false })
+          .order("id_orden", { ascending: false })
+          .range(desde, hasta);
+        if (!verBackoffice) q = q.eq("fuente", "acumulado");
+        if (empresaId) q = q.eq("empresa_id", empresaId);
+        return q;
+      });
+      const ids = data.filter((o) => o.fuente === "acumulado").map((o) => o.id as string);
       const creadores = new Map<string, string | null>();
-      if (ids.length) {
-        const { data: c } = await supabase.from("ordenes_compra").select("id, creada_por").in("id", ids);
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data: c } = await supabase.from("ordenes_compra").select("id, creada_por").in("id", ids.slice(i, i + 200));
         for (const x of c ?? []) creadores.set(x.id as string, x.creada_por as string | null);
       }
-      return (data ?? []).map((o) => {
+      return data.map((o) => {
         const tipoFila = (o.tipo === "OS" ? "OS" : "OC") as "OC" | "OS";
         const etapa = etapaOrdenCompra(o as never, tipoFila);
         return {
@@ -319,6 +336,11 @@ export function Ordenes() {
           <input type="checkbox" checked={verBackoffice} onChange={(e) => setVerBackoffice(e.target.checked)} />
           Ver también las del backoffice
         </label>
+        {lista.data && (
+          <span className="text-xs text-slate-500">
+            {filas.length === lista.data.length ? `${lista.data.length} órdenes` : `${filas.length} de ${lista.data.length} órdenes`}
+          </span>
+        )}
       </div>
       {error && <p className="mb-2 rounded bg-red-50 px-2 py-1 text-sm text-red-700">{error}</p>}
       {lista.isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
