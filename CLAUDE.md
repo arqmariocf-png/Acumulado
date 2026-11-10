@@ -1291,6 +1291,23 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   con módulo proyectos, Mauro (responsable), Jorge (empresa) y Laura. Probado
   en rollback como Timoteo: obra en CSC (queda responsable, con tablero) y en
   MCF; AEP bloqueada; tablero en MCF sí, en AEP no; Alma no da de alta.
+  **IKEA y Olinia para Fernanda y Tino (10-nov-2026, por WhatsApp a Mario:
+  "podrías habilitar las obras en la app y asignarlas para ir subiendo
+  documentación y requisiciones; Ikea, Olinia; para arq Fernanda y Tino")**:
+  "IKEA Puebla — Celosía divisoria Planning (LOMA-IKEA-CEL-01)" ya existía en
+  CSC (la creó Mario el 9-nov como **privada**, `proyectos.privado` con
+  `propietario_id`: nadie más la veía) y Olinia no existía. Por SQL: IKEA
+  pasó a `privado = false`, se dio de alta **Olinia** (CSC, cliente Olinia,
+  tipo no residencial; su tablero se creó solo) y las dos quedaron con
+  responsable Maria Fernanda Alejandro Cruz (responsable, MCF) y comprador
+  Timoteo Colapala (administrativo CSC). Probado en rollback: los dos ven las
+  dos obras, suben planos (`auth_ve_proyecto`) y piden requisiciones (Fernanda
+  por ser responsable de la obra; Timoteo por módulo proyectos en CSC). **Ojo:
+  Fernanda NO ve el tablero de seguimiento de esas obras** (`tableros_select`
+  pide empresa en su alcance y ella es de MCF; el tablero de obra solo se abre
+  por empresa o por tarjeta etiquetada); si hace falta, darle CSC en "Maneja
+  también" con `alcance_propio` (vería todas las obras de CSC) o extender
+  `auth_tableros_etiquetado` al encargado de la obra.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
