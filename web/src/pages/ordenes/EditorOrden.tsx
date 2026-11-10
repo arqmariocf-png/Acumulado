@@ -251,8 +251,15 @@ export function EditorOrden({
                 value={enc.formaPago}
                 onChange={(e) => {
                   const formaPago = e.target.value;
-                  // Efectivo lleva su condición, para que no se programe como transferencia.
-                  const condicion = tipo !== "OV" && formaPago.toLowerCase().startsWith("efectivo") && (enc.condicion === "" || enc.condicion === "contado") ? "efectivo" : enc.condicion;
+                  // Efectivo lleva su condición, para que no se programe como transferencia;
+                  // y al cambiar a otra forma la condición "efectivo" se quita (Laura, 10-nov-2026:
+                  // la OS quedaba "Efectivo · Transferencia" y el pago salía en efectivo).
+                  const esEfectivo = formaPago.toLowerCase().startsWith("efectivo");
+                  const condicion =
+                    tipo === "OV" ? enc.condicion
+                    : esEfectivo && (enc.condicion === "" || enc.condicion === "contado") ? "efectivo"
+                    : !esEfectivo && enc.condicion === "efectivo" ? ""
+                    : enc.condicion;
                   setEnc({ ...enc, formaPago, condicion });
                 }}
                 className={`mt-1 ${campo} ${tipo !== "OV" && !enc.formaPago ? "border-amber-400" : ""}`}

@@ -1576,6 +1576,20 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   estatus.eq.pendiente)`). Sin cambios de base. Ojo: un pago en efectivo no lo
   ve Delia en Tesorería (va a Efectivo por confirmar); si la 0431 debía ser
   transferencia, Laura edita la OS (forma/condición) antes de programarla.
+  **La condición "efectivo" se quedaba pegada (10-nov-2026, Laura: "sí la
+  edité, pero no está contemplando los cambios; los deja dos veces")**: la
+  0431 se capturó con forma Efectivo (el editor pone condición 'efectivo'
+  solo), Laura la cambió a Transferencia y la condición siguió en 'efectivo':
+  la OS impresa decía "Efectivo · Transferencia electrónica de fondos"
+  (`VerOrdenCompra` junta condición · forma) y al programarla el pago salió en
+  efectivo. `20261110120000` (aplicada como
+  `condicion_efectivo_se_quita_al_cambiar_forma`): `fn_orden_ia_guardar`
+  limpia la condición 'efectivo' cuando la forma no es Efectivo, y el editor
+  (`EditorOrden`) la quita al cambiar la forma. Corregido por SQL: 0431 con
+  condición vacía y su pago pendiente a `transferencia` sin cuenta (Laura la
+  elige en "De qué cuenta sale cada pago"). Quedaron igual IA-OC-0418 e
+  IA-OS-0242 (CSC, ya pagadas en efectivo) e IA-OS-0434 (ERG, Estación Gemma
+  $1,000, pendiente en efectivo): se cambian si Laura lo pide.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
