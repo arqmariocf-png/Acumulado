@@ -1558,6 +1558,24 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   "editar" en línea (update a `pagos_programados.notas`, solo pendientes) y
   Tesorería lo pinta en su propio renglón. La hoja de pagos del día ya lo
   traía en "comentarios". Sin cambios de base.
+  **Todo lo programado se ve en la hoja del día (10-nov-2026, Laura por
+  WhatsApp: "les sale programada la 0431 pero no la veo dentro de mi
+  concentrado"; "es lo que te decía de las de crédito que no se ven"; "QUE
+  TODO LO QUE PROGRAME SE VEA")**: la IA-OS-0431 (CSC, Forza Gas $1,500) se
+  capturó con condición **efectivo** (aunque la forma decía Transferencia), su
+  pago nació con método efectivo y la hoja solo lo sumaba en "Efectivo aparte"
+  sin listarlo; y los pagos a crédito programados a futuro (41189 Cemex 20-nov)
+  no salían hasta su fecha. Ahora `armarHojaPagos` (`lib/hojaPagos.ts`, con
+  pruebas): (1) el efectivo sale renglón por renglón (cargo vacío, forma
+  "Efectivo", comentario "no sale del banco, se confirma en Efectivo por
+  confirmar"); (2) `HojaEmpresa.por_venir` / `por_venir_total` = pendientes con
+  fecha posterior a la hoja, por fecha y folio, bloque "Programado para después
+  de esta fecha (no se resta del saldo del día)" en pantalla, impresión y CSV;
+  una empresa con solo pagos a futuro también sale. `HojaPagosDia.tsx` trae
+  del día + TODO lo pendiente (`or(fecha_programada.eq.<fecha>,
+  estatus.eq.pendiente)`). Sin cambios de base. Ojo: un pago en efectivo no lo
+  ve Delia en Tesorería (va a Efectivo por confirmar); si la 0431 debía ser
+  transferencia, Laura edita la OS (forma/condición) antes de programarla.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI

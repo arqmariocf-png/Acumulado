@@ -35,7 +35,9 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
         .from("v_pagos_programados")
         .select("empresa_id, empresa_nombre, id_orden, beneficiario, concepto, monto, fecha_programada, estatus, metodo, tipo_pago_backoffice, oc_proyecto, notas, referencia, pagado_en, tipo")
         .neq("estatus", "cancelado")
-        .or(`fecha_programada.eq.${fecha},and(estatus.eq.pendiente,fecha_programada.lt.${fecha})`);
+        // Del día, vencidos sin pagar y TODO lo pendiente a futuro (10-nov-2026,
+        // Laura: "que todo lo que programe se vea").
+        .or(`fecha_programada.eq.${fecha},estatus.eq.pendiente`);
       if (err) throw err;
       return (data ?? []) as PagoHoja[];
     },
@@ -101,7 +103,7 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
           {abierta ? "▾" : "▸"} Hoja de pagos del día por empresa
         </button>
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value || hoy)} className="rounded border border-slate-300 px-2 py-1 text-xs" />
-        <span className="text-xs text-slate-500">saldo inicial de cada cuenta, más traspasos y préstamos que llegan, menos OC, nómina, mano de obra, traspasos y préstamos del día (y los vencidos sin pagar)</span>
+        <span className="text-xs text-slate-500">saldo inicial de cada cuenta, más traspasos y préstamos que llegan, menos OC, nómina, mano de obra, traspasos y préstamos del día (y los vencidos sin pagar); el efectivo y lo programado para después se listan aparte, sin restar</span>
         <span className="ml-auto flex gap-2">
           <button type="button" onClick={imprimir} disabled={hojas.length === 0} className="rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50">
             Imprimir
@@ -159,6 +161,35 @@ export function HojaPagosDia({ filtroEmpresa, hoy }: { filtroEmpresa: string; ho
                       {h.n_efectivo > 0 && `Efectivo aparte (no sale del banco): ${h.n_efectivo} · ${moneda(h.efectivo)}`}
                     </td>
                   </tr>
+                  {h.por_venir.length > 0 && (
+                    <>
+                      <tr className="bg-slate-100 text-[10px] uppercase text-slate-600">
+                        <th colSpan={8} className="px-2 py-1 text-left">
+                          Programado para después de esta fecha (no se resta del saldo del día)
+                        </th>
+                      </tr>
+                      {h.por_venir.map((r, i) => (
+                        <tr key={`v${i}`} className="border-b border-slate-100 text-slate-700">
+                          <td className="px-2 py-1 font-mono">{r.oc ?? ""}</td>
+                          <td className="px-2 py-1">{r.proveedor}</td>
+                          <td className="px-2 py-1" />
+                          <td className="px-2 py-1 text-right tabular-nums">{moneda(r.cargo ?? 0)}</td>
+                          <td className="px-2 py-1 text-right tabular-nums text-slate-500">{moneda(r.saldo)}</td>
+                          <td className="px-2 py-1 text-slate-600">{r.forma_pago ?? ""}</td>
+                          <td className="px-2 py-1 text-slate-600">{r.proyecto ?? ""}</td>
+                          <td className="px-2 py-1 text-slate-600">{r.comentarios ?? ""}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-50 font-semibold text-slate-700">
+                        <td className="px-2 py-1" />
+                        <td className="px-2 py-1">Programado para después</td>
+                        <td className="px-2 py-1" />
+                        <td className="px-2 py-1 text-right tabular-nums">{moneda(h.por_venir_total)}</td>
+                        <td className="px-2 py-1" />
+                        <td colSpan={3} className="px-2 py-1 font-normal text-slate-600">{h.por_venir.length} pago(s)</td>
+                      </tr>
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>

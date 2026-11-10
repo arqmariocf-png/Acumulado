@@ -87,6 +87,11 @@ export interface HojaEmpresa {
   /** Pagos en efectivo del día: no salen del banco, van aparte. */
   efectivo: number;
   n_efectivo: number;
+  /** Pendientes programados DESPUÉS de la fecha de la hoja (crédito, pagos
+   * a futuro): se listan para que todo lo programado se vea (10-nov-2026,
+   * Laura: "que todo lo que programe se vea"), sin tocar el saldo del día. */
+  por_venir: RenglonHoja[];
+  por_venir_total: number;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -117,13 +122,16 @@ export function notaSaldoInicial(saldoAl: string | null | undefined, fecha: stri
 }
 
 /** Pagos de la fecha (no cancelados) y los pendientes vencidos de días
- * anteriores, que siguen por pagar. El efectivo no toca el saldo. */
+ * anteriores, que siguen por pagar. El efectivo se lista pero no toca el
+ * saldo del banco (10-nov-2026, Laura: la IA-OS-0431 en efectivo "está
+ * programada pero no la veo en mi concentrado"). Lo pendiente con fecha
+ * posterior va en `por_venir`, también sin tocar el saldo. */
 export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: string, entradas: EntradaHoja[] = []): HojaEmpresa[] {
   const mapa = new Map<string, HojaEmpresa>();
   const hoja = (id: string, nombre: string) => {
     let h = mapa.get(id);
     if (!h) {
-      h = { empresa_id: id, empresa_nombre: nombre, renglones: [], abonos: 0, cargos: 0, saldo: 0, efectivo: 0, n_efectivo: 0 };
+      h = { empresa_id: id, empresa_nombre: nombre, renglones: [], abonos: 0, cargos: 0, saldo: 0, efectivo: 0, n_efectivo: 0, por_venir: [], por_venir_total: 0 };
       mapa.set(id, h);
     }
     return h;
@@ -180,6 +188,17 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     if (p.metodo === "efectivo") {
       h.efectivo = r2(h.efectivo + monto);
       h.n_efectivo += 1;
+      h.renglones.push({
+        tipo: "pago",
+        oc: p.id_orden,
+        proveedor: nombrePago(p),
+        abono: null,
+        cargo: null,
+        saldo: h.saldo,
+        forma_pago: "Efectivo",
+        proyecto: p.oc_proyecto,
+        comentarios: [p.fecha_programada < fecha ? `vencido del ${ddmm(p.fecha_programada)}` : null, p.estatus === "pagado" ? "pagado" : "efectivo: no sale del banco, se confirma en Efectivo por confirmar", p.notas].filter(Boolean).join(" · "),
+      });
       continue;
     }
     // Pagado antes de la fecha de la hoja (Mario, 22-oct-2026: la OC 41187
@@ -202,7 +221,7 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     h.renglones.push({
       tipo: "pago",
       oc: p.id_orden,
-      proveedor: p.id_orden ? p.beneficiario : p.concepto && p.concepto !== p.beneficiario ? `${p.beneficiario} · ${p.concepto}` : p.beneficiario,
+      proveedor: nombrePago(p),
       abono: null,
       cargo: yaEnSaldo ? null : monto,
       saldo: h.saldo,
@@ -211,7 +230,30 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
       comentarios: comentarios.length ? comentarios.join(" · ") : null,
     });
   }
-  return [...mapa.values()].filter((h) => h.renglones.some((r) => r.tipo === "pago") || h.abonos !== 0 || h.n_efectivo > 0).sort((a, b) => a.empresa_nombre.localeCompare(b.empresa_nombre, "es"));
+  // Lo programado para después de la fecha: por fecha y luego por folio.
+  const porVenir = pagos.filter((p) => p.estatus === "pendiente" && p.fecha_programada > fecha);
+  porVenir.sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada) || (b.id_orden ?? "").localeCompare(a.id_orden ?? "", "es", { numeric: true }) || a.beneficiario.localeCompare(b.beneficiario, "es"));
+  for (const p of porVenir) {
+    const h = hoja(p.empresa_id, p.empresa_nombre);
+    const monto = r2(Number(p.monto) || 0);
+    h.por_venir_total = r2(h.por_venir_total + monto);
+    h.por_venir.push({
+      tipo: "pago",
+      oc: p.id_orden,
+      proveedor: nombrePago(p),
+      abono: null,
+      cargo: monto,
+      saldo: h.por_venir_total,
+      forma_pago: p.metodo === "efectivo" ? "Efectivo" : p.tipo && p.tipo !== "proveedor" ? ETIQUETA_TIPO_PAGO[p.tipo] : (p.tipo_pago_backoffice ?? METODO[p.metodo]),
+      proyecto: p.oc_proyecto,
+      comentarios: [`programado para el ${ddmm(p.fecha_programada)}`, p.notas].filter(Boolean).join(" · "),
+    });
+  }
+  return [...mapa.values()].filter((h) => h.renglones.some((r) => r.tipo === "pago") || h.abonos !== 0 || h.n_efectivo > 0 || h.por_venir.length > 0).sort((a, b) => a.empresa_nombre.localeCompare(b.empresa_nombre, "es"));
+}
+
+function nombrePago(p: PagoHoja): string {
+  return p.id_orden ? p.beneficiario : p.concepto && p.concepto !== p.beneficiario ? `${p.beneficiario} · ${p.concepto}` : p.beneficiario;
 }
 
 function esc(t: string | number | null | undefined): string {
@@ -241,6 +283,13 @@ export function htmlHojaPagos(fechaTexto: string, hojas: HojaEmpresa[]): string 
         )
         .join("")}
       <tr class="tot"><td></td><td></td><td class="r">${moneda(h.abonos)}</td><td class="r">${moneda(h.cargos)}</td><td class="r">${moneda(h.saldo)}</td><td colspan="3">${h.n_efectivo ? `Efectivo aparte (no sale del banco): ${h.n_efectivo} · ${moneda(h.efectivo)}` : ""}</td></tr>
+      ${
+        h.por_venir.length
+          ? `<tr class="sub"><th colspan="8">Programado para después de esta fecha (no se resta del saldo del día)</th></tr>` +
+            h.por_venir.map((r) => `<tr><td>${esc(r.oc)}</td><td class="c">${esc(r.proveedor)}</td><td class="r"></td><td class="r">${moneda(r.cargo)}</td><td class="r">${moneda(r.saldo)}</td><td>${esc(r.forma_pago)}</td><td>${esc(r.proyecto)}</td><td>${esc(r.comentarios)}</td></tr>`).join("") +
+            `<tr class="tot"><td></td><td>Programado para después</td><td></td><td class="r">${moneda(h.por_venir_total)}</td><td></td><td colspan="3">${h.por_venir.length} pago(s)</td></tr>`
+          : ""
+      }
     </tbody>
   </table>`,
     )
@@ -256,6 +305,7 @@ export function htmlHojaPagos(fechaTexto: string, hojas: HojaEmpresa[]): string 
   .r { text-align: right; white-space: nowrap; } .c { text-align: center; }
   tr.tot td { background: #dbeafe; font-weight: bold; }
   tr.neg td { color: #b91c1c; }
+  tr.sub th { background: #e2e8f0; color: #0f172a; text-align: left; font-size: 10px; text-transform: none; }
   .btn { position: fixed; top: 8px; right: 8px; padding: 6px 12px; background: #0f172a; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
   @media print { .btn { display: none; } body { margin: 0; } }
 </style></head><body>
@@ -279,6 +329,11 @@ export function csvHojaPagos(hojas: HojaEmpresa[]): string {
     filas.push("OC,PROVEEDOR,ABONO,CARGO,SALDO,FORMA DE PAGO,PROYECTO,COMENTARIOS");
     for (const r of h.renglones) filas.push([r.oc, r.proveedor, r.abono?.toFixed(2) ?? null, r.cargo?.toFixed(2) ?? null, r.saldo.toFixed(2), r.forma_pago, r.proyecto, r.comentarios].map(celda).join(","));
     filas.push(["", "TOTAL", h.abonos.toFixed(2), h.cargos.toFixed(2), h.saldo.toFixed(2), "", "", h.n_efectivo ? `Efectivo aparte: ${h.efectivo.toFixed(2)}` : ""].map(celda).join(","));
+    if (h.por_venir.length) {
+      filas.push(celda("PROGRAMADO PARA DESPUÉS DE ESTA FECHA (no se resta del saldo del día)"));
+      for (const r of h.por_venir) filas.push([r.oc, r.proveedor, null, r.cargo?.toFixed(2) ?? null, r.saldo.toFixed(2), r.forma_pago, r.proyecto, r.comentarios].map(celda).join(","));
+      filas.push(["", "PROGRAMADO PARA DESPUÉS", "", h.por_venir_total.toFixed(2), "", "", "", `${h.por_venir.length} pago(s)`].map(celda).join(","));
+    }
     filas.push("");
   }
   return "﻿" + filas.join("\n");
