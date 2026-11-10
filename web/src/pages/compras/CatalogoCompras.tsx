@@ -11,6 +11,7 @@ import { useItemsCompra } from "./useItemsCompra";
 import { descargarCsv } from "../../lib/descargarArchivo";
 import { clabeValida } from "../../lib/importarBancarios";
 import { csvProveedoresCatalogo } from "../../lib/catalogoExcel";
+import { BotonImportarBackoffice } from "../../components/BotonImportarBackoffice";
 
 const dinero = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }));
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -102,6 +103,7 @@ function ListaProveedores({ lista, cargando, onElegir, onNuevo }: { lista: Contr
         >
           Descargar Excel
         </button>
+        {!soloConsulta && <BotonImportarBackoffice funcion="fn_proveedores_importar_backoffice" que="proveedores" invalidar={["ordenes-ia-catalogo", "proveedor-ficha"]} />}
         {!soloConsulta && (
           <button type="button" onClick={onNuevo} className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white">
             + Nuevo proveedor

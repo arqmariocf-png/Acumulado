@@ -2287,6 +2287,25 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   tienen "Descargar Excel" con todo lo filtrado (`lib/catalogoExcel.ts`, con
   pruebas). Al 27-oct: 302 contrapartes (6 con ficha), 1,360 items, 3,587
   partidas por proveedor en `fn_ordenes_catalogo_captura`.
+  **Proveedores e items completos y al día (10-nov-2026, Mario: "siguen sin
+  estar los proveedores completos y materiales en tu sistema")**: de 321
+  proveedores en las OC solo 18 tenían ficha (los demás salían "solo en
+  órdenes", sin ficha que completar; no existía importación de proveedores),
+  `fn_items_importar_backoffice` solo tomaba OC `fuente = 'api'` (las 399
+  partidas de las OC/OS IA capturadas aquí no entraban: 246 faltaban) y las
+  importaciones solo corrían con el botón (última vez 21-oct).
+  `20261110100000` (aplicada como `catalogos_desde_ordenes_automatico`):
+  `fn_proveedores_importar_backoffice()` (ficha por cada proveedor de
+  cualquier OC no rechazada, nombre de la OC más reciente, RFC de
+  `proveedores_datos_bancarios` si lo hay; misma guarda que items), items de
+  TODAS las fuentes (api con IVA /1.16, lo de aquí ya s/IVA), y el cron
+  `sync-catalogo-oc-ov-horario` corre al final proveedores, items y clientes
+  (sin usuario pasan las guardas). Botón "Importar del backoffice" también en
+  Proveedores y artículos. Corrida 10-nov: +302 proveedores (320 fichas, 190
+  con RFC), +242 items (1,602), +4 clientes (63); 0 pendientes. **Lo que el
+  backoffice tiene en su catálogo y nunca salió en una OC no se puede traer
+  (la API no expone proveedores ni items): se captura a mano o Gonzalo expone
+  un endpoint.**
 - **Cancelar, impresión completa y clientes registrados (15-oct-2026,
   Mario)**: (1) `fn_orden_ia_cancelar` ya cancela CUALQUIER OC/OS
   (backoffice, Excel, RQ: solo admin/corporativo/dirección; IA también
