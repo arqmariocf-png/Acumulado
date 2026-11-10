@@ -1587,9 +1587,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   limpia la condición 'efectivo' cuando la forma no es Efectivo, y el editor
   (`EditorOrden`) la quita al cambiar la forma. Corregido por SQL: 0431 con
   condición vacía y su pago pendiente a `transferencia` sin cuenta (Laura la
-  elige en "De qué cuenta sale cada pago"). Quedaron igual IA-OC-0418 e
-  IA-OS-0242 (CSC, ya pagadas en efectivo) e IA-OS-0434 (ERG, Estación Gemma
-  $1,000, pendiente en efectivo): se cambian si Laura lo pide.
+  elige en "De qué cuenta sale cada pago"). Mario decidió las otras tres con
+  el mismo cruce: IA-OS-0242 (CSC, $5,200, pagada) se queda en efectivo (forma
+  puesta en Efectivo); IA-OC-0418 (CSC, Coel $4,941.07, pagada y confirmada
+  sin comprobante) e IA-OS-0434 (ERG, Estación Gemma $1,000, pendiente) pasan a
+  transferencia: condición vacía y pago con método transferencia sin cuenta
+  (la 0418 sigue pagada; Delia le sube el comprobante en Tesorería).
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI
