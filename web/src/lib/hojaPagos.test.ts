@@ -29,7 +29,7 @@ test("hoja de Laura (30-sep): saldo inicial por cuenta, cargos y saldo corrido",
   assert.equal(h.renglones[7].forma_pago, "Transferencia");
 });
 
-test("vencidos pendientes entran con comentario; efectivo va aparte; cancelados y futuros no", () => {
+test("vencidos pendientes entran con comentario; efectivo se lista sin tocar el saldo; cancelados no; futuros en 'por venir'", () => {
   const pagos = [
     pago({ id_orden: "41000", beneficiario: "A", monto: 100, fecha_programada: "2026-09-28" }),
     pago({ id_orden: "41001", beneficiario: "B", monto: 50, fecha_programada: "2026-09-28", estatus: "pagado" }),
@@ -39,13 +39,33 @@ test("vencidos pendientes entran con comentario; efectivo va aparte; cancelados 
     pago({ id_orden: "41005", beneficiario: "F", monto: 20, estatus: "pagado", referencia: "123" }),
   ];
   const [h] = armarHojaPagos([], pagos, "2026-09-30");
-  assert.deepEqual(h.renglones.map((r) => r.oc), ["41005", "41000"]);
-  assert.equal(h.renglones[1].comentarios, "vencido del 28/09");
+  assert.deepEqual(h.renglones.map((r) => r.oc), ["41005", "41002", "41000"]);
+  assert.equal(h.renglones[2].comentarios, "vencido del 28/09");
   assert.equal(h.renglones[0].comentarios, "pagado · ref 123");
+  // El efectivo (IA-OS-0431 de Laura, 10-nov-2026) se ve como renglón pero no
+  // resta del banco.
+  assert.equal(h.renglones[1].cargo, null);
+  assert.equal(h.renglones[1].forma_pago, "Efectivo");
+  assert.match(h.renglones[1].comentarios ?? "", /no sale del banco/);
   assert.equal(h.cargos, 120);
   assert.equal(h.saldo, -120);
   assert.equal(h.efectivo, 70);
   assert.equal(h.n_efectivo, 1);
+  // Lo programado para después (crédito a futuro) se lista aparte, con su
+  // fecha, sin tocar el saldo del día.
+  assert.deepEqual(h.por_venir.map((r) => [r.oc, r.cargo, r.comentarios]), [["41004", 10, "programado para el 01/10"]]);
+  assert.equal(h.por_venir_total, 10);
+});
+
+test("solo con pagos a futuro la empresa también sale en la hoja, y el HTML/CSV los traen", () => {
+  const pagos = [pago({ id_orden: "41189", beneficiario: "Cemex", monto: 24795, fecha_programada: "2026-11-20", notas: "crédito 30 días" }), pago({ id_orden: "41190", beneficiario: "Cemex", monto: 5, fecha_programada: "2026-11-12" })];
+  const hojas = armarHojaPagos([], pagos, "2026-11-10");
+  assert.equal(hojas.length, 1);
+  assert.deepEqual(hojas[0].por_venir.map((r) => r.oc), ["41190", "41189"]);
+  assert.equal(hojas[0].por_venir_total, 24800);
+  assert.equal(hojas[0].cargos, 0);
+  assert.match(htmlHojaPagos("10.11.26", hojas), /Programado para después de esta fecha/);
+  assert.match(csvHojaPagos(hojas), /41189,Cemex,,24795\.00,24800\.00,Transferencia,,programado para el 20\/11 · crédito 30 días/);
 });
 
 test("HTML y CSV traen los totales por empresa", () => {
