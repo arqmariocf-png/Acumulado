@@ -47,6 +47,11 @@ export interface ResultadoParseoPdf {
    * movimientos, o el total/saldo parseado no cuadra con lo que el banco
    * declara en el propio PDF) -- si viene lleno, no confiar en `movimientos`. */
   errorDocumento: string | null;
+  /** Estado de cuenta SIN movimientos en el periodo pero con saldo y fecha
+   * de corte declarados (Banorte mensual "SIN MOVIMIENTOS"): el handler lo
+   * guarda como un renglón de saldo en cero para que la cuenta quede al día
+   * (caso real 9-nov-2026, Delia: Constructora, Banorte 7529, octubre). */
+  saldoCierre?: { fecha: string; saldo: number } | null;
 }
 
 const MESES: Record<string, number> = {

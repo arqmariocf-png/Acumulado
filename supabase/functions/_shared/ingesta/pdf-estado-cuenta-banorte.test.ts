@@ -152,6 +152,14 @@ test('una cuenta sin movimientos en el periodo ("SALDO ANTERIOR ... SIN MOVIMIEN
   assert.equal(r.errorDocumento, null);
   assert.equal(r.erroresPorFila.length, 0);
   assert.equal(r.movimientos.length, 0);
+  // Sin movimientos, el documento igual dice el saldo y la fecha de corte:
+  // el handler lo guarda como renglón de saldo para que la cuenta quede al día.
+  assert.deepEqual(r.saldoCierre, { fecha: "2026-07-31", saldo: 17184.01 });
+});
+
+test("un estado mensual CON movimientos no trae saldoCierre (el saldo ya va en cada renglón)", () => {
+  const r = parsearPdfEstadoCuentaBanorte(TEXTO_REAL_BANORTE_ACEROS_JULIO_2026);
+  assert.ok(!r.saldoCierre);
 });
 
 test('parsea el TERCER formato de Banorte -- "Cuentas de Cheques" detallado, con Depósitos/Retiros en columnas separadas (misma cuenta Aceros 1273, agosto 2026): 7 movimientos, cuadra exacto con OPERACIONES/TOTAL declarados y con Saldo Actual', () => {
@@ -227,4 +235,28 @@ test("en el TERCER formato de Banorte, cuando FECHA DE OPERACIÓN y FECHA (aplic
   const intereses = r.movimientos.find((m) => /INTERESES/.test(m.nombreRazonSocial ?? ""));
   assert.equal(intereses?.fechaPago, "2026-08-17");
   assert.doesNotMatch(intereses?.observacion ?? "", /aplicación/);
+});
+
+test('TERCER formato con columna MONEDA (noviembre 2026, Aceros 1273, 1 al 6 de noviembre): 8 movimientos, cuadra con OPERACIONES/TOTAL y Saldo Actual aunque "MXP" se intercale en cada renglón y en el pie', async () => {
+  const { TEXTO_REAL_BANORTE_ACEROS_NOVIEMBRE_2026_CUENTA_CHEQUES_MONEDA } = await import("./pdf-estado-cuenta-banorte-cuenta-cheques-moneda.fixture.ts");
+  const r = parsearPdfEstadoCuentaBanorte(TEXTO_REAL_BANORTE_ACEROS_NOVIEMBRE_2026_CUENTA_CHEQUES_MONEDA, "1273");
+  assert.equal(r.errorDocumento, null);
+  assert.deepEqual(r.erroresPorFila, []);
+  assert.equal(r.movimientos.length, 8);
+  const depositos = r.movimientos.filter((m) => m.abonoTotal != null);
+  const retiros = r.movimientos.filter((m) => m.cargoTotal != null);
+  assert.equal(depositos.length, 3);
+  assert.equal(retiros.length, 5);
+  assert.equal(Math.round(depositos.reduce((a, m) => a + (m.abonoTotal ?? 0), 0) * 100) / 100, 1530000);
+  assert.equal(Math.round(retiros.reduce((a, m) => a + (m.cargoTotal ?? 0), 0) * 100) / 100, 1516607.49);
+  assert.equal(r.movimientos[0].folio, "678");
+  assert.equal(r.movimientos[0].fechaPago, "2026-11-05");
+  const capital = r.movimientos.find((m) => /PAGO DE CAPITAL/.test(m.nombreRazonSocial ?? ""));
+  assert.equal(capital?.cargoTotal, 1453500);
+  assert.equal(capital?.fechaPago, "2026-11-06");
+  const ultimo = r.movimientos[r.movimientos.length - 1];
+  assert.equal(ultimo.saldo, 14524.3);
+  assert.equal(ultimo.folio, "685");
+  // "MXP" no se cuela en las descripciones ni el pie en el último renglón.
+  for (const m of r.movimientos) assert.doesNotMatch(m.nombreRazonSocial ?? "", /\bMXP\b|OPERACIONES|TOTAL:/);
 });

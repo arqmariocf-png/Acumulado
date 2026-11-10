@@ -174,6 +174,17 @@ function seccionDeHeader(textoCompleto: string, idxHeader: number, idxSiguienteH
  *   comportamiento de bloquear el documento ante un segundo producto con
  *   movimientos reales.
  */
+const MESES_LARGOS: Record<string, number> = { ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6, JULIO: 7, AGOSTO: 8, SEPTIEMBRE: 9, OCTUBRE: 10, NOVIEMBRE: 11, DICIEMBRE: 12 };
+
+/** "Fecha de corte 31/Octubre/2026" del encabezado del estado mensual → ISO. */
+export function extraerFechaCorteBanorte(textoCompleto: string): string | null {
+  const m = textoCompleto.match(/Fecha de corte\s+(\d{1,2})\/([A-Za-z\u00C0-\u00FF]+)\/(\d{4})/i);
+  if (!m) return null;
+  const mes = MESES_LARGOS[m[2].toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")];
+  if (!mes) return null;
+  return `${m[3]}-${String(mes).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+}
+
 function parsearFormatoEstadoCuentaMensual(textoCompleto: string, cuentaUltimos4?: string): ResultadoParseoPdf {
   const posicionesHeader = [...textoCompleto.matchAll(new RegExp(RE_ENCABEZADO_TABLA, "g"))].map((m) => m.index!);
   const idxOtros = textoCompleto.indexOf(RE_OTROS_MARCADOR);
@@ -352,7 +363,12 @@ function parsearFormatoEstadoCuentaMensual(textoCompleto: string, cuentaUltimos4
     }
   }
 
-  return { movimientos, erroresPorFila, errorDocumento: null };
+  // Sin movimientos en el periodo (solo "SALDO ANTERIOR ... SIN MOVIMIENTOS"):
+  // no hay renglones que insertar, pero el documento sí dice el saldo al
+  // corte; se devuelve para que la cuenta quede al día en vez de parecer
+  // que no se cargó nada (9-nov-2026, Delia: Constructora, Banorte 7529).
+  const fechaCorte = movimientos.length === 0 && erroresPorFila.length === 0 ? extraerFechaCorteBanorte(textoCompleto) : null;
+  return { movimientos, erroresPorFila, errorDocumento: null, saldoCierre: fechaCorte ? { fecha: fechaCorte, saldo: saldoAnterior } : null };
 }
 
 // ── Formato 2: "Detalle de Movimientos" del portal Enlace ──────────────────
@@ -695,8 +711,15 @@ const RE_ENCABEZADO_DETALLADO = "MOVIMIENTO DESCRIPCIÓN DETALLADA";
 // aplicación 15/09 (el vencimiento). Tesorería lleva el día por operación,
 // así que esa es la que manda; la de aplicación se anota en la observación
 // cuando difiere para no perderla.
-const RE_ANCLA_DETALLADO = /^(\d+) (\d{2})\/(\d{2})\/(\d{4}) (\d{2})\/(\d{2})\/(\d{4}) \d+ /gm;
-const RE_MONTOS_MOVIMIENTO_DETALLADO = /(-|\$[\d,]+\.\d{2})\s+(-|\$[\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+(\d+)/;
+// REFERENCIA puede venir como "-" (transferencias SPEI enviadas e IVA de
+// la orden de pago, noviembre 2026): sin aceptarlo esos renglones se pegaban
+// al anterior y la cadena de saldos "no cuadraba".
+const RE_ANCLA_DETALLADO = /^(\d+) (\d{2})\/(\d{2})\/(\d{4}) (\d{2})\/(\d{2})\/(\d{4}) (?:\d+|-) /gm;
+// Desde noviembre 2026 el export trae una columna MONEDA ("MXP") entre
+// SALDO y MOVIMIENTO (caso real 9-nov-2026, Delia: "no lee el estado de
+// cuenta de Aceros"; las 6 filas salían "sin montos"): el código de moneda
+// es opcional en la expresión, igual que en los totales del pie.
+const RE_MONTOS_MOVIMIENTO_DETALLADO = /(-|\$[\d,]+\.\d{2})\s+(-|\$[\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+(?:[A-Z]{3}\s+)?(\d+)/;
 
 interface TotalesDetallado {
   numeroDepositos: number | null;
@@ -708,7 +731,8 @@ interface TotalesDetallado {
 
 function extraerTotalesDetallado(textoCompleto: string): TotalesDetallado {
   const mOperaciones = textoCompleto.match(/OPERACIONES:\s*(\d+)\s+(\d+)/i);
-  const mTotal = textoCompleto.match(/TOTAL:\s*\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})/i);
+  // Con la columna MONEDA el pie queda "TOTAL: $1,530,000.00\nMXP $1,516,607.49\nMXP".
+  const mTotal = textoCompleto.match(/TOTAL:\s*\$([\d,]+\.\d{2})\s*(?:[A-Z]{3}\s*)?\$([\d,]+\.\d{2})/i);
   const mSaldoActual = textoCompleto.match(/Saldo Actual:\s*\$([\d,]+\.\d{2})/i);
   return {
     numeroDepositos: mOperaciones ? Number(mOperaciones[1]) : null,
