@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { esOcEfectivo, estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc } from "./pagosOc.ts";
+import { comentarioPago, esOcEfectivo, estadoPagoOc, fechaPagoSugerida, montoPagoSugerido, saldoOc } from "./pagosOc.ts";
 
 const oc = { total: 1160, pagado: 0, fecha_creacion: "2026-09-01", dias_credito: 30 };
 
@@ -95,4 +95,12 @@ test("efectivo por forma de pago aunque la condición diga contado", () => {
   assert.equal(esOcEfectivo({ condicion_pago: "efectivo", tipo_pago_backoffice: "Transferencia electrónica de fondos" }), true);
   assert.equal(esOcEfectivo({ condicion_pago: null, tipo_pago_backoffice: "Transferencia electrónica de fondos" }), false);
   assert.equal(esOcEfectivo({ condicion_pago: "credito", tipo_pago_backoffice: null }), false);
+});
+
+test("comentarioPago junta el propio de la orden con el general del lote", () => {
+  assert.equal(comentarioPago("", ""), null);
+  assert.equal(comentarioPago(null, "  "), null);
+  assert.equal(comentarioPago("pagar antes del viernes", null), "pagar antes del viernes");
+  assert.equal(comentarioPago(" pagar antes del viernes ", "anticipo 50 %"), "anticipo 50 % · pagar antes del viernes");
+  assert.equal(comentarioPago("urgente", "urgente"), "urgente");
 });

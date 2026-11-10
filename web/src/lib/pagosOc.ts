@@ -179,3 +179,13 @@ export function esOcEfectivo(o: { condicion_pago?: string | null; tipo_pago_back
 export const FILTRO_OC_EFECTIVO = "condicion_pago.eq.efectivo,tipo_pago_backoffice.ilike.efectivo*";
 /** Lo contrario: las que salen de banco (transferencia, tarjeta, cheque o sin forma). */
 export const FILTRO_OC_NO_EFECTIVO = "and(or(condicion_pago.is.null,condicion_pago.neq.efectivo),or(tipo_pago_backoffice.is.null,tipo_pago_backoffice.not.ilike.efectivo*))";
+
+// Comentario que se guarda en cada pago del lote "Programar a pago N"
+// (10-nov-2026, Mario: "Laura necesita un apartado de comentarios para los
+// pagos que se seleccionan"): el propio de la orden y, si hay, el general
+// del lote; tesorería y la hoja de pagos del día lo muestran tal cual.
+export function comentarioPago(general: string | null | undefined, propio: string | null | undefined): string | null {
+  const partes = [propio, general].map((t) => (t ?? "").trim()).filter(Boolean);
+  if (partes.length === 0) return null;
+  return partes.length === 2 && partes[0] === partes[1] ? partes[0] : partes.join(" · ");
+}

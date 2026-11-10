@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
-import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, esOcEfectivo, estadoPagoOc, etapaOc, porProgramarOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
+import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, comentarioPago, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, esOcEfectivo, estadoPagoOc, etapaOc, porProgramarOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { OcPorAutorizar } from "./OcPorAutorizar";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
@@ -203,6 +203,11 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
   // monto editable; en blanco = todo lo que falta por programar.
   const [verLote, setVerLote] = useState(false);
   const [montosLote, setMontosLote] = useState<Record<string, string>>({});
+  // Comentarios del lote (10-nov-2026, Mario: "Laura necesita un apartado de
+  // comentarios para los pagos que se seleccionan"): uno por orden y uno
+  // general que se agrega a todos; los ve tesorería y la hoja de pagos del día.
+  const [comentariosLote, setComentariosLote] = useState<Record<string, string>>({});
+  const [comentarioGeneral, setComentarioGeneral] = useState("");
   // Cuenta de la que sale el pago, por empresa, para las que no son en efectivo.
   const [cuentasLote, setCuentasLote] = useState<Record<string, string>>(() => cuentasRecordadas());
   const empresasLote = useMemo(() => {
@@ -231,7 +236,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
       for (const o of programables) {
         const c = condicionInicialDe(o);
         const cuentaId = c === "efectivo" ? null : cuentasLote[o.empresa_id] || null;
-        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: Math.round(montoLote(o) * 100) / 100, p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: cuentaId, p_notas: null });
+        const { error: err } = await supabase.rpc("fn_oc_programar_pago", { p_oc_id: o.id, p_condicion: c, p_monto: Math.round(montoLote(o) * 100) / 100, p_fecha: fechaPagoSugerida(c, o, hoy), p_cuenta_id: cuentaId, p_notas: comentarioPago(comentarioGeneral, comentariosLote[o.id]) });
         if (err) errores.push(`${o.id_orden}: ${err.message}`);
         else {
           n += 1;
@@ -245,6 +250,8 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
       setSeleccion(new Set());
       setVerLote(false);
       setMontosLote({});
+      setComentariosLote({});
+      setComentarioGeneral("");
       for (const k of [["oc-pagos"], ["oc-indicadores"], ["pagos-programados"], ["cxp-proveedores"], ["tesoreria"]]) queryClient.invalidateQueries({ queryKey: k });
     },
     onError: (e: Error) => setAviso(e.message),
@@ -360,6 +367,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
                   <th className="py-1 text-right">Por programar</th>
                   <th className="py-1 text-right">Monto a pagar</th>
                   <th className="py-1">Fecha sugerida</th>
+                  <th className="py-1">Comentarios</th>
                 </tr>
               </thead>
               <tbody>
@@ -385,11 +393,25 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
                       <td className="py-1 text-slate-600">
                         {fechaPagoSugerida(c, o, hoy)} · {ETIQUETA_CONDICION[c].toLowerCase()}
                       </td>
+                      <td className="py-1">
+                        <input
+                          value={comentariosLote[o.id] ?? ""}
+                          placeholder="p. ej. anticipo 50 %, pagar antes del viernes…"
+                          onChange={(e) => setComentariosLote((m) => ({ ...m, [o.id]: e.target.value }))}
+                          className="w-full min-w-48 rounded border border-slate-300 px-1.5 py-0.5"
+                        />
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            <label className="mt-2 flex flex-wrap items-center gap-2 text-slate-700">
+              <span>
+                <b>Comentario para todos</b> (se agrega al de cada orden):
+              </span>
+              <input value={comentarioGeneral} onChange={(e) => setComentarioGeneral(e.target.value)} placeholder="p. ej. pagos de la semana, confirmar con el proveedor…" className="min-w-72 flex-1 rounded border border-slate-300 px-1.5 py-0.5" />
+            </label>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => programarLote.mutate()} disabled={programarLote.isPending} className="rounded bg-emerald-700 px-3 py-1 font-medium text-white disabled:opacity-50">
                 {programarLote.isPending ? "Programando…" : `Programar ${moneda(programables.reduce((t, o) => t + (Number.isFinite(montoLote(o)) ? montoLote(o) : 0), 0))}`}
@@ -397,7 +419,7 @@ export function OrdenesPorPagar({ filtroEmpresa, hoy, nombreEmpresa, cuentas, so
               <button type="button" onClick={() => setVerLote(false)} className="underline">
                 cancelar
               </button>
-              <span className="text-slate-500">En blanco = todo lo que falta por programar. Lo que no se pague queda como saldo de la orden.</span>
+              <span className="text-slate-500">En blanco = todo lo que falta por programar. Lo que no se pague queda como saldo de la orden. Los comentarios salen en Tesorería y en la hoja de pagos del día.</span>
             </div>
           </div>
         )}
@@ -723,8 +745,8 @@ function FilaOc({ oc, hoy, empresa, cuentas, abierta, onAbrir, onAviso, seleccio
                 {cuentas.length === 0 && <p className="mt-0.5 text-xs text-amber-700">La empresa no tiene cuentas bancarias activas.</p>}
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Notas</label>
-                <input value={notas} onChange={(e) => setNotas(e.target.value)} className="w-44 rounded border border-slate-300 px-2 py-1 text-sm" />
+                <label className="mb-1 block text-xs font-medium text-slate-600">Comentarios (los ve tesorería)</label>
+                <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="p. ej. anticipo 50 %" className="w-56 rounded border border-slate-300 px-2 py-1 text-sm" />
               </div>
               <button type="submit" disabled={programar.isPending} className="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
                 {programar.isPending ? "Guardando…" : `Programar ${ETIQUETA_CONDICION[condicion].toLowerCase()}`}

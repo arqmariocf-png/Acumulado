@@ -1548,6 +1548,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   cuenta de cargo" / "cuenta por definir" con liga al bloque. Los pagos que
   nacen por `fn_oc_autorizar` (RQ) siguen sin cuenta hasta que dirección la
   asigne en ese bloque. Sin cambios de base.
+  **Comentarios en los pagos (10-nov-2026, Mario: "Laura necesita un
+  apartado de comentarios para los pagos que se seleccionan")**: el lote
+  "Programar a pago N" solo mandaba `p_notas: null`. Ahora trae columna
+  **Comentarios** por orden y "Comentario para todos" (`comentarioPago` en
+  `lib/pagosOc.ts`, con prueba: propio · general); el formulario por OC lo
+  llama "Comentarios (los ve tesorería)"; en la lista de Programación de
+  pagos cada renglón muestra 💬 el comentario con "agregar comentario" /
+  "editar" en línea (update a `pagos_programados.notas`, solo pendientes) y
+  Tesorería lo pinta en su propio renglón. La hoja de pagos del día ya lo
+  traía en "comentarios". Sin cambios de base.
   **Comprobantes (30-sep)**: aviso arriba de Tesorería (también en el
   inicio) con el % de pagos pagados sin comprobante y la lista para subirlos
   (`components/PagosSinComprobante.tsx`, `lib/comprobantesPago.ts`), KPI

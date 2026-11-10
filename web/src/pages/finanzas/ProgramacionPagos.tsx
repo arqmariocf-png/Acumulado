@@ -75,6 +75,10 @@ export function ProgramacionPagos() {
   const [filtroEmpresa, setFiltroEmpresa] = useState("");
   const [verCerrados, setVerCerrados] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Comentario de un pago, editable en el renglón (10-nov-2026, Mario:
+  // "Laura necesita un apartado de comentarios para los pagos que se
+  // seleccionan"); lo ve tesorería y sale en la hoja de pagos del día.
+  const [comentarioEditando, setComentarioEditando] = useState<{ id: string; texto: string } | null>(null);
 
   const { data: empresas } = useQuery({
     queryKey: ["empresas"],
@@ -101,7 +105,10 @@ export function ProgramacionPagos() {
     },
   });
 
-  const invalidar = () => queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ["pagos-programados"] });
+    queryClient.invalidateQueries({ queryKey: ["tesoreria"] });
+  };
 
   const crear = useMutation({
     mutationFn: async (fila: Record<string, unknown>) => {
@@ -413,6 +420,29 @@ export function ProgramacionPagos() {
                         {p.estatus === "pagado" && p.pagado_en && ` · pagado ${p.pagado_en}`}
                         {p.estatus === "cancelado" && " · cancelado"}
                       </div>
+                      {comentarioEditando?.id === p.id ? (
+                        <form
+                          className="mt-0.5 flex flex-wrap items-center gap-1 text-xs"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            actualizar.mutate({ id: p.id, cambios: { notas: comentarioEditando.texto.trim() || null } });
+                            setComentarioEditando(null);
+                          }}
+                        >
+                          <input autoFocus value={comentarioEditando.texto} onChange={(e) => setComentarioEditando({ id: p.id, texto: e.target.value })} placeholder="Comentario para tesorería…" className="w-72 rounded border border-slate-300 px-1.5 py-0.5 text-slate-800" />
+                          <button type="submit" className="rounded bg-slate-800 px-2 py-0.5 text-white">Guardar</button>
+                          <button type="button" onClick={() => setComentarioEditando(null)} className="text-slate-500 underline">cancelar</button>
+                        </form>
+                      ) : (
+                        <div className="mt-0.5 text-xs">
+                          {p.notas ? <span className="text-slate-700">💬 {p.notas}</span> : <span className="text-slate-400">sin comentario</span>}
+                          {p.estatus === "pendiente" && (
+                            <button type="button" onClick={() => setComentarioEditando({ id: p.id, texto: p.notas ?? "" })} className="ml-2 text-slate-500 underline">
+                              {p.notas ? "editar" : "agregar comentario"}
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {p.estatus === "pendiente" && estaDevuelto(p) && <div className="mt-0.5 text-xs font-medium text-amber-800">{textoDevolucion(p)}</div>}
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs">
                         {p.orden_compra_id && <BotonVerOc ocId={p.orden_compra_id} etiqueta={`ver OC ${p.id_orden ?? ""}`} className="text-slate-600 underline" />}
