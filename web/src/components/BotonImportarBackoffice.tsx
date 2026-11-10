@@ -4,8 +4,9 @@ import { supabase } from "../lib/supabase";
 
 // "Importar del backoffice" en los catálogos de clientes e items (Laura,
 // 21-oct-2026). Llama la función que da de alta solo lo que falta; repetirla
-// no duplica.
-export function BotonImportarBackoffice({ funcion, que, invalidar }: { funcion: "fn_clientes_importar_backoffice" | "fn_items_importar_backoffice"; que: string; invalidar: string[] }) {
+// no duplica. Desde el 10-nov-2026 las tres importaciones también corren
+// solas cada hora al final de la sincronización con el backoffice.
+export function BotonImportarBackoffice({ funcion, que, invalidar }: { funcion: "fn_clientes_importar_backoffice" | "fn_items_importar_backoffice" | "fn_proveedores_importar_backoffice"; que: string; invalidar: string[] }) {
   const qc = useQueryClient();
   const [aviso, setAviso] = useState<string | null>(null);
   const importar = useMutation({
@@ -31,7 +32,7 @@ export function BotonImportarBackoffice({ funcion, que, invalidar }: { funcion: 
           importar.mutate();
         }}
         className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 disabled:opacity-50"
-        title="Da de alta lo que aparece en las órdenes del backoffice y todavía no está en este catálogo"
+        title="Da de alta lo que aparece en las órdenes de compra y todavía no está en este catálogo (también corre solo cada hora)"
       >
         {importar.isPending ? "Importando…" : "Importar del backoffice"}
       </button>
