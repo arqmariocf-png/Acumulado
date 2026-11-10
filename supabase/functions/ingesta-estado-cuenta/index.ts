@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
     const esPdf = archivo.name.toLowerCase().endsWith(".pdf");
     const movimientosMapeados: FilaEstadoCuentaMapeada[] = [];
     const erroresPorFila: { fila: number; errores: string[] }[] = [];
+    let saldoCierre: { fecha: string; saldo: number } | null = null;
 
     if (esPdf) {
       const { data: cuentaRow, error: errCuenta } = await dbServicio.from("cuentas_bancarias").select("banco, ultimos_4").eq("id", cuentaId).single();
@@ -146,6 +147,30 @@ Deno.serve(async (req) => {
       }
       erroresPorFila.push(...resultado.erroresPorFila);
       movimientosMapeados.push(...resultado.movimientos);
+      // Estado de cuenta sin movimientos en el periodo (9-nov-2026, Delia:
+      // Constructora, Banorte 7529, octubre): se guarda UN renglón de saldo
+      // en cero al corte para que fn_saldos_diario_cuenta y Tesorería vean
+      // el saldo del banco a esa fecha; ya clasificado (N/A) para que el
+      // motor no lo busque contra CFDI. Si se vuelve a subir el mismo
+      // estado, filtrarMovimientosNuevos lo detecta como existente.
+      if (resultado.movimientos.length === 0 && resultado.erroresPorFila.length === 0 && resultado.saldoCierre) {
+        saldoCierre = resultado.saldoCierre;
+        movimientosMapeados.push({
+          fechaPago: saldoCierre.fecha,
+          fechaOrden: null,
+          folio: null,
+          proyecto: null,
+          nombreRazonSocial: "Saldo al corte del estado de cuenta (sin movimientos en el periodo)",
+          cargoTotal: 0,
+          abonoTotal: null,
+          saldo: saldoCierre.saldo,
+          referenciaTipo: null,
+          referenciaNumero: null,
+          factura: "N/A - SIN MOVIMIENTOS EN EL PERIODO",
+          comentarios: null,
+          observacion: `El estado de cuenta ${archivo.name} no trae movimientos en el periodo; este renglón solo registra el saldo del banco al corte.`,
+        });
+      }
     } else {
       const filas = archivo.name.toLowerCase().endsWith(".csv")
         ? parseCsv(new TextDecoder("utf-8").decode(bytes))
@@ -219,7 +244,9 @@ Deno.serve(async (req) => {
       })
       .eq("id", archivoId);
 
-    const partes = [`${filasProcesadas.length} movimiento(s) nuevo(s) guardados`];
+    const partes = saldoCierre
+      ? [`el estado de cuenta no trae movimientos en el periodo; se registró el saldo al corte de $${saldoCierre.saldo.toLocaleString("es-MX", { minimumFractionDigits: 2 })} al ${saldoCierre.fecha}${filasProcesadas.length === 0 ? " (ya estaba registrado)" : ""}`]
+      : [`${filasProcesadas.length} movimiento(s) nuevo(s) guardados`];
     if (omitidosPorExistentes > 0) partes.push(`${omitidosPorExistentes} ya existían y no se duplicaron`);
     if (erroresPorFila.length > 0) partes.push(`${erroresPorFila.length} pendiente(s) de revisar (no bloquean la carga)`);
     const mensaje = `Archivo cargado. ${partes.join(", ")}.`;

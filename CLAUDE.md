@@ -366,6 +366,36 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   prueba con `net.http_post` + `net._http_response`). Si el PDF de Delia
   sigue fallando, pedirle el archivo: desde aquí no se puede bajar del
   bucket.
+  **Banorte "Cuentas de Cheques" con columna MONEDA y estado sin movimientos
+  (9-nov-2026, Delia: "me puedes apoyar para que lea el estado de cuenta de
+  Banorte de Constructora… y el de Aceros también")**: (1) Aceros, Banorte
+  1273, "ESTADO DE CUENTA AL 6 DE NOVIEMBRE1.pdf": desde noviembre el export
+  trae la columna **MONEDA** ("MXP") entre SALDO y MOVIMIENTO, el pie
+  "TOTAL:" la intercala entre los dos importes, la última columna es "CH" y
+  la REFERENCIA de las transferencias SPEI enviadas (y su IVA) viene como
+  "-"; las 6 filas salían "sin montos" (archivo completado con 0 filas y 6
+  errores). `RE_MONTOS_MOVIMIENTO_DETALLADO` acepta un código de moneda
+  opcional, `extraerTotalesDetallado` también, y `RE_ANCLA_DETALLADO` acepta
+  "-" como referencia (sin eso dos renglones se pegaban al anterior y la
+  cadena de saldos no cuadraba). Fixture real
+  `pdf-estado-cuenta-banorte-cuenta-cheques-moneda.fixture.ts` (8
+  movimientos: 3 depósitos $1,530,000, 5 retiros $1,516,607.49 —incluye el
+  pago de capital de $1,453,500 a Banorte/NAFIN del 6-nov—, saldo final
+  $14,524.30). Ojo: la cuenta tenía cargado hasta el 30-sep (saldo
+  $1,595.79) y el PDF de noviembre arranca en $1,131.79: falta subir
+  **octubre** de Banorte 1273. (2) Constructora, Banorte 7529, "PDF OCTUBRE
+  2026 CSC BANORTE.pdf": el estado mensual venía **sin movimientos** (igual
+  que julio) y la carga decía "0 movimientos"; la cuenta nunca ha tenido un
+  renglón, así que Tesorería la veía en $0 aunque el banco dice $17,184.01.
+  Ahora el parser mensual devuelve `saldoCierre` {fecha de corte, saldo}
+  cuando no hay movimientos (`extraerFechaCorteBanorte`) y el handler
+  inserta UN renglón "Saldo al corte del estado de cuenta (sin movimientos
+  en el periodo)" con `cargo_total = 0`, el saldo del banco y `factura =
+  'N/A - SIN MOVIMIENTOS EN EL PERIODO'` (regla de clasificación nueva para
+  LOMA con esa palabra, así el motor lo deja resuelto); si se vuelve a subir
+  el mismo estado, el dedupe lo detecta. El mensaje de la carga lo dice.
+  `ingesta-estado-cuenta` **v24** desplegada (archivos sin comentarios con
+  `scratchpad ef/deploy/strip.cjs v24`).
 - **Backoffice caído 7-oct-2026**: `api_ocs_aut`/`api_ov_aut` responden 500
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
