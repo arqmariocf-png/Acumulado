@@ -369,8 +369,8 @@ function FilaPago({ p, cuenta, hoy, onMarcar, onRegresado, ocupado }: { p: PagoV
               {p.orden_compra_id && <BotonVerOc ocId={p.orden_compra_id} etiqueta="ver" className="text-slate-500 underline" />}
             </>
           )}
-          {p.notas && ` · ${p.notas}`}
         </div>
+        {p.notas && <div className="mt-0.5 text-xs text-slate-700">💬 {p.notas}</div>}
         {forma && (
           <div className="mt-0.5 text-xs">
             <span className={`rounded-full px-2 py-0.5 ${forma.tarjeta ? "bg-violet-100 text-violet-800" : "bg-sky-100 text-sky-800"}`} title="Forma de pago que trae la OC del backoffice">
