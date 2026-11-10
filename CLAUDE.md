@@ -2406,6 +2406,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   los folios sin serie (backoffice, por número) y luego cada serie (IA-, RQ-…)
   por su consecutivo sin importar OC/OS/OV (IA-OC-0003, IA-OS-0004,
   IA-OC-0005…). La pantalla sigue de la más reciente a la más vieja.
+  **Solo salían 300 (10-nov-2026, Mario: "ya no me deja ver todas, solo a
+  partir de la 100")**: la lista de `/ordenes` traía las 300 más recientes
+  (`.limit(300)`) y ya hay 449 órdenes IA (334 OC + 115 OS; 2,799 con las del
+  backoffice), así que los folios más viejos (< ~0150) no aparecían y el
+  buscador tampoco los encontraba (filtra en pantalla). Ahora
+  `todasLasPaginas` (en `Ordenes.tsx`) trae TODO por páginas de 1,000 (OC/OS
+  de `v_oc_pagos` y OV), los creadores se consultan de 200 en 200 y junto al
+  buscador sale "N órdenes" / "N de M órdenes". Sin cambios de base. **Una
+  lista nueva de PostgREST nunca lleva `.limit(300)` a secas: o pagina
+  (`range`) hasta traer todo, o busca en el servidor.**
 - **Cuentas por pagar con el saldo del proveedor (21-oct-2026, Laura: "los
   saldos de Bodega Cruz Azul y Cemex están erróneos; ya los había cuadrado y
   otra vez sale que le debemos más de un millón"; "cuentas por pagar solo son
