@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { errorDeFuncion } from "../../lib/funciones";
 import { useAuth } from "../../lib/auth";
-import { etiquetaSexo } from "../../lib/modulos";
+import { esRh, etiquetaSexo } from "../../lib/modulos";
 import type { DocumentoFaltante, ExpedienteFila, ExtraccionDocumento, Personal } from "../../types/database";
 import { rutaVerArchivo } from "../../lib/verArchivo";
 
@@ -224,7 +224,7 @@ export function PestanaDocumentos({ personalInicial }: { personalInicial?: strin
 
   const persona = personal?.find((p) => p.id === personaId) ?? null;
   // rh_documentos sube archivos; aplicar datos a la ficha y verificar es de RH/admin.
-  const puedeAplicar = perfil?.rol === "rh" || perfil?.rol === "admin";
+  const puedeAplicar = esRh(perfil) || perfil?.rol === "admin";
 
   const faltantesPorPersona = new Map<string, { id: string; docs: DocumentoFaltante[] }>();
   for (const f of faltantes ?? []) {

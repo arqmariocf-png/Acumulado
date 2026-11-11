@@ -58,10 +58,18 @@ export function numeroWhatsapp(telefono: string): string {
 
 /** RH directivo (Eréndira, Fernando): todo RH, crea accesos y asigna roles.
  * RH administrativo (Raúl): flujo operativo. Null en rh_nivel = directivo. */
-export function esRhDirectivo(p: { rol: string; rh_nivel?: string | null } | null | undefined): boolean {
+export function esRhDirectivo(p: { rol: string; rh_nivel?: string | null; modulos?: string[] | null } | null | undefined): boolean {
   if (!p) return false;
   if (p.rol === "admin") return true;
-  return p.rol === "rh" && (p.rh_nivel ?? "directivo") === "directivo";
+  return esRh(p) && (p.rh_nivel ?? "directivo") === "directivo";
+}
+
+/** Rol rh, o permiso por persona 'rh' (Laura, dirección, 11-nov-2026: "dale
+ * acceso a Laura al sistema de RH"): en la base `auth_rol_rh()` la trata como
+ * RH en las policies y funciones de recursos humanos sin quitarle su rol. */
+export function esRh(p: { rol: string; modulos?: string[] | null } | null | undefined): boolean {
+  if (!p) return false;
+  return p.rol === "rh" || (p.modulos ?? []).includes("rh");
 }
 export const ETIQUETA_NIVEL_RH: Record<"administrativo" | "directivo", string> = { administrativo: "RH administrativo", directivo: "RH directivo" };
 

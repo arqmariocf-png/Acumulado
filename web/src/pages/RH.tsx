@@ -14,7 +14,7 @@ import { Accesos } from "./rh/Accesos";
 import { PestanaDocumentos } from "./rh/Expediente";
 import { KpiActividades, KpiChecador, KpiVacantes } from "./rh/KpisRh";
 import { htmlFiniquito, sueldoSemanalDesde } from "../lib/documentosRh";
-import { esRhDirectivo } from "../lib/modulos";
+import { esRh, esRhDirectivo } from "../lib/modulos";
 import { abrirParaImprimir } from "../lib/imprimir";
 import { patronDe } from "./MisDocumentos";
 import type {
@@ -125,7 +125,7 @@ export function RH() {
   return (
     <div>
       <h1 className="mb-1 text-xl font-semibold text-slate-900">Recursos Humanos</h1>
-      {perfil?.rol === "rh" && (
+      {esRh(perfil) && (
         <p className="mb-3 text-xs text-slate-500">{directivo ? "RH directivo: indicadores, todo el módulo, accesos y roles." : "RH administrativo: contratos, expedientes, personal, checador, asignaciones, actividades y links de acceso."}</p>
       )}
 

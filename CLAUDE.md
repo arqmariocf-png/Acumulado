@@ -1892,6 +1892,28 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   `auth_rh_directivo` y valida que la persona sea de la organización de RH.
   Cambiar rol, módulos y supervisor después sigue siendo de RH directivo
   (Eréndira, Fernando): `Accesos({ directivo })`, `rh_asignar_rol_basico`.
+- **Laura con RH, permiso por persona (11-nov-2026, Mario: "dale acceso a
+  Laura al sistema de RH")**: RH estaba amarrado al rol `rh` (41 policies y
+  ~15 funciones) y cambiarle el rol a Laura (`direccion`) le quitaría finanzas.
+  Mismo molde que contabilidad/tesorería: `permisos_modulo` **'rh'**
+  (`20261111090000`, aplicada como `permiso_rh_por_persona`; solo por SQL, no
+  está en `MODULOS_ASIGNABLES`). Base: `auth_tiene_permiso_rh()`;
+  `auth_rol_rh()` / `auth_rol_rh_definer()` = el rol de siempre, salvo con el
+  permiso: 'rh'. Las policies que nombran `'rh'::app_rol` (y no lo excluyen)
+  leen el rol por esas funciones (`alter policy` por regexp sobre
+  `pg_policies`), igual las funciones del checador, nómina externa, comedor y
+  equilibrio BBVA; `auth_rh_directivo(_definer)`, `auth_opera_epp` y
+  `auth_solicita_epp` leen `profiles.rol` y se parcharon con `or
+  auth_tiene_permiso_rh()`. **No** se tocó `auth_ve_datos_financieros` (ahí
+  'rh' está excluido) ni `fn_rh_de` / `fn_tarjetas_escalamientos` (los avisos
+  de RH siguen yendo solo al rol rh). App: `esRh(p)` en `lib/modulos.ts` (rol
+  rh o permiso) en `esRhDirectivo`, menú, indicadores, rutas (`oPermiso`) y
+  las pantallas de RH; `profiles.modulos` ya trae los permisos para cualquier
+  rol. Probado en rollback: Laura queda RH directivo (ve 71 expedientes, 503
+  documentos, marcas, EPP) y sigue viendo finanzas; Eréndira igual que antes;
+  Alma sin cambio. **Policy o función nueva de RH → comparar con
+  `auth_rol_rh()` / `auth_rol_rh_definer()`, no con `auth_rol()`, y en la app
+  `esRh(p)`.**
 - **Link a cuentas operativas (2-oct-2026, Fernando con Carlos Sánchez
   Xilot, supervisor_bbva)**: `generar-link-acceso` v5 usa
   `rh_puede_mandar_acceso()` (personal contratado con rol básico,

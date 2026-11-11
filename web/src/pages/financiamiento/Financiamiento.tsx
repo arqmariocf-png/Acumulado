@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { esRh } from "../../lib/modulos";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { amortizar, htmlDocumentoFirmado, type FirmaGuardada } from "../../lib/creditoNomina";
 import {
@@ -193,7 +194,7 @@ function Estudio() {
   const qc = useQueryClient();
   const { soloConsulta, perfil } = useAuth();
   // El sueldo lo fija Recursos Humanos (Mario, 18-oct-2026); dirección autoriza líneas.
-  const fijaSueldo = perfil?.rol === "rh" || perfil?.rol === "admin";
+  const fijaSueldo = esRh(perfil) || perfil?.rol === "admin";
   const estudio = useEstudio();
   const config = useConfig();
   const firmas = useFirmas();

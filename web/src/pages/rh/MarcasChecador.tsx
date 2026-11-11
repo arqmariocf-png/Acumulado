@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { esRh } from "../../lib/modulos";
 import { ETIQUETA_MARCA, SIMBOLO_MARCA, type TipoMarca } from "../Checador";
 import { useUbicacionesChecador } from "./UbicacionesChecador";
 import { rutaVerArchivo } from "../../lib/verArchivo";
@@ -51,7 +52,7 @@ export function MarcasChecador({
   onCrearSitioDesde?: (coords: { lat: number; lng: number }) => void;
 }) {
   const { perfil } = useAuth();
-  const puedeEditar = perfil?.rol === "rh" || perfil?.rol === "admin";
+  const puedeEditar = esRh(perfil) || perfil?.rol === "admin";
   const queryClient = useQueryClient();
   const [dias, setDias] = useState(3);
   const [verAnuladas, setVerAnuladas] = useState(false);

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ExcelJS from "exceljs";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { esRh } from "../../lib/modulos";
 import { useNominaExternaAutoSync } from "../../lib/useNominaExternaAutoSync";
 import { ORIGIN_LABELS, agendaTotals, groupByDate, isOverdue, type AgendaEntry } from "../../lib/agendaPagosExterna";
 import { parseAmountCents } from "../../../../supabase/functions/_shared/nomina-externa.ts";
@@ -193,7 +194,7 @@ export function AgendaPagos() {
     onError: (err: Error) => setError(err.message),
   });
 
-  const puedeVer = perfil?.rol === "admin" || perfil?.rol === "rh";
+  const puedeVer = perfil?.rol === "admin" || esRh(perfil);
   if (!puedeVer) return <Navigate to="/" replace />;
 
   const failedSources = (externalSide?.sources ?? []).filter((s) => s.activo && s.ultimo_estado === "error");

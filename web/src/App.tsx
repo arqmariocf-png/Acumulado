@@ -168,7 +168,7 @@ function Enrutador() {
             <Route path="/gastos" element={<Gastos />} />
           </Route>
           {/* Solicitud de EPP: supervisores, responsables de obra y RH (quién puede, lo decide auth_solicita_epp). */}
-          <Route element={<ProtectedRoute roles={["supervisor", "responsable", "rh", "directivo", "administrativo"]} />}>
+          <Route element={<ProtectedRoute roles={["supervisor", "responsable", "rh", "directivo", "administrativo"]} oPermiso={(p) => (p.modulos ?? []).includes("rh")} />}>
             <Route path="/epp/solicitar" element={<SolicitarEpp />} />
           </Route>
           {/* Vacaciones y permisos (3-nov-2026): cualquiera con expediente pide; jefe/RH se deciden en la base. */}
@@ -211,7 +211,7 @@ function Enrutador() {
             <Route path="/legal" element={<Legal />} />
           </Route>
           {/* Cuentas de nómina y financiamiento: RH, dirección y admin. */}
-          <Route element={<ProtectedRoute roles={["direccion", "rh"]} />}>
+          <Route element={<ProtectedRoute roles={["direccion", "rh"]} oPermiso={(p) => (p.modulos ?? []).includes("rh")} />}>
             <Route path="/financiamiento" element={<Financiamiento />} />
           </Route>
           {/* Cumplimiento: permiso 'legal' o 'cumplimiento'; dirección consulta y registra incidencias. */}
@@ -238,10 +238,10 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["supervisor_bbva", "corporativo", "direccion"]} oPermiso={(p) => p.bbva_mantenimiento} modulo="bbva" />}>
             <Route path="/bbva/folios" element={<FoliosCuadrilla />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["corporativo", "direccion", "rh"]} oPermiso={(p) => p.bbva_mantenimiento} />}>
+          <Route element={<ProtectedRoute roles={["corporativo", "direccion", "rh"]} oPermiso={(p) => p.bbva_mantenimiento || (p.modulos ?? []).includes("rh")} />}>
             <Route path="/bbva/equilibrio" element={<Equilibrio />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["rh", "supervisor", "directivo"]} oPermiso={(p) => p.bbva_mantenimiento || (p.modulos ?? []).includes("checador")} />}>
+          <Route element={<ProtectedRoute roles={["rh", "supervisor", "directivo"]} oPermiso={(p) => p.bbva_mantenimiento || (p.modulos ?? []).includes("checador") || (p.modulos ?? []).includes("rh")} />}>
             <Route path="/bbva/asistencia" element={<AsistenciaEquipo />} />
           </Route>
           <Route element={<ProtectedRoute modulo="proyectos" />}>
@@ -344,7 +344,7 @@ function Enrutador() {
             </Route>
           </Route>
 
-          <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} />}>
+          <Route element={<ProtectedRoute roles={["rh", "rh_documentos"]} oPermiso={(p) => (p.modulos ?? []).includes("rh")} />}>
             <Route path="/rh" element={<RH />} />
           </Route>
 
@@ -361,7 +361,7 @@ function Enrutador() {
           <Route element={<ProtectedRoute roles={["rh", "direccion"]} modulo="rh" />}>
             <Route path="/rh/tiempos" element={<ReporteTiemposRh />} />
           </Route>
-          <Route element={<ProtectedRoute roles={["rh"]} />}>
+          <Route element={<ProtectedRoute roles={["rh"]} oPermiso={(p) => (p.modulos ?? []).includes("rh")} />}>
             <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
             <Route path="/rh/agenda-pagos" element={<AgendaPagos />} />
           </Route>

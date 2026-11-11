@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ExcelJS from "exceljs";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
+import { esRh } from "../../lib/modulos";
 import { sincronizarNominaExterna, type ResultadoSincronizacion } from "../../lib/nominaExterna";
 import { useNominaExternaAutoSync } from "../../lib/useNominaExternaAutoSync";
 // Un solo origen para el parseo de importes: el mismo módulo que usa el
@@ -361,7 +362,7 @@ export function ManoDeObra() {
     onError: (err: Error) => setError(err.message),
   });
 
-  const puedeVer = perfil?.rol === "admin" || perfil?.rol === "rh";
+  const puedeVer = perfil?.rol === "admin" || esRh(perfil);
   if (!puedeVer) return <Navigate to="/" replace />;
 
   const syncing = sync.isPending;

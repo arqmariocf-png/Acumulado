@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useMiPersonal } from "./MisDocumentos";
 import { useAuth } from "../lib/auth";
-import { esRolBasico } from "../lib/modulos";
+import { esRh, esRolBasico } from "../lib/modulos";
 import { GRUPOS_MENU, rutaPermitida, seccionDeRuta } from "../lib/menu";
 import { Indicadores } from "../components/Indicadores";
 import { MisActividades } from "./tareas/MisActividades";
@@ -196,7 +196,7 @@ export function Inicio() {
   const veMantenimientoBbva = rol === "corporativo" || rol === "direccion" || esAdmin || !!perfil?.bbva_mantenimiento;
   const modulos = perfil?.modulos ?? [];
   const veFinanzas = !rolBasico && !soloRequisicionesYPrecios && !esAlmacen && !esRhDocumentos && !esSupervisorBbva;
-  const veRH = rol === "rh" || esRhDocumentos || esAdmin;
+  const veRH = esRh(perfil) || esRhDocumentos || esAdmin;
   const veSaldos = !rolBasico && (rol === "corporativo" || rol === "direccion" || esAdmin);
   const veInventario = rolBasico ? modulos.includes("inventario") : veFinanzas || esAlmacen;
   const vePrecios = rolBasico ? modulos.includes("precios") : !esSupervisorBbva && !esBbvaAcotado;
@@ -297,7 +297,7 @@ export function Inicio() {
       descripcion: "marcas del checador de tu equipo, con foto y ubicación",
       icono: ICONOS.rh,
     },
-    (veMantenimientoBbvaFinal || rol === "rh") && {
+    (veMantenimientoBbvaFinal || esRh(perfil)) && {
       a: "/bbva/equilibrio",
       etiqueta: "Punto de equilibrio BBVA",
       descripcion: "gasto del equipo contra folios generados y cobrados",
