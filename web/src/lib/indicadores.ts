@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { esRolBasico } from "./modulos";
+import { esRh, esRolBasico } from "./modulos";
 import type { Profile } from "../types/database";
 import { avanceComprobantes } from "./comprobantesPago";
 import { FILTRO_OC_EFECTIVO, FILTRO_OC_NO_EFECTIVO } from "./pagosOc";
@@ -37,8 +37,8 @@ export interface Indicador {
 const esAdmin = (p: Profile) => p.rol === "admin";
 const finanzas = (p: Profile) => ["corporativo", "direccion", "admin"].includes(p.rol);
 const contab = (p: Profile) => ["corporativo", "direccion", "empresa", "admin"].includes(p.rol);
-const veEquipo = (p: Profile) => p.rol === "supervisor" || p.rol === "directivo" || p.rol === "rh" || esAdmin(p) || !!p.bbva_mantenimiento || (p.modulos ?? []).includes("checador");
-const rh = (p: Profile) => p.rol === "rh" || esAdmin(p);
+const veEquipo = (p: Profile) => p.rol === "supervisor" || p.rol === "directivo" || esRh(p) || esAdmin(p) || !!p.bbva_mantenimiento || (p.modulos ?? []).includes("checador");
+const rh = (p: Profile) => esRh(p) || esAdmin(p);
 const produccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || (esRolBasico(p.rol) && (p.modulos ?? []).includes("produccion"));
 const inventario = (p: Profile) =>
   ["almacen", "direccion", "corporativo", "empresa", "admin"].includes(p.rol) || (esRolBasico(p.rol) && (p.modulos ?? []).includes("inventario"));

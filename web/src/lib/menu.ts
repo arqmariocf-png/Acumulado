@@ -1,4 +1,4 @@
-import { esRhDirectivo, esRolBasico } from "./modulos.ts";
+import { esRh, esRhDirectivo, esRolBasico } from "./modulos.ts";
 import { esContabilidad } from "./puestos.ts";
 import { menuPermitido } from "./rolesDeberSer.ts";
 import type { ModuloClave, Profile } from "../types/database";
@@ -299,7 +299,7 @@ export const SECCIONES: SeccionMenu[] = [
     entradas: [
       { ruta: "/mantenimiento/bbva", etiqueta: "Control BBVA", descripcion: "folios, estatus por paso y conciliación", uso: "Seguimiento de cada folio desde que se abre hasta que se cobra.", visible: (p) => esFinanzas(p) || bbva(p) },
       { ruta: "/bbva/folios", etiqueta: "Folios", descripcion: "semáforo de atención de las cuadrillas", uso: "Qué folios están por vencer o sin atender hoy.", visible: (p) => p.rol === "supervisor_bbva" || esFinanzas(p) || bbva(p) || modulo("bbva")(p) },
-      { ruta: "/bbva/equilibrio", etiqueta: "Punto de equilibrio", descripcion: "gasto del equipo contra folios cobrados", uso: "Para saber si la operación BBVA se paga sola en el mes.", visible: (p) => esFinanzas(p) || p.rol === "rh" || bbva(p) },
+      { ruta: "/bbva/equilibrio", etiqueta: "Punto de equilibrio", descripcion: "gasto del equipo contra folios cobrados", uso: "Para saber si la operación BBVA se paga sola en el mes.", visible: (p) => esFinanzas(p) || esRh(p) || bbva(p) },
     ],
   },
   {
@@ -309,13 +309,13 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Recursos humanos",
     proposito: "Expedientes, asistencia, EPP y accesos al sistema.",
     entradas: [
-      { ruta: "/tareas/area/rh", etiqueta: "Tablero de RH", descripcion: "actividades del equipo de recursos humanos", uso: "El tablero de tareas de RH (RH · Actividades): lo que asigna RH, quién lo tiene y qué está vencido. De ahí se organiza lo demás.", visible: (p) => p.rol === "rh" || p.rol === "rh_documentos" || esAdmin(p), modulo: "rh" },
+      { ruta: "/tareas/area/rh", etiqueta: "Tablero de RH", descripcion: "actividades del equipo de recursos humanos", uso: "El tablero de tareas de RH (RH · Actividades): lo que asigna RH, quién lo tiene y qué está vencido. De ahí se organiza lo demás.", visible: (p) => esRh(p) || p.rol === "rh_documentos" || esAdmin(p), modulo: "rh" },
       {
         ruta: "/rh",
         etiqueta: "Recursos humanos",
         descripcion: "indicadores, personal, operación, vacantes y accesos",
         uso: "Entra a los indicadores; de ahí el flujo de personal (contrato, expediente, alta), checador, asignaciones y accesos.",
-        visible: (p) => p.rol === "rh" || p.rol === "rh_documentos" || esAdmin(p),
+        visible: (p) => esRh(p) || p.rol === "rh_documentos" || esAdmin(p),
         modulo: "rh",
         niveles: [
           {
@@ -367,10 +367,10 @@ export const SECCIONES: SeccionMenu[] = [
         ],
       },
       { ruta: "/bbva/asistencia", etiqueta: "Asistencia de mi equipo", descripcion: "marcas del checador de tu gente", uso: "Para revisar quién llegó, a qué hora y desde dónde.", visible: (p) => p.rol === "supervisor" || p.rol === "directivo" || (p.modulos ?? []).includes("checador") || (bbva(p) && p.rol !== "rh") , modulo: "rh" },
-      { ruta: "/rh/tiempos", etiqueta: "Tiempos y checador", descripcion: "por persona: faltas, retardos, horas activas contra su jornada y el día por día", uso: "El reporte de RH del checador: cuántos días vino cada quien, a qué hora entra y sale en promedio, cuántas horas trabaja contra su jornada, quién no marca salida; con detalle por día, impresión y Excel.", visible: (p) => p.rol === "rh" || p.rol === "direccion" || esAdmin(p), modulo: "rh" },
+      { ruta: "/rh/tiempos", etiqueta: "Tiempos y checador", descripcion: "por persona: faltas, retardos, horas activas contra su jornada y el día por día", uso: "El reporte de RH del checador: cuántos días vino cada quien, a qué hora entra y sale en promedio, cuántas horas trabaja contra su jornada, quién no marca salida; con detalle por día, impresión y Excel.", visible: (p) => esRh(p) || p.rol === "direccion" || esAdmin(p), modulo: "rh" },
       { ruta: "/rh/reporte-director", etiqueta: "Reporte para el director general", descripcion: "plantilla, asistencia, tareas, evaluaciones, nómina, EPP y accesos en una hoja", uso: "Solo director general: el estado completo de recursos humanos del periodo con lo que hay que atender, para imprimir o leer en el celular.", visible: esAdmin, modulo: "rh" },
-      { ruta: "/vacaciones?tab=equipo", etiqueta: "Vacaciones y permisos", descripcion: "quién está fuera, quién sale y quién regresa; solicitudes por autorizar y saldos", uso: "RH autoriza solicitudes, registra vacaciones o permisos de cualquiera, ve el calendario de ausencias y el saldo de ley por persona. El jefe directo ve lo de su gente.", visible: (p) => p.rol === "rh" || p.rol === "direccion" || p.rol === "supervisor" || p.rol === "responsable" || p.rol === "directivo" || esAdmin(p), modulo: "rh" },
-      { ruta: "/epp/solicitar", etiqueta: "Solicitar EPP", descripcion: "casco, chaleco, botas… para tu gente", uso: "El supervisor o responsable de obra pide el equipo de protección de su gente; RH lo entrega de bodega o lo pide a compras y la persona firma su responsiva.", visible: (p) => ["supervisor", "responsable", "rh"].includes(p.rol) || esAdmin(p), modulo: "rh" },
+      { ruta: "/vacaciones?tab=equipo", etiqueta: "Vacaciones y permisos", descripcion: "quién está fuera, quién sale y quién regresa; solicitudes por autorizar y saldos", uso: "RH autoriza solicitudes, registra vacaciones o permisos de cualquiera, ve el calendario de ausencias y el saldo de ley por persona. El jefe directo ve lo de su gente.", visible: (p) => esRh(p) || p.rol === "direccion" || p.rol === "supervisor" || p.rol === "responsable" || p.rol === "directivo" || esAdmin(p), modulo: "rh" },
+      { ruta: "/epp/solicitar", etiqueta: "Solicitar EPP", descripcion: "casco, chaleco, botas… para tu gente", uso: "El supervisor o responsable de obra pide el equipo de protección de su gente; RH lo entrega de bodega o lo pide a compras y la persona firma su responsiva.", visible: (p) => ["supervisor", "responsable"].includes(p.rol) || esRh(p) || esAdmin(p), modulo: "rh" },
     ],
   },
   {
@@ -385,11 +385,11 @@ export const SECCIONES: SeccionMenu[] = [
         etiqueta: "Préstamos y descuentos",
         descripcion: "estudio, líneas por trabajador y descuentos vía nómina",
         uso: "Estudio por antigüedad, asistencia, tareas, cuidado de herramienta e historial de pago; autoriza la línea de cada trabajador (sin intereses, topes de ley), registra préstamos y anticipos y aplica los descuentos de cada viernes.",
-        visible: (p) => esAdmin(p) || p.rol === "direccion" || p.rol === "rh",
+        visible: (p) => esAdmin(p) || p.rol === "direccion" || esRh(p),
         modulo: "rh",
       },
-      { ruta: "/rh/evaluacion", etiqueta: "Evaluación de desempeño", descripcion: "formato por persona y periodo con las tareas cumplidas", uso: "Elige persona y periodo: el sistema trae tareas hechas, a tiempo y vencidas, cambios de fecha y asistencia; califica los criterios, escribe acuerdos, firma e imprime. El jefe directo evalúa a su gente.", visible: (p) => p.rol === "rh" || p.rol === "direccion" || p.rol === "supervisor" || p.rol === "responsable" || p.rol === "directivo" || p.rol === "empresa" || esAdmin(p), modulo: "rh" },
-      { ruta: "/rh/agenda-pagos", etiqueta: "Agenda de pagos de nómina", descripcion: "calendario de pagos de nómina", uso: "Qué se paga cada semana y quincena.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
+      { ruta: "/rh/evaluacion", etiqueta: "Evaluación de desempeño", descripcion: "formato por persona y periodo con las tareas cumplidas", uso: "Elige persona y periodo: el sistema trae tareas hechas, a tiempo y vencidas, cambios de fecha y asistencia; califica los criterios, escribe acuerdos, firma e imprime. El jefe directo evalúa a su gente.", visible: (p) => esRh(p) || p.rol === "direccion" || p.rol === "supervisor" || p.rol === "responsable" || p.rol === "directivo" || p.rol === "empresa" || esAdmin(p), modulo: "rh" },
+      { ruta: "/rh/agenda-pagos", etiqueta: "Agenda de pagos de nómina", descripcion: "calendario de pagos de nómina", uso: "Qué se paga cada semana y quincena.", visible: (p) => esRh(p) || esAdmin(p) , modulo: "rh" },
     ],
   },
   {
@@ -399,7 +399,7 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Mano de obra",
     proposito: "Contratistas y destajos de obra.",
     entradas: [
-      { ruta: "/rh/mano-de-obra", etiqueta: "Pagos de mano de obra", descripcion: "nómina externa de las APIs de Grupo Loma", uso: "Costo de mano de obra por periodo y por obra.", visible: (p) => p.rol === "rh" || esAdmin(p) , modulo: "rh" },
+      { ruta: "/rh/mano-de-obra", etiqueta: "Pagos de mano de obra", descripcion: "nómina externa de las APIs de Grupo Loma", uso: "Costo de mano de obra por periodo y por obra.", visible: (p) => esRh(p) || esAdmin(p) , modulo: "rh" },
     ],
   },
   {
