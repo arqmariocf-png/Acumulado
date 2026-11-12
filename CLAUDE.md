@@ -2380,6 +2380,36 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   backoffice tiene en su catálogo y nunca salió en una OC no se puede traer
   (la API no expone proveedores ni items): se captura a mano o Gonzalo expone
   un endpoint.**
+  **Catálogos completos por API (12-nov-2026; Gonzalo expuso el 11-nov
+  `api_proveedores_aut` → `reports.grupoloma.mx/dash/qry-prov-aut` y
+  `api_items_aut` → `…/dash/qry-items-aut`)** (`20261112090000`, aplicada
+  como `catalogos_backoffice_api` y `_2_mejor_renglon`; prueba
+  `supabase/tests/catalogos_backoffice_api.sql`): `fn_proveedores_desde_api(
+  jsonb)` (ficha en `proveedores` con RFC, domicilio, contacto —el campo
+  `apellido` del backoffice cuando no es parte del nombre—, teléfono, correo y
+  `backoffice_id`; bancarios en `proveedores_datos_bancarios` origen
+  'backoffice', sin pisar 'captura'; el texto libre de cuenta se limpia con
+  `fn_clabe_de_texto` —18 dígitos tras "CLABE", con dígito verificador— y
+  `fn_cuenta_de_texto` —6-14 dígitos tras "CUENTA"—; proveedor repetido en el
+  backoffice → gana el renglón con más datos; lo que ya existía solo se
+  completa en blancos) y `fn_items_desde_api(jsonb)` (en `compras_items` por
+  descripción normalizada, clave IT-####, servicio si familia "Servicio" o
+  unidad SRV, precio de referencia = último costo **/1.16 cuando lleva IVA**
+  —el costo del backoffice trae IVA igual que las partidas de OC, verificado
+  OC por OC—, familia/categoría/último proveedor en notas; la "categoría" del
+  backoffice no sirve: 6,322 de 8,513 dicen "Despalme"; no trae clave).
+  `sincronizar_catalogos_backoffice()` (service_role) descarga los dos y luego
+  escribe; va al final del cron `sync-catalogo-oc-ov-horario`. Primera
+  corrida 12-nov: proveedores 330 → 1,829 fichas (795 con RFC), bancarios 215
+  → 982 (732 con CLABE), items 1,669 → 8,662. **Ojo rendimiento**: con 1,829
+  fichas `fn_ordenes_catalogo_captura` tardaba 18 s (el `left join lateral` a
+  bancarios calculaba `fn_proveedor_clave` por cada renglón × cada ficha);
+  `20261112100000` (`catalogo_captura_rapido`) calcula la clave una vez por
+  contraparte en un CTE materializado y cruza por `clave`: 1.6 s Laura, 1.0 s
+  Alma; el JSON que recibe el editor de órdenes pesa 2.4 MB (11,284 items +
+  1,830 contrapartes). El botón "Importar del backoffice" sigue siendo solo lo
+  de las órdenes; el catálogo completo llega solo cada hora. No se tocó el
+  frontend salvo el texto del botón.
 - **Cancelar, impresión completa y clientes registrados (15-oct-2026,
   Mario)**: (1) `fn_orden_ia_cancelar` ya cancela CUALQUIER OC/OS
   (backoffice, Excel, RQ: solo admin/corporativo/dirección; IA también
