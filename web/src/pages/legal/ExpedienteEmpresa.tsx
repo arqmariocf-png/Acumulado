@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 import { useAuth } from "../../lib/auth";
 import {
   ESTATUS_OBSERVACION,
@@ -58,7 +59,8 @@ async function llamar(metodo: "GET" | "POST", params: { id: string; archivo?: Fi
   if (params.archivo) {
     cuerpo = new FormData();
     cuerpo.append("empresaDocumentoId", params.id);
-    cuerpo.append("file", params.archivo);
+    const listo = await prepararArchivo(params.archivo);
+    cuerpo.append("file", listo, listo.name);
   }
   const resp = await fetch(metodo === "GET" ? `${base}?empresaDocumento=${encodeURIComponent(params.id)}` : base, {
     method: metodo,

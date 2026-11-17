@@ -1,4 +1,5 @@
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 import type { Profile } from "../../types/database";
 
 /** Misma regla que auth_opera_legal(): admin o permiso 'legal'. */
@@ -80,7 +81,8 @@ export async function llamarDocumentos(metodo: "GET" | "POST", destino: { asunto
     if (destino.contrato) cuerpo.append("contratoId", destino.contrato);
     if (destino.arrendamiento) cuerpo.append("arrendamientoId", destino.arrendamiento);
     if (descripcion) cuerpo.append("descripcion", descripcion);
-    cuerpo.append("file", archivo);
+    const listo = await prepararArchivo(archivo);
+    cuerpo.append("file", listo, listo.name);
   }
   const qs = destino.asunto
     ? `asunto=${encodeURIComponent(destino.asunto)}`

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
+import { prepararArchivo } from "../lib/comprimirArchivo";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth, useEmpresaFiltro } from "../lib/auth";
 import { SelectorEmpresa } from "../components/SelectorEmpresa";
@@ -80,6 +81,11 @@ export function Gastos() {
     try {
       const form = new FormData(formEl);
       form.set("empresaId", empresaId);
+      const original = form.get("file");
+      if (original instanceof File && original.size > 0) {
+        const listo = await prepararArchivo(original);
+        form.set("file", listo, listo.name);
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const respuesta = await fetch(urlFuncion("gastos-comprobar"), { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });

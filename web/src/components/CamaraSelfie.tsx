@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
+/** Lado máximo de la selfie del checador (17-nov-2026: de 1024 a 800 px,
+ * la mitad de peso; la cara sigue perfectamente reconocible). */
+export const LADO_SELFIE = 800;
+
 /** Cámara dentro de la página (getUserMedia) para la selfie del checador.
  * Salir a la app de cámara del teléfono con <input capture> perdía la foto
  * en algunos Android (Christian, 28-sep-2026): el navegador descarga la
@@ -23,7 +27,7 @@ export function CamaraSelfie({ abierta, onCaptura, onCerrar, onSinCamara }: { ab
       return;
     }
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "user", width: { ideal: 1024 }, height: { ideal: 1024 } }, audio: false })
+      .getUserMedia({ video: { facingMode: "user", width: { ideal: LADO_SELFIE }, height: { ideal: LADO_SELFIE } }, audio: false })
       .then((s) => {
         if (cancelado) {
           s.getTracks().forEach((t) => t.stop());
@@ -55,7 +59,7 @@ export function CamaraSelfie({ abierta, onCaptura, onCerrar, onSinCamara }: { ab
     setCapturando(true);
     const ancho = v.videoWidth || 640;
     const alto = v.videoHeight || 480;
-    const escala = Math.min(1, 1024 / Math.max(ancho, alto));
+    const escala = Math.min(1, LADO_SELFIE / Math.max(ancho, alto));
     const lienzo = document.createElement("canvas");
     lienzo.width = Math.round(ancho * escala);
     lienzo.height = Math.round(alto * escala);

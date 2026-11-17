@@ -1684,6 +1684,37 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   directo en la pestaña (la liga blob se pierde si la pestaña de origen se
   recarga o se cierra) (`lib/modoImpresion.ts`, con pruebas; iPad que se
   presenta como Mac = táctil → blob).
+- **Compresión automática de lo que se sube (17-nov-2026, Mario: "sí,
+  comprímelos de manera automática")**: al 17-nov el bucket `cargas` pesaba
+  1.05 GB (RH 378 MB en 74 PDF escaneados de 5 MB; checador 249 MB en 1,907
+  selfies; planos 174 MB; estados de cuenta 105 MB; tareas 70 MB; pagos 29 MB).
+  `lib/comprimirArchivo.ts` (parte pura con pruebas: `decidirCompresion`,
+  `escalaParaLado`, `esPdfEscaneado`, `convieneComprimido`,
+  `nombreComprimido`, `textoCompresion`; `/// <reference lib="dom" />` porque
+  `tsconfig.test.json` no trae DOM): `prepararArchivo(file)` → fotos a JPEG
+  de máximo 1600 px al 82 % (≤ 300 KB y ≤ 1600 px se dejan igual; HEIC/PNG
+  siempre pasan a JPEG, fondo blanco); PDF ≥ 1.5 MB **escaneados** (menos de
+  40 caracteres de texto por página en promedio, hasta 60 páginas) se
+  redibujan a 130 dpi en JPEG al 72 % y se rearman con jsPDF conservando el
+  tamaño de página; un PDF con texto (CFDI, contrato, estado de cuenta) NO se
+  toca; solo se queda lo comprimido si ahorra ≥ 15 %; cualquier error → se
+  sube el original. `pdfjs-dist` 4.10 y `jspdf` 3.0 van por `import()` (chunks
+  aparte: solo se cargan al subir un PDF grande). Conectado en: comprobantes
+  de pago (`ComprobantePago`, `ConfirmarPagos`, `OrdenesPorPagar`,
+  `EfectivoPorConfirmar`), archivos de tarjetas, expediente de RH (PDF
+  completo y documento suelto), legal (`legal/comun.ts` y expediente de la
+  empresa), gastos, cotización de requisición, fotos de remisión de planta y
+  nota de entrega (los `aJpeg` propios se quitaron). Selfies del checador:
+  `LADO_SELFIE = 800` (antes 1024) en `CamaraSelfie` y `Checador`. **No se
+  tocan** estados de cuenta, CFDI, SAT, planos (DWG/PDF de obra), Excel ni
+  logos. Probado en Chromium con el dev server (`scratchpad compresion/`):
+  foto 11.8 MB → 925 KB en 0.2 s; PDF escaneado de 3 páginas 8.6 MB → 519 KB
+  en 0.7 s con las mismas páginas y tamaño carta; PDF con texto de 16 MB se
+  queda igual. **Subida nueva de foto o PDF → `prepararArchivo` antes del
+  `FormData`.** Pendiente: lo ya guardado (RH 378 MB) no se recomprime solo;
+  si Mario quiere, un trabajo en edge que recorra `cargas/rh` con la misma
+  regla. El otro chat de Mario generó un `compresion-subidas.patch` que nunca
+  llegó al repo: esto lo sustituye.
 - `web/version.json` + `AvisoVersion`: aviso de "versión nueva" en pestañas viejas.
 - Foto de nota de entrega: evidencia por defecto; lectura por IA opcional
   (requiere `ANTHROPIC_API_KEY` válida en secrets de Edge Functions; la actual

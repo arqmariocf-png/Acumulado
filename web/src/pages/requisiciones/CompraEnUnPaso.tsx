@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
 
@@ -39,9 +40,10 @@ export function CompraEnUnPaso({ lineaId, sinResolver, unidad, onListo, onCancel
       const r = data as { id_orden: string; necesidad_ids: string[] };
       if (archivo && r.necesidad_ids?.[0]) {
         const { data: sessionData } = await supabase.auth.getSession();
+        const listo = await prepararArchivo(archivo);
         const fd = new FormData();
         fd.append("necesidadId", r.necesidad_ids[0]);
-        fd.append("file", archivo, archivo.name);
+        fd.append("file", listo, listo.name);
         const respuesta = await fetch(urlFuncion("requisiciones-cotizacion"), { method: "POST", headers: { Authorization: `Bearer ${sessionData.session?.access_token}` }, body: fd });
         if (!respuesta.ok) {
           const json = await respuesta.json().catch(() => null);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
+import { LADO_SELFIE } from "../components/CamaraSelfie";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 import { eliminarPendiente, esErrorDeRed, guardarPendiente, listarPendientes, nuevoId, type MarcaPendiente } from "../lib/colaOffline";
@@ -99,12 +100,14 @@ function obtenerUbicacion(): Promise<{ lat: number; lng: number; precision: numb
   });
 }
 
-/** Reduce la foto a máximo 1024 px de lado y JPEG, para que suba rápido
- * desde datos móviles (una selfie de cámara suele pesar 3-5 MB). */
+/** Reduce la foto a máximo 800 px de lado y JPEG, para que suba rápido
+ * desde datos móviles (una selfie de cámara suele pesar 3-5 MB). 17-nov-2026:
+ * bajó de 1024 a 800 px (la mitad de peso; son 1,907 fotos y es la carpeta
+ * que más crece). */
 async function comprimirFoto(archivo: Blob): Promise<Blob> {
   const bitmap = await createImageBitmap(archivo).catch(() => null);
   if (!bitmap) return archivo;
-  const escala = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
+  const escala = Math.min(1, LADO_SELFIE / Math.max(bitmap.width, bitmap.height));
   const lienzo = document.createElement("canvas");
   lienzo.width = Math.round(bitmap.width * escala);
   lienzo.height = Math.round(bitmap.height * escala);
