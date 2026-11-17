@@ -4,6 +4,7 @@ import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { useAuth } from "../lib/auth";
 import { rutaVerArchivo } from "../lib/verArchivo";
+import { prepararArchivo } from "../lib/comprimirArchivo";
 
 /** Comprobante de un pago (Delia, 29-sep-2026): subir (admin/corporativo/
  * dirección) y ver (quien ve el pago). Edge `pagos-comprobante`, bucket
@@ -29,9 +30,10 @@ export function ComprobantePago({ pagoId, nombre, compacto = false }: { pagoId: 
     setOcupado(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
+      const listo = await prepararArchivo(archivo);
       const fd = new FormData();
       fd.append("pagoId", pagoId);
-      fd.append("file", archivo, archivo.name);
+      fd.append("file", listo, listo.name);
       const respuesta = await fetch(urlFuncion("pagos-comprobante"), { method: "POST", headers: { Authorization: `Bearer ${sessionData.session?.access_token}` }, body: fd });
       if (!respuesta.ok) {
         const json = await respuesta.json().catch(() => null);

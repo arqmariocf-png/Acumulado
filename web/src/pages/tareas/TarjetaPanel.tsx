@@ -9,6 +9,7 @@ import { moverOSolicitarCierre } from "../../lib/cierreTarjeta";
 import { useAuth } from "../../lib/auth";
 import type { DirectorioPerfil, TableroColumna, Tarjeta, TarjetaActividad, TarjetaArchivo, TarjetaComentario } from "../../types/database";
 import { rutaVerArchivo } from "../../lib/verArchivo";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 import { TextoConEnlaces } from "../../components/TextoConEnlaces";
 import { ligasDe } from "../../lib/enlaces";
 
@@ -306,9 +307,10 @@ export function TarjetaPanel({
           continue;
         }
         try {
+          const listo = await prepararArchivo(archivo);
           const fd = new FormData();
           fd.append("tarjetaId", tarjetaId);
-          fd.append("file", archivo);
+          fd.append("file", listo, listo.name);
           const respuesta = await fetch(urlFuncion("tareas-archivos"), {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },

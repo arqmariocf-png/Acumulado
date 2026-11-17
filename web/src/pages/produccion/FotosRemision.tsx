@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 import { useAuth } from "../../lib/auth";
 
 interface FotoRemision {
@@ -31,27 +32,6 @@ async function llamar(metodo: "GET" | "POST", remisionId: string, archivo?: File
   return json;
 }
 
-/** Foto del celular a JPEG de máximo 1600 px (pesa poco y el HEIC del iPhone
- * se vuelve legible en cualquier navegador). Un PDF se manda tal cual. */
-async function aJpeg(archivo: File): Promise<File> {
-  if (!archivo.type.startsWith("image/")) return archivo;
-  try {
-    const bitmap = await createImageBitmap(archivo);
-    const escala = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    const lienzo = document.createElement("canvas");
-    lienzo.width = Math.round(bitmap.width * escala);
-    lienzo.height = Math.round(bitmap.height * escala);
-    const ctx = lienzo.getContext("2d");
-    if (!ctx) return archivo;
-    ctx.drawImage(bitmap, 0, 0, lienzo.width, lienzo.height);
-    const blob = await new Promise<Blob | null>((resolve) => lienzo.toBlob(resolve, "image/jpeg", 0.85));
-    if (!blob) return archivo;
-    return new File([blob], archivo.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
-  } catch {
-    return archivo;
-  }
-}
-
 /** Fotos de la entrega (o de la recepción) de una remisión de planta: se
  * ven desde la remisión con QR y se suben con la cámara del celular
  * (Mario, 30-sep-2026). */
@@ -71,7 +51,7 @@ export function FotosRemision({ remisionId }: { remisionId: string }) {
     setError(null);
     setSubiendo(true);
     try {
-      for (const original of Array.from(lista)) await llamar("POST", remisionId, await aJpeg(original));
+      for (const original of Array.from(lista)) await llamar("POST", remisionId, await prepararArchivo(original));
       queryClient.invalidateQueries({ queryKey: ["remision-produccion-fotos", remisionId] });
       queryClient.invalidateQueries({ queryKey: ["remisiones-planta"] });
     } catch (e) {

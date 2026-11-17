@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../lib/supabase";
 import { errorDeFuncion } from "../lib/funciones";
 import { rutaVerArchivo } from "../lib/verArchivo";
+import { prepararArchivo } from "../lib/comprimirArchivo";
 
 // Confirmar varios pagos de una vez con UN comprobante (Mario, 6-oct-2026:
 // "un mismo comprobante cubre varias órdenes de pago"). Laura lo usa para el
@@ -79,7 +80,7 @@ export function ConfirmarPagos({
       form.set("confirmar", "1");
       if (referencia.trim()) form.set("referencia", referencia.trim());
       const archivo = archivoRef.current?.files?.[0];
-      if (archivo) form.set("file", archivo);
+      if (archivo) form.set("file", await prepararArchivo(archivo));
       const { data: sesion } = await supabase.auth.getSession();
       const respuesta = await fetch(urlFuncion("pagos-comprobante"), {
         method: "POST",

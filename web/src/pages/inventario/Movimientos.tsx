@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 import { errorDeFuncion } from "../../lib/funciones";
 import { useEmpresaFiltro } from "../../lib/auth";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
@@ -94,28 +95,6 @@ const MODOS_CAPTURA: { valor: ModoCaptura; etiqueta: string }[] = [
   { valor: "nombre", etiqueta: "Buscar por nombre" },
   { valor: "codigo", etiqueta: "Código de barras" },
 ];
-
-/** Convierte cualquier imagen (incluida HEIC del iPhone cuando el navegador
- * la decodifica) a JPEG de máximo 1600 px, para que la lectura por IA no la
- * rechace por formato ni por peso. Si no se puede decodificar, se manda tal
- * cual. */
-async function aJpeg(archivo: File): Promise<File> {
-  try {
-    const bitmap = await createImageBitmap(archivo);
-    const escala = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    const lienzo = document.createElement("canvas");
-    lienzo.width = Math.round(bitmap.width * escala);
-    lienzo.height = Math.round(bitmap.height * escala);
-    const ctx = lienzo.getContext("2d");
-    if (!ctx) return archivo;
-    ctx.drawImage(bitmap, 0, 0, lienzo.width, lienzo.height);
-    const blob = await new Promise<Blob | null>((resolve) => lienzo.toBlob(resolve, "image/jpeg", 0.85));
-    if (!blob) return archivo;
-    return new File([blob], archivo.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
-  } catch {
-    return archivo;
-  }
-}
 
 /** Campo numérico que respeta lo que la persona va tecleando. Con un
  * <input type="number"> controlado por Number(value), al borrar para escribir
@@ -911,7 +890,10 @@ export function Movimientos() {
     try {
       const form = new FormData(formEl);
       const original = form.get("file");
-      if (original instanceof File && original.size > 0) form.set("file", await aJpeg(original));
+      if (original instanceof File && original.size > 0) {
+        const listo = await prepararArchivo(original);
+        form.set("file", listo, listo.name);
+      }
       form.set("soloEvidencia", soloEvidencia ? "1" : "0");
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;

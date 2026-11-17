@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
 import { ETIQUETA_AUTORIZACION, ETIQUETA_CONDICION, comentarioPago, ETIQUETA_ETAPA_OC, ETIQUETA_ORDEN_OC, PASOS_OC, ordenarOcs, type OrdenOc, esOcEfectivo, estadoPagoOc, etapaOc, porProgramarOc, fechaPagoSugerida, montoPagoSugerido, saldoOc, textoVencimiento, vencimientoCredito, type Autorizacion, type CondicionPago } from "../../lib/pagosOc";
@@ -782,7 +783,8 @@ function ConfirmarOcPagadas({ ocs, hoy, onListo, onCancelar }: { ocs: OcPago[]; 
       if (archivo && pagos.length > 0) {
         const form = new FormData();
         form.set("pagoIds", pagos.join(","));
-        form.set("file", archivo);
+        const listo = await prepararArchivo(archivo);
+        form.set("file", listo, listo.name);
         const { data: sesion } = await supabase.auth.getSession();
         const r = await fetch(urlFuncion("pagos-comprobante"), { method: "POST", headers: { Authorization: `Bearer ${sesion.session?.access_token ?? ""}` }, body: form });
         const json = await r.json().catch(() => null);

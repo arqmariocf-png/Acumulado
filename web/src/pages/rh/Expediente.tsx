@@ -6,6 +6,7 @@ import { useAuth } from "../../lib/auth";
 import { esRh, etiquetaSexo } from "../../lib/modulos";
 import type { DocumentoFaltante, ExpedienteFila, ExtraccionDocumento, Personal } from "../../types/database";
 import { rutaVerArchivo } from "../../lib/verArchivo";
+import { prepararArchivo } from "../../lib/comprimirArchivo";
 
 // Expediente de personal: cada documento del checklist se sube como archivo
 // (edge function rh-documentos -> bucket privado "cargas"), Claude le extrae
@@ -141,7 +142,8 @@ function SubirExpedienteCompleto({ persona, filas, onSubido }: { persona: Person
     setSubiendo(true);
     try {
       const cuerpo = new FormData();
-      cuerpo.append("file", archivo);
+      const listo = await prepararArchivo(archivo);
+      cuerpo.append("file", listo, listo.name);
       cuerpo.append("personalId", persona.id);
       cuerpo.append("tipoDocumentoIds", [...marcados].join(","));
       cuerpo.append("fechaEntrega", String(fd.get("fechaEntrega") ?? hoyIso()));
@@ -346,7 +348,8 @@ function FilaDocumento({ fila, persona, puedeAplicar }: { fila: ExpedienteFila; 
     setSubiendo(true);
     try {
       const cuerpo = new FormData();
-      cuerpo.append("file", archivo);
+      const listo = await prepararArchivo(archivo);
+      cuerpo.append("file", listo, listo.name);
       cuerpo.append("personalId", persona.id);
       cuerpo.append("tipoDocumentoId", fila.tipo_documento_id);
       cuerpo.append("fechaEntrega", String(fd.get("fechaEntrega") ?? hoyIso()));
