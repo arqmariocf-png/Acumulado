@@ -464,6 +464,7 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/admin", etiqueta: "Usuarios y permisos", descripcion: "usuarios, roles, cuentas, reglas y proyectos", uso: "Solo el administrador: dar rol a una cuenta, altas de cuentas bancarias y reglas del motor.", visible: esAdmin , personal: true },
       { ruta: "/admin/plan-sistema", etiqueta: "Plan del sistema", descripcion: "las 100 opciones del deber ser: fase, responsable y avance", uso: "Para dar seguimiento al acomodo del sistema: qué ya funciona, qué falta crear o migrar del backoffice, quién lo lleva y para cuándo.", visible: (p) => esAdmin(p) || p.rol === "direccion" },
       { ruta: "/admin/respaldo-dropbox", etiqueta: "Respaldo en Dropbox", descripcion: "proyectos a cotizar, para leerlos desde Claude", uso: "Solo el director general: conecta tu Dropbox una vez y cada noche se copian proyectos, planos, precios unitarios y cotizaciones (CSV con su índice) para cotizar más rápido desde Claude.", visible: esAdmin },
+      { ruta: "/admin/almacenamiento", etiqueta: "Almacenamiento", descripcion: "cuánto pesa cada carpeta y recomprimir lo ya guardado", uso: "Solo el director general: ver qué carpetas pesan más y recomprimir fotos y PDF escaneados que ya estaban guardados, sin moverlos de lugar.", visible: esAdmin },
       { ruta: "/guia", etiqueta: "Guía de uso", descripcion: "qué hace cada módulo y cuándo usarlo", uso: "Cuando alguien nuevo entra al sistema o no sabe a dónde ir.", visible: () => true , personal: true },
     ],
   },
