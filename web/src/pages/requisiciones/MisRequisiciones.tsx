@@ -64,16 +64,20 @@ function useProductosEmpresa(empresaId: string) {
   });
 }
 
-function useRequisiciones(empresaId: string) {
+// Lo que la persona pidió se ve SIEMPRE, aunque sea de otra empresa (17-nov-2026,
+// Maria Fernanda, responsable de MCF: sus requisiciones de IKEA —obra de CSC—
+// no salían porque la lista filtraba solo por su empresa activa).
+function useRequisiciones(empresaId: string, miId: string | undefined) {
   return useQuery({
-    queryKey: ["requisiciones", empresaId],
+    queryKey: ["requisiciones", empresaId, miId ?? ""],
     queryFn: async () => {
       let query = supabase
         .from("requisiciones")
         .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, proyecto_id, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
         .order("created_at", { ascending: false })
         .limit(100);
-      if (empresaId) query = query.eq("empresa_id", empresaId);
+      if (empresaId && miId) query = query.or(`empresa_id.eq.${empresaId},solicitado_por.eq.${miId}`);
+      else if (empresaId) query = query.eq("empresa_id", empresaId);
       const { data, error } = await query;
       if (error) throw error;
       // Avance real por partidas (pedido · bodega · en camino · en obra).
@@ -142,7 +146,7 @@ export function MisRequisiciones() {
 
   const proyectoSeleccionado = proyectosDisponibles?.find((p) => p.id === proyectoId);
   const { data: productos } = useProductosEmpresa(proyectoSeleccionado?.empresa_id ?? "");
-  const { data: todas, isLoading: cargandoRequisiciones, error: errorRequisiciones } = useRequisiciones(empresaFiltro);
+  const { data: todas, isLoading: cargandoRequisiciones, error: errorRequisiciones } = useRequisiciones(empresaFiltro, perfil?.id);
   // Desde Inicio / indicadores: ?ver=sin_resolver (renglones por comprar o
   // surtir) o ?ver=pendientes (todo lo que no está completo en obra).
   const [ver, quitarVer] = useVer();

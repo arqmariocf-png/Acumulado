@@ -1308,6 +1308,12 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   por empresa o por tarjeta etiquetada); si hace falta, darle CSC en "Maneja
   también" con `alcance_propio` (vería todas las obras de CSC) o extender
   `auth_tableros_etiquetado` al encargado de la obra.
+  **"No me aparecen las requisiciones de IKEA" (17-nov-2026, Maria Fernanda
+  por WhatsApp)**: sí existían (#139 y #143, CSC) y la base se las daba; la
+  lista de `/requisiciones` filtraba por su empresa activa (MCF, fija porque
+  solo tiene una). Ahora `useRequisiciones(empresa, miId)` trae las de la
+  empresa O las que la persona pidió (`or(empresa_id.eq, solicitado_por.eq)`):
+  lo que uno pide se ve siempre, sea de la empresa que sea.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
