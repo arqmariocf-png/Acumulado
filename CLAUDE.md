@@ -1715,6 +1715,29 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   si Mario quiere, un trabajo en edge que recorra `cargas/rh` con la misma
   regla. El otro chat de Mario generó un `compresion-subidas.patch` que nunca
   llegó al repo: esto lo sustituye.
+  **Sistemas › Almacenamiento (17-nov-2026, Mario: "ajusta todos al
+  mínimo")**: `/admin/almacenamiento` (`pages/admin/Almacenamiento.tsx`,
+  `lib/almacenamiento.ts` con pruebas; solo director general): cuánto pesa cada
+  carpeta del bucket `cargas` y botón "Recomprimir N" por carpeta: baja cada
+  archivo con liga firmada, lo comprime EN EL NAVEGADOR con la misma regla
+  (`comprimirImagen` a 800 px en checador, 1600 en lo demás;
+  `comprimirPdfEscaneado`) y lo reemplaza en la MISMA ruta (nada en la base
+  cambia) solo si queda más chico; "Detener" en cualquier momento. Edge
+  **`archivos-recomprimir`** v1 (verify_jwt; `auth_admin_global` por RPC; GET
+  resumen / candidatos / url firmada 120 s; POST ruta+file con upsert; 409 si
+  no pesa menos; nunca borra; solo carpetas rh, checador, tareas, pagos, legal,
+  comprobaciones, cotizaciones, remisiones-produccion, notas-entrega). Base
+  `20261117090000` (aplicada como `almacenamiento_recomprimir`):
+  `fn_almacenamiento_resumen()` y `fn_almacenamiento_candidatos(carpeta,
+  limite)` (definer, solo service_role o admin maestro; leen `storage.objects`;
+  umbrales en `fn_almacenamiento_es_candidato`: checador > 110 KB, otras fotos
+  > 300 KB, PDF > 1.5 MB). **Ojo al desplegar con `_shared`**: el bundler del
+  MCP pone los archivos bajo `source/`, así que la copia desplegada importa
+  `./_shared/…` (el repo sigue con `../_shared/…`). Al 17-nov: 1.03 GB en 3,647
+  archivos; candidatos: RH 71 PDF (376 MB), checador 1,018 selfies (181 MB),
+  tareas 11 (39 MB). Vercel no se ve desde el MCP (el proyecto está en otra
+  cuenta) y el proxy no llega a vercel.app: el despliegue se confirma desde la
+  app (aviso "versión nueva").
 - `web/version.json` + `AvisoVersion`: aviso de "versión nueva" en pestañas viejas.
 - Foto de nota de entrega: evidencia por defecto; lectura por IA opcional
   (requiere `ANTHROPIC_API_KEY` válida en secrets de Edge Functions; la actual

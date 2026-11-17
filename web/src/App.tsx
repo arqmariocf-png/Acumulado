@@ -51,6 +51,7 @@ const Crm = lazy(() => import("./pages/crm/Crm").then((m) => ({ default: m.Crm }
 const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
 const PlanSistemaPagina = lazy(() => import("./pages/admin/PlanSistemaPagina").then((m) => ({ default: m.PlanSistemaPagina })));
 const RespaldoDropbox = lazy(() => import("./pages/admin/RespaldoDropbox").then((m) => ({ default: m.RespaldoDropbox })));
+const Almacenamiento = lazy(() => import("./pages/admin/Almacenamiento").then((m) => ({ default: m.Almacenamiento })));
 const Vacaciones = lazy(() => import("./pages/rh/Vacaciones").then((m) => ({ default: m.Vacaciones })));
 const SolicitarEpp = lazy(() => import("./pages/rh/SolicitarEpp").then((m) => ({ default: m.SolicitarEpp })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
@@ -163,6 +164,7 @@ function Enrutador() {
             <Route path="/organigrama/configurar" element={<ConfigurarKpis />} />
             <Route path="/admin/mensaje-semana" element={<MensajeSemana />} />
             <Route path="/admin/respaldo-dropbox" element={<RespaldoDropbox />} />
+            <Route path="/admin/almacenamiento" element={<Almacenamiento />} />
           </Route>
           <Route element={<ProtectedRoute roles={["supervisor", "responsable", "directivo", "administrativo", "corporativo", "direccion", "empresa"]} />}>
             <Route path="/gastos" element={<Gastos />} />
