@@ -8,6 +8,7 @@ import { BotonVerOc } from "./VerOrdenCompra";
 import { RecepcionOc } from "./RecepcionOc";
 import { ETIQUETA_CONDICION, type CondicionPago } from "../../lib/pagosOc";
 import { ETIQUETA_SEGUIMIENTO, avancePartidas, puedeMarcarEvento, seguimientoLinea, type EstadoSeguimiento, type EventoLinea, type ExtraLinea, type Seguimiento, type TipoEvento } from "../../lib/seguimientoLinea";
+import { requisicionEditable, type HorarioRequisiciones } from "../../lib/horarioRequisiciones";
 import { SeguimientoLinea } from "./SeguimientoLinea";
 import { BotonImprimirRequisicion } from "./ImprimirRequisicion";
 import { TextoConEnlaces } from "../../components/TextoConEnlaces";
@@ -55,7 +56,7 @@ interface OrdenDeRequisicion {
  * botón "Comprar" (un paso: proveedor, costo, cotización → OC RQ) para
  * almacén, y las órdenes de compra que ya salieron de ella con "Ver orden"
  * (Mario, 29-sep-2026: todo en una sola pantalla). */
-export function DetalleRequisicion({ requisicionId, solicitadoPor, estado, esDeLaObra = false }: { requisicionId: string; solicitadoPor?: string; estado?: string; esDeLaObra?: boolean }) {
+export function DetalleRequisicion({ requisicionId, solicitadoPor, estado, etapa, creadaEn, horario, esDeLaObra = false }: { requisicionId: string; solicitadoPor?: string; estado?: string; etapa?: string | null; creadaEn?: string | null; horario?: HorarioRequisiciones | null; esDeLaObra?: boolean }) {
   const { perfil, soloConsulta } = useAuth();
   const queryClient = useQueryClient();
   // Pedido / entregado / devolución / comentarios: cualquiera que vea la
@@ -69,7 +70,9 @@ export function DetalleRequisicion({ requisicionId, solicitadoPor, estado, esDeL
   const puedeComprar = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
   // Quien la pidió puede seguir agregando renglones mientras esté enviada
   // (policy requisicion_lineas_write): a Maria Fernanda se le fue con uno solo.
-  const puedeEditar = estado === "enviada" && !!perfil && (perfil.id === solicitadoPor || perfil.rol === "admin" || perfil.rol === "corporativo");
+  // Desde el 18-nov-2026 solo el mismo día, sin avanzar y con el horario
+  // abierto (requisicionEditable; la base lo exige en auth_requisiciones_editables).
+  const puedeEditar = requisicionEditable(perfil, { solicitado_por: solicitadoPor, estado, etapa, created_at: creadaEn }, horario, new Date());
   const [editando, setEditando] = useState<string | null>(null);
   const [compraAbierta, setCompraAbierta] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);

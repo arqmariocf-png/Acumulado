@@ -17,6 +17,8 @@ import { etiquetaCategoria, sugerirItems } from "../../lib/catalogoItems";
 import { useItemsCompra } from "../compras/useItemsCompra";
 import { descargarCsv } from "../../lib/descargarArchivo";
 import { esDeLaObra, obrasParaPedir, puedeConfirmarObra, textoConfirmarObra } from "../../lib/encargadosObra";
+import { horarioAbierto, horarioAplicaA, motivoCerrado } from "../../lib/horarioRequisiciones";
+import { AvisoHorario, HorarioRequisicionesPanel, useHorarioRequisiciones } from "./HorarioRequisiciones";
 import { csvRequisiciones, csvRequisicionesRenglones, nombreExcelRequisiciones, type EntregaRenglonExcel, type RenglonExcel, type RequisicionExcel } from "../../lib/requisicionesExcel";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
@@ -82,7 +84,7 @@ function useRequisiciones(empresaId: string, miId: string | undefined) {
       for (let desde = 0; ; desde += 1000) {
         let query = supabase
           .from("requisiciones")
-          .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, proyecto_id, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
+          .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, proyecto_id, created_at, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
           .order("created_at", { ascending: false })
           .range(desde, desde + 999);
         if (empresaId && miId) query = query.or(`empresa_id.eq.${empresaId},solicitado_por.eq.${miId}`);
@@ -132,6 +134,10 @@ export function MisRequisiciones() {
     },
   });
   const encargos = useMemo(() => new Set(misEncargos ?? []), [misEncargos]);
+  // Horario para pedir (18-nov-2026): fuera de él, quien pide en obra no manda.
+  const { data: horario } = useHorarioRequisiciones();
+  const horarioAplica = horarioAplicaA(perfil?.rol);
+  const horarioCerrado = horarioAplica && !horarioAbierto(horario, new Date());
   const proyectosDisponibles = useMemo(() => (proyectosVisibles ? obrasParaPedir(perfil, proyectosVisibles, encargos) : proyectosVisibles), [perfil, proyectosVisibles, encargos]);
 
   // Con el permiso por persona 'requisiciones' (Jaime, producción en
@@ -294,6 +300,10 @@ export function MisRequisiciones() {
   async function onEnviar() {
     const filas = filaPendiente ? [...carrito, filaPendiente] : carrito;
     if (!proyectoId || filas.length === 0) return;
+    if (horarioCerrado && !esHerramienta) {
+      setError(motivoCerrado(horario));
+      return;
+    }
     setEnviando(true);
     setError(null);
     setMensaje(null);
@@ -363,6 +373,7 @@ export function MisRequisiciones() {
       {puedeCrear && (
         <div className="mb-6 max-w-2xl rounded border border-slate-200 bg-white p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-800">Nueva requisición</h2>
+          <AvisoHorario horario={horario} aplica={horarioAplica} />
 
           <div className="mb-3">
             <label className="mb-1 block text-xs font-medium text-slate-600">Proyecto</label>
@@ -546,7 +557,7 @@ export function MisRequisiciones() {
 
               <button
                 onClick={onEnviar}
-                disabled={enviando || (carrito.length === 0 && !filaPendiente)}
+                disabled={enviando || (carrito.length === 0 && !filaPendiente) || (horarioCerrado && !esHerramienta)}
                 className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
                 {enviando ? "Enviando…" : `${esHerramienta ? "Pedir herramienta al almacén" : "Enviar requisición"} (${carrito.length + (filaPendiente ? 1 : 0)} línea(s))`}
@@ -559,6 +570,7 @@ export function MisRequisiciones() {
         </div>
       )}
 
+      <HorarioRequisicionesPanel />
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h2 className="text-sm font-semibold text-slate-700">Requisiciones</h2>
         {eligeEmpresa && <SelectorEmpresa value={empresaFiltro} onChange={setEmpresaFiltro} className="rounded border border-slate-300 px-2 py-1 text-sm" />}
@@ -640,6 +652,9 @@ export function MisRequisiciones() {
                           requisicionId={r.id}
                           solicitadoPor={r.solicitado_por}
                           estado={r.estado}
+                          etapa={r.etapa}
+                          creadaEn={r.created_at}
+                          horario={horario}
                           esDeLaObra={esDeLaObra(perfil, r.proyectos ? { ...r.proyectos, id: r.proyecto_id } : null, encargos)}
                         />
                       </td>
