@@ -1326,6 +1326,42 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   obra, "solo las que yo pedí"). `lib/requisicionesExcel.ts` (con pruebas).
   La lista ya trae TODAS las requisiciones por páginas de 1,000 (antes
   `.limit(100)`; Laura tiene 120).
+  **Encargados por obra, confirmar entrega y recordatorio (18-nov-2026,
+  Mario: "necesito que pueda agregar a los supervisores varias obras para
+  solicitar"; "ver de qué manera podemos confirmar las entregas en obra, se
+  están quedando vivas los requerimientos porque no están confirmando en
+  sistema que ya lo tienen")** (`20261118090000`, aplicada como
+  `encargados_obra_confirmar_entrega`; prueba
+  `supabase/tests/proyecto_encargados.sql`): (1) tabla **`proyecto_encargados`**
+  (obra × persona; `empresa_id` por trigger; frontera, espectador,
+  director_general, solo_consulta): quien está ahí entra a
+  `auth_proyectos_propios()` (ve la obra, sus requisiciones y herramienta),
+  pide requisiciones en ella (policy `requisiciones_insert_encargado`:
+  responsable, comprador o encargado, cualquier rol no pendiente) y confirma
+  lo recibido (`auth_es_de_la_obra(obra, persona)` en el trigger de eventos,
+  que ahora también deja a dirección en su alcance). Asignan admin,
+  corporativo, dirección y empresa: chips "Encargados adicionales" en el
+  encabezado de la obra (`proyectos/EncargadosAdicionales.tsx`) y la sección
+  **"Asignar obras a una persona"** arriba de `/proyectos`
+  (`proyectos/AsignarObras.tsx`: persona de `fn_encargados_personas()` →
+  casillas por obra activa). En Requisiciones, el responsable ya pide en sus
+  obras encargadas (`obrasParaPedir`) y un básico sin empresa con obras
+  encargadas ve "Nueva requisición". (2) **"✓ Ya lo recibí todo en obra"** en
+  cada renglón de la lista (`CeldaEtapa`; `puedeConfirmarObra` en
+  `lib/encargadosObra.ts`, con pruebas: quien pidió, los de la obra, empresa,
+  dirección, admin, corporativo; no en canceladas ni recibidas) →
+  `fn_requisicion_confirmar_obra(req, nota)` (definer): por renglón, lo en
+  camino se marca `entregado` y el resto `directo_obra`, y la etapa pasa a
+  recibida; repetirla no duplica. (3) Recordatorio pg_cron
+  `requisiciones-recordar-entregas` (15:00 UTC lun-sáb) →
+  `fn_requisiciones_recordar_entregas()`: requisiciones vivas con renglones
+  en bodega/en camino o ya comprados sin cambio en 3 días → push a quien pidió
+  y al responsable de la obra ("¿Ya recibiste la requisición #N en obra?" →
+  `/requisiciones?abrir=<id>`), una vez cada 3 días
+  (`requisiciones.recordatorio_entrega_en`). Mismo día por SQL: #139
+  cancelada (duplicada de la #143) y #133 y #141 (Christian, BBVA
+  Mantenimiento) confirmadas en obra. Probado en rollback: Laura asigna a
+  Brenda en Olinia; Brenda ve solo Olinia, pide y confirma → recibida.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y

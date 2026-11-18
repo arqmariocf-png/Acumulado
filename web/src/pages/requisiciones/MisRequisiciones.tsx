@@ -16,6 +16,7 @@ import { CampoBuscador } from "../../components/CampoBuscador";
 import { etiquetaCategoria, sugerirItems } from "../../lib/catalogoItems";
 import { useItemsCompra } from "../compras/useItemsCompra";
 import { descargarCsv } from "../../lib/descargarArchivo";
+import { esDeLaObra, obrasParaPedir, puedeConfirmarObra, textoConfirmarObra } from "../../lib/encargadosObra";
 import { csvRequisiciones, csvRequisicionesRenglones, nombreExcelRequisiciones, type EntregaRenglonExcel, type RenglonExcel, type RequisicionExcel } from "../../lib/requisicionesExcel";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
@@ -42,11 +43,13 @@ function useProyectosDisponibles(rol: string | undefined, userId: string | undef
     enabled: !!rol,
     queryFn: async () => {
       let query = supabase.from("proyectos").select("*").eq("activo", true).order("nombre");
-      if (rol === "responsable") query = query.eq("responsable_id", userId);
+      // Responsable: la base le da las de su empresa; la pantalla deja solo
+      // las suyas (responsable, comprador o encargado) con obrasParaPedir.
+      void userId;
       // Rol básico (supervisor, administrativo…): la base ya le deja ver solo
       // sus obras (asignadas, con requisiciones suyas o de su empresa extra,
       // como Timoteo con MCF); no se acota por empresa.
-      else if (!esRolBasico(rol as AppRol) && rol !== "admin" && rol !== "corporativo" && empresaId) query = query.eq("empresa_id", empresaId);
+      if (rol !== "responsable" && !esRolBasico(rol as AppRol) && rol !== "admin" && rol !== "corporativo" && empresaId) query = query.eq("empresa_id", empresaId);
       const { data, error } = await query;
       if (error) throw error;
       return data as Proyecto[];
@@ -116,7 +119,20 @@ const ESTADO_ESTILO: Record<string, string> = {
 export function MisRequisiciones() {
   const { perfil, eligeEmpresa } = useAuth();
   const queryClient = useQueryClient();
-  const { data: proyectosDisponibles } = useProyectosDisponibles(perfil?.rol, perfil?.id, perfil?.empresa_id);
+  const { data: proyectosVisibles } = useProyectosDisponibles(perfil?.rol, perfil?.id, perfil?.empresa_id);
+  // Obras donde la persona es encargada adicional (18-nov-2026): las ve, pide
+  // en ellas y confirma lo recibido aunque no sea responsable ni comprador.
+  const { data: misEncargos } = useQuery({
+    queryKey: ["mis-encargos", perfil?.id],
+    enabled: !!perfil?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("proyecto_encargados").select("proyecto_id").eq("profile_id", perfil!.id);
+      if (error) throw error;
+      return (data ?? []).map((e) => e.proyecto_id as string);
+    },
+  });
+  const encargos = useMemo(() => new Set(misEncargos ?? []), [misEncargos]);
+  const proyectosDisponibles = useMemo(() => (proyectosVisibles ? obrasParaPedir(perfil, proyectosVisibles, encargos) : proyectosVisibles), [perfil, proyectosVisibles, encargos]);
 
   // Con el permiso por persona 'requisiciones' (Jaime, producción en
   // Clavicón, 22-oct-2026) también pide, en obras de su empresa principal.
@@ -125,7 +141,8 @@ export function MisRequisiciones() {
     perfil?.rol === "admin" ||
     perfil?.rol === "corporativo" ||
     administraProyectosDe(perfil, perfil?.empresa_id) ||
-    (!!perfil?.empresa_id && (perfil?.modulos ?? []).includes("requisiciones"));
+    (!!perfil?.empresa_id && (perfil?.modulos ?? []).includes("requisiciones")) ||
+    encargos.size > 0;
   const puedeComprarAqui = perfil?.rol === "admin" || perfil?.rol === "corporativo" || perfil?.rol === "almacen";
 
   const [proyectoId, setProyectoId] = useState("");
@@ -607,7 +624,7 @@ export function MisRequisiciones() {
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ESTADO_ESTILO[r.estado] ?? ""}`}>{r.estado}</span>
                     </td>
                     <td className="px-3 py-2">
-                      <CeldaEtapa r={r} />
+                      <CeldaEtapa r={r} encargos={encargos} />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <BotonImprimirRequisicion requisicionId={r.id} modo="requisicion" etiqueta="PDF" className="mr-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50" />
@@ -623,7 +640,7 @@ export function MisRequisiciones() {
                           requisicionId={r.id}
                           solicitadoPor={r.solicitado_por}
                           estado={r.estado}
-                          esDeLaObra={!!perfil && (perfil.id === r.proyectos?.responsable_id || perfil.id === r.proyectos?.comprador_id)}
+                          esDeLaObra={esDeLaObra(perfil, r.proyectos ? { ...r.proyectos, id: r.proyecto_id } : null, encargos)}
                         />
                       </td>
                     </tr>
@@ -725,10 +742,29 @@ function SolicitudesHerramienta({ soloDe }: { soloDe: string | null }) {
 /** Semáforo de suministro de una requisición y el botón de la siguiente
  * etapa para quien le toca (misma regla que fn_requisicion_etapa). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CeldaEtapa({ r }: { r: any }) {
+function CeldaEtapa({ r, encargos }: { r: any; encargos: Set<string> }) {
   const { perfil } = useAuth();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  // "Ya lo recibí en obra" (18-nov-2026, Mario: "se están quedando vivas los
+  // requerimientos porque no están confirmando en sistema que ya lo tienen"):
+  // un clic cierra lo que falta de cada renglón (fn_requisicion_confirmar_obra).
+  const puedeConfirmar = puedeConfirmarObra(perfil, { ...r, proyectos: r.proyectos ? { ...r.proyectos, id: r.proyecto_id } : null }, encargos);
+  const confirmar = useMutation({
+    mutationFn: async () => {
+      if (!window.confirm(`¿Confirmas que la requisición #${r.folio} ya está completa en obra? Se cierra todo lo que falta por recibir.`)) return;
+      const nota = window.prompt("Nota (opcional): quién la recibió, qué faltó, etc.") ?? "";
+      const { error: err } = await supabase.rpc("fn_requisicion_confirmar_obra", { p_requisicion_id: r.id, p_nota: nota || null });
+      if (err) throw err;
+    },
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["requisiciones"] });
+      queryClient.invalidateQueries({ queryKey: ["requisiciones-proyecto"] });
+      queryClient.invalidateQueries({ queryKey: ["requisicion-detalle", r.id] });
+    },
+    onError: (err) => setError((err as Error).message),
+  });
   const cancelada = r.estado === "cancelada";
   const etapa = (r.etapa ?? "solicitada") as EtapaRequisicion;
   const s = semaforoEtapa(etapa, cancelada, r.avance?.avance_pct);
@@ -737,7 +773,7 @@ function CeldaEtapa({ r }: { r: any }) {
   // bodega, enviar a obra, recibido en obra), no un botón (5-oct-2026).
   const sigEtapa = cancelada ? null : siguienteEtapa(etapa);
   const sig = sigEtapa && ["en_bodega", "en_transito", "recibida"].includes(sigEtapa) ? null : sigEtapa;
-  const esDelProyecto = !!perfil && (perfil.id === r.solicitado_por || perfil.id === r.proyectos?.responsable_id || perfil.id === r.proyectos?.comprador_id);
+  const esDelProyecto = !!perfil && (perfil.id === r.solicitado_por || esDeLaObra(perfil, r.proyectos ? { ...r.proyectos, id: r.proyecto_id } : null, encargos));
   const puede = !!perfil && !!sig && puedeMarcarEtapa(perfil.rol, sig, esDelProyecto);
   const marcar = useMutation({
     mutationFn: async () => {
@@ -776,6 +812,17 @@ function CeldaEtapa({ r }: { r: any }) {
       {sig && puede && (
         <button onClick={() => marcar.mutate()} disabled={marcar.isPending} className="mt-1 text-[11px] text-slate-700 underline disabled:opacity-50">
           marcar {ETIQUETA_ETAPA[sig].toLowerCase()}
+        </button>
+      )}
+      {puedeConfirmar && (
+        <button
+          type="button"
+          onClick={() => confirmar.mutate()}
+          disabled={confirmar.isPending}
+          className="mt-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+          title="Cierra lo que falta por recibir de cada renglón y deja la requisición como recibida"
+        >
+          {confirmar.isPending ? "Confirmando…" : `✓ ${textoConfirmarObra(r.avance)}`}
         </button>
       )}
       {error && <p className="mt-1 text-[11px] text-red-600">{error}</p>}
