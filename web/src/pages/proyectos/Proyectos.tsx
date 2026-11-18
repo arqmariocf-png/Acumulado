@@ -10,6 +10,7 @@ import type { Proyecto, PuEstado } from "../../types/database";
 import { PuntosSemaforoPu } from "./SemaforoPreciosUnitarios";
 import { AlmacenPorProyecto, PuntosAlmacen, useRequisicionesPorProyecto } from "./AlmacenProyectos";
 import { ResumenObrasDirector } from "./ResumenObrasDirector";
+import { AsignarObras } from "./AsignarObras";
 
 
 function useProyectos(empresaId: string, busqueda: string, incluirInactivos: boolean) {
@@ -186,6 +187,8 @@ export function Proyectos() {
           <ResumenObrasDirector />
         </div>
       )}
+
+      <AsignarObras />
 
       <div className="mb-4 flex flex-wrap gap-3">
         {eligeEmpresa && !soloAsignadas && <SelectorEmpresa value={empresaId} onChange={setEmpresaId} />}

@@ -12,6 +12,7 @@ import { SupervisionIA } from "./SupervisionIA";
 import type { Proyecto, ProyectoPlano, PuPrecioCliente, Tablero, TableroColumna, Tarjeta } from "../../types/database";
 import { PestanaControlObra } from "./ControlObra";
 import { CosteoObra } from "./CosteoObra";
+import { EncargadosAdicionales } from "./EncargadosAdicionales";
 import { rutaVerArchivo } from "../../lib/verArchivo";
 
 const campoTexto = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
@@ -174,6 +175,7 @@ export function ProyectoDetalle() {
             {proyecto.empresas?.nombre} {proyecto.cliente && `· Cliente: ${proyecto.cliente}`}
           </p>
           <EncargadosObra proyecto={proyecto} />
+          <EncargadosAdicionales proyectoId={proyecto.id} />
           {errorActivo && <p className="mt-1 text-xs text-red-600">{errorActivo}</p>}
         </div>
         {puedeDesactivar && (
