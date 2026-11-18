@@ -1362,6 +1362,33 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   cancelada (duplicada de la #143) y #133 y #141 (Christian, BBVA
   Mantenimiento) confirmadas en obra. Probado en rollback: Laura asigna a
   Brenda en Olinia; Brenda ve solo Olinia, pide y confirma → recibida.
+  **Horario para pedir y candado a las de días anteriores (18-nov-2026,
+  Mario: "hay que quitar que se pueda modificar los requerimientos pasados.
+  hay que agregar los horarios de requerimiento")** (`20261118110000`,
+  aplicada como `requisiciones_horario_y_candado`; prueba
+  `supabase/tests/requisiciones_horario.sql`): tabla `requisiciones_horario`
+  (una por organización: `activo`, `dias_semana` ISO, `hora_desde`,
+  `hora_hasta`, nota; LOMA sembrada **lun–sáb 08:00–18:00**, hora de México;
+  la cambian admin/corporativo/dirección en Requisiciones › botón "Horario
+  para pedir", `HorarioRequisicionesPanel`). (1) Trigger
+  `requisiciones_horario_guard` (before insert): fuera del horario, quien pide
+  en obra (`fn_requisiciones_horario_aplica`: operativo, administrativo,
+  supervisor, directivo, responsable, produccion) no manda ("Las requisiciones
+  se reciben lun, … de 08:00 a 18:00. Fuera de ese horario no se pueden
+  mandar."); almacén, RH, dirección, empresa, admin y corporativo no se
+  bloquean (EPP, compras internas). (2) `auth_requisiciones_editables()`
+  reescrita: quien pidió solo edita (renglones, cantidades, comentario,
+  cancelar) **el mismo día** en que la mandó (hora MX), mientras siga
+  `enviada`/`solicitada` y con el horario abierto; admin y corporativo
+  siempre (`requisiciones_update` y `requisicion_lineas_write` la usan).
+  `fn_requisicion_editable_por_solicitante(id)` para la pantalla. App:
+  `lib/horarioRequisiciones.ts` (con pruebas: `horarioAbierto`,
+  `requisicionEditable`, `textoHorario`, `momentoMx`) → aviso del horario
+  bajo "Nueva requisición", botón Enviar apagado fuera de horario y el
+  detalle esconde Editar/Cancelar cuando ya no toca. Probado en producción en
+  rollback: Brenda (supervisora encargada de Olinia) bloqueada con el horario
+  cerrado y pasa abierto; Fernanda tiene 17 enviadas de días anteriores y 0
+  editables. Las de herramienta (SH-) no llevan horario.
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
