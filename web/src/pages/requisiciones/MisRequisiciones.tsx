@@ -15,6 +15,8 @@ import { CLASE_SOLICITUD, ETIQUETA_SOLICITUD, type EstadoSolicitudHerramienta } 
 import { CampoBuscador } from "../../components/CampoBuscador";
 import { etiquetaCategoria, sugerirItems } from "../../lib/catalogoItems";
 import { useItemsCompra } from "../compras/useItemsCompra";
+import { descargarCsv } from "../../lib/descargarArchivo";
+import { csvRequisiciones, csvRequisicionesRenglones, nombreExcelRequisiciones, type EntregaRenglonExcel, type RenglonExcel, type RequisicionExcel } from "../../lib/requisicionesExcel";
 
 /** Un renglón trae producto del catálogo o descripción libre (empresas sin
  * catálogo, como Ergodinova, 28-sep-2026). */
@@ -71,15 +73,22 @@ function useRequisiciones(empresaId: string, miId: string | undefined) {
   return useQuery({
     queryKey: ["requisiciones", empresaId, miId ?? ""],
     queryFn: async () => {
-      let query = supabase
-        .from("requisiciones")
-        .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, proyecto_id, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (empresaId && miId) query = query.or(`empresa_id.eq.${empresaId},solicitado_por.eq.${miId}`);
-      else if (empresaId) query = query.eq("empresa_id", empresaId);
-      const { data, error } = await query;
-      if (error) throw error;
+      // Todas, por páginas de 1,000 (antes `.limit(100)`: Laura ya tiene 120
+      // y el Excel del 18-nov-2026 debe traerlas completas).
+      const data: Record<string, unknown>[] = [];
+      for (let desde = 0; ; desde += 1000) {
+        let query = supabase
+          .from("requisiciones")
+          .select("id, folio, fecha, estado, etapa, comentario, solicitado_por, solicitante_nombre, empresa_id, proyecto_id, empresas(codigo), proyectos(nombre, responsable_id, comprador_id)")
+          .order("created_at", { ascending: false })
+          .range(desde, desde + 999);
+        if (empresaId && miId) query = query.or(`empresa_id.eq.${empresaId},solicitado_por.eq.${miId}`);
+        else if (empresaId) query = query.eq("empresa_id", empresaId);
+        const { data: pagina, error } = await query;
+        if (error) throw error;
+        data.push(...((pagina ?? []) as Record<string, unknown>[]));
+        if (!pagina || pagina.length < 1000) break;
+      }
       // Avance real por partidas (pedido · bodega · en camino · en obra).
       const ids = (data ?? []).map((r) => r.id as string);
       const { data: av } = ids.length
@@ -175,6 +184,41 @@ export function MisRequisiciones() {
   useEffect(() => {
     if (proyectosDisponibles?.length === 1) setProyectoId(proyectosDisponibles[0].id);
   }, [proyectosDisponibles]);
+
+  // Excel de lo que está en la lista (18-nov-2026, Mario: "para Laura genera
+  // un exportable en excel de requisiciones"): resumen (una fila por
+  // requisición) o por renglón (solicitado, en compra, bodega, camino, obra).
+  const [exportando, setExportando] = useState(false);
+  async function descargarExcel(porRenglon: boolean) {
+    const lista = (requisiciones ?? []) as unknown as RequisicionExcel[];
+    if (!lista.length) return;
+    setExportando(true);
+    try {
+      if (!porRenglon) {
+        descargarCsv(nombreExcelRequisiciones(new Date()), csvRequisiciones(lista));
+        return;
+      }
+      const ids = lista.map((r) => r.id);
+      const renglones: RenglonExcel[] = [];
+      const entrega: EntregaRenglonExcel[] = [];
+      for (let i = 0; i < ids.length; i += 100) {
+        const parte = ids.slice(i, i + 100);
+        const [l, e] = await Promise.all([
+          supabase.from("requisicion_lineas").select("id, requisicion_id, descripcion, cantidad_solicitada, unidad_medida, comentario, productos(nombre)").in("requisicion_id", parte).order("created_at"),
+          supabase.from("v_requisicion_linea_entrega").select("requisicion_linea_id, pedido, comprado, en_bodega, en_transito, recibido_obra, etapa_partida").in("requisicion_id", parte),
+        ]);
+        if (l.error) throw l.error;
+        if (e.error) throw e.error;
+        renglones.push(...((l.data ?? []) as unknown as RenglonExcel[]));
+        entrega.push(...((e.data ?? []) as unknown as EntregaRenglonExcel[]));
+      }
+      descargarCsv(nombreExcelRequisiciones(new Date(), "renglones"), csvRequisicionesRenglones(lista, renglones, entrega));
+    } catch (e) {
+      setError(`No se pudo armar el Excel: ${(e as Error).message}`);
+    } finally {
+      setExportando(false);
+    }
+  }
 
   const productosFiltrados = useMemo(() => {
     if (!productos) return [];
@@ -502,6 +546,16 @@ export function MisRequisiciones() {
         <h2 className="text-sm font-semibold text-slate-700">Requisiciones</h2>
         {eligeEmpresa && <SelectorEmpresa value={empresaFiltro} onChange={setEmpresaFiltro} className="rounded border border-slate-300 px-2 py-1 text-sm" />}
         <p className="text-xs text-slate-500">Abre una requisición para ver sus renglones{puedeComprarAqui ? ", comprar en un paso y ver la orden de compra" : " y sus órdenes de compra"}.</p>
+        {!!requisiciones?.length && (
+          <span className="ml-auto flex items-center gap-2 text-xs">
+            <button type="button" disabled={exportando} onClick={() => descargarExcel(false)} className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50" title="Una fila por requisición, con su avance por partidas">
+              Descargar Excel ({requisiciones.length})
+            </button>
+            <button type="button" disabled={exportando} onClick={() => descargarExcel(true)} className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50" title="Una fila por renglón: solicitado, en compra, en bodega, en camino, recibido en obra y lo que falta">
+              {exportando ? "Armando…" : "Excel por renglón"}
+            </button>
+          </span>
+        )}
       </div>
 
       {cargandoRequisiciones && <p className="text-sm text-slate-500">Cargando…</p>}

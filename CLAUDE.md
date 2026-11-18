@@ -1314,6 +1314,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   solo tiene una). Ahora `useRequisiciones(empresa, miId)` trae las de la
   empresa O las que la persona pidió (`or(empresa_id.eq, solicitado_por.eq)`):
   lo que uno pide se ve siempre, sea de la empresa que sea.
+  **Excel de requisiciones (18-nov-2026, Mario: "para Laura genera un
+  exportable en excel de requisiciones")**: en `/requisiciones`, junto al
+  encabezado de la lista, "Descargar Excel (N)" (una fila por requisición:
+  folio, fecha, empresa, obra, solicitó, estado, etapa, partidas, avance %,
+  sin pedir / bodega / camino / obra, renglones sin resolver, comentario) y
+  "Excel por renglón" (una fila por partida: descripción, unidad, solicitado,
+  pedido, en compra, bodega, camino, recibido en obra, falta en obra, etapa
+  del renglón; lee `requisicion_lineas` + `v_requisicion_linea_entrega` de
+  100 en 100). Los dos respetan lo filtrado en pantalla (empresa, `?ver=`,
+  obra, "solo las que yo pedí"). `lib/requisicionesExcel.ts` (con pruebas).
+  La lista ya trae TODAS las requisiciones por páginas de 1,000 (antes
+  `.limit(100)`; Laura tiene 120).
 - **Obras asignadas para roles básicos (5-oct-2026, Mario: "a los
   supervisores muéstrales únicamente sus proyectos asignados")**: operativo,
   administrativo, supervisor y directivo ven en `proyectos` y
