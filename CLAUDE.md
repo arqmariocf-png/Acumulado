@@ -4081,3 +4081,28 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   en "Mis ítems" y en "Todos los ítems" y "Imprimir esta etiqueta" al guardar
   (`EtiquetaConteo.cantidad` acepta null para las del catálogo;
   `filtrarProductos`). Para todos los que ven el conteo, no solo Laura.
+  **Racks y niveles de la bodega (19-nov-2026, Mario: "poner una opción de
+  racks y niveles de rack para darle forma"; eligió empezar por la bodega de
+  material)** (`20261119140000`, aplicada como `inventario_ubicaciones`):
+  tabla `inventario_ubicaciones` (empresa, bodega, rack, nivel, posición,
+  código `fn_ubicacion_codigo` = 3 letras de la bodega + R<rack 2 dígitos> +
+  N<nivel> + P<posición>, p. ej. **BOD-R03-N2-P4**; `x/y/ancho/largo/alto`
+  reservados para el plano y el 3D; único por empresa y código). Ve toda la
+  organización; dan de alta/quitan (activo=false) admin, corporativo,
+  dirección y almacén en su alcance. `conteo_items.ubicacion_id` (el trigger
+  copia el código a `ubicacion` y exige misma empresa);
+  `fn_ubicacion_contenido(empresa, conteo|null)` = ítems por lugar.
+  `lib/ubicacionesBodega.ts` (con pruebas: `codigoUbicacion` mismo cálculo
+  que la base, `generarUbicaciones` rack + niveles + posiciones,
+  `agruparUbicaciones`, `lugaresParaContar` = el nivel más fino de cada
+  rack, `urlEtiquetaLugar` → `/inventario/conteo?lugar=<código>`).
+  Pantalla: sección **"Racks y niveles de la bodega"** en el conteo
+  (`pages/inventario/RacksNiveles.tsx`): alta de rack (bodega, rack,
+  niveles, posiciones por nivel), lista bodega › rack › nivel con ítems
+  contados por lugar, etiquetas QR por rack o de todos los lugares, quitar.
+  En la captura, con racks dados de alta sale el selector "Lugar (rack ·
+  nivel)" (se recuerda) y el texto libre queda para lo que no está en rack;
+  el QR del rack escaneado deja ese lugar elegido. Probado en rollback: Alma
+  crea BOD-R03 con 2 niveles, Brenda cuenta en BOD-R03-N2, no crea racks ni
+  cuenta con un lugar de otra empresa. Siguiente paso (pendiente del croquis
+  de Mario): plano 2D de la bodega y vista 3D sobre estos mismos lugares.

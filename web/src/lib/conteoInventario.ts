@@ -16,6 +16,7 @@ export interface ItemConteo {
   codigo_barras: string | null;
   notas: string | null;
   producto_id?: string | null;
+  ubicacion_id?: string | null;
   contado_por: string;
   contado_por_nombre: string | null;
   created_at: string;
