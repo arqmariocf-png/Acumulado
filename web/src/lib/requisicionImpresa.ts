@@ -155,10 +155,10 @@ export function htmlRequisicion(doc: RequisicionDoc, lineas: LineaRequisicionDoc
     <thead><tr>${encabezados}</tr></thead>
     <tbody>${filas || `<tr><td colspan="${columnas}" class="c sub">Sin renglones.</td></tr>`}</tbody>
   </table>
-  ${entrega ? `<p class="pie">En bodega, en camino y recibido en obra según lo registrado en Acumulado al ${esc(doc.impreso)}. "Entregado hoy" y "OK" se llenan al revisar físicamente; después se registra en la requisición.</p>` : ""}
+  ${entrega ? `<p class="pie">En bodega, en camino y recibido en obra según lo registrado en el sistema al ${esc(doc.impreso)}. "Entregado hoy" y "OK" se llenan al revisar físicamente; después se registra en la requisición.</p>` : ""}
   <div class="obs"><strong>Observaciones:</strong><div class="lineas-obs"></div><div class="lineas-obs"></div></div>
   <div class="firmas">${firmas.map((f) => `<div>${esc(f)}<br><br>Nombre y firma</div>`).join("")}</div>
-  <p class="pie">Impreso ${esc(doc.impreso)} · Acumulado</p>
+  <p class="pie">Impreso ${esc(doc.impreso)}</p>
 </div>
 </body></html>`;
 }

@@ -33,7 +33,7 @@ test("presentación de mantenimiento: portada, resumen, qué atender, una lámin
   assert.equal(cuenta(html), 4 + cfg.secciones.length);
   assert.equal(laminasArea(d), 4 + cfg.secciones.length);
   assert.ok(html.includes("Reporte de mantenimiento"));
-  assert.ok(html.includes("Grupo Loma · Acumulado"));
+  assert.ok(html.includes("Grupo Loma"));
   assert.ok(html.includes("07/10 – 05/11/2026"));
   assert.ok(html.includes("Resumen ejecutivo"));
   assert.ok(html.includes("Qué atender"));

@@ -149,7 +149,7 @@ export function CrearAvatar({ alTerminar }: { alTerminar?: () => void }) {
               <div className="max-w-xs space-y-1 rounded border border-violet-200 bg-violet-50 p-2">
                 <label className="flex items-start gap-2 text-xs">
                   <input type="checkbox" className="mt-0.5" checked={aceptoIa} onChange={(e) => setAceptoIa(e.target.checked)} />
-                  <span>Acepto que mi foto se mande a un servicio externo de inteligencia artificial solo para crear mi personaje. Acumulado no guarda la foto.</span>
+                  <span>Acepto que mi foto se mande a un servicio externo de inteligencia artificial solo para crear mi personaje. El sistema no guarda la foto.</span>
                 </label>
                 <button
                   type="button"

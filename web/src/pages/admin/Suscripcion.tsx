@@ -148,7 +148,7 @@ export function Suscripcion() {
         </dl>
 
         <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
-          Los datos de la tarjeta se capturan y se guardan en la pasarela de pago, nunca en Acumulado. Aquí solo se conservan la
+          Los datos de la tarjeta se capturan y se guardan en la pasarela de pago, nunca en el sistema. Aquí solo se conservan la
           marca y los últimos cuatro dígitos para que puedas reconocerla.
         </p>
       </section>

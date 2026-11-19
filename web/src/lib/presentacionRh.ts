@@ -153,7 +153,7 @@ export function htmlPresentacionRh(d: ReporteRh, t: ReporteTiempos | null, o: Op
     slides.push(`<section class="slide"><header><h1>${esc(titulo)}</h1><span class="crumb">Recursos humanos · director general · ${esc(periodo)}</span></header><div class="body">${cuerpo}</div><footer><span>${esc(nota)}</span><span class="pg">${slides.length + 1}</span></footer></section>`);
 
   // 1 Portada
-  slides.push(`<section class="slide cover"><div><div class="eyebrow">${esc(o.organizacion)} · Acumulado</div><h1>Reporte de recursos humanos</h1><h2>para el director general</h2><p>Periodo del ${ddmm(d.desde)} al ${ddmm(d.hasta)} de ${esc(anio)} · ${n0(d.habiles)} días hábiles · generado el ${ddmm(o.hoy)}/${esc(o.hoy.slice(0, 4))}</p><p class="small">Plantilla · asistencia y tiempos · tareas · evaluaciones · nómina · EPP, herramienta y financiamiento · accesos · por definir · por implementar</p></div></section>`);
+  slides.push(`<section class="slide cover"><div><div class="eyebrow">${esc(o.organizacion)}</div><h1>Reporte de recursos humanos</h1><h2>para el director general</h2><p>Periodo del ${ddmm(d.desde)} al ${ddmm(d.hasta)} de ${esc(anio)} · ${n0(d.habiles)} días hábiles · generado el ${ddmm(o.hoy)}/${esc(o.hoy.slice(0, 4))}</p><p class="small">Plantilla · asistencia y tiempos · tareas · evaluaciones · nómina · EPP, herramienta y financiamiento · accesos · por definir · por implementar</p></div></section>`);
 
   // 2 Resumen ejecutivo
   const rotUlt = p.rotacion[p.rotacion.length - 1];
@@ -339,7 +339,7 @@ ${cambios.length ? `<h3>Lo que más cambió contra el reporte anterior</h3><ul c
   slide("Por definir (decisiones)", `<table class="list def"><thead><tr><th>Tema</th><th>Qué hay que decidir</th><th>Quién</th></tr></thead><tbody>${DECISIONES_PENDIENTES.map((x) => `<tr><td><b>${esc(x.tema)}</b></td><td>${esc(x.que)}</td><td class="mute">${esc(x.quien)}</td></tr>`).join("")}</tbody></table>`);
 
   // 11 Por implementar
-  slide("Por implementar", `<table class="list def"><thead><tr><th>Área</th><th>Acción</th><th>Cuándo</th></tr></thead><tbody>${PLAN_IMPLEMENTACION.map((x) => `<tr><td><b>${esc(x.area)}</b></td><td>${esc(x.accion)}</td><td class="mute${/^hecho/i.test(x.cuando) ? " ok" : ""}">${esc(x.cuando)}</td></tr>`).join("")}</tbody></table>`, "Las pantallas ya existen en Acumulado: Recursos humanos → Reporte para el director general y Tiempos y checador.");
+  slide("Por implementar", `<table class="list def"><thead><tr><th>Área</th><th>Acción</th><th>Cuándo</th></tr></thead><tbody>${PLAN_IMPLEMENTACION.map((x) => `<tr><td><b>${esc(x.area)}</b></td><td>${esc(x.accion)}</td><td class="mute${/^hecho/i.test(x.cuando) ? " ok" : ""}">${esc(x.cuando)}</td></tr>`).join("")}</tbody></table>`, "Las pantallas ya existen en el sistema: Recursos humanos → Reporte para el director general y Tiempos y checador.");
 
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reporte RH · director general · ${esc(periodo)}</title>
 <style>

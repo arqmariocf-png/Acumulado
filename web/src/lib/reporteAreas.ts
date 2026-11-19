@@ -319,7 +319,7 @@ export const AREAS_REPORTE: Record<AreaReporte, ConfigArea> = {
     ruta: "/ordenes",
     indicadores: [
       { clave: "oc_periodo_monto", etiqueta: "Comprado en el periodo (OC/OS s/IVA)", formato: "money", destacado: true, sub: (i) => `${n0(i.oc_periodo)} órdenes (${n0(i.os_periodo)} de servicio) · ${n0(i.proveedores_periodo)} proveedores`, liga: "/ordenes?tipo=OC&backoffice=1" },
-      { clave: "oc_backoffice", etiqueta: "Órdenes del backoffice", formato: "n", destacado: true, sub: (i) => `${n0(i.oc_acumulado)} capturadas en Acumulado`, liga: "/ordenes?tipo=OC&backoffice=1" },
+      { clave: "oc_backoffice", etiqueta: "Órdenes del backoffice", formato: "n", destacado: true, sub: (i) => `${n0(i.oc_acumulado)} capturadas aquí`, liga: "/ordenes?tipo=OC&backoffice=1" },
       { clave: "oc_por_autorizar", etiqueta: "Órdenes del periodo sin autorizar", formato: "n", masEsMejor: false, liga: "/finanzas/por-autorizar", semaforo: semN(10) },
       { clave: "requisiciones_sin_resolver", etiqueta: "Requerimientos sin resolver", formato: "n", destacado: true, masEsMejor: false, sub: (i) => `${n0(i.requisiciones_periodo)} nuevos · ${n0(i.requisiciones_en_camino)} en bodega o en camino`, liga: "/requisiciones?ver=sin_resolver", semaforo: semN(5) },
       { clave: "valor_inventario", etiqueta: "Valor del inventario", formato: "money", destacado: true, sub: (i) => `${n0(i.productos)} productos · ${n0(i.con_existencia)} con existencia`, liga: "/inventario/resumen" },

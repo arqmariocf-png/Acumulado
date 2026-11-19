@@ -77,7 +77,7 @@ export function PlanSistema() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Plan del sistema</h1>
           <p className="max-w-3xl text-sm text-slate-500">
-            El deber ser de Acumulado: 7 grupos, sus menús y cada opción con lo que ya funciona y lo que falta. Pon prioridad, responsable, fecha compromiso y
+            El deber ser del sistema: 7 grupos, sus menús y cada opción con lo que ya funciona y lo que falta. Pon prioridad, responsable, fecha compromiso y
             avance a cada una; el resumen se calcula solo.
           </p>
         </div>
