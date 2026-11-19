@@ -17,6 +17,7 @@ import { ProblemaDesdeTablero } from "./ProblemaDesdeTablero";
 import { MenuSeccion } from "./MenuSeccion";
 import { BuscadorMenu, abrirBuscador } from "./BuscadorMenu";
 import { AvisoNotificaciones } from "./AvisoNotificaciones";
+import { AvisoConteoInventario } from "./AvisoConteoInventario";
 import { AvatarPixel } from "./personaje/AvatarPixel";
 import { useMiAvatar } from "./personaje/datos";
 import { claseDe } from "../lib/personaje";
@@ -112,6 +113,7 @@ export function Layout() {
             (20261002090000_espectador_sin_datos.sql). */}
         <IrAlAncla />
         {perfilReal && !espectador && !vistaComo && <AvisoNotificaciones profileId={perfilReal.id} />}
+        {!espectador && <AvisoConteoInventario />}
         {!espectador && <ProblemaDesdeTablero />}
         {espectador ? <PantallaEspectador /> : <Outlet />}
       </main>
