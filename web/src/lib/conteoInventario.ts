@@ -88,8 +88,15 @@ export function revisarHerramientaNueva(x: { empresa_id: string; nombre: string;
 export interface ProductoEtiqueta {
   id: string;
   sku: string | null;
+  /** Clave propia de control (ART-<EMP>-0001); el sku del match de OC/OV no sirve para contar. */
+  clave_control?: string | null;
   nombre: string;
   unidad_medida: string | null;
+}
+
+/** La clave que va en la etiqueta del artículo: la de control; sin ella, el sku. */
+export function claveArticulo(p: Pick<ProductoEtiqueta, "sku" | "clave_control"> & { codigo_barras?: string | null }): string {
+  return p.clave_control || p.sku || p.codigo_barras || "ARTÍCULO";
 }
 
 /** Filtra los artículos del catálogo por texto (sin acentos, palabras en cualquier orden). */
@@ -98,7 +105,7 @@ export function filtrarProductos<T extends ProductoEtiqueta>(productos: T[], tex
   if (!t) return productos;
   const partes = t.split(/\s+/);
   return productos.filter((p) => {
-    const pajar = sinAcentos([p.sku ?? "", p.nombre].join(" "));
+    const pajar = sinAcentos([p.clave_control ?? "", p.sku ?? "", p.nombre].join(" "));
     return partes.every((x) => pajar.includes(x));
   });
 }

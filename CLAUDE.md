@@ -4137,3 +4137,38 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   guardado), repetir nombre o código de barras no duplica, Alma da de alta,
   un operativo también con el conteo abierto y lee la tarjeta, empresa de otra
   organización bloqueada, cantidad 0 bloqueada.
+  **Claves nuevas, reajuste de cantidades y tablero en vivo (19-nov-2026,
+  Laura: "la clave de las etiquetas es errónea, las toma sobre cada OC
+  registrada, pero estamos contando de 0"; Mario: "da la opción de reajustar
+  cantidades por si encuentran posteriormente algo; genérame en el área de
+  almacén un dashboard en tiempo real de quiénes están contando, qué llevan
+  contado y en dónde están")** (`20261119160000`, aplicada como
+  `conteo_claves_control_y_tablero`): (1) el `sku` de `productos` en AEP/MCC/CSC
+  viene del match de OC/OV ("OC-MWE0CL1R-17") y salía en las etiquetas.
+  `productos.clave_control` = clave propia **ART-<EMP>-0001** (serie 'ART');
+  `fn_productos_asignar_claves(empresa)` (admin/corporativo/dirección/almacén)
+  la pone a los activos sin clave en orden de nombre; ya corrida: AEP 365, MCC
+  24, CSC 2. Etiquetas, buscador y lista del catálogo usan `claveArticulo`
+  (clave_control, si no sku) y la columna marca ⚠ las que siguen sin clave con
+  botón "Generar claves nuevas (N sin clave)". `fn_conteo_alta_producto` pone
+  sku y clave_control iguales; `fn_producto_etiqueta` devuelve la clave de
+  control como `sku`. El sku del match no cambia. (2) **Reajustar**: en la
+  captura, si la misma persona ya contó ese artículo del catálogo en este
+  conteo, casilla (prendida) "sumar esta cantidad a ese renglón" (update de
+  cantidad + nota "+N hh:mm") en vez de abrir otro INV-; al escanear un ítem
+  (`?item=`), quien lo contó o quien administra tiene "¿Encontraste más
+  después? + cuántas → Sumar" y "Corregir la cantidad total" (`corregir` acepta
+  `nota`). Las correcciones también valen con el conteo cerrado (el trigger solo
+  bloquea insertar). (3) **Almacén › Tablero del conteo (en vivo)**
+  (`/almacen/conteo-tablero`, `pages/inventario/TableroConteo.tsx`,
+  `lib/tableroConteo.ts` con pruebas; admin, corporativo, dirección, almacén):
+  tarjetas (contando ahora = capturó en los últimos 10 min, ítems, cantidad,
+  lugares, empresas, artículos), ritmo por tramos de 15 min, tabla por persona
+  (estado, ítems, última hora, último lugar, empresa, empezó/último; clic → sus
+  ítems), por lugar, por artículo (suma por clave de control o descripción
+  normalizada; buscador) y últimas 25 capturas con liga al ítem. Datos por
+  realtime (`conteo_items` agregada a `supabase_realtime`; canal con filtro por
+  conteo) más refetch cada 20 s; Excel del conteo. Probado en rollback: Brenda
+  no asigna claves, lee la etiqueta ART- de un artículo aunque su RLS de
+  productos no se lo deje; Alma corrige ítems ajenos; un operativo no toca los
+  ajenos.
