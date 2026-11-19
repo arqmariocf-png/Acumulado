@@ -11,6 +11,7 @@ import {
   type ConteoInventario as Conteo, type EtiquetaConteo, type ItemConteo, nombreAlmacen } from "../../lib/conteoInventario";
 import { RacksNiveles, useUbicaciones } from "./RacksNiveles";
 import { AlmacenesEmpresa, useAlmacenes, useAlmacenesTodos } from "./AlmacenesEmpresa";
+import { EditarItemConteo } from "./EditarItemConteo";
 import { ItemsComprasConteo } from "./ItemsComprasConteo";
 import { useItemsCompra } from "../compras/useItemsCompra";
 import { cruzarItemsConProductos, itemsContables } from "../../lib/itemsConteo";
@@ -480,6 +481,8 @@ export function ConteoInventario() {
   });
   // Material ↔ herramienta sin borrar ni volver a capturar (19-nov-2026, Mario: "ya metí casi todo en Material").
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  // Editar todos los campos de un ítem contado (19-nov-2026, Mario: "agrega un botón para editar también los campos").
+  const [editando, setEditando] = useState<ItemConteo | null>(null);
   const cambiarTipo = useMutation({
     mutationFn: async ({ ids, a }: { ids: string[]; a: "herramienta" | "material" }) => {
       const { data, error: err } = await supabase.rpc(a === "herramienta" ? "fn_conteo_items_a_herramienta" : "fn_conteo_items_a_material", { p_ids: ids });
@@ -775,6 +778,19 @@ export function ConteoInventario() {
         </form>
       )}
 
+      {editando && (
+        <EditarItemConteo
+          item={editando}
+          empresaNombre={nombreEmpresa.get(editando.empresa_id) ?? ""}
+          onCerrar={() => setEditando(null)}
+          onGuardado={(it) => {
+            setEditando(null);
+            setError(null);
+            setAviso(`${it.codigo} actualizado.`);
+          }}
+        />
+      )}
+
       {escaneado && (
         <div className="rounded border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
           <div className="text-xs uppercase tracking-wide text-sky-700">Ítem escaneado</div>
@@ -800,6 +816,9 @@ export function ConteoInventario() {
                     setAjuste("");
                   }}
                 >
+                  <button type="button" onClick={() => setEditando(escaneado)} className="rounded border border-sky-300 bg-white px-2 py-1 text-sky-900 hover:bg-sky-100">
+                    ✎ Editar todos los campos
+                  </button>
                   <span className="text-sky-800">¿Encontraste más después?</span>
                   <input value={ajuste} onChange={(e) => setAjuste(e.target.value)} inputMode="decimal" className="w-20 rounded border border-sky-300 px-2 py-1 text-right" placeholder="+ cuántas" />
                   <button type="submit" disabled={corregir.isPending} className="rounded bg-sky-700 px-2 py-1 font-medium text-white disabled:opacity-50">
@@ -1203,6 +1222,9 @@ export function ConteoInventario() {
                         <button type="button" onClick={() => imprimirEtiquetas([i], `Etiqueta ${i.codigo}`)} className="mr-2 text-slate-600 hover:underline" title="Imprimir la etiqueta QR de este ítem">
                           🖨 QR
                         </button>
+                        <button type="button" onClick={() => setEditando(i)} className="mr-2 text-slate-700 hover:underline" title="Editar descripción, cantidad, unidad, almacén, lugar, código de barras y notas">
+                          ✎ editar
+                        </button>
                         {conteo.estado === "abierto" && (
                           <>
                             <button
@@ -1403,6 +1425,11 @@ export function ConteoInventario() {
                       <button type="button" onClick={() => imprimirEtiquetas([i], `Etiqueta ${i.codigo}`)} className="text-slate-600 hover:underline" title="Imprimir la etiqueta QR de este ítem">
                         🖨 QR
                       </button>
+                      {puedeAjustar(i) && (
+                        <button type="button" onClick={() => setEditando(i)} className="ml-2 text-slate-700 hover:underline" title="Editar descripción, cantidad, unidad, almacén, lugar, código de barras y notas">
+                          ✎ editar
+                        </button>
+                      )}
                       {conteo.estado === "abierto" &&
                         puedeAjustar(i) &&
                         (i.herramienta_id ? (

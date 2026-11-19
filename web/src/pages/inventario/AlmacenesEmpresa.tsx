@@ -48,6 +48,9 @@ export function AlmacenesEmpresa({ empresaId, empresaNombre, administra, contado
   const [descripcion, setDescripcion] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [verInactivos, setVerInactivos] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editDescripcion, setEditDescripcion] = useState("");
   const lista = useMemo(() => (almacenes ?? []).filter((a) => verInactivos || a.activo), [almacenes, verInactivos]);
   const inactivos = (almacenes ?? []).filter((a) => !a.activo).length;
 
@@ -82,6 +85,7 @@ export function AlmacenesEmpresa({ empresaId, empresaNombre, administra, contado
     },
     onSuccess: () => {
       setError(null);
+      setEditandoId(null);
       invalidar();
     },
     onError: (e: Error) => setError(e.message),
@@ -128,46 +132,65 @@ export function AlmacenesEmpresa({ empresaId, empresaNombre, administra, contado
       ) : (
         <ul className="divide-y divide-slate-100">
           {lista.map((a, idx) => (
-            <li key={a.id} className={`flex flex-wrap items-center gap-3 px-4 py-2 text-sm ${a.activo ? "" : "text-slate-400"}`}>
-              <span className="font-medium">{a.nombre}</span>
-              {idx === 0 && a.activo && <span className="rounded bg-slate-100 px-1.5 text-[10px] uppercase text-slate-600" title="Es el almacén del punto de venta y de los movimientos de inventario">principal</span>}
-              {!a.activo && <span className="rounded bg-slate-100 px-1.5 text-[10px] uppercase">baja</span>}
-              {a.descripcion && <span className="text-xs text-slate-500">{a.descripcion}</span>}
-              {contadosPorAlmacen && <span className="text-xs text-emerald-700">{contadosPorAlmacen.get(a.id) ?? 0} ítem(s) contados</span>}
-              {administra && (
-                <span className="ml-auto flex gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const v = window.prompt("Nombre del almacén:", a.nombre);
-                      if (v != null && v.trim() && v.trim() !== a.nombre) editar.mutate({ id: a.id, nombre: v.trim() });
-                    }}
-                    className="text-slate-600 hover:underline"
-                  >
-                    renombrar
+            <li key={a.id} className={`px-4 py-2 text-sm ${a.activo ? "" : "text-slate-400"}`}>
+              {editandoId === a.id ? (
+                <form
+                  className="flex flex-wrap items-end gap-2"
+                  data-sin-borrador
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!editar.isPending) editar.mutate({ id: a.id, nombre: editNombre, descripcion: editDescripcion.trim() || null });
+                  }}
+                >
+                  <label className="block">
+                    <span className="block text-xs text-slate-500">Nombre</span>
+                    <input value={editNombre} onChange={(e) => setEditNombre(e.target.value)} className="w-56 rounded border border-slate-300 px-2 py-1" autoFocus />
+                  </label>
+                  <label className="block">
+                    <span className="block text-xs text-slate-500">Descripción</span>
+                    <input value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} className="w-72 rounded border border-slate-300 px-2 py-1" />
+                  </label>
+                  <button type="submit" disabled={editar.isPending} className="rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white disabled:opacity-50">
+                    Guardar
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const v = window.prompt("Descripción:", a.descripcion ?? "");
-                      if (v != null) editar.mutate({ id: a.id, descripcion: v.trim() || null });
-                    }}
-                    className="text-slate-600 hover:underline"
-                  >
-                    descripción
+                  <button type="button" onClick={() => setEditandoId(null)} className="text-xs text-slate-600 hover:underline">
+                    cancelar
                   </button>
-                  {a.activo ? (
-                    idx > 0 && (
-                      <button type="button" onClick={() => window.confirm(`¿Dar de baja el almacén "${a.nombre}"? Lo ya contado ahí conserva su almacén; solo deja de ofrecerse.`) && editar.mutate({ id: a.id, activo: false })} className="text-red-600 hover:underline">
-                        dar de baja
+                </form>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-medium">{a.nombre}</span>
+                  {idx === 0 && a.activo && <span className="rounded bg-slate-100 px-1.5 text-[10px] uppercase text-slate-600" title="Es el almacén del punto de venta y de los movimientos de inventario">principal</span>}
+                  {!a.activo && <span className="rounded bg-slate-100 px-1.5 text-[10px] uppercase">baja</span>}
+                  {a.descripcion && <span className="text-xs text-slate-500">{a.descripcion}</span>}
+                  {contadosPorAlmacen && <span className="text-xs text-emerald-700">{contadosPorAlmacen.get(a.id) ?? 0} ítem(s) contados</span>}
+                  {administra && (
+                    <span className="ml-auto flex gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditandoId(a.id);
+                          setEditNombre(a.nombre);
+                          setEditDescripcion(a.descripcion ?? "");
+                        }}
+                        className="text-slate-700 hover:underline"
+                      >
+                        ✎ editar
                       </button>
-                    )
-                  ) : (
-                    <button type="button" onClick={() => editar.mutate({ id: a.id, activo: true })} className="text-emerald-700 hover:underline">
-                      reactivar
-                    </button>
+                      {a.activo ? (
+                        idx > 0 && (
+                          <button type="button" onClick={() => window.confirm(`¿Dar de baja el almacén "${a.nombre}"? Lo ya contado ahí conserva su almacén; solo deja de ofrecerse.`) && editar.mutate({ id: a.id, activo: false })} className="text-red-600 hover:underline">
+                            dar de baja
+                          </button>
+                        )
+                      ) : (
+                        <button type="button" onClick={() => editar.mutate({ id: a.id, activo: true })} className="text-emerald-700 hover:underline">
+                          reactivar
+                        </button>
+                      )}
+                    </span>
                   )}
-                </span>
+                </div>
               )}
             </li>
           ))}
