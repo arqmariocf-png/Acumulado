@@ -402,7 +402,7 @@ function useAlmacen(empresaId: string) {
     queryKey: ["almacen-principal", empresaId],
     enabled: !!empresaId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("almacenes").select("id, nombre").eq("empresa_id", empresaId).eq("activo", true).limit(1).maybeSingle();
+      const { data, error } = await supabase.from("almacenes").select("id, nombre").eq("empresa_id", empresaId).eq("activo", true).order("created_at").limit(1).maybeSingle();
       if (error) throw error;
       return data;
     },

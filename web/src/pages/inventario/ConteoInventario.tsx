@@ -8,9 +8,9 @@ import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { descargarCsv } from "../../lib/descargarArchivo";
 import {
   administraConteo, claveArticulo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, nombreExcelConteo, resumenConteo, revisarHerramientaNueva, revisarItem, UNIDADES_CONTEO, urlEtiqueta, urlEtiquetaHerramienta, urlEtiquetaProducto,
-  type ConteoInventario as Conteo, type EtiquetaConteo, type ItemConteo,
-} from "../../lib/conteoInventario";
+  type ConteoInventario as Conteo, type EtiquetaConteo, type ItemConteo, nombreAlmacen } from "../../lib/conteoInventario";
 import { RacksNiveles, useUbicaciones } from "./RacksNiveles";
+import { AlmacenesEmpresa, useAlmacenes, useAlmacenesTodos } from "./AlmacenesEmpresa";
 import { ItemsComprasConteo } from "./ItemsComprasConteo";
 import { useItemsCompra } from "../compras/useItemsCompra";
 import { cruzarItemsConProductos, itemsContables } from "../../lib/itemsConteo";
@@ -67,6 +67,7 @@ interface TarjetaHerramienta {
 }
 
 const UBICACION_KEY = "conteo-inventario-ubicacion";
+const ALMACEN_KEY = "conteo-inventario-almacen";
 
 function QrSvg({ texto, className }: { texto: string; className?: string }) {
   const [svg, setSvg] = useState("");
@@ -135,7 +136,7 @@ export function ConteoInventario() {
       for (let desde = 0; ; desde += 1000) {
         const { data, error } = await supabase
           .from("conteo_items")
-          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
+          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, almacen_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
           .eq("conteo_id", conteo!.id)
           .order("created_at", { ascending: false })
           .range(desde, desde + 999);
@@ -163,6 +164,13 @@ export function ConteoInventario() {
   const [ubicacionId, setUbicacionId] = useState<string>(() => {
     try {
       return localStorage.getItem(UBICACION_KEY + "-id") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [almacenId, setAlmacenId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(ALMACEN_KEY) ?? "";
     } catch {
       return "";
     }
@@ -255,7 +263,21 @@ export function ConteoInventario() {
 
   // Racks y niveles de la empresa elegida: el selector de lugar de la captura.
   const { data: ubicacionesEmpresa } = useUbicaciones(empresaId);
-  const lugares = useMemo(() => lugaresParaContar(ubicacionesEmpresa ?? []), [ubicacionesEmpresa]);
+  // Almacenes con nombre de la empresa (19-nov-2026, Mario: "almacenes con nombre para poder dividirlos").
+  const { data: almacenesEmpresa } = useAlmacenes(empresaId);
+  const { data: almacenesTodos } = useAlmacenesTodos();
+  const nombreAlmacenMapa = useMemo(() => new Map((almacenesTodos ?? []).map((a) => [a.id, a.nombre])), [almacenesTodos]);
+  const almacenesActivos = useMemo(() => (almacenesEmpresa ?? []).filter((a) => a.activo), [almacenesEmpresa]);
+  useEffect(() => {
+    // Si el almacén guardado no es de esta empresa, se toma el principal (el más viejo).
+    if (!almacenesEmpresa) return;
+    if (!almacenId || !almacenesActivos.some((a) => a.id === almacenId)) setAlmacenId(almacenesActivos[0]?.id ?? "");
+  }, [almacenesEmpresa, almacenesActivos, almacenId]);
+  const lugares = useMemo(() => {
+    const todosLugares = lugaresParaContar(ubicacionesEmpresa ?? []);
+    // Con almacén elegido, solo sus racks (y los que no están ligados a ninguno).
+    return almacenId ? todosLugares.filter((u) => !u.almacen_id || u.almacen_id === almacenId) : todosLugares;
+  }, [ubicacionesEmpresa, almacenId]);
   const nombreLugar = useMemo(() => new Map((ubicacionesEmpresa ?? []).map((u) => [u.id, u])), [ubicacionesEmpresa]);
   useEffect(() => {
     // Si el lugar guardado no es de esta empresa (o ya no existe), se limpia.
@@ -269,14 +291,15 @@ export function ConteoInventario() {
     lugarPrellenado.current = lugarEscaneado;
     supabase
       .from("inventario_ubicaciones")
-      .select("id, empresa_id, codigo, activo")
+      .select("id, empresa_id, codigo, activo, almacen_id")
       .eq("codigo", lugarEscaneado)
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
-        const u = data as { id: string; empresa_id: string; codigo: string; activo: boolean } | null;
+        const u = data as { id: string; empresa_id: string; codigo: string; activo: boolean; almacen_id: string | null } | null;
         if (!u) return setError(`No se encontró el lugar ${lugarEscaneado}.`);
         setEmpresaId(u.empresa_id);
+        if (u.almacen_id) setAlmacenId(u.almacen_id);
         setUbicacionId(u.id);
         setUbicacion(u.codigo);
         setTimeout(() => refDescripcion.current?.focus(), 50);
@@ -334,6 +357,14 @@ export function ConteoInventario() {
           p_ubicacion: ubicacionId ? null : ubicacion.trim() || null,
         });
         if (errH) throw errH;
+        if (almacenId && filas?.length) {
+          const { error: errA } = await supabase
+            .from("conteo_items")
+            .update({ almacen_id: almacenId })
+            .in("id", (filas as { item_id: string }[]).map((f) => f.item_id))
+            .is("almacen_id", null);
+          if (errA) throw errA;
+        }
         const nuevas: HerramientaNueva[] = ((filas ?? []) as { herramienta_id: string; folio: string; item_id: string; item_codigo: string }[]).map((f) => ({
           ...f,
           nombre: [descripcion.trim(), marca.trim(), modelo.trim()].filter(Boolean).join(" "),
@@ -350,7 +381,7 @@ export function ConteoInventario() {
           .from("conteo_items")
           .update({ cantidad: nueva, notas: [yaContado.notas, notas.trim() ? notas.trim() : null, `+${cantidad.trim()} ${hora(new Date().toISOString())}`].filter(Boolean).join(" · ") })
           .eq("id", yaContado.id)
-          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
+          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, almacen_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
           .single();
         if (errS) throw errS;
         return { item: { ...(act as ItemConteo), cantidad: Number((act as ItemConteo).cantidad) }, productoNuevo: null, sumado: true };
@@ -379,12 +410,13 @@ export function ConteoInventario() {
           unidad: unidad.trim(),
           ubicacion: ubicacionId ? null : ubicacion.trim() || null,
           ubicacion_id: ubicacionId || null,
+          almacen_id: almacenId || null,
           codigo_barras: codigoBarras.trim() || null,
           notas: notas.trim() || null,
           producto_id: producto,
           contado_por: perfil!.id,
         })
-        .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
+        .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, almacen_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
         .single();
       if (err) throw err;
       return { item: { ...(data as ItemConteo), cantidad: Number((data as ItemConteo).cantidad) }, productoNuevo, sumado: false };
@@ -413,6 +445,7 @@ export function ConteoInventario() {
       try {
         localStorage.setItem(UBICACION_KEY, ubicacion);
         localStorage.setItem(UBICACION_KEY + "-id", ubicacionId);
+        localStorage.setItem(ALMACEN_KEY, almacenId);
       } catch {
         /* sin almacenamiento local */
       }
@@ -515,10 +548,20 @@ export function ConteoInventario() {
   // ── Listas, filtros, etiquetas y Excel ───────────────────────────────
   const [filtroEmpresa, setFiltroEmpresa] = useState("");
   const [filtroPersona, setFiltroPersona] = useState("");
+  const [filtroAlmacen, setFiltroAlmacen] = useState("");
   const [filtroTexto, setFiltroTexto] = useState("");
   const todos = items ?? [];
   const mios = useMemo(() => todos.filter((i) => i.contado_por === perfil?.id), [todos, perfil?.id]);
-  const filtrados = useMemo(() => filtrarItems(todos, { empresa: filtroEmpresa || undefined, persona: filtroPersona || undefined, texto: filtroTexto }), [todos, filtroEmpresa, filtroPersona, filtroTexto]);
+  const filtrados = useMemo(() => filtrarItems(todos, { empresa: filtroEmpresa || undefined, persona: filtroPersona || undefined, almacen: filtroAlmacen || undefined, texto: filtroTexto }), [todos, filtroEmpresa, filtroPersona, filtroAlmacen, filtroTexto]);
+  const almacenesFiltro = useMemo(() => {
+    const ids = new Set(todos.map((i) => i.almacen_id).filter((x): x is string => !!x));
+    return (almacenesTodos ?? []).filter((a) => ids.has(a.id) && (!filtroEmpresa || a.empresa_id === filtroEmpresa));
+  }, [todos, almacenesTodos, filtroEmpresa]);
+  const contadosPorAlmacen = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of todos) if (i.almacen_id) m.set(i.almacen_id, (m.get(i.almacen_id) ?? 0) + 1);
+    return m;
+  }, [todos]);
   const resumen = useMemo(() => resumenConteo(todos, nombreEmpresa), [todos, nombreEmpresa]);
   const personas = useMemo(() => {
     const m = new Map<string, string>();
@@ -666,7 +709,7 @@ export function ConteoInventario() {
   }
 
   function descargarExcel() {
-    descargarCsv(nombreExcelConteo(conteo?.fecha ?? hoy), csvConteo(filtrados, nombreEmpresa));
+    descargarCsv(nombreExcelConteo(conteo?.fecha ?? hoy), csvConteo(filtrados, nombreEmpresa, nombreAlmacenMapa));
   }
 
   if (!perfil || perfil.rol === "pendiente") return null;
@@ -742,6 +785,7 @@ export function ConteoInventario() {
               <div className="text-base">{escaneado.descripcion}</div>
               <div className="text-xs text-sky-800">
                 {escaneado.cantidad} {escaneado.unidad} · {nombreEmpresa.get(escaneado.empresa_id)}
+                {escaneado.almacen_id ? ` · ${nombreAlmacen(escaneado.almacen_id, nombreAlmacenMapa)}` : ""}
                 {escaneado.ubicacion ? ` · ${escaneado.ubicacion}` : ""} · contó {escaneado.contado_por_nombre ?? "—"} a las {hora(escaneado.created_at)}
               </div>
               {puedeAjustar(escaneado) && (
@@ -846,6 +890,18 @@ export function ConteoInventario() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="block text-sm md:col-span-2">
+              <span className="block text-xs text-slate-500">Almacén</span>
+              <select value={almacenId} onChange={(e) => setAlmacenId(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5">
+                {almacenesActivos.length === 0 && <option value="">— sin almacén —</option>}
+                {almacenesActivos.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.nombre}
+                  </option>
+                ))}
+              </select>
+              <span className="block text-xs text-slate-500">{administra ? "Se dan de alta abajo, en \"Almacenes de la empresa\"." : "Se recuerda para el siguiente ítem."}</span>
             </label>
             <label className="block text-sm md:col-span-2">
               <span className="block text-xs text-slate-500">{lugares.length ? "Lugar (rack · nivel) o ubicación a mano" : "Ubicación (bodega, rack, obra…)"}</span>
@@ -985,6 +1041,7 @@ export function ConteoInventario() {
         </form>
       )}
 
+      {conteo && empresaId && <AlmacenesEmpresa empresaId={empresaId} empresaNombre={nombreEmpresa.get(empresaId) ?? ""} administra={administra} contadosPorAlmacen={contadosPorAlmacen} />}
       {conteo && empresaId && <RacksNiveles empresaId={empresaId} empresaNombre={nombreEmpresa.get(empresaId) ?? ""} administra={administra} contadosPorLugar={contadosPorLugar} />}
 
       {conteo && (
@@ -1116,6 +1173,7 @@ export function ConteoInventario() {
                     <th className="px-3 py-2">Descripción</th>
                     <th className="px-3 py-2 text-right">Cantidad</th>
                     <th className="px-3 py-2">Empresa</th>
+                    <th className="px-3 py-2">Almacén</th>
                     <th className="px-3 py-2">Ubicación</th>
                     <th className="px-3 py-2">Hora</th>
                     <th className="px-3 py-2"></th>
@@ -1138,6 +1196,7 @@ export function ConteoInventario() {
                         {i.cantidad} {i.unidad}
                       </td>
                       <td className="px-3 py-1.5">{codigoEmpresa.get(i.empresa_id) ?? ""}</td>
+                      <td className="px-3 py-1.5 text-slate-600">{nombreAlmacen(i.almacen_id, nombreAlmacenMapa)}</td>
                       <td className="px-3 py-1.5 text-slate-600">{i.ubicacion ?? "—"}</td>
                       <td className="px-3 py-1.5 text-slate-500">{hora(i.created_at)}</td>
                       <td className="px-3 py-1.5 text-right text-xs">
@@ -1249,6 +1308,15 @@ export function ConteoInventario() {
                 </option>
               ))}
             </select>
+            <select value={filtroAlmacen} onChange={(e) => setFiltroAlmacen(e.target.value)} className="rounded border border-slate-300 px-2 py-1">
+              <option value="">Todos los almacenes</option>
+              {almacenesFiltro.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {(!filtroEmpresa ? `${codigoEmpresa.get(a.empresa_id) ?? ""} · ` : "") + a.nombre}
+                </option>
+              ))}
+              <option value="sin">Sin almacén</option>
+            </select>
             <input value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} placeholder="buscar código, descripción, ubicación…" className="min-w-[14rem] rounded border border-slate-300 px-2 py-1" />
             <span className="text-slate-500">
               {filtrados.length} de {todos.length}
@@ -1292,6 +1360,7 @@ export function ConteoInventario() {
                   <th className="px-3 py-2">Descripción</th>
                   <th className="px-3 py-2 text-right">Cantidad</th>
                   <th className="px-3 py-2">Empresa</th>
+                  <th className="px-3 py-2">Almacén</th>
                   <th className="px-3 py-2">Ubicación</th>
                   <th className="px-3 py-2">Contó</th>
                   <th className="px-3 py-2">Hora</th>
@@ -1326,6 +1395,7 @@ export function ConteoInventario() {
                       {i.cantidad} {i.unidad}
                     </td>
                     <td className="px-3 py-1.5">{nombreEmpresa.get(i.empresa_id) ?? ""}</td>
+                    <td className="px-3 py-1.5 text-slate-600">{nombreAlmacen(i.almacen_id, nombreAlmacenMapa)}</td>
                     <td className="px-3 py-1.5 text-slate-600">{i.ubicacion ?? "—"}</td>
                     <td className="px-3 py-1.5">{i.contado_por_nombre ?? "—"}</td>
                     <td className="px-3 py-1.5 text-slate-500">{hora(i.created_at)}</td>

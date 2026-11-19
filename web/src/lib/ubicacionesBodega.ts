@@ -14,6 +14,8 @@ export interface Ubicacion {
   codigo: string;
   descripcion: string | null;
   activo: boolean;
+  /** Almacén con nombre al que pertenece el rack (opcional). */
+  almacen_id?: string | null;
 }
 
 export interface UbicacionNueva {

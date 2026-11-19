@@ -19,6 +19,8 @@ export interface ItemConteo {
   ubicacion_id?: string | null;
   /** Pieza de herramienta dada de alta desde el conteo (su QR de control es el folio HE-). */
   herramienta_id?: string | null;
+  /** Almacén con nombre de la empresa (19-nov-2026, Mario: "almacenes con nombre para poder dividirlos"). */
+  almacen_id?: string | null;
   contado_por: string;
   contado_por_nombre: string | null;
   created_at: string;
@@ -113,7 +115,33 @@ export function filtrarProductos<T extends ProductoEtiqueta>(productos: T[], tex
 export interface FiltroConteo {
   empresa?: string;
   persona?: string;
+  /** Id de almacén, o "sin" = los que no tienen almacén. */
+  almacen?: string;
   texto?: string;
+}
+
+export interface AlmacenConteo {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  descripcion?: string | null;
+  activo: boolean;
+  created_at?: string;
+}
+
+/** Nombre del almacén de un ítem (o "—"). */
+export function nombreAlmacen(id: string | null | undefined, almacenes: Map<string, string>): string {
+  return (id && almacenes.get(id)) || "—";
+}
+
+/** Valida el nombre de un almacén nuevo o renombrado (único por empresa, sin acentos ni mayúsculas). */
+export function revisarAlmacen(nombre: string, existentes: Pick<AlmacenConteo, "id" | "nombre">[], id?: string | null): string | null {
+  const n = nombre.trim();
+  if (!n) return "Escribe el nombre del almacén (Bodega de material, Zona BBVA, Herrería…).";
+  if (n.length > 80) return "El nombre es muy largo (máximo 80 caracteres).";
+  const clave = sinAcentos(n).replace(/\s+/g, " ");
+  if (existentes.some((a) => a.id !== id && sinAcentos(a.nombre.trim()).replace(/\s+/g, " ") === clave)) return `Ya hay un almacén llamado "${n}" en esta empresa.`;
+  return null;
 }
 
 function sinAcentos(s: string): string {
@@ -125,6 +153,7 @@ export function filtrarItems(items: ItemConteo[], f: FiltroConteo): ItemConteo[]
   return items.filter((i) => {
     if (f.empresa && i.empresa_id !== f.empresa) return false;
     if (f.persona && i.contado_por !== f.persona) return false;
+    if (f.almacen === "sin" ? !!i.almacen_id : f.almacen && i.almacen_id !== f.almacen) return false;
     if (t) {
       const pajar = sinAcentos([i.codigo, i.descripcion, i.ubicacion ?? "", i.codigo_barras ?? "", i.contado_por_nombre ?? ""].join(" "));
       if (!t.split(/\s+/).every((p) => pajar.includes(p))) return false;
@@ -173,10 +202,10 @@ function horaMx(iso: string): string {
   return `${v("day")}/${v("month")}/${v("year")} ${v("hour")}:${v("minute")}`;
 }
 
-export const COLUMNAS_EXCEL_CONTEO = ["Código", "Empresa", "Descripción", "Cantidad", "Unidad", "Ubicación", "Código de barras", "Contó", "Fecha y hora", "Notas"];
+export const COLUMNAS_EXCEL_CONTEO = ["Código", "Empresa", "Almacén", "Descripción", "Cantidad", "Unidad", "Ubicación", "Código de barras", "Contó", "Fecha y hora", "Notas"];
 
-export function csvConteo(items: ItemConteo[], empresas: Map<string, string>): string {
-  const filas = [COLUMNAS_EXCEL_CONTEO, ...items.map((i) => [i.codigo, empresas.get(i.empresa_id) ?? "", i.descripcion, i.cantidad, i.unidad, i.ubicacion ?? "", i.codigo_barras ?? "", i.contado_por_nombre ?? "", horaMx(i.created_at), i.notas ?? ""])];
+export function csvConteo(items: ItemConteo[], empresas: Map<string, string>, almacenes: Map<string, string> = new Map()): string {
+  const filas = [COLUMNAS_EXCEL_CONTEO, ...items.map((i) => [i.codigo, empresas.get(i.empresa_id) ?? "", (i.almacen_id && almacenes.get(i.almacen_id)) || "", i.descripcion, i.cantidad, i.unidad, i.ubicacion ?? "", i.codigo_barras ?? "", i.contado_por_nombre ?? "", horaMx(i.created_at), i.notas ?? ""])];
   return filas.map((f) => f.map(celda).join(",")).join("\n");
 }
 

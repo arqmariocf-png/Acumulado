@@ -5,7 +5,8 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { descargarCsv } from "../../lib/descargarArchivo";
 import { csvConteo, nombreExcelConteo, type ConteoInventario as Conteo, type ItemConteo } from "../../lib/conteoInventario";
-import { articulosTablero, horaCorta, lugaresTablero, MINUTOS_ACTIVO, personasTablero, serieTiempo, textoHace, totalesTablero } from "../../lib/tableroConteo";
+import { almacenesTablero, articulosTablero, horaCorta, lugaresTablero, MINUTOS_ACTIVO, personasTablero, serieTiempo, textoHace, totalesTablero } from "../../lib/tableroConteo";
+import { useAlmacenesTodos } from "./AlmacenesEmpresa";
 
 // Tablero en vivo del conteo (19-nov-2026, Mario: "un dashboard en tiempo
 // real de quiénes están contando, qué llevan contado y en dónde están
@@ -13,7 +14,7 @@ import { articulosTablero, horaCorta, lugaresTablero, MINUTOS_ACTIVO, personasTa
 // sobre conteo_items) y, por si acaso, se vuelven a pedir cada 20 s.
 // Lo ve quien administra el conteo (admin, corporativo, dirección, almacén).
 
-const SELECT_ITEMS = "id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at";
+const SELECT_ITEMS = "id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, almacen_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at";
 
 function useAhora(cadaMs = 30000): Date {
   const [ahora, setAhora] = useState(() => new Date());
@@ -98,6 +99,9 @@ export function TableroConteo() {
 
   const personas = useMemo(() => personasTablero(todos, ahora), [todos, ahora]);
   const lugares = useMemo(() => lugaresTablero(todos), [todos]);
+  const { data: almacenesTodos } = useAlmacenesTodos();
+  const nombreAlmacenMapa = useMemo(() => new Map((almacenesTodos ?? []).map((a) => [a.id, a.nombre])), [almacenesTodos]);
+  const porAlmacen = useMemo(() => almacenesTablero(todos, nombreAlmacenMapa), [todos, nombreAlmacenMapa]);
   const articulos = useMemo(() => articulosTablero(todos, claves ?? new Map()), [todos, claves]);
   const serie = useMemo(() => serieTiempo(todos, ahora, 15), [todos, ahora]);
   const totales = useMemo(() => totalesTablero(todos, personas), [todos, personas]);
@@ -135,7 +139,7 @@ export function TableroConteo() {
           <Link to="/inventario/conteo" className="rounded border border-slate-300 bg-white px-3 py-1 text-slate-700 hover:bg-slate-50">
             Ir a la captura
           </Link>
-          <button type="button" onClick={() => descargarCsv(nombreExcelConteo(conteo?.fecha ?? ""), csvConteo(todos, nombreEmpresa))} disabled={!todos.length} className="rounded border border-slate-300 bg-white px-3 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+          <button type="button" onClick={() => descargarCsv(nombreExcelConteo(conteo?.fecha ?? ""), csvConteo(todos, nombreEmpresa, nombreAlmacenMapa))} disabled={!todos.length} className="rounded border border-slate-300 bg-white px-3 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             Descargar Excel
           </button>
         </div>
@@ -212,6 +216,45 @@ export function TableroConteo() {
           </section>
 
           <div className="grid gap-6 lg:grid-cols-2">
+            <section className="rounded border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 px-4 py-2">
+                <h2 className="text-sm font-semibold text-slate-800">Por almacén</h2>
+                <p className="text-xs text-slate-500">Los almacenes con nombre de cada empresa; "sin almacén" es lo contado sin elegir uno.</p>
+              </div>
+              {porAlmacen.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-slate-500">Nada contado todavía.</p>
+              ) : (
+                <div className="max-h-96 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2">Empresa</th>
+                        <th className="px-3 py-2">Almacén</th>
+                        <th className="px-3 py-2 text-right">Ítems</th>
+                        <th className="px-3 py-2 text-right">Cantidad</th>
+                        <th className="px-3 py-2 text-right">Lugares</th>
+                        <th className="px-3 py-2">Quién</th>
+                        <th className="px-3 py-2">Último</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {porAlmacen.map((a) => (
+                        <tr key={`${a.empresa_id}|${a.almacen_id ?? ""}`} className="border-t border-slate-100">
+                          <td className="px-3 py-1">{codigoEmpresa.get(a.empresa_id) ?? ""}</td>
+                          <td className={`px-3 py-1 ${a.almacen_id ? "font-medium" : "text-slate-500"}`}>{a.nombre}</td>
+                          <td className="px-3 py-1 text-right">{a.items}</td>
+                          <td className="px-3 py-1 text-right">{a.cantidad.toLocaleString("es-MX")}</td>
+                          <td className="px-3 py-1 text-right">{a.lugares}</td>
+                          <td className="px-3 py-1 text-xs text-slate-600">{a.personas.join(", ")}</td>
+                          <td className="px-3 py-1 text-xs text-slate-500">{horaCorta(new Date(a.ultimo))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
             <section className="rounded border border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-4 py-2">
                 <h2 className="text-sm font-semibold text-slate-800">Dónde se ha contado (por lugar)</h2>

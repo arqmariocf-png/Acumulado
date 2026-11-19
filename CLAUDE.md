@@ -4222,6 +4222,38 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   material INV-CSC-0069 gis y 0072 seguetas, consumibles) → 130 piezas HE-;
   los 90 de Laura (AEP) siguen como material. Los HE- saltan números: las
   pruebas en rollback consumen la secuencia.
+- **Almacenes con nombre (19-nov-2026, Mario: "crea también almacenes con
+  nombre para poder dividirlos")** (`20261119200000`, aplicada como
+  `conteo_almacenes`): `almacenes` ya existía (uno "Almacén principal" por
+  empresa; el punto de venta y Movimientos usan el más viejo por `created_at`:
+  `fn_pv_almacen` y `useAlmacen` ordenan así, de modo que los nuevos no lo
+  desplazan). Ahora cada empresa tiene varios con nombre y `descripcion`;
+  `conteo_items.almacen_id` e `inventario_ubicaciones.almacen_id` (un rack
+  cuelga de un almacén y, al contar en ese rack, el ítem toma su almacén por
+  el trigger `conteo_items_antes`; el trigger de racks pone la bodega = nombre
+  del almacén si no se escribió otra); `fn_conteo_items_a_herramienta` copia
+  el almacén a las piezas extra. Policies nuevas `almacenes_conteo_insert/
+  _update`: admin, corporativo, dirección, almacén y empresa en su alcance (las
+  de siempre eran corporativo/empresa/admin y quien escribe inventario). No se
+  borran: `activo = false` ("dar de baja"; el principal no se da de baja).
+  Pantalla del conteo: selector **Almacén** en la captura (se recuerda; el QR
+  de un rack deja su almacén; los lugares se filtran por almacén; la
+  herramienta nueva recibe el almacén con un update tras el RPC), sección
+  **"Almacenes de <empresa>"** (`pages/inventario/AlmacenesEmpresa.tsx`:
+  `useAlmacenes`, `useAlmacenesTodos`, alta, renombrar, descripción, baja,
+  reactivar, ítems contados por almacén), columna Almacén en Mis ítems /
+  Todos los ítems, filtro "Todos los almacenes / … / Sin almacén", Excel con
+  columna Almacén (`csvConteo(items, empresas, almacenes)`), tarjeta del ítem
+  escaneado; Racks y niveles: selector de almacén al dar de alta el rack y
+  etiqueta del almacén en la lista; Tablero del conteo: sección "Por almacén"
+  (`almacenesTablero` en `lib/tableroConteo.ts`, con prueba). `lib/
+  conteoInventario.ts`: `AlmacenConteo`, `revisarAlmacen`, `nombreAlmacen`,
+  `FiltroConteo.almacen` ("sin" = sin almacén), con pruebas. Probado en
+  rollback: Laura da de alta, renombra y da de baja en AEP; Alma crea "Bodega
+  de material" en MCC, rack BOD-R09-N1 ligado y el ítem contado ahí lo hereda;
+  almacén de otra empresa bloqueado; Brenda no da de alta. Lo ya contado hoy
+  (230 ítems) quedó sin almacén: se filtra con "Sin almacén" y, si Mario
+  quiere, se asigna por SQL por empresa/lugar.
 - **Duplicados y fusiones de catálogos (19-nov-2026, Mario: "revisemos
   duplicidades y similitudes para dar la opción a Laura y Alma de
   fusionarlos, incluyendo sus inventarios")** (`20261119180000`, aplicada

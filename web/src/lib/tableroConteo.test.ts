@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { articulosTablero, lugaresTablero, personasTablero, serieTiempo, textoHace, totalesTablero } from "./tableroConteo.ts";
+import { almacenesTablero, articulosTablero, lugaresTablero, personasTablero, serieTiempo, textoHace, totalesTablero } from "./tableroConteo.ts";
 import type { ItemConteo } from "./conteoInventario.ts";
 
 const ahora = new Date("2026-11-19T18:00:00Z");
@@ -78,4 +78,16 @@ test("serieTiempo por tramos de 15 min y textoHace", () => {
   assert.equal(textoHace(0), "ahora mismo");
   assert.equal(textoHace(7), "hace 7 min");
   assert.equal(textoHace(65), "hace 1 h 05 min");
+});
+
+test("almacenesTablero: por empresa y almacén, lo sin almacén al final", () => {
+  const conAlmacen = items.map((i, n) => ({ ...i, almacen_id: n % 2 === 0 ? "alm1" : null }));
+  const a = almacenesTablero(conAlmacen, new Map([["alm1", "Bodega de material"]]));
+  assert.ok(a.length >= 2);
+  const bod = a.find((x) => x.almacen_id === "alm1");
+  assert.equal(bod?.nombre, "Bodega de material");
+  assert.equal(bod?.items, conAlmacen.filter((i) => i.almacen_id === "alm1").length);
+  assert.ok(a.filter((x) => x.almacen_id === null).every((x) => x.nombre === "sin almacén"));
+  const porEmpresa = a.filter((x) => x.empresa_id === a[0].empresa_id);
+  assert.ok(!(porEmpresa[0].almacen_id === null && porEmpresa.length > 1), "con almacén primero");
 });
