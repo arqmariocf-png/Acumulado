@@ -4254,6 +4254,20 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   almacén de otra empresa bloqueado; Brenda no da de alta. Lo ya contado hoy
   (230 ítems) quedó sin almacén: se filtra con "Sin almacén" y, si Mario
   quiere, se asigna por SQL por empresa/lugar.
+- **Editar todos los campos de un ítem contado (19-nov-2026, Mario: "agrega
+  un botón para editar también los campos")**: `pages/inventario/
+  EditarItemConteo.tsx` (modal): descripción, cantidad, unidad, almacén,
+  lugar (rack · nivel) o ubicación a mano, código de barras y notas; update
+  directo a `conteo_items` (policy: quien lo contó o admin/corporativo/
+  dirección/almacén; el código INV- y su QR no cambian). Un renglón que es
+  herramienta se queda en 1 pza con su folio HE- y, si cambia la descripción,
+  intenta renombrar la herramienta (si la policy no lo deja, se queda). Botón
+  "✎ editar" en Mis ítems, en Todos los ítems (solo si puede ajustarlo) y
+  "✎ Editar todos los campos" en el ítem escaneado; "corregir" (cantidad
+  rápida) y "borrar" siguen. En "Almacenes de la empresa" el renombrar/
+  descripción por `prompt` se cambió por edición en línea ("✎ editar").
+  Probado en rollback: Alma edita un ítem de Christian; Brenda no toca lo
+  ajeno (0 filas).
 - **Duplicados y fusiones de catálogos (19-nov-2026, Mario: "revisemos
   duplicidades y similitudes para dar la opción a Laura y Alma de
   fusionarlos, incluyendo sus inventarios")** (`20261119180000`, aplicada
