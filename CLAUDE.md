@@ -2231,6 +2231,16 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   (`20261023140000`). `useEmpresasAlcance` y "Ver como" ya solo listan
   empresas activas (los admin de Empresas/Usuarios siguen viendo todas).
   **Ninguna pantalla contable debe sumar el comedor como empresa.**
+- **Aviso cuando alguien se anota (19-nov-2026, Mario: "notifícame si se
+  anotan en comedor")** (`20261119210000`, aplicada como
+  `comedor_aviso_pedidos`): `comedor_config.aviso_pedidos_a uuid[]` (LOMA:
+  Mario; se cambia por SQL) y constraint trigger **diferido**
+  `comedor_pedidos_aviso` (after insert / update of estado, initially
+  deferred: corre al confirmar, cuando `fn_comedor_pedir` ya insertó los
+  renglones): push por `fn_push_aviso` "Comedor: alguien se anotó · <nombre>
+  pidió <platillos> para hoy/mañana dd/mm · nota" → `/comedor?tab=cocina`, y
+  "Comedor: pedido cancelado" al cancelar; nunca a quien pidió. Probado en
+  rollback con `set constraints all immediate`: el cuerpo trae los platillos.
 - **Encargada de cocina (19-oct-2026, Mario: "Moni Moreno será la
   encargada de comedor; únicamente va a ver las comidas que el personal
   solicite")**: Monica Moreno Rojas (morenorojasmoni79@gmail.com, operativo,
