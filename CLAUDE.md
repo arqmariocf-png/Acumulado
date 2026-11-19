@@ -396,6 +396,36 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   el mismo estado, el dedupe lo detecta. El mensaje de la carga lo dice.
   `ingesta-estado-cuenta` **v24** desplegada (archivos sin comentarios con
   `scratchpad ef/deploy/strip.cjs v24`).
+  **"Mallas y Clavos sigue sin actualizarse el saldo en finanzas"
+  (19-nov-2026, Mario)**: Delia subió el 17 y 18-nov seis veces los estados
+  "al 17 de noviembre" de MCC (BBVA 6381 y BanBajío 9403) y ninguno traía
+  movimientos después del 13-nov (14-15 fin de semana, 16 festivo; los demás
+  bancos sí cargaron renglones del 17 y 18): la carga guardaba "0 nuevos, N ya
+  existían", la fecha del saldo (= último movimiento) se quedaba en 13/11 y la
+  hoja decía "falta subir lo más reciente" aunque ya estaba subido. Los saldos
+  eran correctos ($4,539.59 y $54,687.26). `20261119090000` (aplicada como
+  `estado_cuenta_al`): `cuentas_bancarias.estado_cuenta_al` / `_subido_en`
+  (hasta qué fecha llega el último estado de cuenta cargado, traiga o no
+  movimientos nuevos), `fn_cuenta_registrar_estado_cuenta` (solo
+  service_role), `fn_cuentas_estado_cuenta_al(fecha)` (por cuenta: último
+  movimiento y "al día hasta" = el mayor de los dos) y
+  `v_saldo_cierre_cuenta.fecha_ultimo_movimiento` ya lo considera (KPI de
+  cuentas sin movimientos). Edge `ingesta-estado-cuenta` **v25**: lee del
+  propio PDF hasta qué fecha llega (`_shared/ingesta/corte-estado-cuenta.ts`,
+  con pruebas: BBVA "DEL…AL"/"Fecha de Corte", Banorte "Fecha de corte" y
+  "Final:"/"Último Acceso", Santander "PERIODO DEL…AL"/"CORTE AL"/"Periodo:
+  … al", BanBajío clásico y Conecta "Fechas … al" + "Generado el"; manda la
+  menor entre fin de periodo y fecha de generación, nunca después de hoy ni
+  antes del último movimiento del archivo; CSV/Excel y la app de BBVA sin
+  fecha → último movimiento del archivo) y lo registra en la cuenta; mensaje
+  "el estado de cuenta llega al dd/mm y no trae movimientos nuevos… la cuenta
+  queda al día hasta el dd/mm". Pantallas: la hoja de pagos usa
+  `fn_cuentas_estado_cuenta_al` (`CuentaHoja.ultimo_movimiento`; nota
+  "estado de cuenta al 17/11 (sin movimientos desde el 13/11)") y Saldos por
+  empresa trae columna "Estado de cuenta" por cuenta (ámbar si está viejo).
+  Las dos cuentas de MCC quedaron al 17/11 por SQL (de los archivos que subió
+  Delia); las demás se registran solas en la siguiente carga. Desplegada con
+  `scratchpad ef/deploy/strip25.cjs` (agrega corte-estado-cuenta.ts a la lista).
 - **Backoffice caído 7-oct-2026**: `api_ocs_aut`/`api_ov_aut` responden 500
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
