@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { administraConteo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, resumenConteo, revisarItem, urlEtiqueta, urlEtiquetaProducto, type ItemConteo } from "./conteoInventario.ts";
+import { administraConteo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, resumenConteo, revisarHerramientaNueva, revisarItem, urlEtiqueta, urlEtiquetaHerramienta, urlEtiquetaProducto, type ItemConteo } from "./conteoInventario.ts";
 
 const base: ItemConteo = { id: "1", conteo_id: "c", empresa_id: "e1", codigo: "INV-AEP-0001", descripcion: "Varilla 3/8", cantidad: 120, unidad: "pza", ubicacion: "Rack A", codigo_barras: null, notas: null, contado_por: "u1", contado_por_nombre: "Alma", created_at: "2026-11-19T15:00:00Z" };
 const items: ItemConteo[] = [
@@ -66,4 +66,14 @@ test("etiquetas de artículos del catálogo: liga por producto, sin cantidad, y 
   assert.deepEqual(filtrarProductos(productos, "alambron").map((p) => p.id), ["2"]);
   assert.deepEqual(filtrarProductos(productos, "var 42").map((p) => p.id), ["1"]);
   assert.equal(filtrarProductos(productos, "").length, 2);
+});
+
+test("herramienta desde el conteo: validación y QR de control por folio", () => {
+  assert.equal(revisarHerramientaNueva({ empresa_id: "e1", nombre: "Taladro", piezas: "" }), null, "sin piezas = 1");
+  assert.equal(revisarHerramientaNueva({ empresa_id: "e1", nombre: "Taladro", piezas: 3 }), null);
+  assert.match(revisarHerramientaNueva({ empresa_id: "", nombre: "Taladro", piezas: 1 }) ?? "", /empresa/);
+  assert.match(revisarHerramientaNueva({ empresa_id: "e1", nombre: " ", piezas: 1 }) ?? "", /herramienta/);
+  assert.match(revisarHerramientaNueva({ empresa_id: "e1", nombre: "Taladro", piezas: "2.5" }) ?? "", /1 a 100/);
+  assert.match(revisarHerramientaNueva({ empresa_id: "e1", nombre: "Taladro", piezas: 101 }) ?? "", /1 a 100/);
+  assert.equal(urlEtiquetaHerramienta("HE-MCC-0001", "https://x"), "https://x/inventario/conteo?herramienta=HE-MCC-0001");
 });
