@@ -47,6 +47,7 @@ const CatalogoCompras = lazy(() => import("./pages/compras/CatalogoCompras").the
 const CatalogoItems = lazy(() => import("./pages/compras/CatalogoItems").then((m) => ({ default: m.CatalogoItems })));
 const CatalogoEmpresas = lazy(() => import("./pages/catalogos/CatalogoEmpresas").then((m) => ({ default: m.CatalogoEmpresas })));
 const CatalogoClientes = lazy(() => import("./pages/catalogos/CatalogoClientes").then((m) => ({ default: m.CatalogoClientes })));
+const Fusiones = lazy(() => import("./pages/catalogos/Fusiones").then((m) => ({ default: m.Fusiones })));
 const Crm = lazy(() => import("./pages/crm/Crm").then((m) => ({ default: m.Crm })));
 const MensajeSemana = lazy(() => import("./pages/admin/MensajeSemana").then((m) => ({ default: m.MensajeSemana })));
 const PlanSistemaPagina = lazy(() => import("./pages/admin/PlanSistemaPagina").then((m) => ({ default: m.PlanSistemaPagina })));
@@ -210,6 +211,10 @@ function Enrutador() {
           {/* Catálogos (21-oct-2026): empresas para dirección; clientes para quien los lee o cotiza. */}
           <Route element={<ProtectedRoute roles={["direccion"]} />}>
             <Route path="/catalogos/empresas" element={<CatalogoEmpresas />} />
+          </Route>
+          {/* Duplicados y fusiones (19-nov-2026): almacén, dirección y corporativo; la base guarda la guarda. */}
+          <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion"]} />}>
+            <Route path="/catalogos/fusiones" element={<Fusiones />} />
           </Route>
           <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion", "empresa", "produccion"]} oPermiso={(p) => (p.modulos ?? []).some((m) => m === "compras" || m === "cotizador" || m === "legal")} />}>
             <Route path="/catalogos/clientes" element={<CatalogoClientes />} />
