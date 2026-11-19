@@ -2241,6 +2241,15 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   pidió <platillos> para hoy/mañana dd/mm · nota" → `/comedor?tab=cocina`, y
   "Comedor: pedido cancelado" al cancelar; nunca a quien pidió. Probado en
   rollback con `set constraints all immediate`: el cuerpo trae los platillos.
+- **"Para revisar las comidas de mañana" (19-nov-2026, Mario)**
+  (`20261119220000`, aplicada como `comedor_resumen_manana`):
+  `fn_comedor_resumen_manana()` (definer; sin usuario o admin maestro) y
+  pg_cron `comedor-resumen-manana` a las 00:00 UTC = **18:00 MX**: push
+  "Comidas de mañana · N persona(s) para mañana dd/mm: 3 × Enchiladas, 2 ×
+  Agua…" (o "Nadie se ha anotado todavía") a `comedor_config.aviso_pedidos_a`
+  con liga `/comedor?tab=cocina&fecha=<mañana>`. Cocina lee `?fecha=` y trae
+  botones **Hoy / Mañana** junto al día. Probado en rollback: la función
+  encola el aviso (0 pedidos → "Nadie se ha anotado todavía para mañana").
 - **Encargada de cocina (19-oct-2026, Mario: "Moni Moreno será la
   encargada de comedor; únicamente va a ver las comidas que el personal
   solicite")**: Monica Moreno Rojas (morenorojasmoni79@gmail.com, operativo,

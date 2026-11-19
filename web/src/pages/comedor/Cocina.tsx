@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
@@ -20,7 +21,9 @@ interface Platillo {
 export function Cocina() {
   const queryClient = useQueryClient();
   const { data: config } = useConfigComedor();
-  const [fecha, setFecha] = useState(hoyMx());
+  // ?fecha=AAAA-MM-DD abre ese día (el aviso "Comidas de mañana" trae mañana).
+  const [params] = useSearchParams();
+  const [fecha, setFecha] = useState(() => (/^\d{4}-\d{2}-\d{2}$/.test(params.get("fecha") ?? "") ? params.get("fecha")! : hoyMx()));
   const [aviso, setAviso] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState({ nombre: "", categoria: "", descripcion: "", precio: "" });
   const [buscar, setBuscar] = useState("");
@@ -204,6 +207,12 @@ export function Cocina() {
           Día
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="rounded border border-slate-300 px-2 py-1" />
         </label>
+        <button type="button" onClick={() => setFecha(hoyMx())} className={`rounded border px-2 py-1 text-xs ${fecha === hoyMx() ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>
+          Hoy
+        </button>
+        <button type="button" onClick={() => setFecha(hoyMx(1))} className={`rounded border px-2 py-1 text-xs ${fecha === hoyMx(1) ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>
+          Mañana
+        </button>
         <label className="flex items-center gap-2">
           Hora límite para pedir
           <input type="time" defaultValue={config.hora_limite.slice(0, 5)} onBlur={(e) => e.target.value && e.target.value !== config.hora_limite.slice(0, 5) && guardarHora.mutate(e.target.value)} className="rounded border border-slate-300 px-2 py-1" />
