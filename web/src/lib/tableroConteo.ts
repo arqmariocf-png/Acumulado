@@ -175,6 +175,39 @@ export function textoHace(minutos: number): string {
   return `hace ${h} h ${String(m).padStart(2, "0")} min`;
 }
 
+export interface AlmacenTablero {
+  empresa_id: string;
+  almacen_id: string | null;
+  nombre: string;
+  items: number;
+  cantidad: number;
+  personas: string[];
+  lugares: number;
+  ultimo: string;
+}
+
+/** Qué hay contado en cada almacén con nombre (por empresa; "sin almacén" para lo que no lo tiene). */
+export function almacenesTablero(items: ItemConteo[], nombres: Map<string, string>): AlmacenTablero[] {
+  const mapa = new Map<string, AlmacenTablero & { lugaresSet: Set<string> }>();
+  for (const i of items) {
+    const k = `${i.empresa_id}|${i.almacen_id ?? ""}`;
+    let a = mapa.get(k);
+    if (!a) {
+      a = { empresa_id: i.empresa_id, almacen_id: i.almacen_id ?? null, nombre: (i.almacen_id && nombres.get(i.almacen_id)) || (i.almacen_id ? "(almacén)" : "sin almacén"), items: 0, cantidad: 0, personas: [], lugares: 0, ultimo: i.created_at, lugaresSet: new Set() };
+      mapa.set(k, a);
+    }
+    a.items += 1;
+    a.cantidad = Math.round((a.cantidad + Number(i.cantidad)) * 1000) / 1000;
+    const persona = i.contado_por_nombre ?? "(sin nombre)";
+    if (!a.personas.includes(persona)) a.personas.push(persona);
+    if (i.ubicacion?.trim()) a.lugaresSet.add(i.ubicacion.trim());
+    if (i.created_at > a.ultimo) a.ultimo = i.created_at;
+  }
+  return [...mapa.values()]
+    .map(({ lugaresSet, ...a }) => ({ ...a, lugares: lugaresSet.size }))
+    .sort((a, b) => a.empresa_id.localeCompare(b.empresa_id) || (a.almacen_id ? 0 : 1) - (b.almacen_id ? 0 : 1) || b.items - a.items);
+}
+
 export interface TotalesTablero {
   personas: number;
   activas: number;

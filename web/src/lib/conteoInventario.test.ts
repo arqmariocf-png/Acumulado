@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { administraConteo, claveArticulo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, resumenConteo, revisarHerramientaNueva, revisarItem, urlEtiqueta, urlEtiquetaHerramienta, urlEtiquetaProducto, type ItemConteo } from "./conteoInventario.ts";
+import { nombreAlmacen, revisarAlmacen, administraConteo, claveArticulo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, resumenConteo, revisarHerramientaNueva, revisarItem, urlEtiqueta, urlEtiquetaHerramienta, urlEtiquetaProducto, type ItemConteo } from "./conteoInventario.ts";
 
 const base: ItemConteo = { id: "1", conteo_id: "c", empresa_id: "e1", codigo: "INV-AEP-0001", descripcion: "Varilla 3/8", cantidad: 120, unidad: "pza", ubicacion: "Rack A", codigo_barras: null, notas: null, contado_por: "u1", contado_por_nombre: "Alma", created_at: "2026-11-19T15:00:00Z" };
 const items: ItemConteo[] = [
@@ -45,8 +45,8 @@ test("filtrarItems: empresa, persona y texto sin acentos", () => {
 test("csvConteo y htmlEtiquetas", () => {
   const csv = csvConteo(items.slice(0, 1), empresas);
   const lineas = csv.split("\n");
-  assert.equal(lineas[0], "Código,Empresa,Descripción,Cantidad,Unidad,Ubicación,Código de barras,Contó,Fecha y hora,Notas");
-  assert.match(lineas[1], /^INV-AEP-0001,Aceros,Varilla 3\/8,120,pza,Rack A,,Alma,19\/11\/2026 09:00,$/);
+  assert.equal(lineas[0], "Código,Empresa,Almacén,Descripción,Cantidad,Unidad,Ubicación,Código de barras,Contó,Fecha y hora,Notas");
+  assert.match(lineas[1], /^INV-AEP-0001,Aceros,,Varilla 3\/8,120,pza,Rack A,,Alma,19\/11\/2026 09:00,$/);
   const html = htmlEtiquetas([{ codigo: "INV-AEP-0001", descripcion: "Varilla <3/8>", cantidad: 120, unidad: "pza", ubicacion: "Rack A", empresa: "Aceros", qrSvg: "<svg/>" }], "Etiquetas");
   assert.match(html, /INV-AEP-0001/);
   assert.match(html, /Varilla &lt;3\/8&gt;/);
@@ -82,4 +82,28 @@ test("claveArticulo: la clave de control antes que el sku del match", () => {
   assert.equal(claveArticulo({ sku: "OC-MWE0CL1R-17", clave_control: "ART-AEP-0001" }), "ART-AEP-0001");
   assert.equal(claveArticulo({ sku: "OC-MWE0CL1R-17", clave_control: null }), "OC-MWE0CL1R-17");
   assert.equal(claveArticulo({ sku: null, clave_control: null, codigo_barras: "750" }), "750");
+});
+
+test("almacenes con nombre: validación, nombre y filtro por almacén", () => {
+  const existentes = [{ id: "a1", nombre: "Almacén principal" }, { id: "a2", nombre: "Zona BBVA" }];
+  assert.match(revisarAlmacen("  ", existentes) ?? "", /nombre/);
+  assert.match(revisarAlmacen("zona  bbva", existentes) ?? "", /Ya hay/);
+  assert.equal(revisarAlmacen("Zona BBVA", existentes, "a2"), null, "renombrar al mismo nombre no choca consigo");
+  assert.equal(revisarAlmacen("Herrería", existentes), null);
+  const nombres = new Map([["a1", "Almacén principal"]]);
+  assert.equal(nombreAlmacen("a1", nombres), "Almacén principal");
+  assert.equal(nombreAlmacen(null, nombres), "—");
+  const base = { conteo_id: "c", empresa_id: "e", descripcion: "x", cantidad: 1, unidad: "pza", ubicacion: null, codigo_barras: null, notas: null, contado_por: "p", contado_por_nombre: "P", created_at: "2026-11-19T10:00:00Z" };
+  const items = [
+    { ...base, id: "1", codigo: "INV-1", almacen_id: "a1" },
+    { ...base, id: "2", codigo: "INV-2", almacen_id: "a2" },
+    { ...base, id: "3", codigo: "INV-3", almacen_id: null },
+  ];
+  assert.deepEqual(filtrarItems(items, { almacen: "a1" }).map((i) => i.id), ["1"]);
+  assert.deepEqual(filtrarItems(items, { almacen: "sin" }).map((i) => i.id), ["3"]);
+  assert.equal(filtrarItems(items, {}).length, 3);
+  const csv = csvConteo(items, new Map([["e", "AEP"]]), nombres);
+  assert.match(csv.split("\n")[0], /Código,Empresa,Almacén,Descripción/);
+  assert.match(csv.split("\n")[1], /^INV-1,AEP,Almacén principal,x/);
+  assert.match(csv.split("\n")[3], /^INV-3,AEP,,x/);
 });

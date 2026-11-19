@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { htmlEtiquetas, type EtiquetaConteo } from "../../lib/conteoInventario";
 import { agruparUbicaciones, generarUbicaciones, nombreUbicacion, revisarRack, urlEtiquetaLugar, type Ubicacion } from "../../lib/ubicacionesBodega";
+import { useAlmacenes } from "./AlmacenesEmpresa";
 
 // Racks y niveles de la bodega (19-nov-2026, Mario: "poner una opción de
 // racks y niveles de rack para darle forma"). Quien administra el conteo
@@ -18,7 +19,7 @@ export function useUbicaciones(empresaId: string | null | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inventario_ubicaciones")
-        .select("id, empresa_id, bodega, rack, nivel, posicion, codigo, descripcion, activo")
+        .select("id, empresa_id, bodega, rack, nivel, posicion, codigo, descripcion, activo, almacen_id")
         .eq("empresa_id", empresaId!)
         .order("bodega")
         .order("rack")
@@ -43,6 +44,10 @@ export function RacksNiveles({ empresaId, empresaNombre, administra, contadosPor
   const qc = useQueryClient();
   const { data: ubicaciones, isLoading } = useUbicaciones(empresaId);
   const [bodega, setBodega] = useState("Bodega");
+  const { data: almacenes } = useAlmacenes(empresaId);
+  const almacenesActivos = useMemo(() => (almacenes ?? []).filter((a) => a.activo), [almacenes]);
+  const [almacenId, setAlmacenId] = useState("");
+  const nombreAlmacen = useMemo(() => new Map((almacenes ?? []).map((a) => [a.id, a.nombre])), [almacenes]);
   const [rack, setRack] = useState("");
   const [niveles, setNiveles] = useState("3");
   const [posiciones, setPosiciones] = useState("0");
@@ -62,7 +67,7 @@ export function RacksNiveles({ empresaId, empresaNombre, administra, contadosPor
       const existentes = new Set((ubicaciones ?? []).map((u) => u.codigo));
       const nuevas = filas.filter((f) => !existentes.has(f.codigo));
       if (!nuevas.length) throw new Error(`El rack ${rack} de ${bodega} ya existe con esos niveles.`);
-      const { error: err } = await supabase.from("inventario_ubicaciones").insert(nuevas.map((f) => ({ empresa_id: empresaId, bodega: f.bodega, rack: f.rack, nivel: f.nivel, posicion: f.posicion })));
+      const { error: err } = await supabase.from("inventario_ubicaciones").insert(nuevas.map((f) => ({ empresa_id: empresaId, bodega: f.bodega, rack: f.rack, nivel: f.nivel, posicion: f.posicion, almacen_id: almacenId || null })));
       if (err) throw err;
       return nuevas.length;
     },
@@ -130,6 +135,27 @@ export function RacksNiveles({ empresaId, empresaNombre, administra, contadosPor
 
       {administra && (
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3 border-b border-slate-100 px-4 py-3 text-sm" data-sin-borrador>
+          {almacenesActivos.length > 0 && (
+            <label className="block">
+              <span className="block text-xs text-slate-500">Almacén</span>
+              <select
+                value={almacenId}
+                onChange={(e) => {
+                  setAlmacenId(e.target.value);
+                  const a = almacenesActivos.find((x) => x.id === e.target.value);
+                  if (a && (bodega === "Bodega" || !bodega.trim())) setBodega(a.nombre);
+                }}
+                className="w-48 rounded border border-slate-300 px-2 py-1"
+              >
+                <option value="">— sin almacén —</option>
+                {almacenesActivos.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="block text-xs text-slate-500">Bodega</span>
             <input value={bodega} onChange={(e) => setBodega(e.target.value)} list="bodegas-conteo" className="w-40 rounded border border-slate-300 px-2 py-1" placeholder="Bodega" />
@@ -177,6 +203,7 @@ export function RacksNiveles({ empresaId, empresaNombre, administra, contadosPor
                     {abierto === clave ? "▾" : "▸"} {g.bodega} · Rack {g.rack}
                   </button>
                   <span className="font-mono text-xs text-slate-500">{g.cabecera?.codigo}</span>
+                  {g.cabecera?.almacen_id && <span className="rounded bg-slate-100 px-1.5 text-[10px] text-slate-600">{nombreAlmacen.get(g.cabecera.almacen_id) ?? "almacén"}</span>}
                   <span className="text-xs text-slate-500">
                     {g.niveles.length} nivel(es){g.niveles.some((n) => n.posiciones.length) ? ` · ${g.niveles.reduce((s, n) => s + n.posiciones.length, 0)} posiciones` : ""}
                     {contadosPorLugar ? ` · ${contados} ítem(s) contados` : ""}
