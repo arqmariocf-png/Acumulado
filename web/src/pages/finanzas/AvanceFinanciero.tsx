@@ -170,7 +170,7 @@ export function AvanceFinanciero() {
           <h1 className="text-2xl font-semibold text-slate-900">Avance financiero de obras</h1>
           <p className="max-w-3xl text-sm text-slate-500">
             Presupuesto contra real (OC, OS, mano de obra y compras del control de obra sin OC), lo pagado y lo pendiente de pago, por obra, empresa, periodo y categoría. Importes sin IVA; el mismo cálculo que el resumen físico-financiero de cada obra. Sin presupuesto por categoría vale el de los controles de obra. El avance físico es el del resumen de la obra: promedio de tareas hechas, suministro de requerimientos y precios unitarios. Lo real
-            sale solo de lo que Acumulado registra; aquí solo se captura el presupuesto.
+            sale solo de lo que el sistema registra; aquí solo se captura el presupuesto.
           </p>
         </div>
       </div>

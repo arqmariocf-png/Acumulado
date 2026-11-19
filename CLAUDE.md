@@ -4054,3 +4054,18 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   cerrado nadie inserta. Primer conteo abierto el 19-nov para LOMA; aviso
   push a los 62 activos (solo 29 tienen notificaciones: los demás ven la
   banda al entrar).
+- **"¿Cambiar el nombre de la app a Grupo Loma?" (19-nov-2026, Mario)**: la
+  marca ya es por organización (`grupos.marca_comercial`/`nombre`; LOMA =
+  "Grupo Loma"): encabezado, pantalla de acceso, título de la pestaña y
+  nombre al instalarla salen de ahí (`aplicarMarca`). "Acumulado" queda solo
+  como nombre neutro de la plataforma antes de saber la organización
+  (`index.html`, `manifest.webmanifest`, `marcaManifiesto`), nunca la marca
+  de otro cliente. Se quitó "Acumulado" de documentos impresos, presentaciones
+  y textos de pantalla (pie de requisición, portada de reportes RH/áreas,
+  avatar, suscripción, cumplimiento, avance financiero, título por defecto
+  del push en `sw.js` → "Aviso"). Pendiente de Mario: logo de Grupo Loma
+  (Dropbox `/Grupo Loma/Logos grupo Loma/Logotipo.jpeg`, el proxy no deja
+  bajarlo) en Admin › Marca (encabezado + icono Android) y, si quiere el
+  icono también en iPhone, mandarlo para reemplazar `public/icon-*.png`,
+  `apple-touch-icon.png` y `favicon.svg` (aplica a todas las organizaciones);
+  y dominio propio en Vercel (su cuenta) en vez de acumulado-nine.vercel.app.

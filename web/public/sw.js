@@ -57,7 +57,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let datos = { titulo: "Acumulado", cuerpo: "Tienes pendientes por revisar.", url: "/tareas" };
+  let datos = { titulo: "Aviso", cuerpo: "Tienes pendientes por revisar.", url: "/tareas" };
   try {
     if (event.data) datos = { ...datos, ...event.data.json() };
   } catch {

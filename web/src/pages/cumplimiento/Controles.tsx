@@ -43,7 +43,7 @@ export function Controles() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600">
-        Cada control responde una pregunta («¿todo pago lleva su comprobante?»). Los marcados <b>automático</b> se prueban solos contra lo que ya está en Acumulado y
+        Cada control responde una pregunta («¿todo pago lleva su comprobante?»). Los marcados <b>automático</b> se prueban solos contra lo que ya está en el sistema y
         dicen exactamente qué casos fallan; el día 1 de cada mes corren solos para el periodo que cerró.
       </p>
       <div className="flex flex-wrap items-center gap-2">

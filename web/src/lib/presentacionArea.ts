@@ -75,7 +75,7 @@ export function htmlPresentacionArea(d: ReporteArea, o: OpcionesPresentacionArea
     slides.push(`<section class="slide"><header><h1>${esc(titulo)}</h1><span class="crumb">${esc(cfg.titulo)} · director general · ${esc(periodo)}</span></header><div class="body">${cuerpo}</div><footer><span>${esc(nota)}</span><span class="pg">${slides.length + 1}</span></footer></section>`);
 
   // 1 Portada
-  slides.push(`<section class="slide cover"><div><div class="eyebrow">${esc(o.organizacion)} · Acumulado</div><h1>Reporte de ${esc(cfg.titulo.toLowerCase())}</h1><h2>para el director general</h2><p>Periodo del ${ddmm(d.desde)} al ${ddmm(d.hasta)} de ${esc(anio)} · ${n0(d.dias)} días · generado el ${ddmm(o.hoy)}/${esc(o.hoy.slice(0, 4))}</p><p class="small">${esc(cfg.cubre)}</p><p class="small">Primera versión para revisarla con el área y pulirla.</p></section>`);
+  slides.push(`<section class="slide cover"><div><div class="eyebrow">${esc(o.organizacion)}</div><h1>Reporte de ${esc(cfg.titulo.toLowerCase())}</h1><h2>para el director general</h2><p>Periodo del ${ddmm(d.desde)} al ${ddmm(d.hasta)} de ${esc(anio)} · ${n0(d.dias)} días · generado el ${ddmm(o.hoy)}/${esc(o.hoy.slice(0, 4))}</p><p class="small">${esc(cfg.cubre)}</p><p class="small">Primera versión para revisarla con el área y pulirla.</p></section>`);
 
   // 2 Resumen ejecutivo
   const destacados = cfg.indicadores.filter((i) => i.destacado).slice(0, 8);
@@ -109,7 +109,7 @@ ${cambios.length ? `<h3>Lo que más cambió contra el reporte anterior</h3><ul c
     alertas.length === 0
       ? `<p class="bullets">Nada pendiente de atender en este periodo.</p>`
       : `<table class="list"><thead><tr><th></th><th>Hallazgo</th><th>Dónde</th></tr></thead><tbody>${alertas.map((x) => `<tr><td><span class="dot ${x.nivel}"></span></td><td>${esc(x.texto)}</td><td class="mute">${esc(x.ruta)}</td></tr>`).join("")}</tbody></table>`,
-    "Rojo = atender esta semana · Ámbar = este mes · Dónde = pantalla de Acumulado",
+    "Rojo = atender esta semana · Ámbar = este mes · Dónde = pantalla del sistema",
   );
 
   // 5… Una lámina por sección: tabla y, si aplica, barras
