@@ -11,6 +11,9 @@ import {
   type ConteoInventario as Conteo, type EtiquetaConteo, type ItemConteo,
 } from "../../lib/conteoInventario";
 import { RacksNiveles, useUbicaciones } from "./RacksNiveles";
+import { ItemsComprasConteo } from "./ItemsComprasConteo";
+import { useItemsCompra } from "../compras/useItemsCompra";
+import { cruzarItemsConProductos, itemsContables } from "../../lib/itemsConteo";
 import { lugaresParaContar, nombreUbicacion } from "../../lib/ubicacionesBodega";
 
 // Conteo físico de inventario (19-nov-2026, Mario: "todos van a contar y
@@ -204,9 +207,17 @@ export function ConteoInventario() {
       return (data ?? []) as Producto[];
     },
   });
+  // También los items del catálogo de compras (8,263 del backoffice) que aún
+  // no son artículo de la empresa: al elegir uno se da de alta con su clave
+  // ART- al guardar (19-nov-2026, Laura: "tenemos más de 4 mil ítems").
+  const { data: itemsCompra } = useItemsCompra(true);
+  const itemsSinProducto = useMemo(() => cruzarItemsConProductos(itemsContables(itemsCompra ?? []), productos ?? []).filter((x) => !x.producto).map((x) => x.item), [itemsCompra, productos]);
   const opcionesProducto: OpcionBuscador[] = useMemo(
-    () => (productos ?? []).map((p) => ({ clave: p.id, titulo: p.nombre, detalle: [p.clave_control, p.unidad_medida, p.codigo_barras].filter(Boolean).join(" · ") || undefined })),
-    [productos],
+    () => [
+      ...(productos ?? []).map((p) => ({ clave: p.id, titulo: p.nombre, detalle: [p.clave_control, p.unidad_medida, p.codigo_barras].filter(Boolean).join(" · ") || undefined })),
+      ...itemsSinProducto.map((i) => ({ clave: `item:${i.id}`, titulo: i.descripcion, detalle: [i.clave, i.unidad, "catálogo de compras · se da de alta al guardar"].filter(Boolean).join(" · ") })),
+    ],
+    [productos, itemsSinProducto],
   );
 
   // QR de un artículo del catálogo: llena la captura con ese producto y deja
@@ -273,6 +284,16 @@ export function ConteoInventario() {
   }, [lugarEscaneado]);
 
   function elegirProducto(id: string) {
+    if (id.startsWith("item:")) {
+      const it = itemsSinProducto.find((x) => x.id === id.slice(5));
+      if (!it) return;
+      setDescripcion(it.descripcion);
+      setProductoId(null);
+      if (it.unidad) setUnidad(it.unidad);
+      setDarAlta(true);
+      refCantidad.current?.focus();
+      return;
+    }
     const p = (productos ?? []).find((x) => x.id === id);
     if (!p) return;
     setDescripcion(p.nombre);
@@ -1016,6 +1037,17 @@ export function ConteoInventario() {
             </div>
           )}
         </section>
+      )}
+
+      {conteo && empresaCat && (
+        <ItemsComprasConteo
+          empresaId={empresaCat}
+          empresaNombre={nombreEmpresa.get(empresaCat) ?? ""}
+          productos={catalogo ?? []}
+          imprimir={(lista, titulo) => imprimirProductos(lista as Producto[], nombreEmpresa.get(empresaCat) ?? "", titulo)}
+          onError={setError}
+          onAviso={setAviso}
+        />
       )}
 
       {conteo && (

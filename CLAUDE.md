@@ -4172,3 +4172,29 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   no asigna claves, lee la etiqueta ART- de un artículo aunque su RLS de
   productos no se lo deje; Alma corrige ítems ajenos; un operativo no toca los
   ajenos.
+  **Los 8,263 items de compras en el conteo (19-nov-2026, Laura: "en el
+  sistema tenemos más de 4 mil ítems")** (`20261119170000`, aplicada como
+  `conteo_items_compras_a_productos` y `_2_fix`): Laura cuenta con Catálogos
+  › Items (`compras_items`, por organización: 8,731 del backoffice, 8,263
+  materiales + 466 servicios + 2 equipos, claves IT-####), no con `productos`
+  (inventario por empresa: AEP 365). Para que la etiqueta lleve la clave
+  consecutiva de SU empresa, el item se vuelve producto de esa empresa al
+  etiquetarlo o contarlo: `productos.item_id` y
+  `fn_conteo_alta_productos_desde_items(empresa, items[])` (definer; misma
+  guarda `fn_conteo_puede_dar_alta`; hasta 500 por llamada; llama
+  `fn_conteo_alta_producto` por cada uno —no duplica por nombre normalizado,
+  351 de los 365 de AEP ya empatan— y devuelve clave ART-, nombre y unidad).
+  Pantalla: sección **"Catálogo de items de compras (N) · etiquetar para
+  <empresa>"** (`pages/inventario/ItemsComprasConteo.tsx`, debajo de las
+  etiquetas del catálogo; misma empresa elegida ahí): buscador por IT-/ART-/
+  texto, casilla "solo sin clave en la empresa", columna "Clave en
+  <empresa>", "🖨 Dar clave e imprimir marcados (N)" y 🖨 por renglón (dan de
+  alta y abren la hoja de etiquetas). En la captura, el buscador de
+  descripción ofrece también los items que aún no son producto de la empresa
+  ("catálogo de compras · se da de alta al guardar"): elegir uno prende "darlo
+  de alta" y al guardar nace con su ART-. `lib/itemsConteo.ts` (con pruebas:
+  `claveTexto`, `itemsContables` —sin servicios—, `cruzarItemsConProductos`,
+  `filtrarItemsConteo`, `lotes`). Ojo: `useItemsCompra` baja los 8,731 (9
+  páginas) al abrir el conteo. Probado en rollback: Brenda da clave a 3 items
+  en MCC (ART-MCC-0025…), repetirlos devuelve las mismas claves y un item que
+  ya era producto devuelve la clave existente.
