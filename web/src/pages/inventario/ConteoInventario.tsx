@@ -10,6 +10,8 @@ import {
   administraConteo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, nombreExcelConteo, resumenConteo, revisarItem, UNIDADES_CONTEO, urlEtiqueta, urlEtiquetaProducto,
   type ConteoInventario as Conteo, type EtiquetaConteo, type ItemConteo,
 } from "../../lib/conteoInventario";
+import { RacksNiveles, useUbicaciones } from "./RacksNiveles";
+import { lugaresParaContar, nombreUbicacion } from "../../lib/ubicacionesBodega";
 
 // Conteo físico de inventario (19-nov-2026, Mario: "todos van a contar y
 // subir códigos con los ítems existentes, así como códigos QR para tener
@@ -65,6 +67,7 @@ export function ConteoInventario() {
   const [params] = useSearchParams();
   const itemEscaneado = params.get("item");
   const productoEscaneado = params.get("producto");
+  const lugarEscaneado = params.get("lugar");
   const hoy = fechaHoyMx();
   const administra = administraConteo(perfil?.rol);
 
@@ -98,7 +101,7 @@ export function ConteoInventario() {
       for (let desde = 0; ; desde += 1000) {
         const { data, error } = await supabase
           .from("conteo_items")
-          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, codigo_barras, notas, producto_id, contado_por, contado_por_nombre, created_at")
+          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, contado_por, contado_por_nombre, created_at")
           .eq("conteo_id", conteo!.id)
           .order("created_at", { ascending: false })
           .range(desde, desde + 999);
@@ -119,6 +122,13 @@ export function ConteoInventario() {
   const [ubicacion, setUbicacion] = useState(() => {
     try {
       return localStorage.getItem(UBICACION_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [ubicacionId, setUbicacionId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(UBICACION_KEY + "-id") ?? "";
     } catch {
       return "";
     }
@@ -175,6 +185,36 @@ export function ConteoInventario() {
       });
   }, [productoEscaneado]);
 
+  // Racks y niveles de la empresa elegida: el selector de lugar de la captura.
+  const { data: ubicacionesEmpresa } = useUbicaciones(empresaId);
+  const lugares = useMemo(() => lugaresParaContar(ubicacionesEmpresa ?? []), [ubicacionesEmpresa]);
+  const nombreLugar = useMemo(() => new Map((ubicacionesEmpresa ?? []).map((u) => [u.id, u])), [ubicacionesEmpresa]);
+  useEffect(() => {
+    // Si el lugar guardado no es de esta empresa (o ya no existe), se limpia.
+    if (ubicacionId && ubicacionesEmpresa && !ubicacionesEmpresa.some((u) => u.id === ubicacionId && u.activo)) setUbicacionId("");
+  }, [ubicacionId, ubicacionesEmpresa]);
+
+  // QR pegado en el rack: deja ese lugar elegido (y su empresa) y el cursor en la descripción.
+  const lugarPrellenado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!lugarEscaneado || lugarPrellenado.current === lugarEscaneado) return;
+    lugarPrellenado.current = lugarEscaneado;
+    supabase
+      .from("inventario_ubicaciones")
+      .select("id, empresa_id, codigo, activo")
+      .eq("codigo", lugarEscaneado)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const u = data as { id: string; empresa_id: string; codigo: string; activo: boolean } | null;
+        if (!u) return setError(`No se encontró el lugar ${lugarEscaneado}.`);
+        setEmpresaId(u.empresa_id);
+        setUbicacionId(u.id);
+        setUbicacion(u.codigo);
+        setTimeout(() => refDescripcion.current?.focus(), 50);
+      });
+  }, [lugarEscaneado]);
+
   function elegirProducto(id: string) {
     const p = (productos ?? []).find((x) => x.id === id);
     if (!p) return;
@@ -211,13 +251,14 @@ export function ConteoInventario() {
           descripcion: descripcion.trim(),
           cantidad: Number(cantidad.replace(/,/g, "")),
           unidad: unidad.trim(),
-          ubicacion: ubicacion.trim() || null,
+          ubicacion: ubicacionId ? null : ubicacion.trim() || null,
+          ubicacion_id: ubicacionId || null,
           codigo_barras: codigoBarras.trim() || null,
           notas: notas.trim() || null,
           producto_id: productoId,
           contado_por: perfil!.id,
         })
-        .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, codigo_barras, notas, contado_por, contado_por_nombre, created_at")
+        .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, contado_por, contado_por_nombre, created_at")
         .single();
       if (err) throw err;
       return { ...(data as ItemConteo), cantidad: Number((data as ItemConteo).cantidad) };
@@ -232,6 +273,7 @@ export function ConteoInventario() {
       setProductoId(null);
       try {
         localStorage.setItem(UBICACION_KEY, ubicacion);
+        localStorage.setItem(UBICACION_KEY + "-id", ubicacionId);
       } catch {
         /* sin almacenamiento local */
       }
@@ -383,6 +425,11 @@ export function ConteoInventario() {
     },
   });
   const catalogoFiltrado = useMemo(() => filtrarProductos(catalogo ?? [], buscarCatalogo), [catalogo, buscarCatalogo]);
+  const contadosPorLugar = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of todos) if (i.ubicacion_id) m.set(i.ubicacion_id, (m.get(i.ubicacion_id) ?? 0) + 1);
+    return m;
+  }, [todos]);
   const contadosPorProducto = useMemo(() => {
     const m = new Map<string, number>();
     for (const i of todos) if (i.producto_id) m.set(i.producto_id, (m.get(i.producto_id) ?? 0) + 1);
@@ -496,8 +543,19 @@ export function ConteoInventario() {
               </select>
             </label>
             <label className="block text-sm md:col-span-2">
-              <span className="block text-xs text-slate-500">Ubicación (bodega, rack, obra…)</span>
-              <input value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5" placeholder="se recuerda para el siguiente" />
+              <span className="block text-xs text-slate-500">{lugares.length ? "Lugar (rack · nivel) o ubicación a mano" : "Ubicación (bodega, rack, obra…)"}</span>
+              {lugares.length > 0 && (
+                <select value={ubicacionId} onChange={(e) => setUbicacionId(e.target.value)} className="mb-1 w-full rounded border border-slate-300 px-2 py-1.5">
+                  <option value="">— escribir la ubicación a mano —</option>
+                  {lugares.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.codigo} · {nombreUbicacion(u)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {!ubicacionId && <input value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5" placeholder="se recuerda para el siguiente" />}
+              {ubicacionId && <span className="block text-xs text-emerald-700">Se guarda en {nombreLugar.get(ubicacionId)?.codigo}; se recuerda para el siguiente ítem.</span>}
             </label>
             <label className="block text-sm md:col-span-2">
               <span className="block text-xs text-slate-500">Código de barras del artículo (lector o a mano)</span>
@@ -571,6 +629,8 @@ export function ConteoInventario() {
           </div>
         </form>
       )}
+
+      {conteo && empresaId && <RacksNiveles empresaId={empresaId} empresaNombre={nombreEmpresa.get(empresaId) ?? ""} administra={administra} contadosPorLugar={contadosPorLugar} />}
 
       {conteo && (
         <section className="rounded border border-slate-200 bg-white">
