@@ -54,6 +54,7 @@ const RespaldoDropbox = lazy(() => import("./pages/admin/RespaldoDropbox").then(
 const Almacenamiento = lazy(() => import("./pages/admin/Almacenamiento").then((m) => ({ default: m.Almacenamiento })));
 const Vacaciones = lazy(() => import("./pages/rh/Vacaciones").then((m) => ({ default: m.Vacaciones })));
 const ConteoInventario = lazy(() => import("./pages/inventario/ConteoInventario").then((m) => ({ default: m.ConteoInventario })));
+const TableroConteo = lazy(() => import("./pages/inventario/TableroConteo").then((m) => ({ default: m.TableroConteo })));
 const SolicitarEpp = lazy(() => import("./pages/rh/SolicitarEpp").then((m) => ({ default: m.SolicitarEpp })));
 const Herramienta = lazy(() => import("./pages/herramienta/Herramienta").then((m) => ({ default: m.Herramienta })));
 const Logistica = lazy(() => import("./pages/logistica/Logistica").then((m) => ({ default: m.Logistica })));
@@ -177,6 +178,9 @@ function Enrutador() {
           {/* Vacaciones y permisos (3-nov-2026): cualquiera con expediente pide; jefe/RH se deciden en la base. */}
           <Route path="/vacaciones" element={<Vacaciones />} />
           <Route path="/inventario/conteo" element={<ConteoInventario />} />
+          <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion"]} />}>
+            <Route path="/almacen/conteo-tablero" element={<TableroConteo />} />
+          </Route>
           {/* Comedor: cualquiera con cuenta pide; cocina y nómina se deciden en la base. */}
           <Route path="/comedor" element={<Comedor />} />
           {/* Punto de venta (ferretería, almacén general): almacén, corporativo o permiso 'punto_venta'. */}

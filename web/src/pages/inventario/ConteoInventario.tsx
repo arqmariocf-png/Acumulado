@@ -7,7 +7,7 @@ import { CampoBuscador, type OpcionBuscador } from "../../components/CampoBuscad
 import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { descargarCsv } from "../../lib/descargarArchivo";
 import {
-  administraConteo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, nombreExcelConteo, resumenConteo, revisarHerramientaNueva, revisarItem, UNIDADES_CONTEO, urlEtiqueta, urlEtiquetaHerramienta, urlEtiquetaProducto,
+  administraConteo, claveArticulo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, nombreExcelConteo, resumenConteo, revisarHerramientaNueva, revisarItem, UNIDADES_CONTEO, urlEtiqueta, urlEtiquetaHerramienta, urlEtiquetaProducto,
   type ConteoInventario as Conteo, type EtiquetaConteo, type ItemConteo,
 } from "../../lib/conteoInventario";
 import { RacksNiveles, useUbicaciones } from "./RacksNiveles";
@@ -28,6 +28,7 @@ interface Empresa {
 interface Producto {
   id: string;
   sku: string | null;
+  clave_control?: string | null;
   nombre: string;
   unidad_medida: string | null;
   codigo_barras: string | null;
@@ -177,7 +178,13 @@ export function ConteoInventario() {
   const [ultimoProducto, setUltimoProducto] = useState<(Producto & { empresa_id: string }) | null>(null);
   const [ultimasHerramientas, setUltimasHerramientas] = useState<HerramientaNueva[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [ultimo, setUltimo] = useState<ItemConteo | null>(null);
+  // Reajustar cantidades (19-nov-2026, Mario: "por si encuentran posteriormente
+  // algo"): si el artículo ya lo contó la misma persona en este conteo, lo nuevo
+  // se puede sumar a ese renglón en vez de abrir otro.
+  const [sumarA, setSumarA] = useState(true);
+  const [ajuste, setAjuste] = useState("");
   const refDescripcion = useRef<HTMLInputElement | null>(null);
   const refCantidad = useRef<HTMLInputElement | null>(null);
 
@@ -192,13 +199,13 @@ export function ConteoInventario() {
     queryKey: ["productos-conteo", empresaId],
     enabled: !!empresaId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("productos").select("id, sku, nombre, unidad_medida, codigo_barras").eq("empresa_id", empresaId).eq("activo", true).order("nombre").limit(1000);
+      const { data, error } = await supabase.from("productos").select("id, sku, clave_control, nombre, unidad_medida, codigo_barras").eq("empresa_id", empresaId).eq("activo", true).order("nombre").limit(1000);
       if (error) throw error;
       return (data ?? []) as Producto[];
     },
   });
   const opcionesProducto: OpcionBuscador[] = useMemo(
-    () => (productos ?? []).map((p) => ({ clave: p.id, titulo: p.nombre, detalle: [p.unidad_medida, p.codigo_barras].filter(Boolean).join(" · ") || undefined })),
+    () => (productos ?? []).map((p) => ({ clave: p.id, titulo: p.nombre, detalle: [p.clave_control, p.unidad_medida, p.codigo_barras].filter(Boolean).join(" · ") || undefined })),
     [productos],
   );
 
@@ -316,6 +323,17 @@ export function ConteoInventario() {
       }
       const falta = revisarItem({ empresa_id: empresaId, descripcion, cantidad, unidad });
       if (falta) throw new Error(falta);
+      if (yaContado && sumarA) {
+        const nueva = Math.round((Number(yaContado.cantidad) + Number(cantidad.replace(/,/g, ""))) * 1000) / 1000;
+        const { data: act, error: errS } = await supabase
+          .from("conteo_items")
+          .update({ cantidad: nueva, notas: [yaContado.notas, notas.trim() ? notas.trim() : null, `+${cantidad.trim()} ${hora(new Date().toISOString())}`].filter(Boolean).join(" · ") })
+          .eq("id", yaContado.id)
+          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
+          .single();
+        if (errS) throw errS;
+        return { item: { ...(act as ItemConteo), cantidad: Number((act as ItemConteo).cantidad) }, productoNuevo: null, sumado: true };
+      }
       let producto = productoId;
       let productoNuevo: (Producto & { empresa_id: string }) | null = null;
       if (!producto && darAlta) {
@@ -348,10 +366,11 @@ export function ConteoInventario() {
         .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, ubicacion_id, codigo_barras, notas, producto_id, herramienta_id, contado_por, contado_por_nombre, created_at")
         .single();
       if (err) throw err;
-      return { item: { ...(data as ItemConteo), cantidad: Number((data as ItemConteo).cantidad) }, productoNuevo };
+      return { item: { ...(data as ItemConteo), cantidad: Number((data as ItemConteo).cantidad) }, productoNuevo, sumado: false };
     },
     onSuccess: (r) => {
       setError(null);
+      setAviso(null);
       if (r.herramientas) {
         setUltimasHerramientas(r.herramientas);
         setUltimo(null);
@@ -388,8 +407,10 @@ export function ConteoInventario() {
   }
 
   const corregir = useMutation({
-    mutationFn: async ({ id, cantidad: c }: { id: string; cantidad: number }) => {
-      const { error: err } = await supabase.from("conteo_items").update({ cantidad: c }).eq("id", id);
+    mutationFn: async ({ id, cantidad: c, nota }: { id: string; cantidad: number; nota?: string }) => {
+      const previo = todos.find((i) => i.id === id);
+      const notas = nota ? [previo?.notas, nota].filter(Boolean).join(" · ") : undefined;
+      const { error: err } = await supabase.from("conteo_items").update(notas === undefined ? { cantidad: c } : { cantidad: c, notas }).eq("id", id);
       if (err) throw err;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["conteo-items", conteo?.id] }),
@@ -455,6 +476,8 @@ export function ConteoInventario() {
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
   }, [todos]);
   const escaneado = itemEscaneado ? todos.find((i) => i.codigo === itemEscaneado) : undefined;
+  const yaContado = useMemo(() => (tipo === "material" && productoId ? mios.find((i) => i.producto_id === productoId) ?? null : null), [tipo, productoId, mios]);
+  const puedeAjustar = (i: ItemConteo) => administra || i.contado_por === perfil?.id;
 
   async function imprimirHoja(armar: (qr: (texto: string) => Promise<string>) => Promise<EtiquetaConteo[]>, titulo: string) {
     const ventana = abrirVentanaImpresion();
@@ -528,7 +551,7 @@ export function ConteoInventario() {
       (qr) =>
         Promise.all(
           lista.map(async (p) => ({
-            codigo: p.sku || p.codigo_barras || "ARTÍCULO",
+            codigo: claveArticulo(p),
             descripcion: p.nombre,
             cantidad: null,
             unidad: p.unidad_medida || "pza",
@@ -550,12 +573,29 @@ export function ConteoInventario() {
     queryKey: ["productos-conteo", empresaCat],
     enabled: !!empresaCat,
     queryFn: async () => {
-      const { data, error } = await supabase.from("productos").select("id, sku, nombre, unidad_medida, codigo_barras").eq("empresa_id", empresaCat).eq("activo", true).order("nombre").limit(1000);
+      const { data, error } = await supabase.from("productos").select("id, sku, clave_control, nombre, unidad_medida, codigo_barras").eq("empresa_id", empresaCat).eq("activo", true).order("nombre").limit(1000);
       if (error) throw error;
       return (data ?? []) as Producto[];
     },
   });
   const catalogoFiltrado = useMemo(() => filtrarProductos(catalogo ?? [], buscarCatalogo), [catalogo, buscarCatalogo]);
+  // Claves nuevas para contar de cero (19-nov-2026, Laura: "la clave de las
+  // etiquetas es errónea, las toma sobre cada OC registrada"): el sku del
+  // match (OC-…) no sirve; la etiqueta lleva la clave de control ART-.
+  const sinClave = useMemo(() => (catalogo ?? []).filter((p) => !p.clave_control).length, [catalogo]);
+  const asignarClaves = useMutation({
+    mutationFn: async () => {
+      const { data, error: err } = await supabase.rpc("fn_productos_asignar_claves", { p_empresa_id: empresaCat });
+      if (err) throw err;
+      return data as number;
+    },
+    onSuccess: (n) => {
+      setError(null);
+      setAviso(`Se asignaron ${n} claves de control nuevas. Ya puedes imprimir las etiquetas.`);
+      qc.invalidateQueries({ queryKey: ["productos-conteo"] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
   const contadosPorLugar = useMemo(() => {
     const m = new Map<string, number>();
     for (const i of todos) if (i.ubicacion_id) m.set(i.ubicacion_id, (m.get(i.ubicacion_id) ?? 0) + 1);
@@ -616,6 +656,7 @@ export function ConteoInventario() {
 
       {avisoEnviado && <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{avisoEnviado}</p>}
       {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {aviso && <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{aviso}</p>}
 
       {administra && (!conteo || (conteo.estado === "cerrado" && conteo.fecha !== hoy)) && (
         <form
@@ -653,6 +694,38 @@ export function ConteoInventario() {
                 {escaneado.cantidad} {escaneado.unidad} · {nombreEmpresa.get(escaneado.empresa_id)}
                 {escaneado.ubicacion ? ` · ${escaneado.ubicacion}` : ""} · contó {escaneado.contado_por_nombre ?? "—"} a las {hora(escaneado.created_at)}
               </div>
+              {puedeAjustar(escaneado) && (
+                <form
+                  className="mt-2 flex flex-wrap items-center gap-2 text-xs"
+                  data-sin-borrador
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const n = Number(ajuste.replace(/,/g, ""));
+                    if (!Number.isFinite(n) || n <= 0) return setError("Escribe cuántas piezas más encontraste.");
+                    corregir.mutate({ id: escaneado.id, cantidad: Math.round((Number(escaneado.cantidad) + n) * 1000) / 1000, nota: `+${n} ${hora(new Date().toISOString())}` });
+                    setAjuste("");
+                  }}
+                >
+                  <span className="text-sky-800">¿Encontraste más después?</span>
+                  <input value={ajuste} onChange={(e) => setAjuste(e.target.value)} inputMode="decimal" className="w-20 rounded border border-sky-300 px-2 py-1 text-right" placeholder="+ cuántas" />
+                  <button type="submit" disabled={corregir.isPending} className="rounded bg-sky-700 px-2 py-1 font-medium text-white disabled:opacity-50">
+                    Sumar a {escaneado.codigo}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = window.prompt(`Nueva cantidad total de ${escaneado.codigo} (${escaneado.descripcion}). Hoy: ${escaneado.cantidad} ${escaneado.unidad}`, String(escaneado.cantidad));
+                      if (v == null) return;
+                      const n = Number(v.replace(/,/g, ""));
+                      if (!Number.isFinite(n) || n < 0) return setError("La cantidad debe ser un número (0 o más).");
+                      corregir.mutate({ id: escaneado.id, cantidad: n, nota: `corregido de ${escaneado.cantidad} a ${n} ${hora(new Date().toISOString())}` });
+                    }}
+                    className="rounded border border-sky-300 bg-white px-2 py-1 text-sky-900 hover:bg-sky-100"
+                  >
+                    Corregir la cantidad total
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -801,6 +874,13 @@ export function ConteoInventario() {
               <input value={notas} onChange={(e) => setNotas(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5" placeholder="opcional" />
             </label>
           </div>
+          {yaContado && (
+            <label className="mt-2 flex items-center gap-2 text-xs text-amber-900">
+              <input type="checkbox" checked={sumarA} onChange={(e) => setSumarA(e.target.checked)} />
+              Ya contaste este artículo en <span className="font-mono">{yaContado.codigo}</span> ({yaContado.cantidad} {yaContado.unidad}
+              {yaContado.ubicacion ? ` en ${yaContado.ubicacion}` : ""}): sumar esta cantidad a ese renglón en vez de abrir otro.
+            </label>
+          )}
           {tipo === "material" && descripcion.trim() && !productoId && (
             <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
               <input type="checkbox" checked={darAlta} onChange={(e) => setDarAlta(e.target.checked)} />
@@ -863,6 +943,16 @@ export function ConteoInventario() {
                 ))}
               </select>
               <input value={buscarCatalogo} onChange={(e) => setBuscarCatalogo(e.target.value)} placeholder="buscar artículo o clave…" className="min-w-[12rem] rounded border border-slate-300 px-2 py-1" />
+              {administra && sinClave > 0 && (
+                <button
+                  type="button"
+                  onClick={() => window.confirm(`¿Generar claves de control nuevas (ART-${codigoEmpresa.get(empresaCat) ?? ""}-0001…) para los ${sinClave} artículos que no la tienen? El sku del match de OC/OV no cambia.`) && asignarClaves.mutate()}
+                  disabled={asignarClaves.isPending}
+                  className="rounded border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  Generar claves nuevas ({sinClave} sin clave)
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => imprimirProductos(catalogoFiltrado.filter((p) => marcados.has(p.id)), nombreEmpresa.get(empresaCat) ?? "", `Etiquetas QR · artículos · ${nombreEmpresa.get(empresaCat) ?? ""}`)}
@@ -909,12 +999,12 @@ export function ConteoInventario() {
                       <td className="px-3 py-1">
                         <input type="checkbox" checked={marcados.has(p.id)} onChange={() => alternar(p.id)} />
                       </td>
-                      <td className="px-3 py-1 font-mono text-xs">{p.sku ?? "—"}</td>
+                      <td className="px-3 py-1 font-mono text-xs">{p.clave_control ?? <span className="text-amber-700" title="Clave del match de OC/OV, no sirve para contar: genera las claves nuevas">{p.sku ?? "—"} ⚠</span>}</td>
                       <td className="px-3 py-1">{p.nombre}</td>
                       <td className="px-3 py-1 text-slate-600">{p.unidad_medida ?? "—"}</td>
                       <td className="px-3 py-1 text-xs">{contadosPorProducto.get(p.id) ? <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800">{contadosPorProducto.get(p.id)} vez/veces</span> : <span className="text-slate-400">no</span>}</td>
                       <td className="px-3 py-1 text-right text-xs">
-                        <button type="button" onClick={() => imprimirProductos([p], nombreEmpresa.get(empresaCat) ?? "", `Etiqueta ${p.sku ?? p.nombre}`)} className="text-slate-600 hover:underline">
+                        <button type="button" onClick={() => imprimirProductos([p], nombreEmpresa.get(empresaCat) ?? "", `Etiqueta ${claveArticulo(p)}`)} className="text-slate-600 hover:underline">
                           🖨 QR
                         </button>
                       </td>
