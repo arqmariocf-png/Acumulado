@@ -4025,3 +4025,32 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   funciones quedaron renombradas `*_v1` y revocadas. Probado en rollback:
   Christian (responsable, CSC) pone "Oficinas Grupo Loma" a una OC de BBVA
   Puebla; Alma no puede.
+- **Conteo de inventario de todos (19-nov-2026, Mario: "agrega a todos para
+  el día de hoy un módulo de inventarios: todos van a contar y subir códigos
+  con los ítems existentes, así como códigos QR para tener todos los ítems
+  identificados; envíales una notificación…; registra la fecha y los ítems
+  que harán todos y cada uno y también a las empresas que pertenece el
+  inventario")** (`20261119120000`, aplicada como `conteo_inventario`):
+  `conteos_inventario` (uno por organización y fecha; abierto/cerrado; lo
+  abren, cierran y avisan admin/corporativo/dirección/almacén) y
+  `conteo_items` (empresa dueña, código **INV-<EMP>-0001** por
+  `fn_siguiente_folio`, descripción, cantidad, unidad, ubicación, código de
+  barras, producto opcional, `contado_por` = quien lo capturó —solo a su
+  nombre— y su nombre, hora). Cualquiera de la organización (no pendiente)
+  ve el conteo y captura; corrige/borra lo suyo (los que administran, todo);
+  con el conteo cerrado ya no se inserta (trigger). `fn_conteo_resumen(id)`
+  (persona × empresa) y `fn_conteo_avisar(id)` (push a toda la organización
+  por `fn_push_aviso`, liga `/inventario/conteo`). Pantalla Mi día ›
+  **Conteo de inventario** (`/inventario/conteo`,
+  `pages/inventario/ConteoInventario.tsx`; `lib/conteoInventario.ts` con
+  pruebas): captura con Enter (sugiere productos de la empresa; lector de
+  código de barras), QR por ítem (la etiqueta lleva la liga
+  `/inventario/conteo?item=<código>`, que resalta el ítem), "Mis ítems",
+  avance por persona y empresa, todos los ítems con filtros, Excel e
+  impresión de etiquetas (3 × 62 mm). `components/AvisoConteoInventario.tsx`
+  en el Layout: mientras hay conteo abierto hoy, banda verde arriba de toda
+  pantalla con liga directa. Probado en rollback: Brenda captura a su nombre
+  (INV-MCC-…), no a nombre de otro ni cierra; Laura ve, corrige y cierra; con
+  cerrado nadie inserta. Primer conteo abierto el 19-nov para LOMA; aviso
+  push a los 62 activos (solo 29 tienen notificaciones: los demás ven la
+  banda al entrar).
