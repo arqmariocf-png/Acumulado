@@ -33,6 +33,7 @@ import { parsearPdfEstadoCuentaBanBajio, type ResultadoParseoPdf } from "../_sha
 import { parsearPaginasBBVA } from "../_shared/ingesta/pdf-estado-cuenta-bbva.ts";
 import { parsearPdfEstadoCuentaBanorte, type SaldoPrevioConocido } from "../_shared/ingesta/pdf-estado-cuenta-banorte.ts";
 import { parsearPdfEstadoCuentaSantander } from "../_shared/ingesta/pdf-estado-cuenta-santander.ts";
+import { acotarCorte, extraerCorteEstadoCuenta, hoyMexicoIso } from "../_shared/ingesta/corte-estado-cuenta.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
@@ -95,6 +96,9 @@ Deno.serve(async (req) => {
     const movimientosMapeados: FilaEstadoCuentaMapeada[] = [];
     const erroresPorFila: { fila: number; errores: string[] }[] = [];
     let saldoCierre: { fecha: string; saldo: number } | null = null;
+    // Texto del documento del que se lee hasta qué fecha llega (ver
+    // corte-estado-cuenta.ts). Vacío en CSV/Excel.
+    let textoCorte = "";
 
     if (esPdf) {
       const { data: cuentaRow, error: errCuenta } = await dbServicio.from("cuentas_bancarias").select("banco, ultimos_4").eq("id", cuentaId).single();
@@ -123,15 +127,31 @@ Deno.serve(async (req) => {
       }
 
       const parserPorBanco: Record<string, (bytes: Uint8Array) => Promise<ResultadoParseoPdf>> = {
-        BanBajio: async (b) => parsearPdfEstadoCuentaBanBajio(await pdfATexto(b)),
+        BanBajio: async (b) => {
+          const t = await pdfATexto(b);
+          textoCorte = t;
+          return parsearPdfEstadoCuentaBanBajio(t);
+        },
         // ultimos_4 bloquea el PDF de OTRA cuenta subido por error (caso real
         // 17-sep-2026, PDF de 7382 cargado como 9954) -- ver extraerNumeroCuentaBBVA.
-        BBVA: async (b) => parsearPaginasBBVA(await pdfAPosiciones(b), cuentaRow.ultimos_4),
+        BBVA: async (b) => {
+          const paginas = await pdfAPosiciones(b);
+          textoCorte = (paginas[0] ?? []).map((i) => i.texto).join(" ");
+          return parsearPaginasBBVA(paginas, cuentaRow.ultimos_4);
+        },
         // ultimos_4 permite desambiguar cuando el PDF trae más de un
         // producto (ej. cuenta + inversión) -- ver comentario del
         // encabezado de pdf-estado-cuenta-banorte.ts.
-        Banorte: async (b) => parsearPdfEstadoCuentaBanorte(await pdfATexto(b), cuentaRow.ultimos_4, saldoPrevio),
-        Santander: async (b) => parsearPdfEstadoCuentaSantander(await pdfATexto(b)),
+        Banorte: async (b) => {
+          const t = await pdfATexto(b);
+          textoCorte = t;
+          return parsearPdfEstadoCuentaBanorte(t, cuentaRow.ultimos_4, saldoPrevio);
+        },
+        Santander: async (b) => {
+          const t = await pdfATexto(b);
+          textoCorte = t;
+          return parsearPdfEstadoCuentaSantander(t);
+        },
       };
       const parser = parserPorBanco[cuentaRow.banco];
       if (!parser) {
@@ -244,10 +264,32 @@ Deno.serve(async (req) => {
       })
       .eq("id", archivoId);
 
+    // Hasta qué fecha llega este estado de cuenta: la que declara el PDF
+    // (corte, fin de periodo o generación), si no la del último movimiento
+    // que trae; nunca después de hoy. Se registra aunque no haya entrado
+    // ningún renglón nuevo: así Finanzas sabe que la cuenta está al día
+    // (19-nov-2026, Mallas y Clavos: seis cargas "al 17" sin movimientos
+    // nuevos y la hoja seguía diciendo "al 13/11, falta subir lo más
+    // reciente").
+    const ultimoDelArchivo = movimientosMapeados.reduce<string | null>((max, m) => (m.fechaPago && (!max || m.fechaPago > max) ? m.fechaPago : max), null);
+    const estadoCuentaAl = acotarCorte(extraerCorteEstadoCuenta(textoCorte), ultimoDelArchivo, hoyMexicoIso());
+    let avisoEstadoCuentaAl: string | null = null;
+    if (estadoCuentaAl) {
+      const { error: errAl } = await dbServicio.rpc("fn_cuenta_registrar_estado_cuenta", { p_cuenta_id: cuentaId, p_al: estadoCuentaAl });
+      if (errAl) avisoEstadoCuentaAl = `No se pudo registrar la fecha del estado de cuenta: ${errAl.message}`;
+    }
+    const fechaCorta = (iso: string) => iso.split("-").reverse().join("/");
+    const sinNuevosConCorte = !saldoCierre && filasProcesadas.length === 0 && omitidosPorExistentes > 0 && !!estadoCuentaAl;
+
     const partes = saldoCierre
       ? [`el estado de cuenta no trae movimientos en el periodo; se registró el saldo al corte de $${saldoCierre.saldo.toLocaleString("es-MX", { minimumFractionDigits: 2 })} al ${saldoCierre.fecha}${filasProcesadas.length === 0 ? " (ya estaba registrado)" : ""}`]
-      : [`${filasProcesadas.length} movimiento(s) nuevo(s) guardados`];
-    if (omitidosPorExistentes > 0) partes.push(`${omitidosPorExistentes} ya existían y no se duplicaron`);
+      : sinNuevosConCorte
+        ? [
+            `el estado de cuenta llega al ${fechaCorta(estadoCuentaAl!)} y no trae movimientos nuevos: los ${omitidosPorExistentes} que trae ya estaban cargados${ultimoDelArchivo ? `; el saldo de la cuenta sigue en el del último movimiento (${fechaCorta(ultimoDelArchivo)})` : ""}. La cuenta queda al día hasta el ${fechaCorta(estadoCuentaAl!)}`,
+          ]
+        : [`${filasProcesadas.length} movimiento(s) nuevo(s) guardados${estadoCuentaAl ? `; la cuenta queda al día hasta el ${fechaCorta(estadoCuentaAl)}` : ""}`];
+    if (omitidosPorExistentes > 0 && !sinNuevosConCorte) partes.push(`${omitidosPorExistentes} ya existían y no se duplicaron`);
+    if (avisoEstadoCuentaAl) partes.push(avisoEstadoCuentaAl);
     if (erroresPorFila.length > 0) partes.push(`${erroresPorFila.length} pendiente(s) de revisar (no bloquean la carga)`);
     const mensaje = `Archivo cargado. ${partes.join(", ")}.`;
 
@@ -258,6 +300,7 @@ Deno.serve(async (req) => {
       filasProcesadas: filasProcesadas.length,
       filasConError: erroresPorFila.length,
       omitidosPorExistentes,
+      estadoCuentaAl,
       erroresPorFila: erroresPorFila.slice(0, 50),
       siguientePaso: "Llamar a motor-conciliacion con { empresaId, archivoId } para clasificar estos movimientos.",
     });

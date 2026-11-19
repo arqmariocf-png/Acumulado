@@ -106,6 +106,9 @@ test("saldo inicial dice de qué día es el estado de cuenta y avisa si está vi
   assert.match(notaSaldoInicial("2026-09-30", "2026-10-13")!.texto, /al 30\/09: falta subir/);
   assert.equal(notaSaldoInicial(null, "2026-10-13")?.texto, "sin estado de cuenta cargado");
   assert.equal(notaSaldoInicial(undefined, "2026-10-13"), null);
+  // Estado de cuenta más reciente que el último movimiento (19-nov-2026, Mallas y Clavos).
+  assert.deepEqual(notaSaldoInicial("2026-11-17", "2026-11-18", "2026-11-13"), { texto: "estado de cuenta al 17/11 (sin movimientos desde el 13/11)", viejo: false });
+  assert.equal(notaSaldoInicial("2026-11-17", "2026-11-18", "2026-11-17")?.texto, "estado de cuenta al 17/11");
   const [h] = armarHojaPagos([{ empresa_id: "e", empresa_nombre: "AEP", banco: "Banorte", ultimos_4: "1273", alias: null, saldo_inicial: 100, saldo_al: "2026-09-30" }], [], "2026-10-13");
   assert.equal(h.renglones[0].saldo_viejo, true);
   assert.match(h.renglones[0].comentarios ?? "", /30\/09/);

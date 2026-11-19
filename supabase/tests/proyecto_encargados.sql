@@ -23,6 +23,11 @@ insert into public.proyectos (id, nombre, empresa_id) values
   ('ffffffff-1111-0000-0000-000000000002', 'Obra encargada B', (select id from public.empresas where codigo = 'MCF')),
   ('ffffffff-1111-0000-0000-000000000003', 'Obra ajena', (select id from public.empresas where codigo = 'CSC'));
 
+-- El candado de horario (20261118110000) bloquea a quien pide en obra fuera
+-- de lun-sáb 08:00-18:00 MX; la validación corre a cualquier hora.
+update public.requisiciones_horario set dias_semana = '{1,2,3,4,5,6,7}', hora_desde = '00:00', hora_hasta = '23:59'
+  where grupo_id = (select id from public.grupos where codigo = 'LOMA');
+
 set role authenticated;
 
 \echo '── 1. Dirección asigna al supervisor a dos obras de empresas distintas'

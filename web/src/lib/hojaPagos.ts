@@ -19,6 +19,10 @@ export interface CuentaHoja {
   /** Día del último movimiento cargado hasta la fecha inclusive: de ahí sale
    * el saldo inicial (13-oct-2026, Laura). null = la cuenta no tiene nada. */
   saldo_al?: string | null;
+  /** Día del último movimiento cargado cuando `saldo_al` viene de un estado
+   * de cuenta más reciente sin movimientos nuevos (19-nov-2026, Mallas y
+   * Clavos): la nota dice "sin movimientos desde el dd/mm". */
+  ultimo_movimiento?: string | null;
 }
 
 export interface PagoHoja {
@@ -113,12 +117,15 @@ export function diaHabilAnterior(iso: string): string {
 
 /** De qué día es el saldo inicial y si está viejo (anterior al día hábil
  * previo a la fecha de la hoja). */
-export function notaSaldoInicial(saldoAl: string | null | undefined, fecha: string): { texto: string; viejo: boolean } | null {
+export function notaSaldoInicial(saldoAl: string | null | undefined, fecha: string, ultimoMovimiento?: string | null): { texto: string; viejo: boolean } | null {
   if (saldoAl === undefined) return null;
   if (saldoAl === null) return { texto: "sin estado de cuenta cargado", viejo: true };
-  if (saldoAl >= fecha) return { texto: `estado de cuenta al ${ddmm(saldoAl)}, ya con los movimientos de ese día`, viejo: false };
+  // El estado de cuenta llega más lejos que el último movimiento: la cuenta
+  // está al día aunque el saldo no haya cambiado.
+  const sinMovs = ultimoMovimiento && ultimoMovimiento < saldoAl ? ` (sin movimientos desde el ${ddmm(ultimoMovimiento)})` : "";
+  if (saldoAl >= fecha) return { texto: `estado de cuenta al ${ddmm(saldoAl)}, ya con los movimientos de ese día${sinMovs}`, viejo: false };
   const viejo = saldoAl < diaHabilAnterior(fecha);
-  return { texto: viejo ? `estado de cuenta al ${ddmm(saldoAl)}: falta subir lo más reciente` : `estado de cuenta al ${ddmm(saldoAl)}`, viejo };
+  return { texto: viejo ? `estado de cuenta al ${ddmm(saldoAl)}: falta subir lo más reciente${sinMovs}` : `estado de cuenta al ${ddmm(saldoAl)}${sinMovs}`, viejo };
 }
 
 /** Pagos de la fecha (no cancelados) y los pendientes vencidos de días
@@ -151,7 +158,7 @@ export function armarHojaPagos(cuentas: CuentaHoja[], pagos: PagoHoja[], fecha: 
     const monto = r2(Number(alDia ? c.saldo_final : c.saldo_inicial) || 0);
     h.abonos = r2(h.abonos + monto);
     h.saldo = r2(h.saldo + monto);
-    const nota = notaSaldoInicial(c.saldo_al, fecha);
+    const nota = notaSaldoInicial(c.saldo_al, fecha, c.ultimo_movimiento);
     h.renglones.push({ tipo: "saldo", oc: null, proveedor: `SALDO INICIAL ${c.banco} ${c.ultimos_4}${c.alias ? ` · ${c.alias}` : ""}`.toUpperCase(), abono: monto, cargo: null, saldo: h.saldo, forma_pago: null, proyecto: null, comentarios: nota?.texto ?? null, saldo_viejo: nota?.viejo ?? false });
   }
   const tocaHoy = (p: { estatus: string; fecha_programada: string }) => p.estatus !== "cancelado" && (p.fecha_programada === fecha || (p.estatus === "pendiente" && p.fecha_programada < fecha));

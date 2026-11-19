@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { agruparPorEmpresa, htmlSaldosEmpresas, moneda, type FilaSaldoCuenta } from "../../lib/saldosEmpresas";
+import { notaSaldoInicial } from "../../lib/hojaPagos";
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 function fechaTexto(iso: string): string {
@@ -26,6 +27,24 @@ export function useSaldosDia(fecha: string) {
   });
 }
 
+/** Hasta qué día está al día cada cuenta (último estado de cuenta cargado,
+ * aunque no trajera movimientos nuevos) y su último movimiento
+ * (19-nov-2026, Mallas y Clavos: el saldo era correcto pero la pantalla no
+ * decía que el estado de cuenta del 17 ya estaba subido). */
+export type FechasEstadoCuenta = Map<string, { al: string | null; ultimo: string | null }>;
+export function useFechasEstadoCuenta(fecha: string) {
+  return useQuery({
+    queryKey: ["cuentas-estado-cuenta-al", fecha],
+    queryFn: async (): Promise<FechasEstadoCuenta> => {
+      const { data, error } = await supabase.rpc("fn_cuentas_estado_cuenta_al", { p_fecha: fecha });
+      if (error) throw error;
+      return new Map(
+        ((data ?? []) as { cuenta_id: string; ultimo_movimiento: string | null; estado_cuenta_al: string | null }[]).map((r) => [r.cuenta_id, { al: r.estado_cuenta_al, ultimo: r.ultimo_movimiento }]),
+      );
+    },
+  });
+}
+
 /** Vista simple para Finanzas: saldo inicial y de cierre por empresa y
  * cuenta en una fecha, con impresión y acceso a la programación de pagos. */
 export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
@@ -34,6 +53,7 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
   const [detalle, setDetalle] = useState(!compacto);
   const [aviso, setAviso] = useState<string | null>(null);
   const { data: filas, isLoading, error } = useSaldosDia(fecha);
+  const { data: fechas } = useFechasEstadoCuenta(fecha);
   const { grupos, total } = useMemo(() => agruparPorEmpresa(filas ?? []), [filas]);
 
   function imprimir() {
@@ -77,11 +97,12 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
                 <th className="px-3 py-2 text-right">Entradas</th>
                 <th className="px-3 py-2 text-right">Salidas</th>
                 <th className="px-3 py-2 text-right">Saldo de cierre</th>
+                <th className="px-3 py-2">Estado de cuenta</th>
               </tr>
             </thead>
             <tbody>
               {grupos.map((g) => (
-                <GrupoFilas key={g.empresa_id} grupo={g} detalle={detalle} />
+                <GrupoFilas key={g.empresa_id} grupo={g} detalle={detalle} fechas={fechas} fecha={fecha} />
               ))}
             </tbody>
             <tfoot className="bg-slate-100 text-sm font-semibold">
@@ -91,6 +112,7 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
                 <td className="px-3 py-2 text-right tabular-nums">{moneda(total.entradas)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{moneda(total.salidas)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{moneda(total.saldo_final)}</td>
+                <td />
               </tr>
             </tfoot>
           </table>
@@ -103,7 +125,16 @@ export function SaldosEmpresas({ compacto = false }: { compacto?: boolean }) {
   );
 }
 
-function GrupoFilas({ grupo: g, detalle }: { grupo: ReturnType<typeof agruparPorEmpresa>["grupos"][number]; detalle: boolean }) {
+function NotaEstadoCuenta({ f, fecha }: { f: { al: string | null; ultimo: string | null } | undefined; fecha: string }) {
+  if (!f) return null;
+  const n = notaSaldoInicial(f.al, fecha, f.ultimo);
+  if (!n) return null;
+  return <span className={n.viejo ? "text-amber-700" : "text-slate-500"}>{n.texto.replace(/^estado de cuenta /, "")}</span>;
+}
+
+function GrupoFilas({ grupo: g, detalle, fechas, fecha }: { grupo: ReturnType<typeof agruparPorEmpresa>["grupos"][number]; detalle: boolean; fechas: FechasEstadoCuenta | undefined; fecha: string }) {
+  // Resumen por empresa: la cuenta más atrasada manda.
+  const masVieja = g.cuentas.map((c) => fechas?.get(c.cuenta_id)).filter((f): f is { al: string | null; ultimo: string | null } => !!f).sort((a, b) => (a.al ?? "") < (b.al ?? "") ? -1 : 1)[0];
   return (
     <>
       <tr className={`border-t border-slate-200 ${detalle ? "bg-slate-50 font-medium" : ""}`}>
@@ -116,6 +147,7 @@ function GrupoFilas({ grupo: g, detalle }: { grupo: ReturnType<typeof agruparPor
         <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{g.entradas ? moneda(g.entradas) : "—"}</td>
         <td className="px-3 py-2 text-right tabular-nums text-red-700">{g.salidas ? moneda(g.salidas) : "—"}</td>
         <td className="px-3 py-2 text-right font-semibold tabular-nums">{moneda(g.saldo_final)}</td>
+        <td className="px-3 py-2 text-xs">{!detalle && <NotaEstadoCuenta f={masVieja} fecha={fecha} />}</td>
       </tr>
       {detalle &&
         g.cuentas.map((c) => (
@@ -131,6 +163,9 @@ function GrupoFilas({ grupo: g, detalle }: { grupo: ReturnType<typeof agruparPor
             <td className="px-3 py-1.5 text-right tabular-nums">{c.entradas ? moneda(c.entradas) : "—"}</td>
             <td className="px-3 py-1.5 text-right tabular-nums">{c.salidas ? moneda(c.salidas) : "—"}</td>
             <td className="px-3 py-1.5 text-right tabular-nums">{moneda(c.saldo_final)}</td>
+            <td className="px-3 py-1.5 text-xs">
+              <NotaEstadoCuenta f={fechas?.get(c.cuenta_id)} fecha={fecha} />
+            </td>
           </tr>
         ))}
     </>
