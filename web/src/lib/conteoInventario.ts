@@ -15,6 +15,7 @@ export interface ItemConteo {
   ubicacion: string | null;
   codigo_barras: string | null;
   notas: string | null;
+  producto_id?: string | null;
   contado_por: string;
   contado_por_nombre: string | null;
   created_at: string;
@@ -56,6 +57,32 @@ export function revisarItem(x: { empresa_id: string; descripcion: string; cantid
 /** Lo que va dentro del QR: la liga que abre el ítem en la pantalla. */
 export function urlEtiqueta(codigo: string, origen = ""): string {
   return `${origen}/inventario/conteo?item=${encodeURIComponent(codigo)}`;
+}
+
+/** QR de un artículo del catálogo: al escanearlo la captura queda llena con
+ * ese producto y solo falta la cantidad (19-nov-2026, Mario: "dale la opción a
+ * Lau a imprimir QR por artículo existente y a todos los demás para irlos
+ * pegando mientras están contando"). */
+export function urlEtiquetaProducto(productoId: string, origen = ""): string {
+  return `${origen}/inventario/conteo?producto=${encodeURIComponent(productoId)}`;
+}
+
+export interface ProductoEtiqueta {
+  id: string;
+  sku: string | null;
+  nombre: string;
+  unidad_medida: string | null;
+}
+
+/** Filtra los artículos del catálogo por texto (sin acentos, palabras en cualquier orden). */
+export function filtrarProductos<T extends ProductoEtiqueta>(productos: T[], texto: string): T[] {
+  const t = sinAcentos(texto.trim());
+  if (!t) return productos;
+  const partes = t.split(/\s+/);
+  return productos.filter((p) => {
+    const pajar = sinAcentos([p.sku ?? "", p.nombre].join(" "));
+    return partes.every((x) => pajar.includes(x));
+  });
 }
 
 export interface FiltroConteo {
@@ -139,7 +166,8 @@ function esc(s: string): string {
 export interface EtiquetaConteo {
   codigo: string;
   descripcion: string;
-  cantidad: number;
+  /** null = etiqueta de un artículo del catálogo (sin cantidad contada). */
+  cantidad: number | null;
   unidad: string;
   ubicacion: string | null;
   empresa: string;
@@ -155,7 +183,7 @@ export function htmlEtiquetas(etiquetas: EtiquetaConteo[], titulo: string): stri
       <div class="tx">
         <div class="cod">${esc(e.codigo)}</div>
         <div class="des">${esc(e.descripcion)}</div>
-        <div class="dat">${esc(e.empresa)} · ${e.cantidad} ${esc(e.unidad)}${e.ubicacion ? ` · ${esc(e.ubicacion)}` : ""}</div>
+        <div class="dat">${esc(e.empresa)} · ${e.cantidad == null ? esc(e.unidad) : `${e.cantidad} ${esc(e.unidad)}`}${e.ubicacion ? ` · ${esc(e.ubicacion)}` : ""}</div>
       </div>
     </div>`,
     )

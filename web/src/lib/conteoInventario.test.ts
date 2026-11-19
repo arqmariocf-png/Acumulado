@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { administraConteo, csvConteo, fechaHoyMx, filtrarItems, htmlEtiquetas, resumenConteo, revisarItem, urlEtiqueta, type ItemConteo } from "./conteoInventario.ts";
+import { administraConteo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, resumenConteo, revisarItem, urlEtiqueta, urlEtiquetaProducto, type ItemConteo } from "./conteoInventario.ts";
 
 const base: ItemConteo = { id: "1", conteo_id: "c", empresa_id: "e1", codigo: "INV-AEP-0001", descripcion: "Varilla 3/8", cantidad: 120, unidad: "pza", ubicacion: "Rack A", codigo_barras: null, notas: null, contado_por: "u1", contado_por_nombre: "Alma", created_at: "2026-11-19T15:00:00Z" };
 const items: ItemConteo[] = [
@@ -52,4 +52,18 @@ test("csvConteo y htmlEtiquetas", () => {
   assert.match(html, /Varilla &lt;3\/8&gt;/);
   assert.match(html, /Aceros · 120 pza · Rack A/);
   assert.match(html, /<svg\/>/);
+});
+
+test("etiquetas de artículos del catálogo: liga por producto, sin cantidad, y filtro", () => {
+  assert.equal(urlEtiquetaProducto("abc"), "/inventario/conteo?producto=abc");
+  const html = htmlEtiquetas([{ codigo: "VAR-38", descripcion: "Varilla 3/8", cantidad: null, unidad: "pza", ubicacion: null, empresa: "Aceros", qrSvg: "<svg/>" }], "Artículos");
+  assert.match(html, /Aceros · pza</);
+  assert.doesNotMatch(html, /null/);
+  const productos = [
+    { id: "1", sku: "VAR-38", nombre: "Varilla 3/8 R42", unidad_medida: "pza" },
+    { id: "2", sku: "ALA-55", nombre: "Alambrón 5.5", unidad_medida: "kg" },
+  ];
+  assert.deepEqual(filtrarProductos(productos, "alambron").map((p) => p.id), ["2"]);
+  assert.deepEqual(filtrarProductos(productos, "var 42").map((p) => p.id), ["1"]);
+  assert.equal(filtrarProductos(productos, "").length, 2);
 });

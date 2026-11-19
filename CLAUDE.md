@@ -4069,3 +4069,15 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   icono también en iPhone, mandarlo para reemplazar `public/icon-*.png`,
   `apple-touch-icon.png` y `favicon.svg` (aplica a todas las organizaciones);
   y dominio propio en Vercel (su cuenta) en vez de acumulado-nine.vercel.app.
+  **QR por artículo existente (19-nov-2026, Mario: "dale la opción a Lau a
+  imprimir QR por artículo existente y a todos los demás para irlos pegando
+  mientras están contando")**: en la pantalla del conteo, sección "Etiquetas
+  QR de los artículos del catálogo" (`productos` activos de la empresa
+  elegida: AEP 365, MCC 24, CSC 2; buscador, casillas, "Imprimir marcados" /
+  "todos los de la lista" y 🖨 por renglón; columna "Contado hoy"). Ese QR
+  lleva `/inventario/conteo?producto=<id>` (`urlEtiquetaProducto`): al
+  escanearlo la captura queda llena con empresa, descripción, unidad y código
+  de barras del artículo y el cursor en la cantidad. Además 🖨 QR por renglón
+  en "Mis ítems" y en "Todos los ítems" y "Imprimir esta etiqueta" al guardar
+  (`EtiquetaConteo.cantidad` acepta null para las del catálogo;
+  `filtrarProductos`). Para todos los que ven el conteo, no solo Laura.

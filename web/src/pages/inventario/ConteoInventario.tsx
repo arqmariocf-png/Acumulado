@@ -7,8 +7,8 @@ import { CampoBuscador, type OpcionBuscador } from "../../components/CampoBuscad
 import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { descargarCsv } from "../../lib/descargarArchivo";
 import {
-  administraConteo, csvConteo, fechaHoyMx, filtrarItems, htmlEtiquetas, nombreExcelConteo, resumenConteo, revisarItem, UNIDADES_CONTEO, urlEtiqueta,
-  type ConteoInventario as Conteo, type ItemConteo,
+  administraConteo, csvConteo, fechaHoyMx, filtrarItems, filtrarProductos, htmlEtiquetas, nombreExcelConteo, resumenConteo, revisarItem, UNIDADES_CONTEO, urlEtiqueta, urlEtiquetaProducto,
+  type ConteoInventario as Conteo, type EtiquetaConteo, type ItemConteo,
 } from "../../lib/conteoInventario";
 
 // Conteo físico de inventario (19-nov-2026, Mario: "todos van a contar y
@@ -25,6 +25,7 @@ interface Empresa {
 }
 interface Producto {
   id: string;
+  sku: string | null;
   nombre: string;
   unidad_medida: string | null;
   codigo_barras: string | null;
@@ -63,6 +64,7 @@ export function ConteoInventario() {
   const qc = useQueryClient();
   const [params] = useSearchParams();
   const itemEscaneado = params.get("item");
+  const productoEscaneado = params.get("producto");
   const hoy = fechaHoyMx();
   const administra = administraConteo(perfil?.rol);
 
@@ -96,7 +98,7 @@ export function ConteoInventario() {
       for (let desde = 0; ; desde += 1000) {
         const { data, error } = await supabase
           .from("conteo_items")
-          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, codigo_barras, notas, contado_por, contado_por_nombre, created_at")
+          .select("id, conteo_id, empresa_id, codigo, descripcion, cantidad, unidad, ubicacion, codigo_barras, notas, producto_id, contado_por, contado_por_nombre, created_at")
           .eq("conteo_id", conteo!.id)
           .order("created_at", { ascending: false })
           .range(desde, desde + 999);
@@ -140,7 +142,7 @@ export function ConteoInventario() {
     queryKey: ["productos-conteo", empresaId],
     enabled: !!empresaId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("productos").select("id, nombre, unidad_medida, codigo_barras").eq("empresa_id", empresaId).eq("activo", true).order("nombre").limit(1000);
+      const { data, error } = await supabase.from("productos").select("id, sku, nombre, unidad_medida, codigo_barras").eq("empresa_id", empresaId).eq("activo", true).order("nombre").limit(1000);
       if (error) throw error;
       return (data ?? []) as Producto[];
     },
@@ -149,6 +151,29 @@ export function ConteoInventario() {
     () => (productos ?? []).map((p) => ({ clave: p.id, titulo: p.nombre, detalle: [p.unidad_medida, p.codigo_barras].filter(Boolean).join(" · ") || undefined })),
     [productos],
   );
+
+  // QR de un artículo del catálogo: llena la captura con ese producto y deja
+  // el cursor en la cantidad (una sola vez por carga).
+  const productoPrellenado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!productoEscaneado || productoPrellenado.current === productoEscaneado) return;
+    productoPrellenado.current = productoEscaneado;
+    supabase
+      .from("productos")
+      .select("id, empresa_id, sku, nombre, unidad_medida, codigo_barras")
+      .eq("id", productoEscaneado)
+      .maybeSingle()
+      .then(({ data }) => {
+        const p = data as (Producto & { empresa_id: string }) | null;
+        if (!p) return setError("No se encontró ese artículo del catálogo.");
+        setEmpresaId(p.empresa_id);
+        setDescripcion(p.nombre);
+        setProductoId(p.id);
+        if (p.unidad_medida) setUnidad(p.unidad_medida);
+        if (p.codigo_barras) setCodigoBarras(p.codigo_barras);
+        setTimeout(() => refCantidad.current?.focus(), 50);
+      });
+  }, [productoEscaneado]);
 
   function elegirProducto(id: string) {
     const p = (productos ?? []).find((x) => x.id === id);
@@ -290,27 +315,86 @@ export function ConteoInventario() {
   }, [todos]);
   const escaneado = itemEscaneado ? todos.find((i) => i.codigo === itemEscaneado) : undefined;
 
-  async function imprimirEtiquetas(lista: ItemConteo[], titulo: string) {
-    if (!lista.length) return;
+  async function imprimirHoja(armar: (qr: (texto: string) => Promise<string>) => Promise<EtiquetaConteo[]>, titulo: string) {
     const ventana = abrirVentanaImpresion();
     try {
       const Q = await import("qrcode");
-      const etiquetas = await Promise.all(
-        lista.map(async (i) => ({
-          codigo: i.codigo,
-          descripcion: i.descripcion,
-          cantidad: i.cantidad,
-          unidad: i.unidad,
-          ubicacion: i.ubicacion,
-          empresa: nombreEmpresa.get(i.empresa_id) ?? "",
-          qrSvg: await Q.toString(urlEtiqueta(i.codigo, window.location.origin), { type: "svg", errorCorrectionLevel: "M", margin: 0 }),
-        })),
-      );
+      const qr = (texto: string) => Q.toString(texto, { type: "svg", errorCorrectionLevel: "M", margin: 0 });
+      const etiquetas = await armar(qr);
       if (!abrirParaImprimir(htmlEtiquetas(etiquetas, titulo), ventana)) setError("El navegador bloqueó la ventana. Permite ventanas emergentes.");
     } catch (e) {
       ventana?.close();
       setError((e as Error).message);
     }
+  }
+
+  /** Etiquetas de ítems contados (con cantidad y ubicación). */
+  function imprimirEtiquetas(lista: ItemConteo[], titulo: string) {
+    if (!lista.length) return;
+    return imprimirHoja(
+      (qr) =>
+        Promise.all(
+          lista.map(async (i) => ({
+            codigo: i.codigo,
+            descripcion: i.descripcion,
+            cantidad: i.cantidad,
+            unidad: i.unidad,
+            ubicacion: i.ubicacion,
+            empresa: nombreEmpresa.get(i.empresa_id) ?? "",
+            qrSvg: await qr(urlEtiqueta(i.codigo, window.location.origin)),
+          })),
+        ),
+      titulo,
+    );
+  }
+
+  /** Etiquetas de artículos del catálogo: el QR abre la captura con el producto ya puesto. */
+  function imprimirProductos(lista: Producto[], empresa: string, titulo: string) {
+    if (!lista.length) return;
+    return imprimirHoja(
+      (qr) =>
+        Promise.all(
+          lista.map(async (p) => ({
+            codigo: p.sku || p.codigo_barras || "ARTÍCULO",
+            descripcion: p.nombre,
+            cantidad: null,
+            unidad: p.unidad_medida || "pza",
+            ubicacion: null,
+            empresa,
+            qrSvg: await qr(urlEtiquetaProducto(p.id, window.location.origin)),
+          })),
+        ),
+      titulo,
+    );
+  }
+
+  // ── Artículos del catálogo para etiquetar ────────────────────────────
+  const [empresaCatalogo, setEmpresaCatalogo] = useState("");
+  const [buscarCatalogo, setBuscarCatalogo] = useState("");
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const empresaCat = empresaCatalogo || empresaId;
+  const { data: catalogo } = useQuery({
+    queryKey: ["productos-conteo", empresaCat],
+    enabled: !!empresaCat,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("productos").select("id, sku, nombre, unidad_medida, codigo_barras").eq("empresa_id", empresaCat).eq("activo", true).order("nombre").limit(1000);
+      if (error) throw error;
+      return (data ?? []) as Producto[];
+    },
+  });
+  const catalogoFiltrado = useMemo(() => filtrarProductos(catalogo ?? [], buscarCatalogo), [catalogo, buscarCatalogo]);
+  const contadosPorProducto = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of todos) if (i.producto_id) m.set(i.producto_id, (m.get(i.producto_id) ?? 0) + 1);
+    return m;
+  }, [todos]);
+  function alternar(id: string) {
+    setMarcados((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   }
 
   function descargarExcel() {
@@ -479,10 +563,94 @@ export function ConteoInventario() {
               <span className="flex items-center gap-2 rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-800">
                 <QrSvg texto={urlEtiqueta(ultimo.codigo, window.location.origin)} className="block h-8 w-8 [&>svg]:h-8 [&>svg]:w-8" />
                 Guardado <span className="font-mono font-semibold">{ultimo.codigo}</span> · {ultimo.descripcion} · {ultimo.cantidad} {ultimo.unidad}
+                <button type="button" onClick={() => imprimirEtiquetas([ultimo], `Etiqueta ${ultimo.codigo}`)} className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-emerald-800 hover:bg-emerald-100">
+                  🖨 Imprimir esta etiqueta
+                </button>
               </span>
             )}
           </div>
         </form>
+      )}
+
+      {conteo && (
+        <section className="rounded border border-slate-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Etiquetas QR de los artículos del catálogo</h2>
+              <p className="text-xs text-slate-500">Imprime el QR de los artículos que ya existen en el sistema y pégalo en su lugar. Al escanearlo, la captura queda llena con ese artículo y solo escribes la cantidad.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <select value={empresaCat} onChange={(e) => { setEmpresaCatalogo(e.target.value); setMarcados(new Set()); }} className="rounded border border-slate-300 px-2 py-1">
+                {(empresas ?? []).map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.nombre}
+                  </option>
+                ))}
+              </select>
+              <input value={buscarCatalogo} onChange={(e) => setBuscarCatalogo(e.target.value)} placeholder="buscar artículo o clave…" className="min-w-[12rem] rounded border border-slate-300 px-2 py-1" />
+              <button
+                type="button"
+                onClick={() => imprimirProductos(catalogoFiltrado.filter((p) => marcados.has(p.id)), nombreEmpresa.get(empresaCat) ?? "", `Etiquetas QR · artículos · ${nombreEmpresa.get(empresaCat) ?? ""}`)}
+                disabled={!catalogoFiltrado.some((p) => marcados.has(p.id))}
+                className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                🖨 Imprimir marcados ({catalogoFiltrado.filter((p) => marcados.has(p.id)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => imprimirProductos(catalogoFiltrado, nombreEmpresa.get(empresaCat) ?? "", `Etiquetas QR · artículos · ${nombreEmpresa.get(empresaCat) ?? ""}`)}
+                disabled={!catalogoFiltrado.length}
+                className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                🖨 Imprimir todos los de la lista ({catalogoFiltrado.length})
+              </button>
+            </div>
+          </div>
+          {!catalogo?.length ? (
+            <p className="px-4 py-3 text-sm text-slate-500">Esta empresa no tiene artículos en el catálogo de inventario. Lo que cuenten se da de alta con su código INV- y su QR en la captura de arriba.</p>
+          ) : (
+            <div className="max-h-80 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={catalogoFiltrado.length > 0 && catalogoFiltrado.every((p) => marcados.has(p.id))}
+                        onChange={(e) => setMarcados(e.target.checked ? new Set(catalogoFiltrado.map((p) => p.id)) : new Set())}
+                        title="marcar todos los de la lista"
+                      />
+                    </th>
+                    <th className="px-3 py-2">Clave</th>
+                    <th className="px-3 py-2">Artículo</th>
+                    <th className="px-3 py-2">Unidad</th>
+                    <th className="px-3 py-2">Contado hoy</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalogoFiltrado.slice(0, 500).map((p) => (
+                    <tr key={p.id} className="border-t border-slate-100">
+                      <td className="px-3 py-1">
+                        <input type="checkbox" checked={marcados.has(p.id)} onChange={() => alternar(p.id)} />
+                      </td>
+                      <td className="px-3 py-1 font-mono text-xs">{p.sku ?? "—"}</td>
+                      <td className="px-3 py-1">{p.nombre}</td>
+                      <td className="px-3 py-1 text-slate-600">{p.unidad_medida ?? "—"}</td>
+                      <td className="px-3 py-1 text-xs">{contadosPorProducto.get(p.id) ? <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800">{contadosPorProducto.get(p.id)} vez/veces</span> : <span className="text-slate-400">no</span>}</td>
+                      <td className="px-3 py-1 text-right text-xs">
+                        <button type="button" onClick={() => imprimirProductos([p], nombreEmpresa.get(empresaCat) ?? "", `Etiqueta ${p.sku ?? p.nombre}`)} className="text-slate-600 hover:underline">
+                          🖨 QR
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {catalogoFiltrado.length > 500 && <p className="px-4 py-2 text-xs text-slate-500">Se muestran 500 de {catalogoFiltrado.length}; afina la búsqueda.</p>}
+            </div>
+          )}
+        </section>
       )}
 
       {conteo && (
@@ -529,6 +697,9 @@ export function ConteoInventario() {
                       <td className="px-3 py-1.5 text-slate-600">{i.ubicacion ?? "—"}</td>
                       <td className="px-3 py-1.5 text-slate-500">{hora(i.created_at)}</td>
                       <td className="px-3 py-1.5 text-right text-xs">
+                        <button type="button" onClick={() => imprimirEtiquetas([i], `Etiqueta ${i.codigo}`)} className="mr-2 text-slate-600 hover:underline" title="Imprimir la etiqueta QR de este ítem">
+                          🖨 QR
+                        </button>
                         {conteo.estado === "abierto" && (
                           <>
                             <button
@@ -647,6 +818,7 @@ export function ConteoInventario() {
                   <th className="px-3 py-2">Ubicación</th>
                   <th className="px-3 py-2">Contó</th>
                   <th className="px-3 py-2">Hora</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -661,6 +833,11 @@ export function ConteoInventario() {
                     <td className="px-3 py-1.5 text-slate-600">{i.ubicacion ?? "—"}</td>
                     <td className="px-3 py-1.5">{i.contado_por_nombre ?? "—"}</td>
                     <td className="px-3 py-1.5 text-slate-500">{hora(i.created_at)}</td>
+                    <td className="px-3 py-1.5 text-right text-xs">
+                      <button type="button" onClick={() => imprimirEtiquetas([i], `Etiqueta ${i.codigo}`)} className="text-slate-600 hover:underline" title="Imprimir la etiqueta QR de este ítem">
+                        🖨 QR
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
