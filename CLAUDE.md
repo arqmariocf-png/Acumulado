@@ -4198,3 +4198,54 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   páginas) al abrir el conteo. Probado en rollback: Brenda da clave a 3 items
   en MCC (ART-MCC-0025…), repetirlos devuelve las mismas claves y un item que
   ya era producto devuelve la clave existente.
+- **Duplicados y fusiones de catálogos (19-nov-2026, Mario: "revisemos
+  duplicidades y similitudes para dar la opción a Laura y Alma de
+  fusionarlos, incluyendo sus inventarios")** (`20261119180000`, aplicada
+  como `catalogo_similares_1_trgm` y `catalogo_duplicados_fusiones_2`):
+  Catálogos › **Duplicados y fusiones** (`/catalogos/fusiones`,
+  `pages/catalogos/Fusiones.tsx`, `lib/fusiones.ts` con pruebas; almacén,
+  dirección, corporativo y admin). (1) **Parecidos precalculados**: extensión
+  `pg_trgm` (índices GIN sobre `normalizar_texto_sql` de
+  `compras_items.descripcion` y `productos.nombre`); tabla
+  `catalogo_similares` (tipo 'item' = compras_items de la organización sin
+  servicios, 'producto' = productos de la misma empresa; pares a/b con
+  `similitud` ≥ 0.5); `fn_catalogo_similares_recalcular(grupo|null)` (solo
+  procesos o admin maestro; tarda ~14 s para 8,731 items, por eso no corre
+  desde la app) en pg_cron `catalogo-similares-diario` 09:10 UTC (03:10 MX)
+  con `statement_timeout 10min`. Primera corrida 19-nov: items 10,795 pares
+  (1,866 ≥ 80 %), productos AEP 211 (35 ≥ 80 %; "Alambron 5.5" repetido).
+  **Ojo**: los trigramas no distinguen "1/2" de "1 1/2" ni "R42 1/2" de
+  "R42 1 1/2" (salen al 100 %): son sugerencias, la persona marca cuáles son
+  lo mismo. (2) **Fusionar**: `fn_catalogo_fusion_uso(tipo, ids[])` (cuánto se
+  usa cada uno: existencia —suma de movimientos—, movimientos, conteos,
+  requisiciones, ventas del mostrador; o precios de proveedor y artículos
+  ligados) y `fn_catalogo_fusionar(tipo, destino, origenes[], nota)` (definer;
+  `fn_catalogo_fusion_puede` = admin/corporativo/dirección/almacén, no
+  espectador, suscripción; productos de la MISMA empresa en alcance; máximo
+  50): re-apunta al destino todas las tablas de `fn_catalogo_refs_producto()`
+  (movimientos_inventario —las existencias son vista sobre ellos, así el
+  inventario se suma solo—, conteo_items, pv_venta_lineas,
+  requisicion_lineas.concepto_id, cotizaciones_produccion_lineas,
+  movimientos_producto_terminado, ordenes_produccion, ordenes_venta,
+  receta_items, remisiones_produccion_lineas, rutas_producto) o, en items,
+  `proveedor_articulos.item_id` y `productos.item_id`; el origen queda
+  `activo=false` (producto: sin código de barras ni item_id; item: nota
+  "Fusionado en IT-xxxx el dd/mm"); el destino hereda código de barras, item,
+  costo/precio o precio de referencia/unidad si no los tenía; borra los pares
+  del origen en `catalogo_similares`. Bitácora `catalogo_fusiones` (destino,
+  origen, `origen_datos` = la fila completa, `referencias` = {tabla.columna:
+  [ids movidos]}, quién, nota) y `fn_catalogo_fusion_deshacer(id)` regresa
+  esos ids al origen y lo reactiva. **Tabla nueva con `producto_id` →
+  agregarla a `fn_catalogo_refs_producto`.** Pantalla: pestañas Artículos de
+  inventario (por empresa) / Items de compras; nivel de parecido (≥ 90/80/70/
+  60/50 %); grupos por unión transitiva (`agruparSimilares`, máximo 12 por
+  grupo) con el sugerido a conservar primero (`ordenarParaConservar`: más
+  movimientos/existencia/usos, en empate el más viejo), radio "Conservar",
+  casillas "Fusionar", uso por renglón, "no son iguales (ocultar)", confirmación
+  con `resumenFusion` (qué se mueve y a dónde); "Fusionar a mano" (buscar y
+  agregar los que la base no detecta); historial con "Deshacer". El uso se
+  consulta solo para los grupos visibles (60 por página, lotes de 200).
+  Probado en producción en rollback: Alma fusiona ART-AEP-0020 en 0019
+  (existencia 2,845 + 2,835 = 5,680, movimientos 1 + 1), repetir bloqueado,
+  deshacer regresa cada uno a lo suyo; fusiona items IT-0085 en IT-1369 con
+  nota; Brenda bloqueada y no ve los pares.
