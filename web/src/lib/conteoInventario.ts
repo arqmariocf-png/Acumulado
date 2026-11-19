@@ -17,6 +17,8 @@ export interface ItemConteo {
   notas: string | null;
   producto_id?: string | null;
   ubicacion_id?: string | null;
+  /** Pieza de herramienta dada de alta desde el conteo (su QR de control es el folio HE-). */
+  herramienta_id?: string | null;
   contado_por: string;
   contado_por_nombre: string | null;
   created_at: string;
@@ -66,6 +68,21 @@ export function urlEtiqueta(codigo: string, origen = ""): string {
  * pegando mientras están contando"). */
 export function urlEtiquetaProducto(productoId: string, origen = ""): string {
   return `${origen}/inventario/conteo?producto=${encodeURIComponent(productoId)}`;
+}
+
+/** QR de control de una herramienta (folio HE-): abre su tarjeta (qué es, quién la tiene, dónde se contó). */
+export function urlEtiquetaHerramienta(folio: string, origen = ""): string {
+  return `${origen}/inventario/conteo?herramienta=${encodeURIComponent(folio)}`;
+}
+
+/** Qué le falta a la herramienta antes de darla de alta desde el conteo; null = lista. */
+export function revisarHerramientaNueva(x: { empresa_id: string; nombre: string; piezas: string | number }): string | null {
+  if (!x.empresa_id) return "Elige la empresa dueña de la herramienta.";
+  if (!x.nombre.trim()) return "Escribe qué herramienta o equipo es.";
+  if (x.nombre.trim().length > 200) return "El nombre es muy largo (máximo 200 caracteres).";
+  const n = typeof x.piezas === "number" ? x.piezas : Number(String(x.piezas).trim() || "1");
+  if (!Number.isInteger(n) || n < 1 || n > 100) return "Las piezas van de 1 a 100 (cada una recibe su folio HE- y su QR).";
+  return null;
 }
 
 export interface ProductoEtiqueta {

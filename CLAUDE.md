@@ -4106,3 +4106,34 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   crea BOD-R03 con 2 niveles, Brenda cuenta en BOD-R03-N2, no crea racks ni
   cuenta con un lugar de otra empresa. Siguiente paso (pendiente del croquis
   de Mario): plano 2D de la bodega y vista 3D sobre estos mismos lugares.
+  **Ítems y herramientas nuevos con QR de control (19-nov-2026, Mario:
+  "permite agregar ítems y herramientas y este a su vez generarle un código
+  qr interno de control")** (`20261119150000`, aplicada como
+  `conteo_alta_items_herramientas` y `_2_producto_etiqueta`): en la captura
+  del conteo hay dos tipos. **Material / artículo**: si lo que se escribe no
+  está en el catálogo, casilla "darlo de alta" →
+  `fn_conteo_alta_producto(empresa, nombre, unidad, codigo_barras)` (definer)
+  crea el `productos` con clave **ART-<EMP>-0001** (`folios_series` 'ART'; si ya
+  hay uno con el mismo nombre normalizado o el mismo código de barras en esa
+  empresa devuelve ese), el ítem queda ligado (`producto_id`) y sale "🖨 QR de
+  control del artículo" (el QR de catálogo de siempre, `?producto=`).
+  **Herramienta o equipo**: nombre, marca/modelo, piezas, lugar →
+  `fn_conteo_alta_herramienta(conteo, empresa, nombre, piezas, marca, modelo,
+  notas, ubicacion_id, ubicacion)` da de alta cada pieza en `herramientas`
+  (folio **HE-<EMP>-0001**, bitácora 'alta') y su renglón del conteo (1 pza,
+  `codigo_barras` = folio, `conteo_items.herramienta_id`); etiqueta QR de
+  control → `/inventario/conteo?herramienta=<folio>` que pinta la tarjeta con
+  `fn_herramienta_tarjeta(folio)` (qué es, estado, a cargo de quién, obra,
+  último conteo y lugar; cualquiera de la organización) y liga a Herramienta y
+  equipo. En Mis ítems / Todos, el 🖨 de un ítem que es herramienta imprime la
+  etiqueta HE-, no la INV-. Quién puede: `fn_conteo_puede_dar_alta` = no
+  pendiente ni espectador, suscripción, empresa de su organización y conteo
+  abierto (admin/corporativo/dirección/almacén y quien opera herramienta,
+  siempre). `fn_producto_etiqueta(id)` (definer) da los datos del artículo
+  para el QR aunque la RLS de `productos` no deje leerlo (el prellenado de
+  `?producto=` ya la usa). `lib/conteoInventario.ts`: `urlEtiquetaHerramienta`,
+  `revisarHerramientaNueva` (con pruebas). Probado en rollback: Brenda da de
+  alta ART-MCC-0001 y 2 taladros (HE-MCC-0001/0002 → INV-MCC-0001/0002, lugar
+  guardado), repetir nombre o código de barras no duplica, Alma da de alta,
+  un operativo también con el conteo abierto y lee la tarjeta, empresa de otra
+  organización bloqueada, cantidad 0 bloqueada.
