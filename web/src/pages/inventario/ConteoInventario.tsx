@@ -445,6 +445,35 @@ export function ConteoInventario() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["conteo-items", conteo?.id] }),
     onError: (e: Error) => setError(e.message),
   });
+  // Material ↔ herramienta sin borrar ni volver a capturar (19-nov-2026, Mario: "ya metí casi todo en Material").
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const cambiarTipo = useMutation({
+    mutationFn: async ({ ids, a }: { ids: string[]; a: "herramienta" | "material" }) => {
+      const { data, error: err } = await supabase.rpc(a === "herramienta" ? "fn_conteo_items_a_herramienta" : "fn_conteo_items_a_material", { p_ids: ids });
+      if (err) throw err;
+      return { a, n: ((data ?? []) as unknown[]).length };
+    },
+    onSuccess: ({ a, n }) => {
+      setError(null);
+      setSeleccion(new Set());
+      setAviso(a === "herramienta" ? `${n} pieza(s) ahora son herramienta o equipo, cada una con su folio HE- y su QR de control.` : `${n} renglón(es) regresaron a material.`);
+      qc.invalidateQueries({ queryKey: ["conteo-items", conteo?.id] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+  function pasarAHerramienta(items: ItemConteo[]) {
+    const lista = items.filter((i) => !i.herramienta_id);
+    if (!lista.length) return;
+    const piezas = lista.reduce((s, i) => s + Math.max(1, Math.round(Number(i.cantidad))), 0);
+    if (!window.confirm(`¿Pasar ${lista.length} ítem(s) de material a herramienta o equipo? Se dan de alta ${piezas} pieza(s) con folio HE- (una por renglón; si un ítem tenía varias piezas, se abren renglones nuevos con la misma persona y lugar). Se puede regresar a material mientras no se asignen.`)) return;
+    cambiarTipo.mutate({ ids: lista.map((i) => i.id), a: "herramienta" });
+  }
+  function regresarAMaterial(items: ItemConteo[]) {
+    const lista = items.filter((i) => !!i.herramienta_id);
+    if (!lista.length) return;
+    if (!window.confirm(`¿Regresar ${lista.length} renglón(es) a material? Su herramienta HE- se da de baja (solo si nunca se asignó ni movió).`)) return;
+    cambiarTipo.mutate({ ids: lista.map((i) => i.id), a: "material" });
+  }
 
   // ── Administración del conteo ────────────────────────────────────────
   const [nombreNuevo, setNombreNuevo] = useState("Conteo de inventario");
@@ -745,6 +774,16 @@ export function ConteoInventario() {
                   >
                     Corregir la cantidad total
                   </button>
+                  {conteo?.estado === "abierto" &&
+                    (escaneado.herramienta_id ? (
+                      <button type="button" onClick={() => regresarAMaterial([escaneado])} disabled={cambiarTipo.isPending} className="rounded border border-sky-300 bg-white px-2 py-1 text-sky-900 hover:bg-sky-100 disabled:opacity-50">
+                        Regresar a material
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => pasarAHerramienta([escaneado])} disabled={cambiarTipo.isPending} className="rounded border border-violet-300 bg-white px-2 py-1 text-violet-900 hover:bg-violet-100 disabled:opacity-50">
+                        🔧 Pasar a herramienta o equipo
+                      </button>
+                    ))}
                 </form>
               )}
             </div>
@@ -1054,9 +1093,16 @@ export function ConteoInventario() {
         <section className="rounded border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2">
             <h2 className="text-sm font-semibold text-slate-800">Mis ítems ({mios.length})</h2>
-            <button type="button" onClick={() => imprimirEtiquetas(mios, `Etiquetas QR · ${perfil.nombre} · ${conteo.fecha}`)} disabled={!mios.length} className="rounded border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              🖨 Imprimir mis etiquetas QR
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {conteo.estado === "abierto" && mios.some((i) => !i.herramienta_id) && (
+                <button type="button" onClick={() => pasarAHerramienta(mios)} disabled={cambiarTipo.isPending} className="rounded border border-violet-300 bg-violet-50 px-3 py-1 text-xs text-violet-900 hover:bg-violet-100 disabled:opacity-50" title="Si capturaste herramienta o equipo como material, pásalo aquí sin borrar nada">
+                  🔧 Pasar mis materiales a herramienta ({mios.filter((i) => !i.herramienta_id).length})
+                </button>
+              )}
+              <button type="button" onClick={() => imprimirEtiquetas(mios, `Etiquetas QR · ${perfil.nombre} · ${conteo.fecha}`)} disabled={!mios.length} className="rounded border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                🖨 Imprimir mis etiquetas QR
+              </button>
+            </div>
           </div>
           {mios.length === 0 ? (
             <p className="px-4 py-3 text-sm text-slate-500">Todavía no has capturado ítems en este conteo.</p>
@@ -1083,6 +1129,7 @@ export function ConteoInventario() {
                       </td>
                       <td className="px-3 py-1.5 font-mono text-xs">{i.codigo}</td>
                       <td className="px-3 py-1.5">
+                        {i.herramienta_id && <span className="mr-1 rounded bg-violet-100 px-1 text-[10px] text-violet-800" title="Herramienta o equipo (QR de control HE-)">🔧</span>}
                         {i.descripcion}
                         {i.codigo_barras && <span className="block font-mono text-[10px] text-slate-400">{i.codigo_barras}</span>}
                         {i.notas && <span className="block text-xs text-slate-500">{i.notas}</span>}
@@ -1115,6 +1162,15 @@ export function ConteoInventario() {
                             <button type="button" onClick={() => window.confirm(`¿Borrar ${i.codigo} (${i.descripcion})?`) && borrar.mutate(i.id)} className="ml-2 text-red-600 hover:underline">
                               borrar
                             </button>
+                            {i.herramienta_id ? (
+                              <button type="button" onClick={() => regresarAMaterial([i])} className="ml-2 text-slate-600 hover:underline" title="Regresar este renglón a material (la herramienta se da de baja)">
+                                → material
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => pasarAHerramienta([i])} className="ml-2 text-violet-700 hover:underline" title="Pasar a herramienta o equipo (folio HE- y QR de control)">
+                                → herramienta
+                              </button>
+                            )}
                           </>
                         )}
                       </td>
@@ -1203,11 +1259,35 @@ export function ConteoInventario() {
             <button type="button" onClick={() => imprimirEtiquetas(filtrados, `Etiquetas QR · ${conteo.fecha}`)} disabled={!filtrados.length} className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
               🖨 Etiquetas QR de estos {filtrados.length}
             </button>
+            {conteo.estado === "abierto" && seleccion.size > 0 && (
+              <>
+                <span className="text-slate-700">{seleccion.size} marcado(s):</span>
+                <button type="button" onClick={() => pasarAHerramienta(todos.filter((i) => seleccion.has(i.id)))} disabled={cambiarTipo.isPending || !todos.some((i) => seleccion.has(i.id) && !i.herramienta_id)} className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900 hover:bg-violet-100 disabled:opacity-50">
+                  🔧 Pasar a herramienta o equipo
+                </button>
+                <button type="button" onClick={() => regresarAMaterial(todos.filter((i) => seleccion.has(i.id)))} disabled={cambiarTipo.isPending || !todos.some((i) => seleccion.has(i.id) && i.herramienta_id)} className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  Regresar a material
+                </button>
+                <button type="button" onClick={() => setSeleccion(new Set())} className="text-slate-500 hover:underline">
+                  quitar marcas
+                </button>
+              </>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>
+                  {conteo.estado === "abierto" && (
+                    <th className="px-2 py-2">
+                      <input
+                        type="checkbox"
+                        title="Marcar todos los que puedo cambiar"
+                        checked={filtrados.some((i) => puedeAjustar(i)) && filtrados.filter((i) => puedeAjustar(i)).every((i) => seleccion.has(i.id))}
+                        onChange={(e) => setSeleccion(e.target.checked ? new Set(filtrados.filter((i) => puedeAjustar(i)).map((i) => i.id)) : new Set())}
+                      />
+                    </th>
+                  )}
                   <th className="px-3 py-2">Código</th>
                   <th className="px-3 py-2">Descripción</th>
                   <th className="px-3 py-2 text-right">Cantidad</th>
@@ -1221,8 +1301,27 @@ export function ConteoInventario() {
               <tbody>
                 {filtrados.slice(0, 500).map((i) => (
                   <tr key={i.id} className={`border-t border-slate-100 ${escaneado?.id === i.id ? "bg-sky-50" : ""}`}>
+                    {conteo.estado === "abierto" && (
+                      <td className="px-2 py-1.5">
+                        {puedeAjustar(i) && (
+                          <input
+                            type="checkbox"
+                            checked={seleccion.has(i.id)}
+                            onChange={(e) => {
+                              const n = new Set(seleccion);
+                              if (e.target.checked) n.add(i.id);
+                              else n.delete(i.id);
+                              setSeleccion(n);
+                            }}
+                          />
+                        )}
+                      </td>
+                    )}
                     <td className="px-3 py-1.5 font-mono text-xs">{i.codigo}</td>
-                    <td className="px-3 py-1.5">{i.descripcion}</td>
+                    <td className="px-3 py-1.5">
+                      {i.herramienta_id && <span className="mr-1 rounded bg-violet-100 px-1 text-[10px] text-violet-800" title="Herramienta o equipo (QR de control HE-)">🔧</span>}
+                      {i.descripcion}
+                    </td>
                     <td className="px-3 py-1.5 text-right tabular-nums">
                       {i.cantidad} {i.unidad}
                     </td>
@@ -1234,6 +1333,17 @@ export function ConteoInventario() {
                       <button type="button" onClick={() => imprimirEtiquetas([i], `Etiqueta ${i.codigo}`)} className="text-slate-600 hover:underline" title="Imprimir la etiqueta QR de este ítem">
                         🖨 QR
                       </button>
+                      {conteo.estado === "abierto" &&
+                        puedeAjustar(i) &&
+                        (i.herramienta_id ? (
+                          <button type="button" onClick={() => regresarAMaterial([i])} className="ml-2 text-slate-600 hover:underline" title="Regresar a material">
+                            → material
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => pasarAHerramienta([i])} className="ml-2 text-violet-700 hover:underline" title="Pasar a herramienta o equipo (folio HE- y QR de control)">
+                            → herramienta
+                          </button>
+                        ))}
                     </td>
                   </tr>
                 ))}

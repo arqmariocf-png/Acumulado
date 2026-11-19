@@ -4198,6 +4198,30 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   páginas) al abrir el conteo. Probado en rollback: Brenda da clave a 3 items
   en MCC (ART-MCC-0025…), repetirlos devuelve las mismas claves y un item que
   ya era producto devuelve la clave existente.
+- **Material → herramienta sin borrar (19-nov-2026, Mario: "ya metí casi
+  todo en Material, ¿se le puede pedir a la IA que mueva eso a Herramienta o
+  lo borro y lo vuelvo a meter?")** (`20261119190000`, aplicada como
+  `conteo_material_a_herramienta`): `fn_conteo_items_a_herramienta(ids[])`
+  (definer; quien contó el renglón o admin/corporativo/dirección/almacén,
+  mismas guardas que dar de alta herramienta, conteo abierto, ≤ 300 por
+  llamada): por cada ítem que aún no es herramienta da de alta tantas piezas
+  en `herramientas` como su cantidad (HE-<EMP>-####, bitácora 'alta', notas
+  "Del conteo INV-… · lugar"); la primera pieza se queda en el MISMO renglón
+  INV- (cantidad 1, `codigo_barras` = folio HE-, `herramienta_id`) y las demás
+  abren renglones INV- nuevos con la misma persona, lugar y hora ("Pieza N de M
+  de INV-…"). `fn_conteo_items_a_material(ids[])` es el regreso: la
+  herramienta se da de baja (solo si nunca se asignó ni movió) y el renglón
+  vuelve a material. Pantalla del conteo: "🔧 Pasar mis materiales a
+  herramienta (N)" en Mis ítems, "→ herramienta" / "→ material" por renglón
+  (Mis ítems, Todos los ítems y el ítem escaneado) y casillas en Todos los
+  ítems con "Pasar a herramienta o equipo" / "Regresar a material" para lo
+  marcado; 🔧 marca los renglones que ya son herramienta. Probado en rollback:
+  Brenda no toca lo ajeno; Alma convierte 7 desarmadores → 7 renglones HE-,
+  repetir no duplica, regresa uno a material. **Aplicado en producción como
+  Mario**: los 9 de Alberto (ERG) y 73 de Christian (CSC; quedaron como
+  material INV-CSC-0069 gis y 0072 seguetas, consumibles) → 130 piezas HE-;
+  los 90 de Laura (AEP) siguen como material. Los HE- saltan números: las
+  pruebas en rollback consumen la secuencia.
 - **Duplicados y fusiones de catálogos (19-nov-2026, Mario: "revisemos
   duplicidades y similitudes para dar la opción a Laura y Alma de
   fusionarlos, incluyendo sus inventarios")** (`20261119180000`, aplicada
