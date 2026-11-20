@@ -648,6 +648,27 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   celosía es sencilla o doble. VBB no tiene productos ni lotes de producción en la base:
   el costeo por colada sigue en la calculadora hasta que se dé de alta la
   vigueta como producto con receta.
+  **Remisión de salida de viguetas y bovedilla (20-nov-2026, Mario: "permite
+  que pueda generar la remisión de salida de viguetas y bovedilla")**: la
+  remisión de planta ya existía para Balken (Producción › Balken › Inventario
+  › Salidas, mismo `RemisionProduccionModal`, folio REM-VBB-000001, membrete
+  con el logo de VBB) pero VBB no tenía ningún producto. `20261120100000`
+  (aplicada como `balken_productos_remision`): `productos_produccion` de VBB
+  **Vigueta sencilla 12 cm**, **Vigueta reforzada 12 cm** (tipo vigueta, pza;
+  la descripción de la partida lleva el largo) y **Bovedilla de cemento
+  15×25×56** (tipo bovedilla, pza). En Despiece y cotización, botón **"Generar
+  remisión de salida"**: abre el modal con cliente = el de la cotización, una
+  partida por versión y largo de vigueta ("Vigueta sencilla 12 cm × 2.70 m" ×
+  piezas, precio = largo × $/m **sin IVA**), la bovedilla con desperdicio, y
+  observaciones con el resumen del despiece; todo editable antes de generar
+  (`lineasRemisionBalken` / `productoParaRemision` en `lib/despieceBalken.ts`,
+  con pruebas; `RemisionProduccionModal` acepta `inicial` {contraparte,
+  observaciones, lineas, preciosConIva}; `DespieceBalken` recibe `empresaId`).
+  Concreto, malla, montaje y flete no van a la remisión (no salen de la
+  planta). Quién puede: rol produccion (Jaime, con VBB en "Maneja también") y
+  admin, los que entran a Producción. Probado en rollback como Jaime:
+  REM-VBB-000001 con 2 partidas. Ojo: la remisión no descuenta inventario de
+  planta (VBB no tiene lotes); la salida de producto terminado sigue aparte.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el

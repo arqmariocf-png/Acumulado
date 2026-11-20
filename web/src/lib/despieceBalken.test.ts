@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PARAMETROS_BASE, PRECIOS_BASE, cotizar, despiezar, despiezarTablero, htmlCotizacionBalken, redondearArriba } from "./despieceBalken.ts";
+import { PARAMETROS_BASE, PRECIOS_BASE, cotizar, despiezar, despiezarTablero, htmlCotizacionBalken, lineasRemisionBalken, productoParaRemision, redondearArriba } from "./despieceBalken.ts";
 
 test("redondearArriba sube al múltiplo siguiente", () => {
   assert.equal(redondearArriba(3.2, 0.1), 3.2);
@@ -115,4 +115,49 @@ test("htmlCotizacionBalken escapa y muestra totales", () => {
   assert.match(conAnexo, /Se anexa la ficha técnica/);
   assert.match(conAnexo, /<div class="ficha">FICHA<\/div><\/body>/);
   assert.match(html, /Precio por m²/);
+});
+
+// 20-nov-2026, Mario: remisión de salida de viguetas y bovedilla desde el despiece.
+const CATALOGO_VBB = [
+  { id: "vs", nombre: "Vigueta sencilla 12 cm", tipo: "vigueta" },
+  { id: "vr", nombre: "Vigueta reforzada 12 cm", tipo: "vigueta" },
+  { id: "bo", nombre: "Bovedilla de cemento 15×25×56", tipo: "bovedilla" },
+];
+
+test("productoParaRemision: liga por tipo y por sencilla/reforzada", () => {
+  assert.equal(productoParaRemision(CATALOGO_VBB, "sencilla")?.id, "vs");
+  assert.equal(productoParaRemision(CATALOGO_VBB, "reforzada")?.id, "vr");
+  assert.equal(productoParaRemision(CATALOGO_VBB, "bovedilla")?.id, "bo");
+  assert.equal(productoParaRemision([{ id: "x", nombre: "Vigueta 12", tipo: "vigueta" }], "reforzada")?.id, "x");
+  assert.equal(productoParaRemision([], "bovedilla"), null);
+});
+
+test("lineasRemisionBalken: una partida por versión y longitud + la bovedilla con desperdicio, precios s/IVA", () => {
+  const p = { ...PARAMETROS_BASE, peralteVigueta: 12, claroSencillaHasta: 3, nombreViguetaSencilla: "Vigueta sencilla", nombreVigueta: "Vigueta reforzada" };
+  const d = despiezar(
+    [
+      { nombre: "A", claro: 2.5, ancho: 3, cantidad: 1 },
+      { nombre: "B", claro: 3.4, ancho: 3, cantidad: 1 },
+    ],
+    p,
+  );
+  const lineas = lineasRemisionBalken(d, p, { ...PRECIOS_BASE, viguetaPorMetro: 150, bovedillaPorPieza: 20 }, CATALOGO_VBB);
+  assert.equal(lineas.length, 3);
+  assert.equal(lineas[0].itemId, "vs");
+  assert.match(lineas[0].descripcion, /^Vigueta sencilla 12 cm × 2\.70 m$/);
+  assert.equal(lineas[0].unidad, "pza");
+  assert.equal(lineas[0].precio, String(Math.round(2.7 * 150 * 100) / 100));
+  assert.equal(lineas[1].itemId, "vr");
+  assert.match(lineas[1].descripcion, /^Vigueta reforzada 12 cm × 3\.60 m$/);
+  assert.equal(lineas[2].itemId, "bo");
+  assert.equal(lineas[2].descripcion, PARAMETROS_BASE.bovedilla);
+  assert.equal(lineas[2].cantidad, d.bovedillasConDesperdicio);
+  assert.equal(lineas[2].precio, "20");
+  const sinPrecio = lineasRemisionBalken(d, p, PRECIOS_BASE, []);
+  assert.equal(sinPrecio[0].precio, "");
+  assert.equal(sinPrecio[0].itemId, "");
+});
+
+test("lineasRemisionBalken: sin tableros no hay partidas", () => {
+  assert.deepEqual(lineasRemisionBalken(despiezar([], PARAMETROS_BASE), PARAMETROS_BASE, PRECIOS_BASE, CATALOGO_VBB), []);
 });

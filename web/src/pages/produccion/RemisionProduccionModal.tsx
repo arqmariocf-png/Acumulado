@@ -10,7 +10,7 @@ export interface ItemRemision {
   unidad_medida: string;
 }
 
-interface LineaForm {
+export interface LineaForm {
   itemId: string;
   descripcion: string;
   cantidad: number;
@@ -38,6 +38,7 @@ export function RemisionProduccionModal({
   tipo,
   items,
   referencias,
+  inicial,
   onCerrar,
 }: {
   empresaId: string;
@@ -45,10 +46,13 @@ export function RemisionProduccionModal({
   items: ItemRemision[];
   /** OV (salida) u OC (entrada) para ligar y sugerir la contraparte. */
   referencias: { id: string; folio: string; contraparte: string | null }[];
+  /** Lo que llega ya capturado (20-nov-2026: el despiece de Balken manda sus
+   * viguetas y bovedillas); todo se puede corregir antes de generar. */
+  inicial?: { contraparte?: string; observaciones?: string; lineas?: LineaForm[]; preciosConIva?: boolean };
   onCerrar: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [contraparte, setContraparte] = useState("");
+  const [contraparte, setContraparte] = useState(inicial?.contraparte ?? "");
   const [clienteId, setClienteId] = useState("");
   const [nuevoCliente, setNuevoCliente] = useState(false);
   const [nuevoRfc, setNuevoRfc] = useState("");
@@ -62,13 +66,13 @@ export function RemisionProduccionModal({
   const [pagaNombre, setPagaNombre] = useState("");
   const [referenciaPago, setReferenciaPago] = useState("");
   const [proyectoId, setProyectoId] = useState("");
-  const [observaciones, setObservaciones] = useState("");
+  const [observaciones, setObservaciones] = useState(inicial?.observaciones ?? "");
   // Contado o crédito: se clasifica al emitir la entrega (Mario, 30-sep-2026).
   const [condicion, setCondicion] = useState<"" | "contado" | "credito">("");
   const [diasCredito, setDiasCredito] = useState("");
   // Los precios de Clavicón se cierran con IVA incluido; se guarda sin IVA.
-  const [preciosConIva, setPreciosConIva] = useState(true);
-  const [lineas, setLineas] = useState<LineaForm[]>([{ itemId: "", descripcion: "", cantidad: 1, unidad: "pza" }]);
+  const [preciosConIva, setPreciosConIva] = useState(inicial?.preciosConIva ?? true);
+  const [lineas, setLineas] = useState<LineaForm[]>(inicial?.lineas && inicial.lineas.length > 0 ? inicial.lineas : [{ itemId: "", descripcion: "", cantidad: 1, unidad: "pza" }]);
   const [error, setError] = useState<string | null>(null);
   const [creada, setCreada] = useState<{ id: string; folio: string } | null>(null);
 
