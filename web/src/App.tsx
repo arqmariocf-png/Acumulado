@@ -111,6 +111,7 @@ const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ def
 const VerArchivo = lazy(() => import("./pages/VerArchivo").then((m) => ({ default: m.VerArchivo })));
 const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
 const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
+const RemisionesEmpresas = lazy(() => import("./pages/produccion/RemisionesEmpresas").then((m) => ({ default: m.RemisionesEmpresas })));
 
 // Mario, 6-oct-2026: "se está trabando mucho". Por defecto react-query daba
 // todo por viejo al instante (staleTime 0), lo volvía a pedir al regresar a la
@@ -383,8 +384,14 @@ function Enrutador() {
             <Route path="/clavicon" element={<PanoramaClavicon />} />
           </Route>
 
-          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable"]} modulo="produccion" />}>
+          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable", "almacen"]} modulo="produccion" />}>
             <Route path="/produccion/remisiones/:id" element={<RemisionProduccionDetalle />} />
+          </Route>
+
+          {/* Remisiones de salida de planta de todas las empresas, para quien
+              no entra a Producción (almacén y dirección; Mario, 20-nov-2026). */}
+          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "almacen"]} modulo="produccion" />}>
+            <Route path="/produccion/remisiones" element={<RemisionesEmpresas />} />
           </Route>
 
           <Route element={<ProtectedRoute roles={["produccion"]} modulo="produccion" />}>

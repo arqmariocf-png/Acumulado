@@ -669,6 +669,27 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   admin, los que entran a Producción. Probado en rollback como Jaime:
   REM-VBB-000001 con 2 partidas. Ojo: la remisión no descuenta inventario de
   planta (VBB no tiene lotes); la salida de producto terminado sigue aparte.
+- **Remisiones de planta para Alma y Laura (20-nov-2026, Mario: "deja a
+  Alma y a Laura poder hacer remisiones de todas las empresas también")**
+  (`20261120110000`, aplicada como `remisiones_planta_almacen_direccion`):
+  las remisiones de planta (`remisiones_produccion`) solo las emitía el rol
+  produccion (+ admin/corporativo) y la pantalla de Producción es solo de ese
+  rol. Policies `remisiones_produccion_insert/_select` y
+  `remisiones_produccion_lineas_insert` aceptan también `almacen` y
+  `direccion` en su alcance (Alma García y Laura tienen todas las empresas);
+  `productos_produccion_remision_select` (solo lectura del catálogo de planta
+  para esos dos roles) y `confirmar_entrega_remision_produccion` acepta
+  almacén. Pantalla nueva **Remisiones de planta** (`/produccion/remisiones`,
+  `pages/produccion/RemisionesEmpresas.tsx`; menú Almacén y Producción; roles
+  produccion, corporativo, dirección, almacén y admin): selector de empresa
+  (las que tienen `productos_produccion` activos: MCC, VBB, CSC…), "+ Nueva
+  remisión de salida" (mismo `RemisionProduccionModal`, folio REM-<EMP>,
+  membrete y QR), lista de salidas y, en VBB, el despiece de Balken con su
+  "Generar remisión de salida". No se les abrió el resto de Producción (lotes,
+  costeo). Las remisiones de almacén (`remisiones_salida`) ya las podían
+  emitir las dos. Probado en rollback: Alma REM-VBB-000001 con partida, Laura
+  REM-MCC-000006. Mismo día se les puso contraseña temporal por SQL
+  (`crypt(..., gen_salt('bf'))` en `auth.users`; se dictaron a Mario por chat).
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el
