@@ -33,7 +33,7 @@ import { parsearPdfEstadoCuentaBanBajio, type ResultadoParseoPdf } from "../_sha
 import { parsearPaginasBBVA } from "../_shared/ingesta/pdf-estado-cuenta-bbva.ts";
 import { parsearPdfEstadoCuentaBanorte, type SaldoPrevioConocido } from "../_shared/ingesta/pdf-estado-cuenta-banorte.ts";
 import { parsearPdfEstadoCuentaSantander } from "../_shared/ingesta/pdf-estado-cuenta-santander.ts";
-import { acotarCorte, extraerCorteEstadoCuenta, hoyMexicoIso } from "../_shared/ingesta/corte-estado-cuenta.ts";
+import { corteDeArchivo, hoyMexicoIso } from "../_shared/ingesta/corte-estado-cuenta.ts";
 import {
   construirIndiceCampos,
   encabezadosFaltantes,
@@ -272,7 +272,10 @@ Deno.serve(async (req) => {
     // nuevos y la hoja seguía diciendo "al 13/11, falta subir lo más
     // reciente").
     const ultimoDelArchivo = movimientosMapeados.reduce<string | null>((max, m) => (m.fechaPago && (!max || m.fechaPago > max) ? m.fechaPago : max), null);
-    const estadoCuentaAl = acotarCorte(extraerCorteEstadoCuenta(textoCorte), ultimoDelArchivo, hoyMexicoIso());
+    // El nombre del archivo también cuenta ("ESTADO DE CUENTA AL 20 DE
+    // NOVIEMBRE.pdf"): los exports diarios de BBVA no declaran corte en el
+    // texto (20-nov-2026).
+    const estadoCuentaAl = corteDeArchivo(textoCorte, archivo.name ?? "", ultimoDelArchivo, hoyMexicoIso());
     let avisoEstadoCuentaAl: string | null = null;
     if (estadoCuentaAl) {
       const { error: errAl } = await dbServicio.rpc("fn_cuenta_registrar_estado_cuenta", { p_cuenta_id: cuentaId, p_al: estadoCuentaAl });

@@ -56,6 +56,8 @@ const RE_GENERADO: RegExp[] = [
   /(\d{1,2})-([A-Za-zÀ-ÿ]{3,})-(\d{4}),\s+\d{2}:\d{2}(?::\d{2})?\s+horas/gi,
   // Banorte Enlace "Fecha Último Acceso: 25/08/2026 11:15 a. m.".
   /Fecha Último Acceso:\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/gi,
+  // Exports de portal: "Fecha de consulta: 20/11/2026", "Fecha y hora de impresión 20/11/2026 17:25".
+  /Fecha (?:y hora )?de (?:consulta|impresi[oó]n|emisi[oó]n|generaci[oó]n|descarga):?\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/gi,
 ];
 
 function fechasDe(texto: string, patrones: RegExp[]): string[] {
@@ -82,6 +84,48 @@ export function extraerCorteEstadoCuenta(textoCompleto: string): string | null {
   if (generados.length) candidatos.push(generados.reduce((a, b) => (a < b ? a : b)));
   if (!candidatos.length) return null;
   return candidatos.reduce((a, b) => (a < b ? a : b));
+}
+
+// Nombre del archivo como respaldo (20-nov-2026, Mario: "con Delia marca como
+// pendiente el estado de cuenta… porque muchas veces no hay movimientos
+// posteriores"): los exports diarios de BBVA ("ESTADO DE CUENTA AL 20 DE
+// NOVIEMBRE.pdf") no declaran corte en el texto y la cuenta quedaba "al"
+// último movimiento (17/11) aunque el archivo era del 20. Delia nombra los
+// archivos "AL <día> DE <mes>" (también "AL 19 DE NOV BALKEN"): se toma esa
+// fecha, con el año de hoy (o el anterior si quedaría en el futuro).
+const RE_NOMBRE_AL = /\bAL\s+(\d{1,2})\s+(?:DE\s+)?([A-Za-zÀ-ÿ]{3,})(?:\s+(?:DE\s+)?(\d{4}))?/i;
+const RE_NOMBRE_ISO = /(\d{4})[-_.](\d{2})[-_.](\d{2})/;
+const RE_NOMBRE_DMY = /\b(\d{1,2})[-_.](\d{1,2})[-_.](\d{4})\b/;
+
+/** Fecha (ISO) que dice el NOMBRE del archivo, o null. `hoy` da el año
+ * cuando el nombre no lo trae. */
+export function corteDesdeNombreArchivo(nombre: string, hoy: string): string | null {
+  const limpio = (nombre ?? "").replace(/\.[A-Za-z0-9]+$/, "").replace(/[_]+/g, " ");
+  const al = limpio.match(RE_NOMBRE_AL);
+  if (al) {
+    const anioHoy = hoy.slice(0, 4);
+    const conAnio = iso(al[1], al[2], al[3] ?? anioHoy);
+    if (conAnio) {
+      if (al[3] || conAnio <= hoy) return conAnio;
+      return iso(al[1], al[2], String(Number(anioHoy) - 1));
+    }
+  }
+  const isoM = limpio.match(RE_NOMBRE_ISO);
+  if (isoM) return iso(isoM[3], isoM[2], isoM[1]);
+  const dmy = limpio.match(RE_NOMBRE_DMY);
+  if (dmy) return iso(dmy[1], dmy[2], dmy[3]);
+  return null;
+}
+
+/** Corte a registrar a partir del texto del PDF y del nombre del archivo:
+ * la mayor de las dos (el nombre es lo que la persona declara; el texto, lo
+ * que declara el banco), acotada como `acotarCorte`. */
+export function corteDeArchivo(textoCompleto: string, nombreArchivo: string, ultimoMovimientoArchivo: string | null, hoy: string): string | null {
+  const doc = extraerCorteEstadoCuenta(textoCompleto);
+  const nom = corteDesdeNombreArchivo(nombreArchivo, hoy);
+  const candidatos = [doc, nom].filter((x): x is string => !!x && x <= hoy);
+  const mejor = candidatos.length ? candidatos.reduce((a, b) => (a > b ? a : b)) : null;
+  return acotarCorte(mejor, ultimoMovimientoArchivo, hoy);
 }
 
 /** Fecha que se registra en la cuenta: la del documento (o, si no la trae,
