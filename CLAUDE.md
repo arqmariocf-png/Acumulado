@@ -2273,6 +2273,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   con liga `/comedor?tab=cocina&fecha=<mañana>`. Cocina lee `?fecha=` y trae
   botones **Hoy / Mañana** junto al día. Probado en rollback: la función
   encola el aviso (0 pedidos → "Nadie se ha anotado todavía para mañana").
+- **Platillos siempre en el menú (20-nov-2026, Mario: "mándales aviso y
+  estos dos menús estarán siempre")** (`20261120090000`, aplicada como
+  `comedor_menu_fijo`): `comedor_platillos.fijo` (casilla "siempre en el
+  menú" en Cocina, la cambia quien opera comedor); `fn_comedor_menu_fijo(dias
+  = 14)` (definer; sin usuario, admin o cocina) inserta en `comedor_menu` lo
+  que falte de hoy (hora MX) a 14 días para los fijos activos, sin cupo;
+  trigger `comedor_platillos_fijo` la corre al marcar uno, y pg_cron
+  `comedor-menu-fijo` a las 06:10 UTC (00:10 MX) todos los días. Quitar un
+  platillo fijo de UN día en Cocina se respeta ese día (vuelve al siguiente).
+  Desayuno ejecutivo ($60) y Menú ejecutivo ($90) quedaron fijos: menú del
+  19-nov al 2-dic. Mismo día se mandó por `fn_push_aviso` "Comedor: ya puedes
+  pedir tu comida" a los 29 activos de LOMA con notificaciones (de 62).
 - **Encargada de cocina (19-oct-2026, Mario: "Moni Moreno será la
   encargada de comedor; únicamente va a ver las comidas que el personal
   solicite")**: Monica Moreno Rojas (morenorojasmoni79@gmail.com, operativo,
