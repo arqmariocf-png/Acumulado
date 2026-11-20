@@ -426,6 +426,29 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Las dos cuentas de MCC quedaron al 17/11 por SQL (de los archivos que subió
   Delia); las demás se registran solas en la siguiente carga. Desplegada con
   `scratchpad ef/deploy/strip25.cjs` (agrega corte-estado-cuenta.ts a la lista).
+  **"Sigue sin actualizar el saldo de Mallas de BanBajío… si no tienen
+  movimiento se quedan con el estado de cuenta del último movimiento, no se
+  actualiza la fecha" (20-nov-2026, Delia por WhatsApp a Mario)**: la base ya
+  estaba bien (las dos cuentas de MCC quedaron `estado_cuenta_al` 19/11 con la
+  carga de las 18:43 y el saldo $54,687.26 es el del banco: el PDF Conecta "al
+  19" trae los mismos 17 movimientos de noviembre, el último del 13/11, y el
+  dedupe va por fecha + monto + referencia, así que uno nuevo sí entraría);
+  lo que no decía la fecha era **Tesorería** (su pantalla) ni el **PDF
+  "Reporte de Saldos Bancarios"** (`reporte-saldos-diario`, sección 1 solo
+  traía el saldo). Ahora: `notaEstadosCuenta` (`lib/tesoreria.ts`, con
+  pruebas) pinta bajo "Saldo banco" de cada empresa "estado de cuenta al 19/11
+  · BanBajio 9403 sin movimientos desde el 13/11" (ámbar si alguna cuenta está
+  atrasada o sin estado) y "De qué cuenta sale cada pago" trae la fecha bajo
+  cada saldo (`CuentasDeCargo` props `fechasSaldo`/`hoyFecha`); el PDF tiene
+  columna **AL DÍA** (dd/mm hasta el que llega el estado de cuenta) y notas
+  "Estados de cuenta" (atrasadas en rojo; al día sin movimientos en gris:
+  "el saldo no cambia, pero sí está al día") — `textoAlDia`, `notasAlDia`,
+  `estadoCuentaViejo` en `_shared/reportes/saldos.ts` (con pruebas); la edge
+  consulta además `fn_cuentas_estado_cuenta_al(hoy)` (invoker, RLS de quien
+  pide). `reporte-saldos-diario` **v6** desplegada con `scratchpad
+  ef/deploy/saldos6/strip.cjs` + el `_shared/supabase-clients.ts` y `cors.ts`
+  que ya corrían en la v5 (el del repo es distinto; no se tocó). Ojo pdf-lib:
+  Helvetica estándar no codifica "≠" (se dejó "!=" como en producción).
 - **Backoffice caído 7-oct-2026**: `api_ocs_aut`/`api_ov_aut` responden 500
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for

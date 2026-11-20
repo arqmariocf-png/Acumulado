@@ -5,7 +5,7 @@
 // (probado aparte con node --test, sin este archivo de por medio).
 
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
-import { descuadreFila, etiquetaCuenta, filasConDescuadre, saldoAjustado, tieneDescuadre, type FilaSaldoCuenta, type ReporteSaldosDia } from "./saldos.ts";
+import { descuadreFila, etiquetaCuenta, filasConDescuadre, notasAlDia, saldoAjustado, textoAlDia, tieneDescuadre, type FilaSaldoCuenta, type ReporteSaldosDia } from "./saldos.ts";
 
 /** Etiqueta de la cuenta con "(!)" cuando el día no cuadra (ver
  * descuadreFila) -- la explicación va en dibujarNotasDescuadre. */
@@ -243,12 +243,31 @@ function dibujarNotasAjuste(estado: EstadoPdf, reporte: ReporteSaldosDia): void 
  * al saldo final cargado. Casi siempre es que faltan movimientos entre la
  * última carga y el día (hay que subir el estado de cuenta de los días
  * intermedios) o que un movimiento quedó con otra fecha. */
+function dibujarNotasAlDia(estado: EstadoPdf, reporte: ReporteSaldosDia, fechaHoy: string): void {
+  const notas = notasAlDia(reporte, fechaHoy);
+  if (notas.length === 0) return;
+  asegurarEspacio(estado, 14 + notas.length * 11);
+  estado.y -= 6;
+  dibujarTexto(estado, "Estados de cuenta (AL DÍA = hasta qué día llega el último estado de cuenta subido, traiga o no movimientos nuevos):", MARGEN_X, {
+    negrita: true,
+    tamano: 8,
+    color: COLOR_TEXTO_SUAVE,
+  });
+  estado.y -= 11;
+  for (const n of notas) {
+    asegurarEspacio(estado, 11);
+    const texto = truncarTexto(estado.fuente, n.texto, 8, ANCHO_PAGINA - 2 * MARGEN_X);
+    dibujarTexto(estado, texto, MARGEN_X, { tamano: 8, color: n.atrasada ? COLOR_NEGATIVO : COLOR_TEXTO_SUAVE });
+    estado.y -= 11;
+  }
+}
+
 function dibujarNotasDescuadre(estado: EstadoPdf, reporte: ReporteSaldosDia, etiquetaDia: string): void {
   const filas = filasConDescuadre(reporte);
   if (filas.length === 0) return;
   asegurarEspacio(estado, 14 + filas.length * 11);
   estado.y -= 6;
-  dibujarTexto(estado, `No cuadra ${etiquetaDia} (inicial + entradas - salidas ≠ saldo final):`, MARGEN_X, { negrita: true, tamano: 8, color: COLOR_TEXTO_SUAVE });
+  dibujarTexto(estado, `No cuadra ${etiquetaDia} (inicial + entradas - salidas != saldo final):`, MARGEN_X, { negrita: true, tamano: 8, color: COLOR_TEXTO_SUAVE });
   estado.y -= 11;
   for (const f of filas) {
     const dif = descuadreFila(f);
@@ -288,11 +307,16 @@ function dibujarNumeroPaginas(estado: EstadoPdf): void {
 // corrección manual fija de cuentas_bancarias.ajuste_saldo (ver saldos.ts),
 // para que quien revise el reporte vea la diferencia contra el banco real
 // ahí mismo, sin tener que ir a investigar de qué meses viene cada vez.
+// "AL DÍA": hasta qué día llega el último estado de cuenta subido de la
+// cuenta, aunque no traiga movimientos nuevos (20-nov-2026, Delia: "si no
+// tienen movimiento se quedan con el estado de cuenta del último movimiento,
+// no se actualiza la fecha").
 const COLUMNAS_GLOBAL: Columna[] = [
-  { titulo: "CUENTA", ancho: 250, alinear: "izquierda" },
+  { titulo: "CUENTA", ancho: 212, alinear: "izquierda" },
+  { titulo: "AL DÍA", ancho: 50, alinear: "derecha" },
   { titulo: "SALDO SISTEMA", ancho: 90, alinear: "derecha" },
-  { titulo: "AJUSTE", ancho: 90, alinear: "derecha" },
-  { titulo: "SALDO REAL", ancho: 98, alinear: "derecha" },
+  { titulo: "AJUSTE", ancho: 80, alinear: "derecha" },
+  { titulo: "SALDO REAL", ancho: 96, alinear: "derecha" },
 ];
 
 // Los 5 anchos deben sumar <= ANCHO_PAGINA - 2*MARGEN_X (528pt) -- si suman
@@ -334,15 +358,16 @@ export async function generarPdfSaldosDiarios(datos: DatosReportePdf): Promise<U
   dibujarTituloSeccion(
     estado,
     "1. Posición global (saldo actual por cuenta)",
-    "AJUSTE: corrección manual fija que se suma al SALDO SISTEMA. SALDO REAL debe coincidir con el banco (ver notas abajo).",
+    "AL DÍA: hasta qué día llega el estado de cuenta subido. AJUSTE: corrección manual fija que se suma al SALDO SISTEMA. SALDO REAL debe coincidir con el banco.",
   );
   dibujarTablaReporte(
     estado,
     datos.global,
     COLUMNAS_GLOBAL,
-    (f) => [etiquetaCuenta(f), formatoMoneda(f.saldoFinal), formatoMoneda(f.ajusteSaldo), formatoMoneda(saldoAjustado(f))],
-    (s) => ["", formatoMoneda(s.saldoFinal), formatoMoneda(s.ajusteSaldo), formatoMoneda(saldoAjustado(s))],
+    (f) => [etiquetaCuenta(f), textoAlDia(f), formatoMoneda(f.saldoFinal), formatoMoneda(f.ajusteSaldo), formatoMoneda(saldoAjustado(f))],
+    (s) => ["", "", formatoMoneda(s.saldoFinal), formatoMoneda(s.ajusteSaldo), formatoMoneda(saldoAjustado(s))],
   );
+  dibujarNotasAlDia(estado, datos.global, datos.fechaHoy);
   dibujarNotasAjuste(estado, datos.global);
 
   estado.y -= 10;

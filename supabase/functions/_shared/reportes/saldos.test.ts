@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { construirReporteSaldosDia, etiquetaCuenta, saldoAjustado, type FilaSaldoCuenta, descuadreFila, filasConDescuadre } from "./saldos.ts";
+import { construirReporteSaldosDia, etiquetaCuenta, saldoAjustado, type FilaSaldoCuenta, descuadreFila, filasConDescuadre, textoAlDia, estadoCuentaViejo, notasAlDia, diaHabilAnterior } from "./saldos.ts";
 
 function fila(parcial: Partial<FilaSaldoCuenta> & Pick<FilaSaldoCuenta, "empresaNombre" | "banco" | "ultimos4">): FilaSaldoCuenta {
   return {
@@ -98,4 +98,44 @@ test("descuadreFila marca las cuentas donde inicial + entradas - salidas no lleg
   const sinMovs = { ...base, cuentaId: "g", tieneMovimientos: false, saldoInicial: 0, entradas: 0, salidas: 0, saldoFinal: 100 };
   const reporte = construirReporteSaldosDia([noCuadra, faltan, cuadra, sinMovs]);
   assert.deepEqual(filasConDescuadre(reporte).map((f) => f.ultimos4), ["1226"]);
+});
+
+// 20-nov-2026, Delia: Mallas BanBajío 9403 sin movimientos desde el 13/11 con
+// el estado de cuenta del 19 ya subido; el PDF debe decirlo.
+test("textoAlDia: muestra hasta qué día llega el estado de cuenta, o guion", () => {
+  assert.equal(textoAlDia({ estadoCuentaAl: "2026-11-19", ultimoMovimiento: "2026-11-13" }), "19/11");
+  assert.equal(textoAlDia({ estadoCuentaAl: null, ultimoMovimiento: "2026-11-13" }), "13/11");
+  assert.equal(textoAlDia({ estadoCuentaAl: null, ultimoMovimiento: null }), "—");
+});
+
+test("diaHabilAnterior: el lunes regresa al viernes", () => {
+  assert.equal(diaHabilAnterior("2026-11-23"), "2026-11-20");
+  assert.equal(diaHabilAnterior("2026-11-20"), "2026-11-19");
+});
+
+test("estadoCuentaViejo: anterior al día hábil previo o nunca cargado", () => {
+  assert.equal(estadoCuentaViejo({ estadoCuentaAl: "2026-11-19", ultimoMovimiento: "2026-11-13" }, "2026-11-20"), false);
+  assert.equal(estadoCuentaViejo({ estadoCuentaAl: "2026-11-17", ultimoMovimiento: "2026-11-13" }, "2026-11-20"), true);
+  assert.equal(estadoCuentaViejo({ estadoCuentaAl: null, ultimoMovimiento: null }, "2026-11-20"), true);
+});
+
+test("notasAlDia: atrasadas primero, luego las al día sin movimientos; las que cambian no salen", () => {
+  const reporte = construirReporteSaldosDia([
+    fila({ empresaNombre: "Mallas", banco: "BanBajio", ultimos4: "9403", estadoCuentaAl: "2026-11-19", ultimoMovimiento: "2026-11-13" }),
+    fila({ empresaNombre: "Mallas", banco: "BBVA", ultimos4: "6381", estadoCuentaAl: "2026-11-19", ultimoMovimiento: "2026-11-19" }),
+    fila({ empresaNombre: "Aceros", banco: "Banorte", ultimos4: "1273", estadoCuentaAl: "2026-11-10", ultimoMovimiento: "2026-11-10" }),
+    fila({ empresaNombre: "Aceros", banco: "BBVA", ultimos4: "0000", estadoCuentaAl: null, ultimoMovimiento: null }),
+  ]);
+  const notas = notasAlDia(reporte, "2026-11-20");
+  assert.deepEqual(
+    notas.map((n) => [n.fila.ultimos4, n.atrasada]),
+    [["1273", true], ["0000", true], ["9403", false]],
+  );
+  assert.match(notas[2].texto, /estado de cuenta al 19\/11, sin movimientos desde el 13\/11/);
+  assert.match(notas[0].texto, /al 10\/11, falta subir lo más reciente/);
+});
+
+test("notasAlDia: filas sin la información (ayer/hoy) no generan notas", () => {
+  const reporte = construirReporteSaldosDia([fila({ empresaNombre: "X", banco: "BBVA", ultimos4: "1" })]);
+  assert.deepEqual(notasAlDia(reporte, "2026-11-20"), []);
 });

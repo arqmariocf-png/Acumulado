@@ -86,14 +86,26 @@ Deno.serve(async (req) => {
     const fechaHoy = fechaMexico(0);
     const fechaAyer = fechaMexico(-1);
 
-    const [rpcHoy, rpcAyer] = await Promise.all([
+    // fn_cuentas_estado_cuenta_al: hasta qué día llega el estado de cuenta
+    // de cada cuenta aunque no traiga movimientos nuevos (20-nov-2026,
+    // Delia). Si falla, el PDF sale sin esa columna llena, no se detiene.
+    const [rpcHoy, rpcAyer, rpcAl] = await Promise.all([
       db.rpc("fn_saldos_diario_cuenta", { p_fecha: fechaHoy }),
       db.rpc("fn_saldos_diario_cuenta", { p_fecha: fechaAyer }),
+      db.rpc("fn_cuentas_estado_cuenta_al", { p_fecha: fechaHoy }),
     ]);
     if (rpcHoy.error) return jsonError(rpcHoy.error.message, 500);
     if (rpcAyer.error) return jsonError(rpcAyer.error.message, 500);
+    const alDia = new Map<string, { al: string | null; ultimo: string | null }>();
+    for (const r of (rpcAl.data ?? []) as { cuenta_id: string; ultimo_movimiento: string | null; estado_cuenta_al: string | null }[]) {
+      alDia.set(r.cuenta_id, { al: r.estado_cuenta_al, ultimo: r.ultimo_movimiento });
+    }
 
-    const filasHoy = ((rpcHoy.data ?? []) as FilaRpc[]).map(mapearFila);
+    const filasHoy = ((rpcHoy.data ?? []) as FilaRpc[]).map((f) => {
+      const fila = mapearFila(f);
+      const a = alDia.get(f.cuenta_id);
+      return rpcAl.error ? fila : { ...fila, estadoCuentaAl: a?.al ?? null, ultimoMovimiento: a?.ultimo ?? null };
+    });
     const filasAyer = ((rpcAyer.data ?? []) as FilaRpc[]).map(mapearFila);
 
     const reporteHoy = construirReporteSaldosDia(filasHoy);

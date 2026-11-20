@@ -6,6 +6,7 @@
 import { Link } from "react-router-dom";
 import { moneda } from "../lib/saldosEmpresas";
 import { agruparPorCuenta, quedaEnCuenta, textoCuenta, type CuentaCargo, type PagoConCuenta } from "../lib/cuentaCargo";
+import { notaSaldoInicial } from "../lib/hojaPagos";
 
 export interface PagoCuentaVista extends PagoConCuenta {
   beneficiario: string;
@@ -21,6 +22,8 @@ export function CuentasDeCargo({
   nombreEmpresa,
   hoy,
   saldos,
+  fechasSaldo,
+  hoyFecha,
   onAsignar,
   ocupado = false,
 }: {
@@ -32,6 +35,11 @@ export function CuentasDeCargo({
   hoy: string;
   /** Saldo del banco por cuenta (último estado de cuenta), si se tiene. */
   saldos?: Map<string, number>;
+  /** Hasta qué día llega el estado de cuenta de cada cuenta y su último
+   * movimiento (20-nov-2026, Delia): se pinta bajo el saldo del banco. */
+  fechasSaldo?: Map<string, { al: string | null; ultimo: string | null }>;
+  /** Fecha contra la que se juzga si el estado de cuenta está viejo (hoy). */
+  hoyFecha?: string;
   /** Dirección asigna la cuenta a los pagos que no la tienen; sin esto solo se ve. */
   onAsignar?: (pagoId: string, cuentaId: string) => void;
   ocupado?: boolean;
@@ -67,6 +75,8 @@ export function CuentasDeCargo({
               const hoyVenc = g.pagos.filter((p) => p.fecha_programada <= hoy).reduce((s, p) => s + Number(p.monto), 0);
               const saldo = saldos ? saldos.get(g.cuenta!.id) ?? null : null;
               const queda = saldos ? quedaEnCuenta(saldo, g.total) : null;
+              const f = fechasSaldo?.get(g.cuenta!.id);
+              const notaSaldo = fechasSaldo && hoyFecha ? notaSaldoInicial(f?.al ?? null, hoyFecha, f?.ultimo ?? null) : null;
               return (
                 <tr key={g.cuenta!.id} className="border-t border-slate-100">
                   <td className="px-3 py-2 text-slate-700">{nombreEmpresa.get(g.empresa_id) ?? ""}</td>
@@ -87,7 +97,12 @@ export function CuentasDeCargo({
                   <td className="px-3 py-2 text-right tabular-nums">{g.n}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{hoyVenc ? moneda(hoyVenc) : "—"}</td>
                   <td className="px-3 py-2 text-right font-medium tabular-nums">{moneda(g.total)}</td>
-                  {saldos && <td className="px-3 py-2 text-right tabular-nums text-slate-600">{saldo == null ? <span className="text-slate-400">sin estado de cuenta</span> : moneda(saldo)}</td>}
+                  {saldos && (
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                      {saldo == null ? <span className="text-slate-400">sin estado de cuenta</span> : moneda(saldo)}
+                      {saldo != null && notaSaldo && <div className={`text-[10px] leading-tight ${notaSaldo.viejo ? "text-amber-700" : "text-slate-400"}`}>{notaSaldo.texto.replace(/^estado de cuenta /, "")}</div>}
+                    </td>
+                  )}
                   {saldos && <td className={`px-3 py-2 text-right font-medium tabular-nums ${queda != null && queda < 0 ? "text-red-700" : "text-slate-900"}`}>{queda == null ? "—" : moneda(queda)}</td>}
                 </tr>
               );

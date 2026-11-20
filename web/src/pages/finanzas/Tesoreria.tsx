@@ -3,8 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { moneda } from "../../lib/saldosEmpresas";
-import { armarTesoreria, semaforoTesoreria, type ColorTesoreria } from "../../lib/tesoreria";
-import { useSaldosDia } from "./SaldosEmpresas";
+import { armarTesoreria, notaEstadosCuenta, semaforoTesoreria, type ColorTesoreria, type CuentaEstadoCuenta } from "../../lib/tesoreria";
+import { useFechasEstadoCuenta, useSaldosDia } from "./SaldosEmpresas";
 import { DatosBancariosProveedor } from "../../components/DatosBancariosProveedor";
 import { desgloseIvaPago } from "../../lib/ivaPago";
 import { ImportarBancariosProveedores } from "../../components/ImportarBancariosProveedores";
@@ -106,6 +106,9 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
   };
   const [aviso, setAviso] = useState<string | null>(null);
   const { data: saldos } = useSaldosDia(hoy);
+  // Hasta qué día llega el estado de cuenta de cada cuenta (20-nov-2026,
+  // Delia: sin movimientos nuevos "no se actualiza la fecha").
+  const { data: fechasEstado } = useFechasEstadoCuenta(hoy);
   const { data: cuentas } = useQuery({
     queryKey: ["cuentas-bancarias-todas"],
     queryFn: async () => {
@@ -147,6 +150,14 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
   // Saldo del banco por cuenta (último estado de cuenta) y nombre de cada empresa,
   // para el bloque "de qué cuenta sale cada pago" (9-nov-2026, Mario).
   const saldoPorCuenta = useMemo(() => new Map((saldos ?? []).map((s) => [s.cuenta_id, Number(s.saldo_final)])), [saldos]);
+  const estadosPorEmpresa = useMemo(() => {
+    const m = new Map<string, CuentaEstadoCuenta[]>();
+    for (const s of saldos ?? []) {
+      const f = fechasEstado?.get(s.cuenta_id);
+      m.set(s.empresa_id, [...(m.get(s.empresa_id) ?? []), { banco: s.banco, ultimos_4: s.ultimos_4, al: f?.al ?? null, ultimo: f?.ultimo ?? null }]);
+    }
+    return m;
+  }, [saldos, fechasEstado]);
   const nombreEmpresa = useMemo(() => {
     const m = new Map<string, string>();
     for (const s of saldos ?? []) m.set(s.empresa_id, s.empresa_nombre);
@@ -232,6 +243,7 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
       <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {empresas.map((e) => {
           const s = semaforoTesoreria(e);
+          const notaEstado = fechasEstado ? notaEstadosCuenta(estadosPorEmpresa.get(e.empresa_id) ?? [], hoy) : null;
           const elegida = filtroEmpresa === e.empresa_id;
           const clase = `block rounded border p-3 text-left hover:shadow-sm ${COLOR[s.color]} ${elegida ? "ring-2 ring-slate-900" : ""} ${filtroEmpresa && !elegida ? "opacity-60" : ""}`;
           const contenido = (
@@ -244,6 +256,7 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
               <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-slate-600">
                 <dt>Saldo banco</dt>
                 <dd className="text-right tabular-nums">{moneda(e.saldo_final)}</dd>
+                {notaEstado && <dd className={`col-span-2 text-[10px] leading-tight ${notaEstado.viejo ? "text-amber-700" : "text-slate-500"}`}>{notaEstado.texto}</dd>}
                 <dt>Por pagar hoy</dt>
                 <dd className="text-right tabular-nums">{e.pendientes_hoy ? moneda(e.pendientes_hoy) : "—"}</dd>
                 <dt>Pagado hoy</dt>
@@ -302,6 +315,8 @@ export function Tesoreria({ compacto = false }: { compacto?: boolean }) {
             nombreEmpresa={nombreEmpresa}
             hoy={hoy}
             saldos={saldoPorCuenta}
+            fechasSaldo={fechasEstado}
+            hoyFecha={hoy}
           />
           <Seccion id="por-pagar" titulo="Por pagar hoy" grupos={porEmpresa(pendientes)} vacio="No hay pagos pendientes para hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
           <Seccion titulo="Pagados hoy" grupos={porEmpresa(pagadosHoy)} vacio="Todavía no se marca ningún pago hoy." render={(p) => <FilaPago p={p} cuenta={p.cuenta_id ? cuentaTexto.get(p.cuenta_id) ?? null : null} hoy={hoy} onMarcar={(pagado) => marcar.mutate({ p, pagado })} onRegresado={regresar} ocupado={marcar.isPending} />} />
