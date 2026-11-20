@@ -367,3 +367,66 @@ export function htmlCotizacionBalken(enc: EncabezadoCotizacion, p: ParametrosDes
   <p class="param">Las cantidades son un despiece estimado a partir de las medidas indicadas; se confirman con el plano y la visita a obra. El claro máximo por peralte es orientativo y no sustituye el cálculo estructural.${anexo ? " Se anexa la ficha técnica de la vigueta." : ""}</p>
 </div>${anexo?.html ?? ""}</body></html>`;
 }
+
+// ── Remisión de salida desde el despiece ──────────────────────────────────
+// (20-nov-2026, Mario: "permite que pueda generar la remisión de salida de
+// viguetas y bovedilla"). Solo lo que se entrega físicamente: viguetas por
+// versión y longitud, y bovedillas (con desperdicio). Concreto, malla, montaje
+// y flete son conceptos de la cotización, no mercancía que sale de la planta.
+
+export interface ProductoRemisionBalken {
+  id: string;
+  nombre: string;
+  tipo?: string | null;
+  unidad_medida?: string | null;
+}
+
+export interface LineaRemisionBalken {
+  /** Producto del catálogo de Balken al que se liga la partida ("" si no hay). */
+  itemId: string;
+  descripcion: string;
+  cantidad: number;
+  unidad: string;
+  /** Precio unitario SIN IVA como texto para el formulario ("" si no se cotizó). */
+  precio: string;
+}
+
+function normalizar(t: string): string {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/** Producto del catálogo que corresponde a una vigueta de cierta versión o a
+ * la bovedilla: por tipo y, en viguetas, por la palabra sencilla/reforzada en
+ * el nombre (si solo hay una vigueta en el catálogo, esa). */
+export function productoParaRemision(items: ProductoRemisionBalken[], que: VersionViguetaCotizada | "bovedilla"): ProductoRemisionBalken | null {
+  if (que === "bovedilla") {
+    return items.find((i) => i.tipo === "bovedilla") ?? items.find((i) => normalizar(i.nombre).includes("bovedilla")) ?? null;
+  }
+  const viguetas = items.filter((i) => i.tipo === "vigueta" || normalizar(i.nombre).includes("vigueta"));
+  const palabra = que === "sencilla" ? "sencilla" : "reforzada";
+  return viguetas.find((i) => normalizar(i.nombre).includes(palabra)) ?? (viguetas.length === 1 ? viguetas[0] : null);
+}
+
+export function lineasRemisionBalken(d: Despiece, p: ParametrosDespiece, precios: PreciosCotizacion, items: ProductoRemisionBalken[]): LineaRemisionBalken[] {
+  const lineas: LineaRemisionBalken[] = [];
+  for (const v of d.viguetasPorLongitud) {
+    const precio = r2(v.longitud * precios.viguetaPorMetro);
+    lineas.push({
+      itemId: productoParaRemision(items, v.version)?.id ?? "",
+      descripcion: `${nombreVigueta(v.version, p)} ${p.peralteVigueta} cm × ${v.longitud.toFixed(2)} m`,
+      cantidad: v.piezas,
+      unidad: "pza",
+      precio: precio > 0 ? String(precio) : "",
+    });
+  }
+  if (d.bovedillasConDesperdicio > 0) {
+    lineas.push({
+      itemId: productoParaRemision(items, "bovedilla")?.id ?? "",
+      descripcion: p.bovedilla,
+      cantidad: d.bovedillasConDesperdicio,
+      unidad: "pza",
+      precio: precios.bovedillaPorPieza > 0 ? String(r2(precios.bovedillaPorPieza)) : "",
+    });
+  }
+  return lineas;
+}

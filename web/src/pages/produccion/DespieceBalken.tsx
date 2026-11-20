@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../lib/auth";
+import { supabase } from "../../lib/supabase";
+import { RemisionProduccionModal } from "./RemisionProduccionModal";
 import { abrirParaImprimir } from "../../lib/imprimir";
 import { logoDeEmpresa } from "../../lib/logoEmpresaCargar";
 import { CALIBRES_CELOSIA, CALIBRES_VARILLA, FICHAS_VIGUETA, NOMBRE_VERSION, VERSIONES_VIGUETA, aceroVigueta, cuerpoFicha, estilosFicha, htmlFichaVigueta, pesoVigueta, textoClaro, type FichaVigueta, type VersionVigueta } from "../../lib/fichaVigueta";
@@ -10,6 +13,7 @@ import {
   cotizar,
   despiezar,
   htmlCotizacionBalken,
+  lineasRemisionBalken,
   type ParametrosDespiece,
   type PreciosCotizacion,
   type Tablero,
@@ -59,7 +63,7 @@ function leerFichas(): Fichas {
 
 /** Despiece de losa de vigueta y bovedilla + cotización rápida (Balken).
  * Los parámetros y precios se recuerdan en este navegador. */
-export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre: string; empresaCodigo?: string }) {
+export function DespieceBalken({ empresaId, empresaNombre, empresaCodigo }: { empresaId?: string; empresaNombre: string; empresaCodigo?: string }) {
   const { perfil } = useAuth();
   // Fichas técnicas de la vigueta (5-nov-2026): sencilla (varilla 3/8", claros
   // hasta 3 m) y reforzada (varilla 1/2", claros mayores). Se editan aquí, se
@@ -90,6 +94,27 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
   const [vigencia, setVigencia] = useState("15 días");
   const [notas, setNotas] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
+  // Remisión de salida con las viguetas y bovedillas del despiece (20-nov-2026,
+  // Mario): abre el mismo generador de la planta con las partidas ya cargadas.
+  const [remisionAbierta, setRemisionAbierta] = useState(false);
+  const { data: productosVbb } = useQuery({
+    queryKey: ["productos-produccion", empresaId],
+    enabled: !!empresaId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("productos_produccion").select("id, nombre, tipo, unidad_medida").eq("empresa_id", empresaId!).eq("activo", true).order("nombre");
+      if (error) throw error;
+      return (data ?? []) as { id: string; nombre: string; tipo: string | null; unidad_medida: string | null }[];
+    },
+  });
+  const { data: ovVbb } = useQuery({
+    queryKey: ["ordenes-venta-planta", empresaId, null],
+    enabled: !!empresaId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("ordenes_venta").select("id, id_ov, cliente, total").eq("empresa_id", empresaId!).order("fecha_ov", { ascending: false, nullsFirst: false }).order("id_ov", { ascending: false }).limit(200);
+      if (error) throw error;
+      return (data ?? []) as { id: string; id_ov: string; cliente: string | null; total: number | null }[];
+    },
+  });
 
   useEffect(() => {
     try {
@@ -345,10 +370,21 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
           <div><label className={etiqueta}>Cliente</label><input value={cliente} onChange={(e) => setCliente(e.target.value)} className={campo} /></div>
           <div><label className={etiqueta}>Obra</label><input value={obra} onChange={(e) => setObra(e.target.value)} className={campo} /></div>
           <div><label className={etiqueta}>Vigencia</label><input value={vigencia} onChange={(e) => setVigencia(e.target.value)} className={campo} /></div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <button onClick={imprimir} disabled={despiece.area === 0} className="w-full rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
               Imprimir cotización
             </button>
+            {empresaId && (
+              <button
+                type="button"
+                onClick={() => setRemisionAbierta(true)}
+                disabled={despiece.viguetas === 0 && despiece.bovedillasConDesperdicio === 0}
+                title="Abre la remisión de salida con las viguetas y bovedillas de este despiece; se puede corregir antes de generarla"
+                className="w-full whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Generar remisión de salida
+              </button>
+            )}
           </div>
           <div className="sm:col-span-4"><label className={etiqueta}>Notas</label><textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} className={campo} /></div>
           <label className="flex items-center gap-2 text-xs text-slate-700 sm:col-span-4">
@@ -356,7 +392,27 @@ export function DespieceBalken({ empresaNombre, empresaCodigo }: { empresaNombre
           </label>
         </div>
         {aviso && <p className="mt-2 text-sm text-red-600">{aviso}</p>}
+        {empresaId && (
+          <p className="mt-2 text-xs text-slate-500">
+            "Generar remisión de salida" lleva las viguetas (por versión y largo) y las bovedillas de este despiece a la remisión con QR de la planta; los precios van sin IVA como en la cotización. Las ya emitidas están en Inventario › Salidas.
+          </p>
+        )}
       </div>
+      {remisionAbierta && empresaId && (
+        <RemisionProduccionModal
+          empresaId={empresaId}
+          tipo="salida"
+          items={(productosVbb ?? []).map((p) => ({ id: p.id, nombre: p.nombre, unidad_medida: p.unidad_medida ?? "pza" }))}
+          referencias={(ovVbb ?? []).map((ov) => ({ id: ov.id, folio: `OV ${ov.id_ov}`, contraparte: ov.cliente }))}
+          inicial={{
+            contraparte: cliente,
+            observaciones: [obra ? `Obra: ${obra}` : "", `Despiece: ${num(despiece.area)} m² de losa, ${despiece.viguetas} viguetas (${num(despiece.metrosVigueta)} m), ${despiece.bovedillas} bovedillas + desperdicio.`].filter(Boolean).join(" · "),
+            lineas: lineasRemisionBalken(despiece, parametrosEfectivos, precios, productosVbb ?? []),
+            preciosConIva: false,
+          }}
+          onCerrar={() => setRemisionAbierta(false)}
+        />
+      )}
 
       {/* Ficha técnica de la vigueta */}
       <div className="rounded border border-slate-200 bg-white p-3">
