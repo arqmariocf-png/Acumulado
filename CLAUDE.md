@@ -690,6 +690,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   emitir las dos. Probado en rollback: Alma REM-VBB-000001 con partida, Laura
   REM-MCC-000006. Mismo día se les puso contraseña temporal por SQL
   (`crypt(..., gen_salt('bf'))` en `auth.users`; se dictaron a Mario por chat).
+- **Área nueva de seguridad y monitoreo (20-nov-2026, Mario: "ambos van a
+  ser para un área de seguridad y monitoreo nueva; yo te digo acceso a dónde
+  van a tener")**: dos cuentas en rol **pendiente** hasta que Mario diga qué
+  acceso: Gonzalo Xochimitl Cuautle (gonzalo.xochimitl@qxsolutions.mx; se
+  registró solo el 14-sep; es el desarrollador del backoffice, puesto Sistemas
+  en RH con correo gxochimitl@hotmail.com, expediente sin ligar) y
+  **seguridad@grupoloma.mx** (nombre "Seguridad y monitoreo", creada por SQL
+  en `auth.users` + `auth.identities` con las columnas de token en `''`, como
+  la de Aldo). Contraseñas temporales dictadas a Mario por chat. Cuando
+  defina el acceso: rol/permisos por persona + `grupo_id` LOMA (los dos están
+  sin organización) y, si hace falta, módulo o pantalla nueva del área.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el
