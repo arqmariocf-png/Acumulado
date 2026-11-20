@@ -14,6 +14,8 @@ interface Platillo {
   categoria: string | null;
   precio: number;
   activo: boolean;
+  /** Siempre en el menú: entra solo todos los días (20-nov-2026, Mario). */
+  fijo: boolean;
 }
 
 /** Cocina: catálogo de platillos, menú del día y entregas. Solo lo
@@ -35,7 +37,7 @@ export function Cocina() {
   const { data: platillos = [] } = useQuery({
     queryKey: ["comedor", "platillos"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("comedor_platillos").select("id, nombre, descripcion, categoria, precio, activo").order("categoria").order("nombre");
+      const { data, error } = await supabase.from("comedor_platillos").select("id, nombre, descripcion, categoria, precio, activo, fijo").order("categoria").order("nombre");
       if (error) throw error;
       return (data ?? []) as Platillo[];
     },
@@ -268,7 +270,7 @@ export function Cocina() {
             copiar el menú del día anterior
           </button>
         </div>
-        <p className="mb-2 text-xs text-slate-500">Marca los platillos que se ofrecen ese día. El cupo es opcional: al llenarse ya no se aceptan pedidos de ese platillo.</p>
+        <p className="mb-2 text-xs text-slate-500">Marca los platillos que se ofrecen ese día. El cupo es opcional: al llenarse ya no se aceptan pedidos de ese platillo. Los marcados "siempre en el menú" entran solos cada día.</p>
         <ul className="divide-y divide-slate-100 rounded border border-slate-200 bg-white text-sm">
           {platillos.map((pl) => {
             const enMenu = menu.find((m) => m.platillo_id === pl.id);
@@ -304,7 +306,11 @@ export function Cocina() {
                     />
                   </span>
                 )}
-                <button type="button" onClick={() => editarPlatillo.mutate({ id: pl.id, cambios: { activo: !pl.activo } })} className="ml-auto text-xs text-slate-500 underline">
+                <label className="ml-auto flex items-center gap-1 text-xs text-slate-600" title="Entra solo al menú de todos los días; se puede quitar de un día en concreto">
+                  <input type="checkbox" checked={pl.fijo} disabled={!pl.activo} onChange={() => editarPlatillo.mutate({ id: pl.id, cambios: { fijo: !pl.fijo } })} />
+                  siempre en el menú
+                </label>
+                <button type="button" onClick={() => editarPlatillo.mutate({ id: pl.id, cambios: { activo: !pl.activo } })} className="text-xs text-slate-500 underline">
                   {pl.activo ? "desactivar" : "activar"}
                 </button>
               </li>
