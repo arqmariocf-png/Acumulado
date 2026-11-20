@@ -48,6 +48,8 @@ export const MODULOS_ASIGNABLES: { clave: string; ruta: string; etiqueta: string
   { clave: "checador", ruta: "/bbva/asistencia", etiqueta: "Responsable de checador", descripcion: "ve entradas y salidas de todo el personal" },
   { clave: "caja", ruta: "/finanzas/efectivo", etiqueta: "Caja de efectivo y corte del comedor (solo ver)", descripcion: "ve las OC que se pagan en efectivo y sus pagos; confirmar sigue siendo de dirección" },
   { clave: "logistica", ruta: "/logistica", etiqueta: "Logística (opera)", descripcion: "da de alta unidades, captura reservas y atiende averías" },
+  { clave: "seguridad", ruta: "/seguridad/salidas", etiqueta: "Seguridad (caseta)", descripcion: "escanea el QR de las remisiones de salida y registra el conteo al salir el material" },
+  { clave: "monitoreo", ruta: "/seguridad/monitor", etiqueta: "Monitoreo de salidas", descripcion: "ve las remisiones de salida de todas las empresas y las verificaciones de la caseta" },
 ];
 
 /** Deja solo dígitos y, si es un celular mexicano de 10 dígitos, antepone 52 (lo que pide wa.me). */

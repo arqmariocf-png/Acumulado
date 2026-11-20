@@ -691,16 +691,56 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   REM-MCC-000006. Mismo día se les puso contraseña temporal por SQL
   (`crypt(..., gen_salt('bf'))` en `auth.users`; se dictaron a Mario por chat).
 - **Área nueva de seguridad y monitoreo (20-nov-2026, Mario: "ambos van a
-  ser para un área de seguridad y monitoreo nueva; yo te digo acceso a dónde
-  van a tener")**: dos cuentas en rol **pendiente** hasta que Mario diga qué
-  acceso: Gonzalo Xochimitl Cuautle (gonzalo.xochimitl@qxsolutions.mx; se
-  registró solo el 14-sep; es el desarrollador del backoffice, puesto Sistemas
-  en RH con correo gxochimitl@hotmail.com, expediente sin ligar) y
-  **seguridad@grupoloma.mx** (nombre "Seguridad y monitoreo", creada por SQL
-  en `auth.users` + `auth.identities` con las columnas de token en `''`, como
-  la de Aldo). Contraseñas temporales dictadas a Mario por chat. Cuando
-  defina el acceso: rol/permisos por persona + `grupo_id` LOMA (los dos están
-  sin organización) y, si hace falta, módulo o pantalla nueva del área.
+  ser para un área de seguridad y monitoreo nueva"; "a ambos dales acceso a
+  su cuenta personal para checar y demás; Gonzalo debe ver las remisiones de
+  salida y el área de seguridad escanea con el QR y realiza el conteo cada vez
+  que salen los materiales; este proceso lo va a monitorear Gonzalo")**
+  (`20261120120000`, aplicada como `seguridad_salidas`): cuentas Gonzalo
+  Xochimitl Cuautle (gonzalo.xochimitl@qxsolutions.mx; desarrollador del
+  backoffice; su expediente de RH quedó ligado a esta cuenta) y
+  **seguridad@grupoloma.mx** ("Seguridad y monitoreo", creada por SQL en
+  `auth.users` + `auth.identities` con tokens en `''`), las dos rol
+  **administrativo** en LOMA (checador, tareas, mi perfil) sin empresa
+  principal. Permisos por persona nuevos en `permisos_modulo` y
+  `MODULOS_ASIGNABLES`: **'seguridad'** (la caseta: seguridad@) y
+  **'monitoreo'** (Gonzalo). Tabla `salidas_verificadas` (grupo, empresa,
+  origen almacen|planta, remision_id, folio, cliente, resultado
+  coincide|diferencia, `lineas` jsonb [{descripcion, unidad,
+  cantidad_remision, cantidad_contada}], totales, observaciones, quién y
+  cuándo; frontera, espectador, director_general, solo_consulta; select
+  `auth_ve_salidas()` = admin/corporativo/dirección/almacén/producción o
+  permiso seguridad/monitoreo; se escribe solo por función).
+  `fn_salida_por_codigo(texto)` (definer; lee la liga del QR
+  `/inventario/remisiones/<id>` o `/produccion/remisiones/<id>`, un id o un
+  folio REM-XXX-000001; devuelve encabezado, partidas —almacén: movimientos
+  de inventario de la remisión; planta: sus partidas— y verificaciones
+  previas; solo de la organización), `fn_salida_verificar(origen, remision,
+  lineas, observaciones)` (definer; `auth_registra_salida()` = permiso
+  seguridad, almacén o admin; calcula el resultado y avisa por `fn_push_aviso`
+  a quien tiene 'monitoreo' —con diferencia también a dirección— →
+  `/seguridad/monitor`; se puede volver a verificar) y
+  `fn_salidas_monitor(desde, hasta)` (remisiones de salida de almacén y planta
+  de toda la organización con su última verificación). Pantallas: menú
+  **Seguridad y monitoreo** (grupo Operación; `lib/menu.ts` sección
+  `seguridad`, también en `rolesDeberSer` como menú 23): **Control de salidas
+  (caseta)** (`/seguridad/salidas`, `pages/seguridad/ControlSalidas.tsx`:
+  cámara `CamaraQr` —ahora exportada de `LectorCredencial`— o lector de
+  mano/folio; partidas con "contado" editable, diferencia en rojo, "Registrar
+  salida verificada / CON diferencia", salidas de hoy; acepta `?codigo=`) y
+  **Monitor de salidas** (`/seguridad/monitor`, `MonitorSalidas.tsx`: rango de
+  fechas, tarjetas salidas/verificadas/sin verificar/con diferencia, por
+  empresa, tabla con "ver conteo", se refresca cada minuto). Reglas puras en
+  `lib/controlSalidas.ts` (con pruebas: `interpretarCodigoSalida`,
+  `conteoInicial`, `compararConteo`, `revisarConteo`, `resumenMonitor`,
+  `filtrarMonitor`, `rutaRemisionSalida` —planta abre su detalle, cuya ruta
+  acepta ya seguridad/monitoreo; almacén abre la caseta con `?codigo=`, el
+  detalle de inventario sigue siendo de almacén—). Probado en rollback:
+  seguridad@ lee por folio, liga e id, registra con diferencia (2 avisos
+  encolados), ve sus verificaciones y el monitor; Gonzalo ve monitor y
+  verificaciones; Alma registra. Al 20-nov solo hay 3 remisiones de salida en
+  los últimos 30 días. Pendiente: expediente de RH para la persona de
+  seguridad si va a checar (RH › Personal) y, si Mario quiere, que la
+  remisión se marque "entregada" al verificarla en caseta.
 - **Christian, BBVA los viernes (8-oct-2026)**: actividad recurrente
   "Actualizar el sistema de BBVA Mantenimiento" (viernes) en el tablero
   "BBVA Mantenimiento · Actividades" (CSC); se cierra sola al subir el

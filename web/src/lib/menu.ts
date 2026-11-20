@@ -76,6 +76,7 @@ const veClientes = (p: Profile) =>
   veOrdenes(p) || p.rol === "produccion" || (p.modulos ?? []).some((m) => m === "cotizador" || m === "legal");
 const veHerramienta = (p: Profile) =>
   esAdmin(p) || ["almacen", "corporativo", "empresa", "direccion", "responsable", "supervisor", "administrativo", "directivo"].includes(p.rol) || (p.modulos ?? []).includes("herramienta");
+const veSalidas = (p: Profile) => ["admin", "corporativo", "direccion", "almacen", "produccion"].includes(p.rol) || (p.modulos ?? []).some((m) => m === "seguridad" || m === "monitoreo");
 const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || modulo("produccion")(p);
 // Logística (9-nov-2026): la ve toda la organización (choferes y supervisores reportan averías).
 const veLogistica = (p: Profile) => p.rol !== "pendiente";
@@ -93,7 +94,7 @@ export const GRUPOS_MENU: { clave: GrupoMenu; titulo: string }[] = [
   { clave: "administracion", titulo: "Administración" },
 ];
 
-/** Los 22 menús del deber ser, cada uno en su grupo. `area` liga el menú con
+/** Los 22 menús del deber ser (más Seguridad y monitoreo, 20-nov-2026), cada uno en su grupo. `area` liga el menú con
  * el departamento del organigrama (KPIs) y con los tableros de tareas. El
  * menú, el inicio, la guía y la barra de la sección usan esta misma lista;
  * un menú sin opciones (Presupuestos, Fletes) no se pinta hasta que tenga. */
@@ -280,6 +281,17 @@ export const SECCIONES: SeccionMenu[] = [
       { ruta: "/produccion/carpinteria", etiqueta: "Carpintería", descripcion: "taller de carpintería", uso: "Órdenes de producción y remisiones del taller.", visible: veProduccion },
       { ruta: "/produccion/remisiones", etiqueta: "Remisiones de planta", descripcion: "remisiones de salida de producto terminado de todas las empresas", uso: "Elige la empresa y genera la remisión de salida (folio REM, membrete y QR); para Balken también el despiece de vigueta y bovedilla.", visible: (p) => veProduccion(p) || ["almacen", "direccion", "corporativo"].includes(p.rol) },
       { ruta: "/clavicon", etiqueta: "Panorama Clavicón", descripcion: "calendario de procesos y reporte oficial", uso: "Solo dirección: el estado completo de la planta en un documento.", visible: esAdmin },
+    ],
+  },
+  {
+    clave: "seguridad",
+    grupo: "operacion",
+    area: "operacion",
+    titulo: "Seguridad y monitoreo",
+    proposito: "Caseta: qué sale y si cuadra con la remisión.",
+    entradas: [
+      { ruta: "/seguridad/salidas", etiqueta: "Control de salidas (caseta)", descripcion: "escanea el QR de la remisión, cuenta lo que sale y regístralo", uso: "Cada vez que sale material: escanea el QR de la remisión, cuenta las piezas y registra la salida; una diferencia se avisa a monitoreo.", visible: (p) => veSalidas(p) },
+      { ruta: "/seguridad/monitor", etiqueta: "Monitor de salidas", descripcion: "remisiones de salida de todas las empresas y su verificación en caseta", uso: "Qué salió, de qué empresa, si la caseta ya lo verificó y dónde hubo diferencias.", visible: (p) => veSalidas(p) },
     ],
   },
   {
