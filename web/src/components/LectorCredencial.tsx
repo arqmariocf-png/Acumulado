@@ -73,7 +73,7 @@ export function LectorCredencial({ titulo = "Escanear credencial", onLeida }: { 
   );
 }
 
-function CamaraQr({ onCodigo }: { onCodigo: (codigo: string) => void }) {
+export function CamaraQr({ onCodigo }: { onCodigo: (codigo: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [aviso, setAviso] = useState<string | null>("Abriendo la cámara…");
   const ultimo = useRef("");

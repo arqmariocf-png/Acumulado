@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import type { Profile } from "./types/database";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./lib/auth";
@@ -111,6 +112,8 @@ const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ def
 const VerArchivo = lazy(() => import("./pages/VerArchivo").then((m) => ({ default: m.VerArchivo })));
 const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
 const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
+const ControlSalidas = lazy(() => import("./pages/seguridad/ControlSalidas").then((m) => ({ default: m.ControlSalidas })));
+const MonitorSalidas = lazy(() => import("./pages/seguridad/MonitorSalidas").then((m) => ({ default: m.MonitorSalidas })));
 const RemisionesEmpresas = lazy(() => import("./pages/produccion/RemisionesEmpresas").then((m) => ({ default: m.RemisionesEmpresas })));
 
 // Mario, 6-oct-2026: "se está trabando mucho". Por defecto react-query daba
@@ -125,6 +128,8 @@ const queryClient = new QueryClient({
 function Cargando() {
   return <div className="p-8 text-center text-sm text-slate-500">Cargando…</div>;
 }
+
+const veSalidas = (p: Profile) => (p.modulos ?? []).some((m) => m === "seguridad" || m === "monitoreo");
 
 export default function App() {
   return (
@@ -384,8 +389,15 @@ function Enrutador() {
             <Route path="/clavicon" element={<PanoramaClavicon />} />
           </Route>
 
-          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable", "almacen"]} modulo="produccion" />}>
+          <Route element={<ProtectedRoute roles={["produccion", "corporativo", "direccion", "empresa", "responsable", "almacen"]} modulo="produccion" oPermiso={veSalidas} />}>
             <Route path="/produccion/remisiones/:id" element={<RemisionProduccionDetalle />} />
+          </Route>
+
+          {/* Seguridad y monitoreo (Mario, 20-nov-2026): la caseta escanea el QR
+              de la remisión de salida y cuenta lo que sale; monitoreo lo revisa. */}
+          <Route element={<ProtectedRoute roles={["almacen", "corporativo", "direccion", "produccion"]} oPermiso={veSalidas} />}>
+            <Route path="/seguridad/salidas" element={<ControlSalidas />} />
+            <Route path="/seguridad/monitor" element={<MonitorSalidas />} />
           </Route>
 
           {/* Remisiones de salida de planta de todas las empresas, para quien

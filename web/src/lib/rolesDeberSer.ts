@@ -28,6 +28,7 @@ export type ClaveMenu =
   | "obras"
   | "produccion"
   | "fletes"
+  | "seguridad"
   | "mantenimiento_bbva"
   | "nomina"
   | "mano_obra"
@@ -38,7 +39,7 @@ export type ClaveMenu =
 
 export const TODOS_LOS_MENUS: ClaveMenu[] = [
   "mi_dia", "tablero", "analisis", "gobierno", "ventas", "cobranza", "compras", "almacen", "tesoreria", "cuentas_pagar", "presupuestos",
-  "contabilidad", "obras", "produccion", "fletes", "mantenimiento_bbva", "nomina", "mano_obra", "rh", "legal", "catalogos", "configuracion",
+  "contabilidad", "obras", "produccion", "fletes", "seguridad", "mantenimiento_bbva", "nomina", "mano_obra", "rh", "legal", "catalogos", "configuracion",
 ];
 
 export type Puesto =

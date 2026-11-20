@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { APLICAR_ROLES_DEBER_SER, equivalencia, menuPermitido, menusQueSeQuitan, nombrePuestos, PUESTOS, TODOS_LOS_MENUS } from "./rolesDeberSer.ts";
 import { SECCIONES } from "./menu.ts";
 
-test("los menús de la matriz son los 22 del menú", () => {
+test("los menús de la matriz son los 23 del menú", () => {
   assert.deepEqual([...SECCIONES.map((s) => s.clave)].sort(), [...TODOS_LOS_MENUS].sort());
   for (const p of Object.values(PUESTOS)) assert.ok(p.menus.includes("mi_dia"), p.nombre);
 });
 
 test("equivalencias de los roles de hoy", () => {
-  assert.equal(equivalencia({ rol: "admin" }).menus?.size, 22);
+  assert.equal(equivalencia({ rol: "admin" }).menus?.size, 23);
   const laura = equivalencia({ rol: "direccion" });
   assert.deepEqual(laura.puestos, ["finanzas_tesoreria"]);
   assert.ok(laura.menus?.has("catalogos"), "excepción de catálogos");
