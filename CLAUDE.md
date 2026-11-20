@@ -2256,6 +2256,18 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   aviso a Alma), Alma genera IA-OC-0429, Laura autoriza (pago, req autorizada),
   en_bodega avisa a RH + Christian; Christian pide SE-CSC-0003 y al atender con
   'compra' sale la requisición con "EPP: Casco | EPP: Botas talla 27".
+  **"Podemos registrar una entrega, pero no podemos hacer requisiciones de
+  EPP para que pueda visualizarlas Alma" (20-nov-2026, Fernando por WhatsApp
+  a Mario)**: la base sí lo dejaba (probado con su cuenta sobre EPP-ERG-0004:
+  `fn_epp_pedir_compra` crea la requisición) pero al registrar la entrega
+  directa todas las piezas nacían "Bodega" y el botón "No hay en bodega: pedir
+  a compras" pasaba desapercibido (EPP-ERG-0003 y 0004 sin requisición). Ahora
+  en "Registrar entrega" el origen por defecto es **Comprar** y la casilla
+  **"Pedir a compras al registrar (requisición para Alma)"** (prendida) llama
+  `fn_epp_pedir_compra` justo después de guardar (todas las piezas si ninguna
+  es de compra); el botón dice "Registrar entrega y pedir a compras" y las
+  entregas ya registradas traen "📦 Pedir a compras (requisición para Alma)".
+  Sin cambios de base.
   **Solicitud de EPP (21-oct-2026, Mario: "da de alta a los supervisores y
   revisa que Christian tenga habilitada la solicitud de EPP"; eligió "que
   pidan EPP")**: menú RH → **Solicitar EPP** (`/epp/solicitar`,
