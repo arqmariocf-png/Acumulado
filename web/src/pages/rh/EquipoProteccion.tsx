@@ -34,7 +34,7 @@ interface FilaNueva {
   origen: "bodega" | "compra";
 }
 
-const filaVacia = (): FilaNueva => ({ descripcion: "", talla: "", cantidad: "1", unidad: "pza", costo: "", vigencia: "12", origen: "bodega" });
+const filaVacia = (): FilaNueva => ({ descripcion: "", talla: "", cantidad: "1", unidad: "pza", costo: "", vigencia: "12", origen: "compra" });
 const hoy = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
 const pesos = (n: number) => n.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 const campo = "rounded border border-slate-300 px-2 py-1 text-sm";
@@ -55,6 +55,10 @@ export function EquipoProteccion() {
   const [personalId, setPersonalId] = useState("");
   const [proyectoId, setProyectoId] = useState("");
   const [notas, setNotas] = useState("");
+  // Fernando (20-nov-2026): "podemos registrar una entrega, pero no podemos
+  // hacer requisiciones de EPP para que pueda visualizarlas Alma". Al
+  // registrar, la requisición para almacén sale de una vez.
+  const [pedirAlRegistrar, setPedirAlRegistrar] = useState(true);
   const [filas, setFilas] = useState<FilaNueva[]>([filaVacia()]);
   const [filtro, setFiltro] = useState("");
 
@@ -133,10 +137,21 @@ export function EquipoProteccion() {
         })),
       );
       if (e2) throw e2;
-      return a.folio as string;
+      let requisicion = false;
+      if (pedirAlRegistrar) {
+        const hayCompra = lineas.some((f) => f.origen === "compra");
+        const { error: e3 } = await supabase.rpc("fn_epp_pedir_compra", { p_asignacion: a.id, p_todas: !hayCompra });
+        if (e3) throw new Error(`La entrega ${a.folio} quedó registrada, pero no se pudo crear la requisición: ${e3.message}. Usa "Pedir a compras" en la entrega.`);
+        requisicion = true;
+      }
+      return { folio: a.folio as string, requisicion };
     },
-    onSuccess: (folio) => {
-      setAviso(`Entrega ${folio} registrada. Si hay piezas por comprar, usa "Pedir a compras".`);
+    onSuccess: ({ folio, requisicion }) => {
+      setAviso(
+        requisicion
+          ? `Entrega ${folio} registrada y requisición creada: Alma ya la ve en Requisiciones y genera la OC; al llegar te avisamos para entregarla.`
+          : `Entrega ${folio} registrada. Si hay piezas por comprar, usa "Pedir a compras".`,
+      );
       setNueva(false);
       setFilas([filaVacia()]);
       setPersonalId("");
@@ -342,6 +357,10 @@ export function EquipoProteccion() {
               + Otra pieza
             </button>
             <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas (opcional)" className={`${campo} flex-1`} />
+            <label className="flex items-center gap-1 text-xs text-slate-700" title="Crea la requisición de compra al registrar: Alma la ve en Requisiciones, genera la OC y dirección la autoriza. Las piezas marcadas Bodega se surten de ahí; si todas son de bodega, se piden todas.">
+              <input type="checkbox" checked={pedirAlRegistrar} onChange={(e) => setPedirAlRegistrar(e.target.checked)} />
+              Pedir a compras al registrar (requisición para Alma)
+            </label>
             <button
               disabled={crear.isPending}
               onClick={() => {
@@ -350,7 +369,7 @@ export function EquipoProteccion() {
               }}
               className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >
-              {crear.isPending ? "Guardando…" : "Registrar entrega"}
+              {crear.isPending ? "Guardando…" : pedirAlRegistrar ? "Registrar entrega y pedir a compras" : "Registrar entrega"}
             </button>
           </div>
         </div>
@@ -426,7 +445,7 @@ export function EquipoProteccion() {
               <span className="flex-1" />
               {porSurtir && !a.requisicion_id && (
                 <button onClick={() => pedirCompra.mutate({ id: a.id, todas: !porComprar })} disabled={pedirCompra.isPending} className="rounded border border-sky-300 px-2 py-1 text-xs text-sky-800" title={porComprar ? "Manda a compras las piezas marcadas para comprar" : "No hay en bodega: manda a compras todo lo que falta por surtir"}>
-                  {porComprar ? "Pedir a compras" : "No hay en bodega: pedir a compras"}
+                  📦 {porComprar ? "Pedir a compras (requisición para Alma)" : "No hay en bodega: pedir todo a compras (requisición para Alma)"}
                 </button>
               )}
               <button onClick={() => imprimir(a)} className="rounded border border-slate-300 px-2 py-1 text-xs">
