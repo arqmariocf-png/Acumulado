@@ -28,6 +28,14 @@ export interface FilaSaldoCuenta {
   /** De dónde viene el ajuste (ej. "comisión no capturada, jul-ago 2026"). */
   ajusteNota: string | null;
   tieneMovimientos: boolean;
+  /** Hasta qué día llega el último estado de cuenta subido de la cuenta
+   * (`cuentas_bancarias.estado_cuenta_al`; la carga lo registra aunque no
+   * traiga movimientos nuevos). 20-nov-2026, Delia: "si no tienen movimiento
+   * se quedan con el estado de cuenta del último movimiento, no se actualiza
+   * la fecha". Opcional: las filas de "ayer"/"hoy" no lo traen. */
+  estadoCuentaAl?: string | null;
+  /** Fecha del último movimiento cargado de la cuenta. */
+  ultimoMovimiento?: string | null;
 }
 
 export interface SubtotalSaldos {
@@ -117,4 +125,59 @@ export function tieneDescuadre(f: FilaSaldoCuenta): boolean {
 
 export function filasConDescuadre(reporte: ReporteSaldosDia): FilaSaldoCuenta[] {
   return reporte.grupos.flatMap((g) => g.filas).filter(tieneDescuadre);
+}
+
+/** dd/mm de una fecha ISO. */
+export function ddmm(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+}
+
+/** Día hábil anterior (lunes → viernes): los bancos no mueven en fin de semana. */
+export function diaHabilAnterior(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  do d.setUTCDate(d.getUTCDate() - 1);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Texto corto de la columna "AL DÍA" de la posición global: hasta qué día
+ * llega el estado de cuenta de la cuenta ("19/11"), o "—" si nunca se ha
+ * cargado uno. */
+export function textoAlDia(f: Pick<FilaSaldoCuenta, "estadoCuentaAl" | "ultimoMovimiento">): string {
+  const al = f.estadoCuentaAl ?? f.ultimoMovimiento ?? null;
+  return al ? ddmm(al) : "—";
+}
+
+/** ¿El estado de cuenta está atrasado respecto a la fecha del reporte
+ * (anterior al día hábil previo, o nunca cargado)? */
+export function estadoCuentaViejo(f: Pick<FilaSaldoCuenta, "estadoCuentaAl" | "ultimoMovimiento">, fechaHoy: string): boolean {
+  const al = f.estadoCuentaAl ?? f.ultimoMovimiento ?? null;
+  return !al || al < diaHabilAnterior(fechaHoy);
+}
+
+export interface NotaAlDia {
+  fila: FilaSaldoCuenta;
+  texto: string;
+  /** true = falta subir el estado de cuenta; false = al día, solo sin movimientos nuevos. */
+  atrasada: boolean;
+}
+
+/** Notas al pie de la posición global: cuentas cuyo estado de cuenta está
+ * atrasado (o nunca se cargó) y cuentas al día que no han tenido
+ * movimientos desde antes (el saldo no cambia pero sí está actualizado). */
+export function notasAlDia(reporte: ReporteSaldosDia, fechaHoy: string): NotaAlDia[] {
+  const notas: NotaAlDia[] = [];
+  for (const f of reporte.grupos.flatMap((g) => g.filas)) {
+    if (f.estadoCuentaAl === undefined && f.ultimoMovimiento === undefined) continue;
+    const al = f.estadoCuentaAl ?? f.ultimoMovimiento ?? null;
+    if (!al) {
+      notas.push({ fila: f, texto: `${etiquetaCuenta(f)} (${f.empresaNombre}): nunca se ha cargado un estado de cuenta.`, atrasada: true });
+    } else if (al < diaHabilAnterior(fechaHoy)) {
+      notas.push({ fila: f, texto: `${etiquetaCuenta(f)} (${f.empresaNombre}): estado de cuenta al ${ddmm(al)}, falta subir lo más reciente.`, atrasada: true });
+    } else if (f.ultimoMovimiento && f.ultimoMovimiento < al) {
+      notas.push({ fila: f, texto: `${etiquetaCuenta(f)} (${f.empresaNombre}): estado de cuenta al ${ddmm(al)}, sin movimientos desde el ${ddmm(f.ultimoMovimiento)} (el saldo no cambia, pero sí está al día).`, atrasada: false });
+    }
+  }
+  return notas.sort((a, b) => Number(b.atrasada) - Number(a.atrasada));
 }

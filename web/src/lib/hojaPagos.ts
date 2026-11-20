@@ -101,7 +101,7 @@ export interface HojaEmpresa {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const METODO: Record<PagoHoja["metodo"], string> = { transferencia: "Transferencia", efectivo: "Efectivo", cheque: "Cheque" };
 
-function ddmm(iso: string): string {
+export function ddmm(iso: string): string {
   const [, m, d] = iso.split("-");
   return `${d}/${m}`;
 }
