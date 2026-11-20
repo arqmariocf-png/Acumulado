@@ -426,6 +426,36 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   Las dos cuentas de MCC quedaron al 17/11 por SQL (de los archivos que subió
   Delia); las demás se registran solas en la siguiente carga. Desplegada con
   `scratchpad ef/deploy/strip25.cjs` (agrega corte-estado-cuenta.ts a la lista).
+  **"Con Delia marca como pendiente el estado de cuenta, sin embargo es porque
+  muchas veces no hay movimientos posteriores" (20-nov-2026, Mario)**: Delia
+  subió hoy "ESTADO DE CUENTA AL 20 DE NOVIEMBRE.pdf" (BBVA) para CSC 6448/7382/
+  4940/9954, LRT 1829 y MCF 2047 y las cuentas quedaron `estado_cuenta_al` =
+  17/11, 13/11, 18/11… (la fecha del último movimiento del archivo): el export
+  diario de BBVA **no declara corte en el texto** y `extraerCorteEstadoCuenta`
+  devolvía null, así que la hoja decía "falta subir lo más reciente" aunque el
+  archivo era del día. Ahora el **nombre del archivo** cuenta como respaldo:
+  `corteDesdeNombreArchivo` ("AL 20 DE NOVIEMBRE", "AL 19 DE NOV BALKEN", con
+  o sin año —sin año toma el de hoy, o el anterior si quedaría en el futuro—,
+  `2026-11-18`, `18-11-2026`) y `corteDeArchivo(texto, nombre, último, hoy)` =
+  la mayor entre lo que dice el banco y lo que dice el nombre, nunca después de
+  hoy (`_shared/ingesta/corte-estado-cuenta.ts`, con pruebas; también lee
+  "Fecha de consulta/impresión/emisión dd/mm/aaaa"). Edge
+  `ingesta-estado-cuenta` **v26** (archivos sin comentarios con el printer de
+  TypeScript: `ts.createPrinter({ removeComments: true })` sobre cada .ts del
+  repo reproduce exacto lo desplegado; `get_edge_function` trae los 13 archivos
+  y solo se cambian los tocados). Los reportes que seguían midiendo por último
+  movimiento ahora usan `greatest(último movimiento, estado_cuenta_al)`:
+  cumplimiento CON-01 `estados_cuenta_al_dia` (detalle "Estado de cuenta al
+  …"), `fn_reporte_area_finanzas` (cuentas_sin_estado_7d, saldos_por_empresa.al)
+  y `fn_reporte_area_contabilidad` (cuentas_sin_estado_7d, ultimo_estado)
+  (`20261120130000`, aplicada como `estado_cuenta_al_en_reportes`; reescribe
+  por reemplazo sobre la definición vigente y falla si no encuentra el texto).
+  Por SQL se corrigió lo ya subido leyendo "AL d DE mes" de
+  `archivos_cargados.nombre_original`: 6 cuentas al 20/11, AEP 4239 al 19/11,
+  QX 4941 al 13/11. **Decirle a Delia**: nombrar el archivo con la fecha ("AL 20
+  DE NOVIEMBRE") basta para que la cuenta quede al día aunque no traiga
+  movimientos nuevos. Siguen sin estado de cuenta registrado: AEP Banorte 1273
+  (último mov. 30-sep), CSC Banorte 7529, ERG Santander 7153 (9-nov).
   **"Sigue sin actualizar el saldo de Mallas de BanBajío… si no tienen
   movimiento se quedan con el estado de cuenta del último movimiento, no se
   actualiza la fecha" (20-nov-2026, Delia por WhatsApp a Mario)**: la base ya
