@@ -479,6 +479,17 @@ inventario, precios unitarios, RH/checador, producción (Clavicón/Balken), BBVA
   ef/deploy/saldos6/strip.cjs` + el `_shared/supabase-clients.ts` y `cors.ts`
   que ya corrían en la v5 (el del repo es distinto; no se tocó). Ojo pdf-lib:
   Helvetica estándar no codifica "≠" (se dejó "!=" como en producción).
+  **Sin observación en el tablero de Delia (21-nov-2026, Mario: "a Delia le
+  salen pendientes los estados de cuenta cuando no hay movimientos; quita esa
+  observación y que no sea una condicionante de que quede en verde su
+  tablero")**: las tarjetas de Tesorería ya no pintan "estado de cuenta al
+  dd/mm · … sin movimientos desde…" ni la fecha bajo cada saldo en "De qué
+  cuenta sale cada pago" (`notaEstadosCuenta` se quitó de `lib/tesoreria.ts`;
+  Tesorería ya no consulta `useFechasEstadoCuenta`). El semáforo de Tesorería
+  (`semaforoTesoreria`) nunca dependió de esa fecha: solo compara pagos contra
+  saldo del banco y lo pagado contra lo que el banco refleja. La fecha del
+  estado de cuenta sigue en la hoja de pagos de Laura, en Saldos por empresa y
+  en el PDF de saldos (ahí la nota de "sin movimientos" dice "sí está al día").
 - **Backoffice caído 7-oct-2026**: `api_ocs_aut`/`api_ov_aut` responden 500
   con página HTML "Access denied for user 'dxjldwfg_backoffice'" (su Laravel
   no entra a su MySQL). En Acumulado se ve como "invalid input syntax for
