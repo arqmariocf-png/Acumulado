@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { armarTesoreria, notaEstadosCuenta, semaforoTesoreria } from "./tesoreria.ts";
+import { armarTesoreria, semaforoTesoreria } from "./tesoreria.ts";
 
 test("semaforoTesoreria: rojo si lo pendiente rebasa el saldo", () => {
   const s = semaforoTesoreria({ saldo_final: 1000, salidas: 0, pendientes_hoy: 1500, pagados_hoy: 0 });
@@ -48,43 +48,4 @@ test("armarTesoreria cruza saldos y pagos por empresa; efectivo aparte; vencidos
   assert.equal(a.n_pendientes, 3);
   assert.equal(semaforoTesoreria(a).color, "ambar");
   assert.equal(filas[1].saldo_final, 0);
-});
-
-// 20-nov-2026, Delia: la cuenta de Mallas en BanBajío no tenía movimientos
-// desde el 13/11 pero el estado de cuenta del 19 ya estaba subido.
-test("notaEstadosCuenta: una cuenta al día sin movimientos recientes lo dice", () => {
-  const n = notaEstadosCuenta([{ banco: "BanBajio", ultimos_4: "9403", al: "2026-11-19", ultimo: "2026-11-13" }], "2026-11-19");
-  assert.equal(n?.viejo, false);
-  assert.match(n!.texto, /estado de cuenta al 19\/11/);
-  assert.match(n!.texto, /sin movimientos desde el 13\/11/);
-});
-
-test("notaEstadosCuenta: varias cuentas al mismo día, nombra la que no tiene movimientos", () => {
-  const n = notaEstadosCuenta(
-    [
-      { banco: "BBVA", ultimos_4: "6381", al: "2026-11-19", ultimo: "2026-11-19" },
-      { banco: "BanBajio", ultimos_4: "9403", al: "2026-11-19", ultimo: "2026-11-13" },
-    ],
-    "2026-11-20",
-  );
-  assert.equal(n?.viejo, false);
-  assert.equal(n?.texto, "estado de cuenta al 19/11 · BanBajio 9403 sin movimientos desde el 13/11");
-});
-
-test("notaEstadosCuenta: la cuenta atrasada se nombra y marca viejo", () => {
-  const n = notaEstadosCuenta(
-    [
-      { banco: "BBVA", ultimos_4: "5859", al: "2026-11-19", ultimo: "2026-11-19" },
-      { banco: "Banorte", ultimos_4: "1273", al: "2026-11-10", ultimo: "2026-11-10" },
-    ],
-    "2026-11-19",
-  );
-  assert.equal(n?.viejo, true);
-  assert.equal(n?.texto, "estado de cuenta al 19/11 · Banorte 1273 al 10/11: falta subir lo más reciente");
-});
-
-test("notaEstadosCuenta: sin cuentas o sin estados de cuenta", () => {
-  assert.equal(notaEstadosCuenta([], "2026-11-19"), null);
-  const n = notaEstadosCuenta([{ banco: "BBVA", ultimos_4: "1", al: null, ultimo: null }, { banco: "BBVA", ultimos_4: "2", al: null, ultimo: null }], "2026-11-19");
-  assert.deepEqual(n, { texto: "sin estado de cuenta cargado", viejo: true });
 });

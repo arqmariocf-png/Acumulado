@@ -3,7 +3,6 @@
 // estado de cuenta que ella misma sube: al cierre, saldo del banco menos lo
 // que falta por pagar es lo que debe quedar.
 
-import { ddmm, diaHabilAnterior, notaSaldoInicial } from "./hojaPagos.ts";
 
 export interface EmpresaTesoreria {
   empresa_id: string;
@@ -49,50 +48,11 @@ function fmt(n: number): string {
   return Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
 }
 
-/** Hasta qué día llega el estado de cuenta de cada cuenta de la empresa,
- * para decirlo junto al saldo del banco (19/20-nov-2026, Delia: "yo subo los
- * estados de cuenta diario, pero si no tienen movimiento se quedan con el
- * estado de cuenta del último movimiento, no se actualiza la fecha"). `al` =
- * `cuentas_bancarias.estado_cuenta_al` (lo registra la carga aunque no traiga
- * movimientos nuevos); `ultimo` = último movimiento cargado. */
-export interface CuentaEstadoCuenta {
-  banco: string;
-  ultimos_4: string;
-  al: string | null;
-  ultimo: string | null;
-}
-
-/** Una línea por empresa: "estado de cuenta al 19/11 (BanBajio 9403 sin
- * movimientos desde el 13/11)"; si una cuenta va atrás de las demás, la
- * nombra; `viejo` = alguna cuenta anterior al día hábil previo o sin estado. */
-export function notaEstadosCuenta(cuentas: CuentaEstadoCuenta[], hoy: string): { texto: string; viejo: boolean } | null {
-  if (cuentas.length === 0) return null;
-  const etiqueta = (c: CuentaEstadoCuenta) => `${c.banco} ${c.ultimos_4}`;
-  if (cuentas.length === 1) {
-    const n = notaSaldoInicial(cuentas[0].al, hoy, cuentas[0].ultimo);
-    return n ? { texto: n.texto, viejo: n.viejo } : null;
-  }
-  const conFecha = cuentas.filter((c) => c.al);
-  const sinFecha = cuentas.filter((c) => !c.al);
-  if (conFecha.length === 0) return { texto: "sin estado de cuenta cargado", viejo: true };
-  const masReciente = conFecha.map((c) => c.al!).sort().reverse()[0];
-  const partes: string[] = [`estado de cuenta al ${ddmm(masReciente)}`];
-  let viejo = masReciente < diaHabilAnterior(hoy);
-  for (const c of conFecha) {
-    if (c.al! < masReciente) {
-      const atrasada = c.al! < diaHabilAnterior(hoy);
-      viejo = viejo || atrasada;
-      partes.push(`${etiqueta(c)} al ${ddmm(c.al!)}${atrasada ? ": falta subir lo más reciente" : ""}`);
-    } else if (c.ultimo && c.ultimo < c.al!) {
-      partes.push(`${etiqueta(c)} sin movimientos desde el ${ddmm(c.ultimo)}`);
-    }
-  }
-  for (const c of sinFecha) {
-    viejo = true;
-    partes.push(`${etiqueta(c)} sin estado de cuenta`);
-  }
-  return { texto: partes.join(" · "), viejo };
-}
+// La nota "estado de cuenta al dd/mm · sin movimientos desde…" que se
+// pintaba en las tarjetas se quitó el 21-nov-2026 (Mario: a Delia le salían
+// como pendientes las cuentas sin movimientos). Hasta qué día llega cada
+// estado de cuenta sigue en la hoja de pagos y en Saldos por empresa
+// (`notaSaldoInicial` en lib/hojaPagos.ts).
 
 export interface PagoTesoreria {
   empresa_id: string;
