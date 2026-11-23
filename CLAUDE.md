@@ -4571,6 +4571,20 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   mismas partidas s/IVA; `ordenes_compra.interempresa_ov_id`; una sola OC viva
   por OV). La OV muestra "OC <folio> ✓ · <empresa>" (`fn_interempresa_ov_estado`).
   Es el camino inverso de "Inter empresa" (OC → OV + OC). Probado como Laura.
+  **Columna "Inter empresa" (23-nov-2026, Mario: "de las órdenes de venta y
+  órdenes de compra, agrega una columna en donde se registre en qué OC u OV
+  quedó registrado, para no duplicar")** (`20261123130000`, aplicada como
+  `interempresa_ligas`): `fn_interempresa_ligas()` (definer; organización de
+  quien pregunta) devuelve por orden sus ligas en los dos sentidos:
+  `relacion` 'genera' = lo que nació de ella (OC/OS origen → OV inter empresa y
+  OC/OS de la compradora; OV → OC/OS) y 'origen' = de qué orden nació
+  (canceladas/rechazadas no cuentan como 'genera'). En `/ordenes`, las dos
+  pestañas y el Excel traen la columna **Inter empresa**: "← IA-OC-0040 (AEP)"
+  (de dónde viene, gris) y "→ IA-OV-0012 (CSC)" (qué generó, índigo), cada una
+  liga a esa orden (`?tipo=&buscar=<folio>`). `ligasDeOrden`, `textoLigas`,
+  `indiceLigas` en `lib/interempresa.ts` (con pruebas); `csvOrdenes` y
+  `csvOrdenesConDetalle` aceptan `interempresa` y `COLUMNAS_EXCEL_ORDENES`
+  termina en "Inter empresa". Al 23-nov Laura ve 107 OC origen con su OV y OC.
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,

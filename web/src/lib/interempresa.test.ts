@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { claveEmpresa, costoSinIva, empresaCompradoraSugerida, interempresaCompleta, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarCompraDesdeOv, revisarInterempresa } from "./interempresa.ts";
+import { claveEmpresa, costoSinIva, empresaCompradoraSugerida, indiceLigas, interempresaCompleta, ligasDeOrden, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarCompraDesdeOv, revisarInterempresa, textoLigas, type LigaInterempresa } from "./interempresa.ts";
 
 test("costo sin IVA: backoffice trae IVA en la partida, las propias no", () => {
   assert.equal(costoSinIva({ costo: 116, iva: true }, "api"), 100);
@@ -99,4 +99,23 @@ test("OC desde OV: validación", () => {
     "La empresa que compra debe ser distinta de la que vende.",
     "El tipo debe ser compra (OC) o servicio (OS).",
   ]);
+});
+
+test("ligasDeOrden: primero de dónde viene, luego lo que generó, sin repetidos", () => {
+  const codigo = (id: string) => ({ a: "AEP", c: "CSC" })[id] ?? "?";
+  const ligas: LigaInterempresa[] = [
+    { orden_id: "oc1", es_venta: false, relacion: "genera", liga_id: "ov9", liga_tipo: "OV", liga_folio: "IA-OV-0009", liga_empresa_id: "a" },
+    { orden_id: "oc1", es_venta: false, relacion: "genera", liga_id: "oc5", liga_tipo: "OC", liga_folio: "IA-OC-0005", liga_empresa_id: "c" },
+    { orden_id: "oc1", es_venta: false, relacion: "genera", liga_id: "oc5", liga_tipo: "OC", liga_folio: "IA-OC-0005", liga_empresa_id: "c" },
+    { orden_id: "oc1", es_venta: false, relacion: "origen", liga_id: "ov2", liga_tipo: "OV", liga_folio: "IA-OV-0002", liga_empresa_id: "a" },
+    { orden_id: "otra", es_venta: true, relacion: "genera", liga_id: "x", liga_tipo: "OC", liga_folio: "IA-OC-0001", liga_empresa_id: "c" },
+  ];
+  const r = ligasDeOrden(ligas, "oc1", codigo);
+  assert.deepEqual(
+    r.map((l) => l.texto),
+    ["← IA-OV-0002 (AEP)", "→ IA-OC-0005 (CSC)", "→ IA-OV-0009 (AEP)"],
+  );
+  assert.equal(textoLigas(r), "← IA-OV-0002 (AEP) · → IA-OC-0005 (CSC) · → IA-OV-0009 (AEP)");
+  assert.deepEqual(ligasDeOrden(ligas, "nada", codigo), []);
+  assert.equal(indiceLigas(ligas).get("oc1")?.length, 4);
 });

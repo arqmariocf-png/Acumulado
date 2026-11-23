@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuth, useEmpresaFiltro } from "../../lib/auth";
@@ -12,6 +12,7 @@ import { CompraInterempresaDesdeOv } from "./CompraInterempresaDesdeOv";
 import { FacturarOrden } from "../../components/FacturarOrden";
 import { puedeFacturar } from "../../lib/facturacion";
 import { rutaVerArchivo } from "../../lib/verArchivo";
+import { indiceLigas, ligasDeOrden, textoLigas, type LigaInterempresa } from "../../lib/interempresa";
 import { csvOrdenes, csvOrdenesConDetalle, etapaOrdenCompra, type LineaExcelOrden, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
 import { descargarCsv } from "../../lib/descargarArchivo";
 
@@ -96,6 +97,7 @@ export function Ordenes() {
   const [texto, setTexto] = useState(params.get("buscar") ?? "");
   const [error, setError] = useState<string | null>(null);
   const esDireccion = !!perfil && ["admin", "corporativo", "direccion"].includes(perfil.rol);
+  const codigo = (id: string) => empresas?.find((e) => e.id === id)?.codigo ?? "—";
 
   const lista = useQuery({
     queryKey: ["ordenes-ia", vista, filtro, empresaId, verBackoffice],
@@ -200,6 +202,18 @@ export function Ordenes() {
     },
   });
 
+  // Columna "Inter empresa" (23-nov-2026, Mario: "en qué OC u OV quedó
+  // registrado, para no duplicar"): de dónde nació cada orden y qué generó.
+  const ligas = useQuery({
+    queryKey: ["ordenes-ia", "interempresa-ligas"],
+    queryFn: async () => {
+      const { data, error: e } = await supabase.rpc("fn_interempresa_ligas");
+      if (e) throw e;
+      return indiceLigas((data ?? []) as LigaInterempresa[]);
+    },
+  });
+  const ligasDe = (o: FilaOrden) => ligasDeOrden(ligas.data?.get(o.id) ?? [], o.id, codigo);
+
   // Facturas timbradas por OV (23-nov-2026).
   const facturasOv = useQuery({
     queryKey: ["ordenes-ia", "facturas-ov"],
@@ -219,7 +233,6 @@ export function Ordenes() {
       .sort((a, b) => (b.fecha ?? "").localeCompare(a.fecha ?? "") || b.folio.localeCompare(a.folio, "es", { numeric: true }));
   }, [lista.data, texto]);
 
-  const codigo = (id: string) => empresas?.find((e) => e.id === id)?.codigo ?? "—";
   const info = infoTipo(tipo);
   // Cancelada aquí o en el backoffice, o rechazada: sin inter empresa (Laura, 22-oct-2026).
   const cerrada = (o: FilaOrden) => o.etapa.etiqueta === "cancelada" || o.etapa.etiqueta === "rechazada" || /cancel/i.test(o.estatus_backoffice ?? "");
@@ -227,7 +240,7 @@ export function Ordenes() {
 
   const [descargando, setDescargando] = useState(false);
   async function descargar() {
-    const conEstado = filas.map((o) => ({ ...o, empresa: codigo(o.empresa_id), estado: o.etapa.etiqueta }));
+    const conEstado = filas.map((o) => ({ ...o, empresa: codigo(o.empresa_id), estado: o.etapa.etiqueta, interempresa: textoLigas(ligasDe(o)) }));
     let csv: string;
     if (vista === "OV") {
       // Con el detalle de cada orden (Laura, 22-oct-2026).
@@ -400,13 +413,16 @@ export function Ordenes() {
                 <th className="px-3 py-2">Proyecto</th>
                 <th className="px-3 py-2 text-right">Total c/IVA</th>
                 <th className="px-3 py-2">Estado</th>
+                <th className="px-3 py-2" title="En qué OC/OS/OV quedó registrada esta orden (inter empresa): ← de dónde nació, → qué se generó a partir de ella">
+                  Inter empresa
+                </th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
               {filas.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
                     Todavía no hay órdenes con folio IA. Usa "+ Nueva {vista === "OV" ? "OV" : "OC u OS"}".
                   </td>
                 </tr>
@@ -429,6 +445,24 @@ export function Ordenes() {
                   <td className="px-3 py-2 text-right tabular-nums">{dinero(o.total)}</td>
                   <td className="px-3 py-2">
                     <span className={`rounded-full px-2 py-0.5 text-[11px] ${TONOS[o.etapa.tono]}`}>{o.etapa.etiqueta}</span>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-[11px]">
+                    {ligasDe(o).length === 0 ? (
+                      <span className="text-slate-300">—</span>
+                    ) : (
+                      <div className="flex flex-col gap-0.5">
+                        {ligasDe(o).map((l) => (
+                          <Link
+                            key={`${l.relacion}-${l.liga_id}`}
+                            to={`/ordenes?tipo=${l.liga_tipo === "OV" ? "OV" : "OC"}&buscar=${encodeURIComponent(l.folio)}`}
+                            title={l.relacion === "origen" ? "Esta orden nació de esa" : "Se generó a partir de esta orden"}
+                            className={`whitespace-nowrap hover:underline ${l.relacion === "origen" ? "text-slate-600" : "text-indigo-700"}`}
+                          >
+                            {l.texto}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
