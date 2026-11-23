@@ -173,3 +173,57 @@ export function revisarCompraDesdeOv(o: { empresaVende: string; empresaCompra: s
   if (o.lineas <= 0) p.push("La orden de venta no tiene partidas.");
   return p;
 }
+
+/** Columna "Inter empresa" de las listas de OC/OS y OV (23-nov-2026, Mario:
+ * "una columna en donde se registre en qué OC u OV quedó registrado, para no
+ * duplicar"). Renglones de `fn_interempresa_ligas`: 'genera' = lo que nació de
+ * esta orden; 'origen' = de qué orden nació esta. */
+export interface LigaInterempresa {
+  orden_id: string;
+  es_venta: boolean;
+  relacion: "genera" | "origen";
+  liga_id: string;
+  liga_tipo: string;
+  liga_folio: string;
+  liga_empresa_id: string;
+}
+
+export interface LigaTexto {
+  relacion: "genera" | "origen";
+  texto: string;
+  liga_id: string;
+  liga_tipo: string;
+  folio: string;
+}
+
+/** Ligas de UNA orden, ya con texto: "→ IA-OV-0012 (CSC)" lo que generó,
+ * "← IA-OC-0040 (AEP)" de dónde viene. Sin repetidos y en orden de folio. */
+export function ligasDeOrden(ligas: LigaInterempresa[], ordenId: string, codigo: (empresaId: string) => string): LigaTexto[] {
+  const vistas = new Set<string>();
+  const out: LigaTexto[] = [];
+  const propias = ligas.filter((l) => l.orden_id === ordenId).sort((a, b) => (a.relacion === b.relacion ? a.liga_folio.localeCompare(b.liga_folio, "es", { numeric: true }) : a.relacion === "origen" ? -1 : 1));
+  for (const l of propias) {
+    const k = `${l.relacion}:${l.liga_id}`;
+    if (vistas.has(k)) continue;
+    vistas.add(k);
+    const flecha = l.relacion === "origen" ? "←" : "→";
+    out.push({ relacion: l.relacion, liga_id: l.liga_id, liga_tipo: l.liga_tipo, folio: l.liga_folio, texto: `${flecha} ${l.liga_folio} (${codigo(l.liga_empresa_id)})` });
+  }
+  return out;
+}
+
+/** La misma columna en una celda del Excel: "→ IA-OV-0012 (CSC) · ← IA-OC-0040 (AEP)". */
+export function textoLigas(ligas: LigaTexto[]): string {
+  return ligas.map((l) => l.texto).join(" · ");
+}
+
+/** Índice por orden para no recorrer la lista completa por renglón. */
+export function indiceLigas(ligas: LigaInterempresa[]): Map<string, LigaInterempresa[]> {
+  const m = new Map<string, LigaInterempresa[]>();
+  for (const l of ligas) {
+    const arr = m.get(l.orden_id) ?? [];
+    arr.push(l);
+    m.set(l.orden_id, arr);
+  }
+  return m;
+}
