@@ -4519,3 +4519,71 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   (existencia 2,845 + 2,835 = 5,680, movimientos 1 + 1), repetir bloqueado,
   deshacer regresa cada uno a lo suyo; fusiona items IT-0085 en IT-1369 con
   nota; Brenda bloqueada y no ve los pares.
+
+## 23-nov-2026: factura.com, OV → OC inter empresa, volteo, organizaciones inactivas
+- **Facturación con factura.com (Mario: "necesitamos hacer una conexión con
+  factura.com para que las órdenes de venta se agreguen de inmediato y podamos
+  facturar con un click")** (`20261123090000`, aplicada como
+  `facturacion_factura_com`; edge **`facturacion-factura-com` v1**):
+  Contabilidad › **Facturación (factura.com)** (`/contabilidad/facturacion`,
+  `pages/contabilidad/Facturacion.tsx`; corporativo, dirección, permiso
+  contabilidad y admin = `auth_opera_facturacion()`). Por empresa se capturan
+  **API key y secret key** de factura.com (sandbox o producción; se prueban
+  contra `GET /v4/series` antes de guardarse en Vault vía
+  `fn_facturacion_credenciales_guardar`, solo service_role; `facturacion_config`
+  guarda entorno, serie, régimen fiscal, lugar de expedición, enviar correo y
+  clave SAT por defecto). En `/ordenes` cada OV trae **"Facturar"**
+  (`components/FacturarOrden.tsx`): `fn_ov_para_facturar(ov)` arma receptor
+  (RFC, razón social, régimen, C.P., correo, uso CFDI; los clientes casi no
+  tienen RFC: se completan ahí y quedan en `clientes` con
+  `factura_com_uid`) y conceptos (clave prod/serv y unidad SAT: memoria
+  `facturacion_claves_sat` por descripción, luego `productos`/`compras_items`,
+  luego el default 01010101/H87); forma/método de pago; "Timbrar". La edge
+  busca o crea el cliente en factura.com (`/v1/clients/rfc/{RFC}`, `create`),
+  `POST /v4/cfdi40/create` (header `F-PLUGIN` fijo + llaves), baja XML y PDF a
+  `cargas/facturas/<empresa>/<uuid>.*`, registra `facturas_emitidas` + el
+  `cfdi` emitido (`fn_factura_registrar`) y recuerda las claves SAT por
+  descripción. Una OV solo tiene una factura viva (índice
+  `facturas_emitidas_ov_viva`); cancelar = motivo SAT 01-04 (+ UUID sustituto);
+  reenviar por correo. Visor `/archivo?f=factura&id=<id>` (PDF) o `<id>:xml`.
+  Parte pura `_shared/facturacion/factura-com.ts` (con pruebas) y
+  `lib/facturacion.ts` (catálogos SAT, `conceptosDesdeOv`, `receptorDesdeOv`,
+  `revisarFactura`; con pruebas). **Lo que falta de Mario**: cuenta(s) de
+  factura.com por empresa con el **CSD cargado allá** y una serie tipo
+  "factura"; las llaves se capturan en la pantalla (sandbox se pide a
+  soporte@factura.com y tiene llaves aparte). Sin llaves la pantalla lo dice;
+  nada se timbró todavía. Pendiente: Remisiones por facturar con el mismo
+  botón, y complementos de pago.
+- **ARSSA y Estudio K fuera (Mario: "quita ARSSA y Estudio K de mis empresas,
+  que ya no aparezcan")** (`20261123100000`): `grupos.activo = false` para
+  ARSSA y EK (y la empresa EK inactiva); `auth_empresas_alcance()` solo da al
+  admin maestro las empresas de organizaciones activas (la propia siempre).
+  La vista de socio ya solo muestra LOMA. Nada se borró: reactivar =
+  `activo = true`.
+- **OV → OC inter empresa (Mario: "la orden de venta pueda convertirse en orden
+  de compra inter empresas")** (`20261123110000`, aplicada como
+  `oc_interempresa_desde_ov`): botón **"OC inter empresa"** en cada OV de
+  `/ordenes` (`pages/ordenes/CompraInterempresaDesdeOv.tsx`): sugiere la
+  empresa compradora por el nombre del cliente (`empresaCompradoraSugerida`
+  en `lib/interempresa.ts`), OC u OS, forma/condición, obra, notas →
+  `fn_orden_interempresa_desde_ov(ov, compradora, tipo, …)` (definer; llama
+  `fn_orden_ia_guardar` en la compradora con proveedor = la que vende y las
+  mismas partidas s/IVA; `ordenes_compra.interempresa_ov_id`; una sola OC viva
+  por OV). La OV muestra "OC <folio> ✓ · <empresa>" (`fn_interempresa_ov_estado`).
+  Es el camino inverso de "Inter empresa" (OC → OV + OC). Probado como Laura.
+- **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
+  volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
+  Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,
+  `lib/volteo.ts` con pruebas). Tipo de unidad **volteo**; `logistica_viajes`
+  (folio VJ-<EMP>-0001: fecha, unidad, chofer, tipo flete/material/residuos/
+  renta/traslado, cliente —si es empresa del grupo se liga—, obra, origen,
+  destino, material, cantidad × precio o viajes × precio = importe, km,
+  cobrado, OV ligada, manifiesto de residuos, ticket, estado) y
+  `logistica_gastos` (folio GU-<EMP>-0001: diésel, mantenimiento, llantas,
+  casetas, chofer…, litros, monto, OC ligada). Resumen por unidad y mes
+  (ingresos, gastos, margen, km, $/km), Excel, **bitácora de la unidad** y
+  **manifiesto de residuos** imprimibles (modelo: "Ventas Residuos.xlsx",
+  "Manifiestos Volteo.xlsx" y "Recorridos.xlsx" del Dropbox de AEP). Capturan
+  los que operan logística y el chofer habitual de la unidad en sus viajes y
+  gastos. Al 23-nov `logistica_unidades` está vacía: dar de alta los camiones
+  primero. Falta la API de reservas (pendiente de antes).

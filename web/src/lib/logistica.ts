@@ -3,7 +3,7 @@
 // sistema actual de reservas, y ahí vamos a reportar averías"). Reglas puras
 // de la pantalla; la base las repite en los triggers logistica_*_antes.
 
-export type TipoUnidad = "camioneta" | "camion" | "tractocamion" | "remolque" | "auto" | "maquinaria" | "motocicleta" | "otro";
+export type TipoUnidad = "camioneta" | "camion" | "volteo" | "tractocamion" | "remolque" | "auto" | "maquinaria" | "motocicleta" | "otro";
 export type EstadoUnidad = "activa" | "taller" | "baja";
 export type EstadoReserva = "programada" | "en_curso" | "terminada" | "cancelada";
 export type GravedadAveria = "leve" | "media" | "grave";
@@ -12,6 +12,7 @@ export type EstadoAveria = "abierta" | "en_taller" | "resuelta" | "descartada";
 export const TIPOS_UNIDAD: { clave: TipoUnidad; etiqueta: string }[] = [
   { clave: "camioneta", etiqueta: "Camioneta" },
   { clave: "camion", etiqueta: "Camión" },
+  { clave: "volteo", etiqueta: "Camión de volteo" },
   { clave: "tractocamion", etiqueta: "Tractocamión" },
   { clave: "remolque", etiqueta: "Remolque" },
   { clave: "auto", etiqueta: "Auto" },

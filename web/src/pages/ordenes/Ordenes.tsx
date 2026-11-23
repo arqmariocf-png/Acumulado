@@ -8,6 +8,10 @@ import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
 import { BotonVerOv } from "./VerOrdenVenta";
 import { EditorOrden } from "./EditorOrden";
 import { VentaInterempresa } from "./VentaInterempresa";
+import { CompraInterempresaDesdeOv } from "./CompraInterempresaDesdeOv";
+import { FacturarOrden } from "../../components/FacturarOrden";
+import { puedeFacturar } from "../../lib/facturacion";
+import { rutaVerArchivo } from "../../lib/verArchivo";
 import { csvOrdenes, csvOrdenesConDetalle, etapaOrdenCompra, type LineaExcelOrden, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
 import { descargarCsv } from "../../lib/descargarArchivo";
 
@@ -83,6 +87,10 @@ export function Ordenes() {
   const queryClient = useQueryClient();
   const [editor, setEditor] = useState<{ id: string | null } | null>(null);
   const [interempresa, setInterempresa] = useState<string | null>(null);
+  // OV → OC inter empresa (23-nov-2026, Mario): la OV abierta en el panel.
+  const [compraDesdeOv, setCompraDesdeOv] = useState<string | null>(null);
+  // Facturar con un clic (23-nov-2026): la OV abierta en el panel de factura.com.
+  const [facturando, setFacturando] = useState<string | null>(null);
   // Desde el resumen de la obra (23-oct-2026): ?buscar=<folio u obra>&backoffice=1 abre la lista ya filtrada.
   const [verBackoffice, setVerBackoffice] = useState(params.get("backoffice") === "1");
   const [texto, setTexto] = useState(params.get("buscar") ?? "");
@@ -178,6 +186,28 @@ export function Ordenes() {
       const { data, error: e } = await supabase.rpc("fn_interempresa_estado");
       if (e) throw e;
       return new Map(((data ?? []) as { origen_id: string; completa: boolean }[]).map((x) => [x.origen_id, x.completa]));
+    },
+  });
+
+  // Qué OV ya generó su compra inter empresa (OV → OC, 23-nov-2026).
+  const compraOvEstado = useQuery({
+    queryKey: ["ordenes-ia", "interempresa-ov-estado"],
+    enabled: vista === "OV",
+    queryFn: async () => {
+      const { data, error: e } = await supabase.rpc("fn_interempresa_ov_estado");
+      if (e) throw e;
+      return new Map(((data ?? []) as { ov_id: string; oc_id: string; oc_folio: string; oc_empresa_id: string }[]).map((x) => [x.ov_id, x]));
+    },
+  });
+
+  // Facturas timbradas por OV (23-nov-2026).
+  const facturasOv = useQuery({
+    queryKey: ["ordenes-ia", "facturas-ov"],
+    enabled: vista === "OV",
+    queryFn: async () => {
+      const { data, error: e } = await supabase.from("facturas_emitidas").select("id, orden_venta_id, serie, folio, uuid, entorno").eq("estado", "timbrada");
+      if (e) throw e;
+      return new Map(((data ?? []) as { id: string; orden_venta_id: string | null; serie: string | null; folio: string | null; uuid: string | null; entorno: string }[]).filter((x) => x.orden_venta_id).map((x) => [x.orden_venta_id as string, x]));
     },
   });
 
@@ -301,6 +331,17 @@ export function Ordenes() {
         />
       )}
 
+      {facturando && <FacturarOrden ovId={facturando} onCerrar={() => setFacturando(null)} onFacturada={() => queryClient.invalidateQueries({ queryKey: ["ordenes-ia"] })} />}
+      {compraDesdeOv && (
+        <CompraInterempresaDesdeOv
+          key={compraDesdeOv}
+          ovId={compraDesdeOv}
+          onCerrar={() => setCompraDesdeOv(null)}
+          onGuardada={() => {
+            queryClient.invalidateQueries({ queryKey: ["ordenes-ia"] });
+          }}
+        />
+      )}
       {interempresa && (
         <VentaInterempresa
           key={interempresa}
@@ -392,6 +433,35 @@ export function Ordenes() {
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
                       {o.tipo === "OV" ? <BotonVerOv ovId={o.id} /> : <BotonVerOc ocId={o.id} />}
+                      {o.tipo === "OV" && facturasOv.data?.get(o.id) && (
+                        <a href={rutaVerArchivo("factura", facturasOv.data.get(o.id)!.id)} target="_blank" rel="noreferrer" className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700" title={`UUID ${facturasOv.data.get(o.id)?.uuid ?? ""} · ver PDF`}>
+                          Factura {[facturasOv.data.get(o.id)?.serie, facturasOv.data.get(o.id)?.folio].filter(Boolean).join(" ") || "✓"}{facturasOv.data.get(o.id)?.entorno === "sandbox" ? " (sandbox)" : ""}
+                        </a>
+                      )}
+                      {o.tipo === "OV" && !cerrada(o) && o.fuente === "acumulado" && !facturasOv.data?.get(o.id) && puedeFacturar(perfil) && (
+                        <button type="button" onClick={() => setFacturando(o.id)} title="Timbrar la factura de esta orden de venta en factura.com" className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-800 hover:bg-emerald-50">
+                          Facturar
+                        </button>
+                      )}
+                      {o.tipo === "OV" && !cerrada(o) && compraOvEstado.data?.get(o.id) && (
+                        <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700" title={`Compra inter empresa ${compraOvEstado.data.get(o.id)?.oc_folio} de ${codigo(compraOvEstado.data.get(o.id)?.oc_empresa_id ?? "")}`}>
+                          OC {compraOvEstado.data.get(o.id)?.oc_folio} ✓ · {codigo(compraOvEstado.data.get(o.id)?.oc_empresa_id ?? "")}
+                        </span>
+                      )}
+                      {o.tipo === "OV" && !cerrada(o) && !compraOvEstado.data?.get(o.id) && puedeTocar(o) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditor(null);
+                            setCompraDesdeOv(o.id);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          title="Generar la orden de compra o de servicio de la empresa del grupo a la que se le vendió, con las mismas partidas"
+                          className="rounded border border-indigo-200 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-50"
+                        >
+                          OC inter empresa
+                        </button>
+                      )}
                       {o.tipo !== "OV" && !cerrada(o) && interempresaEstado.data?.get(o.id) === true && (
                         <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700" title="Ya se generaron la venta y la compra inter empresa de todas sus partidas">
                           inter empresa ✓

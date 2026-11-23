@@ -29,6 +29,8 @@ import {
   type Reserva,
   type Unidad,
 } from "../../lib/logistica";
+import { Gastos, ResumenUnidades, Viajes } from "./Volteo";
+import type { Gasto, Viaje } from "../../lib/volteo";
 
 // Logística (9-nov-2026, Mario: "el módulo de logística donde cargaremos las
 // unidades consultadas en el calendario de reservas; va a poner el API del
@@ -38,7 +40,7 @@ import {
 // Las reservas se capturan a mano hasta que llegue el API del sistema de
 // reservas: la sincronización insertará con origen 'api' y externo_id.
 
-type Pestana = "calendario" | "unidades" | "averias";
+type Pestana = "calendario" | "unidades" | "averias" | "viajes" | "gastos" | "resumen";
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiqueta = "mb-1 block text-xs font-medium text-slate-700";
 const CLASE_SEMAFORO: Record<string, string> = { rojo: "bg-red-500", ambar: "bg-amber-400", verde: "bg-emerald-500", gris: "bg-slate-300" };
@@ -96,6 +98,23 @@ export function Logistica() {
       return (data ?? []) as Averia[];
     },
   });
+  // Camiones de volteo (23-nov-2026): viajes y gastos por unidad.
+  const { data: viajes = [] } = useQuery({
+    queryKey: ["logistica-viajes"],
+    queryFn: async () => {
+      const { data, error: err } = await supabase.from("logistica_viajes").select("*").order("fecha", { ascending: false }).order("created_at", { ascending: false }).limit(3000);
+      if (err) throw err;
+      return (data ?? []) as Viaje[];
+    },
+  });
+  const { data: gastos = [] } = useQuery({
+    queryKey: ["logistica-gastos"],
+    queryFn: async () => {
+      const { data, error: err } = await supabase.from("logistica_gastos").select("*").order("fecha", { ascending: false }).order("created_at", { ascending: false }).limit(3000);
+      if (err) throw err;
+      return (data ?? []) as Gasto[];
+    },
+  });
   const { data: obras = [] } = useQuery({
     queryKey: ["logistica-obras"],
     queryFn: async () => {
@@ -108,6 +127,8 @@ export function Logistica() {
     qc.invalidateQueries({ queryKey: ["logistica-unidades"] });
     qc.invalidateQueries({ queryKey: ["logistica-reservas"] });
     qc.invalidateQueries({ queryKey: ["logistica-averias"] });
+    qc.invalidateQueries({ queryKey: ["logistica-viajes"] });
+    qc.invalidateQueries({ queryKey: ["logistica-gastos"] });
   };
   const ok = (m: string) => {
     setError(null);
@@ -124,6 +145,8 @@ export function Logistica() {
   const unidadPorId = useMemo(() => new Map(unidades.map((u) => [u.id, u])), [unidades]);
   const resumen = resumenAverias(averias.filter((a) => !empresaId || a.empresa_id === empresaId));
   const activas = unidadesEmpresa.filter((u) => u.estado !== "baja");
+  const viajesEmpresa = useMemo(() => (empresaId ? viajes.filter((v) => v.empresa_id === empresaId) : viajes), [viajes, empresaId]);
+  const gastosEmpresa = useMemo(() => (empresaId ? gastos.filter((g) => g.empresa_id === empresaId) : gastos), [gastos, empresaId]);
 
   return (
     <div>
@@ -146,6 +169,9 @@ export function Logistica() {
             ["calendario", "Calendario de reservas"],
             ["unidades", `Unidades (${unidadesEmpresa.length})`],
             ["averias", `Averías${resumen.abiertas + resumen.enTaller ? ` · ${resumen.abiertas + resumen.enTaller} abiertas` : ""}`],
+            ["viajes", `Viajes de volteo${viajesEmpresa.length ? ` (${viajesEmpresa.length})` : ""}`],
+            ["gastos", "Gastos por unidad"],
+            ["resumen", "Resumen por unidad"],
           ] as [Pestana, string][]
         ).map(([clave, texto]) => (
           <button key={clave} onClick={() => setPestana(clave)} className={`-mb-px border-b-2 px-3 py-2 text-sm ${pestana === clave ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
@@ -158,6 +184,12 @@ export function Logistica() {
         <p className="text-sm text-slate-500">Cargando…</p>
       ) : pestana === "calendario" ? (
         <Calendario unidades={activas} reservas={reservas} obras={obras} averias={averias} opera={opera} empresaId={empresaId} nombreEmpresa={nombreEmpresa} onOk={ok} onError={falla} />
+      ) : pestana === "viajes" ? (
+        <Viajes unidades={unidadesEmpresa} unidadPorId={unidadPorId} viajes={viajesEmpresa} obras={obras} opera={opera} miId={perfil?.id ?? null} nombreEmpresa={nombreEmpresa} onOk={ok} onError={falla} />
+      ) : pestana === "gastos" ? (
+        <Gastos unidades={unidadesEmpresa} unidadPorId={unidadPorId} gastos={gastosEmpresa} viajes={viajesEmpresa} opera={opera} miId={perfil?.id ?? null} nombreEmpresa={nombreEmpresa} onOk={ok} onError={falla} />
+      ) : pestana === "resumen" ? (
+        <ResumenUnidades unidades={unidadesEmpresa} unidadPorId={unidadPorId} viajes={viajesEmpresa} gastos={gastosEmpresa} nombreEmpresa={nombreEmpresa} />
       ) : pestana === "unidades" ? (
         <Unidades unidades={unidadesEmpresa} averias={averias} opera={opera} empresaId={empresaId} empresas={empresas ?? []} nombreEmpresa={nombreEmpresa} onOk={ok} onError={falla} />
       ) : (
