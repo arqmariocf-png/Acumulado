@@ -14,6 +14,8 @@ export const FUENTES_ARCHIVO = {
   cotizacion: { funcion: "requisiciones-cotizacion", param: "id", titulo: "Cotización" },
   gasto: { funcion: "gastos-comprobar", param: "id", titulo: "Comprobante de gasto" },
   cxc: { funcion: "cxc-archivos", param: "id", titulo: "Estado de cuenta de clientes" },
+  // Factura timbrada en factura.com (23-nov-2026): id = <factura_id> (PDF) o <factura_id>:xml.
+  factura: { funcion: "facturacion-factura-com", param: "id", titulo: "Factura (CFDI)" },
 } as const;
 
 export type FuenteArchivo = keyof typeof FUENTES_ARCHIVO;

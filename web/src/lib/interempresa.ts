@@ -130,3 +130,46 @@ export function revisarInterempresa(o: { empresaVende: string; empresaCompra: st
   });
   return errores;
 }
+
+// ── OC inter empresa desde una OV (23-nov-2026, Mario: "la orden de venta
+// pueda convertirse en orden de compra inter empresas") ──────────────────
+
+/** Nombre normalizado como lo hace fn_proveedor_clave: mayúsculas, sin
+ * acentos ni puntuación, sin la forma societaria (SA DE CV, S.A. de C.V.…). */
+export function claveEmpresa(nombre: string | null | undefined): string {
+  return (nombre ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[.,;:()]/g, " ")
+    .replace(/\b(S\s*A\s*(DE)?\s*C\s*V|S\s*DE\s*R\s*L\s*(DE)?\s*C\s*V|SAPI\s*(DE)?\s*C\s*V|S\s*C|A\s*C)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export interface EmpresaGrupo {
+  id: string;
+  nombre: string;
+  codigo: string;
+  razon_social?: string | null;
+}
+
+/** La empresa del grupo a la que se le vendió, por el nombre del cliente de la
+ * OV; null si el cliente no es una empresa del grupo o es la misma que vende. */
+export function empresaCompradoraSugerida(cliente: string | null | undefined, empresas: EmpresaGrupo[], empresaVende: string): EmpresaGrupo | null {
+  const c = claveEmpresa(cliente);
+  if (!c) return null;
+  const e = empresas.find((x) => x.id !== empresaVende && (claveEmpresa(x.razon_social) === c || claveEmpresa(x.nombre) === c));
+  return e ?? null;
+}
+
+/** Qué le falta a la OV para generar la compra inter empresa. */
+export function revisarCompraDesdeOv(o: { empresaVende: string; empresaCompra: string; tipo: string; lineas: number; cancelada: boolean }): string[] {
+  const p: string[] = [];
+  if (o.cancelada) p.push("La orden de venta está cancelada.");
+  if (!o.empresaCompra) p.push("Elige la empresa del grupo que compra.");
+  else if (o.empresaCompra === o.empresaVende) p.push("La empresa que compra debe ser distinta de la que vende.");
+  if (o.tipo !== "OC" && o.tipo !== "OS") p.push("El tipo debe ser compra (OC) o servicio (OS).");
+  if (o.lineas <= 0) p.push("La orden de venta no tiene partidas.");
+  return p;
+}

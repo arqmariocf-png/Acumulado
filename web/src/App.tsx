@@ -22,6 +22,7 @@ const HistorialPagos = lazy(() => import("./pages/finanzas/HistorialPagos").then
 const ObrasFisicoFinanciero = lazy(() => import("./pages/finanzas/ObrasFisicoFinanciero").then((m) => ({ default: m.ObrasFisicoFinanciero })));
 const Tesoreria = lazy(() => import("./pages/finanzas/Tesoreria").then((m) => ({ default: m.Tesoreria })));
 const EfirmasSat = lazy(() => import("./pages/finanzas/EfirmasSat").then((m) => ({ default: m.EfirmasSat })));
+const Facturacion = lazy(() => import("./pages/contabilidad/Facturacion").then((m) => ({ default: m.Facturacion })));
 const SeguroSocialObras = lazy(() => import("./pages/finanzas/SeguroSocialObras").then((m) => ({ default: m.SeguroSocialObras })));
 const ProgramacionPagos = lazy(() => import("./pages/finanzas/ProgramacionPagos").then((m) => ({ default: m.ProgramacionPagos })));
 const CuentasPorPagar = lazy(() => import("./pages/finanzas/CuentasPorPagar").then((m) => ({ default: m.CuentasPorPagar })));
@@ -303,6 +304,8 @@ function Enrutador() {
           {/* Remisiones por facturar (4-nov-2026): contabilidad (permiso), corporativo y dirección; admin siempre. */}
           <Route element={<ProtectedRoute roles={["corporativo", "direccion"]} oPermiso={esContabilidad} />}>
             <Route path="/contabilidad/remisiones" element={<RemisionesFacturar />} />
+            {/* Facturación con factura.com (23-nov-2026): mismos roles. */}
+            <Route path="/contabilidad/facturacion" element={<Facturacion />} />
           </Route>
           {/* Menú exclusivo de dirección (Laura): líneas de crédito con
               vencimiento. Admin siempre pasa. */}

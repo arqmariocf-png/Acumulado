@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { costoSinIva, interempresaCompleta, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarInterempresa } from "./interempresa.ts";
+import { claveEmpresa, costoSinIva, empresaCompradoraSugerida, interempresaCompleta, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarCompraDesdeOv, revisarInterempresa } from "./interempresa.ts";
 
 test("costo sin IVA: backoffice trae IVA en la partida, las propias no", () => {
   assert.equal(costoSinIva({ costo: 116, iva: true }, "api"), 100);
@@ -72,4 +72,31 @@ test("solo lo que falta por vender inter empresa; completa sin partidas pendient
   assert.equal(interempresaCompleta(lineas), false);
   assert.equal(interempresaCompleta(lineas.map((l) => ({ ...l, restante: 0 }))), true);
   assert.equal(interempresaCompleta([]), false);
+});
+
+test("OC desde OV: empresa compradora por el nombre del cliente", () => {
+  const empresas = [
+    { id: "aep", nombre: "Aceros y Envasados de Puebla", codigo: "AEP", razon_social: "Aceros y Envasados de Puebla S.A. de C.V." },
+    { id: "csc", nombre: "Constructora Loma", codigo: "CSC", razon_social: "Constructora, Supervisión y Consultoría Loma S.A. de C.V." },
+    { id: "erg", nombre: "Ergodinova", codigo: "ERG", razon_social: "Ergodinova S.A. de C.V." },
+  ];
+  assert.equal(empresaCompradoraSugerida("Constructora, Supervisión y Consultoría Loma S.A. de C.V.", empresas, "aep")?.codigo, "CSC");
+  assert.equal(empresaCompradoraSugerida("ergodinova sa de cv", empresas, "aep")?.codigo, "ERG");
+  assert.equal(empresaCompradoraSugerida("Ergodinova", empresas, "aep")?.codigo, "ERG");
+  assert.equal(empresaCompradoraSugerida("Mario Contreras Farfán", empresas, "aep"), null, "cliente externo");
+  assert.equal(empresaCompradoraSugerida("Aceros y Envasados de Puebla", empresas, "aep"), null, "la misma que vende");
+  assert.equal(claveEmpresa("Constructora, Supervisión y Consultoría Loma S.A. de C.V."), "CONSTRUCTORA SUPERVISION Y CONSULTORIA LOMA");
+});
+
+test("OC desde OV: validación", () => {
+  assert.deepEqual(revisarCompraDesdeOv({ empresaVende: "aep", empresaCompra: "csc", tipo: "OC", lineas: 2, cancelada: false }), []);
+  assert.deepEqual(revisarCompraDesdeOv({ empresaVende: "aep", empresaCompra: "", tipo: "OC", lineas: 0, cancelada: true }), [
+    "La orden de venta está cancelada.",
+    "Elige la empresa del grupo que compra.",
+    "La orden de venta no tiene partidas.",
+  ]);
+  assert.deepEqual(revisarCompraDesdeOv({ empresaVende: "aep", empresaCompra: "aep", tipo: "OX", lineas: 1, cancelada: false }), [
+    "La empresa que compra debe ser distinta de la que vende.",
+    "El tipo debe ser compra (OC) o servicio (OS).",
+  ]);
 });
