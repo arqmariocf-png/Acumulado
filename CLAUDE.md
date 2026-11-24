@@ -4626,6 +4626,41 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   `auth_rol_produccion_definer()`, no con `auth_rol_definer()`.** El catálogo
   de carpintería está vacío (0 productos de CSC): Fernanda lo da de alta en
   Producción › Carpintería › Catálogo.
+- **"Los saldos de Clavicón no se pueden actualizar; son de un pago a Aceros
+  el viernes 13 que no se refleja" (24-nov-2026, Delia y Laura por WhatsApp)**:
+  dos cosas. (1) **Bancos de MCC**: ninguna carga falló; la última de Clavicón
+  fue el 21-nov 04:08 ("AL 13 DE NOVIEMBRE1.pdf", 0 nuevos) y el 23-nov Delia
+  subió "AL 23" de AEP/CSC/ERG/MCF pero no de MCC. Las dos cuentas están al
+  20/11 (BBVA 6381 $7,173.55; BanBajío 9403 $54,687.26, último movimiento
+  13/11): los 4 PDF de Conecta del 17 al 21-nov traen los mismos movimientos y
+  el último es del 13/11 (la cadena de saldos cuadra, no es el lector): el
+  export del portal sale con un rango que termina el 13. En MCC no hay ningún
+  pago a Aceros el 13-nov (ese día BBVA 6381 pagó Yulitsadonce $12,410.27 y
+  Maqui Print $2,029.74, IA-OC-0533/0528; BanBajío solo traspasos propios). (2)
+  **Cuentas por cobrar de AEP**: Laura subió el 23-nov "ESTADO DE CUENTA
+  CLIENTES AEP 2026.xlsx" (3.8 MB, 8 hojas, ~25,000 filas) a "Estados de
+  cuenta de clientes" y quedó `resumen = null`: no se creó ningún saldo
+  inicial (igual el 11-nov) y la cartera siguió con los 8 saldos del 29-oct.
+  Causas: ExcelJS cargaba el libro completo y la pantalla dejaba "Guardar"
+  mientras leía (sin renglones → "Archivo guardado."); y un corte nuevo
+  tampoco cerraba el anterior (se habrían sumado los dos). Ahora
+  `CxcEstadosCuenta.tsx`: lee con **SheetJS** (`xlsx` 0.18.5, `sheetRows: 200`,
+  `dense`, sin fórmulas/HTML; ExcelJS solo de respaldo), botón apagado
+  "Leyendo el Excel…", aviso si no encontró el resumen y confirmación antes de
+  subir sin saldos, el corte se toma de la "Fecha de Consulta" de la hoja
+  (`fechaConsultaDeHoja`: mes/día/año de Laura, ISO o serial) y al crear los
+  saldos de un corte nuevo se cancelan los `saldo_inicial` anteriores de la
+  empresa (`saldosQueSustituye`, motivo "Sustituido por el estado de cuenta al
+  …"; `fn_cxc_cartera` toma `max(fecha)` de los no cancelados). Por SQL se
+  cargaron los 8 saldos **al 20-nov-2026** (consulta 20-nov del archivo en
+  Dropbox, mismo nombre: Ventosa 58,678.02 · Ventosa paga Mario 51,016.29 ·
+  Ergodinova 672,169.33 · CSC 85,512.12 · Clavicón 513,383.60 · MCF 752,225.54
+  · Africam 61,829.88 · Balken 77,036.17 = 2,271,850.95) ligados al archivo
+  del 23-nov (corte corregido a 20-nov) y los del 29-oct quedaron cancelados.
+  Clavicón 513,383.60 = 397,663.05 + IA-OV-0069/0086/0093/0111: el Excel de
+  Laura tampoco trae el pago del 13-nov. Un pago de Clavicón a Aceros que no
+  pasó por el banco cargado se registra en Cuentas por cobrar › Registrar
+  cobro (sin depósito ligado) o esperando el estado de cuenta correcto.
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,

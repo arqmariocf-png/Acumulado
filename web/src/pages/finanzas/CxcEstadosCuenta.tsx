@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, urlFuncion } from "../../lib/supabase";
 import { rutaVerArchivo } from "../../lib/verArchivo";
-import { emparejarCliente, folioSaldoInicial, saldosDesdeHoja, type CandidatoCliente, type ClienteCxc, type DocumentoCxc, type SaldoHoja } from "../../lib/cuentasPorCobrar";
+import { emparejarCliente, fechaConsultaDeHoja, folioSaldoInicial, saldosDesdeHoja, saldosQueSustituye, type CandidatoCliente, type ClienteCxc, type DocumentoCxc, type SaldoHoja } from "../../lib/cuentasPorCobrar";
 
 // Estados de cuenta de clientes (Mario, 4-nov-2026: "poder consultar el
 // archivo que adjunto para tomar esta base para la conciliación y de ahí
@@ -55,14 +55,42 @@ async function llamarEdge(metodo: "POST" | "DELETE", cuerpo?: FormData, id?: str
   return json;
 }
 
-/** Lee las hojas del Excel como matrices de celdas (texto o número). */
-async function hojasDeExcel(archivo: File): Promise<{ nombre: string; filas: (string | number | null)[][] }[]> {
+type Hoja = { nombre: string; filas: (string | number | null)[][] };
+const FILAS_POR_HOJA = 200;
+
+/** Lee las hojas del Excel como matrices de celdas (texto o número), solo las
+ * primeras 200 filas de cada una: el resumen Cliente · Total va arriba. Primero
+ * SheetJS con `sheetRows` (el Excel de Laura pesa 3.8 MB y trae ~25,000 filas
+ * con fórmulas en 8 hojas; ExcelJS lo cargaba completo y la pantalla se quedaba
+ * sin saldos: 11 y 23-nov-2026, los dos archivos quedaron con resumen vacío);
+ * si SheetJS falla, ExcelJS como respaldo. */
+async function hojasDeExcel(archivo: File): Promise<Hoja[]> {
+  const bytes = await archivo.arrayBuffer();
+  try {
+    return await hojasConSheetJs(bytes);
+  } catch (e) {
+    console.warn("SheetJS no pudo leer el Excel; se intenta con ExcelJS", e);
+    return hojasConExcelJs(bytes);
+  }
+}
+
+async function hojasConSheetJs(bytes: ArrayBuffer): Promise<Hoja[]> {
+  const XLSX = await import("xlsx");
+  const libro = XLSX.read(new Uint8Array(bytes), { type: "array", sheetRows: FILAS_POR_HOJA, cellFormula: false, cellHTML: false, cellText: false, cellDates: true, dense: true });
+  return libro.SheetNames.map((nombre) => {
+    const hoja = libro.Sheets[nombre];
+    const filas = XLSX.utils.sheet_to_json<unknown[]>(hoja, { header: 1, raw: true, defval: null, blankrows: true }).slice(0, FILAS_POR_HOJA);
+    return { nombre, filas: filas.map((f) => (f as unknown[]).map(celdaATexto)) };
+  });
+}
+
+async function hojasConExcelJs(bytes: ArrayBuffer): Promise<Hoja[]> {
   const { default: ExcelJS } = await import("exceljs");
   const libro = new ExcelJS.Workbook();
-  await libro.xlsx.load(await archivo.arrayBuffer());
+  await libro.xlsx.load(bytes);
   return libro.worksheets.map((hoja) => {
     const filas: (string | number | null)[][] = [];
-    const tope = Math.min(hoja.rowCount, 200);
+    const tope = Math.min(hoja.rowCount, FILAS_POR_HOJA);
     for (let r = 1; r <= tope; r++) {
       const fila = hoja.getRow(r);
       const celdas: (string | number | null)[] = [];
@@ -70,12 +98,19 @@ async function hojasDeExcel(archivo: File): Promise<{ nombre: string; filas: (st
         let v: unknown = celda.value;
         if (v && typeof v === "object" && "result" in (v as object)) v = (v as { result: unknown }).result;
         if (v && typeof v === "object" && "richText" in (v as object)) v = (v as { richText: { text: string }[] }).richText.map((t) => t.text).join("");
-        celdas[col - 1] = typeof v === "number" ? v : v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v);
+        celdas[col - 1] = celdaATexto(v);
       });
       filas.push(celdas);
     }
     return { nombre: hoja.name, filas };
   });
+}
+
+function celdaATexto(v: unknown): string | number | null {
+  if (typeof v === "number") return v;
+  if (v == null) return null;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
+  return String(v);
 }
 
 interface RenglonSaldo extends SaldoHoja {
@@ -97,7 +132,9 @@ export function CxcEstadosCuenta({
   const [corte, setCorte] = useState(hoyIso());
   const [nota, setNota] = useState("");
   const [archivo, setArchivo] = useState<File | null>(null);
-  const [hojas, setHojas] = useState<{ nombre: string; filas: (string | number | null)[][] }[] | null>(null);
+  const [hojas, setHojas] = useState<Hoja[] | null>(null);
+  const [leyendo, setLeyendo] = useState(false);
+  const [corteSugerido, setCorteSugerido] = useState<string | null>(null);
   const [hojaElegida, setHojaElegida] = useState("");
   const [crearSaldos, setCrearSaldos] = useState(true);
   const [renglones, setRenglones] = useState<RenglonSaldo[]>([]);
@@ -146,15 +183,22 @@ export function CxcEstadosCuenta({
     setArchivo(f ?? null);
     setHojas(null);
     setRenglones([]);
+    setCorteSugerido(null);
     setErr(null);
     if (!f || !/\.xlsx$/i.test(f.name)) return;
+    setLeyendo(true);
     try {
       const hs = await hojasDeExcel(f);
       setHojas(hs);
       const resumen = hs.find((h) => /^cxc$|resumen|saldos/i.test(h.nombre) && saldosDesdeHoja(h.filas).length > 0) ?? hs.find((h) => saldosDesdeHoja(h.filas).length > 0) ?? hs[0];
       setHojaElegida(resumen?.nombre ?? "");
+      // "Fecha de Consulta" de la hoja = a qué día están los saldos: se toma como corte.
+      const consulta = resumen ? fechaConsultaDeHoja(resumen.filas) : null;
+      if (consulta) { setCorte(consulta); setCorteSugerido(consulta); }
     } catch (e) {
-      setErr(`No se pudo leer el Excel: ${(e as Error).message}. Se sube igual, sin saldos.`);
+      setErr(`No se pudo leer el Excel: ${(e as Error).message}. Puedes subirlo igual, pero sin saldos iniciales: captúralos después en Registrar cobro › Documentos.`);
+    } finally {
+      setLeyendo(false);
     }
   }
   useEffect(() => {
@@ -168,13 +212,21 @@ export function CxcEstadosCuenta({
 
   const sumaIncluidos = renglones.filter((r) => r.incluir).reduce((s, r) => s + r.saldo, 0);
   const sinClave = renglones.filter((r) => r.incluir && !r.clave);
+  // Saldos iniciales de cortes anteriores de esta empresa: el estado de cuenta
+  // nuevo trae el saldo completo de cada cliente, así que se cierran.
+  const sustituye = useMemo(() => saldosQueSustituye(docs, empresaId, corte), [docs, empresaId, corte]);
+  const sustituyeTotal = useMemo(() => docs.filter((d) => sustituye.includes(d.id)).reduce((s, d) => s + d.total, 0), [docs, sustituye]);
 
   const subir = useMutation({
     mutationFn: async () => {
       if (!archivo) throw new Error("Elige el archivo.");
       if (!empresaId) throw new Error("Elige la empresa.");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(corte)) throw new Error("Indica la fecha de corte.");
+      if (leyendo) throw new Error("Espera a que termine de leerse el Excel.");
       if (crearSaldos && yaExisten.length === 0 && sinClave.length > 0) throw new Error(`Elige a qué cliente corresponde: ${sinClave.map((r) => r.nombre).join(", ")}.`);
+      if (/\.xlsx$/i.test(archivo.name) && renglones.length === 0 && !window.confirm("No se leyó ningún saldo por cliente del Excel (hoja Cliente · Total). ¿Subir el archivo de todos modos, sin crear saldos iniciales?")) {
+        throw new Error("No se subió: revisa la hoja con el resumen por cliente.");
+      }
       const fd = new FormData();
       fd.append("empresaId", empresaId);
       fd.append("corte", corte);
@@ -212,13 +264,23 @@ export function CxcEstadosCuenta({
             const { error } = await supabase.from("cxc_documentos").insert(filas);
             if (error) throw error;
             creados = filas.length;
+            if (sustituye.length > 0) {
+              const { error: errCierre } = await supabase
+                .from("cxc_documentos")
+                .update({ cancelado_en: new Date().toISOString(), cancelado_motivo: `Sustituido por el estado de cuenta al ${fechaCorta(corte)} (${archivo.name})` })
+                .in("id", sustituye)
+                .is("cancelado_en", null);
+              if (errCierre) throw errCierre;
+            }
           }
         }
       }
       return creados;
     },
     onSuccess: (creados) => {
-      setOk(creados > 0 ? `Archivo guardado y ${creados} saldos iniciales creados al ${fechaCorta(corte)}: la cartera arranca desde ahí.` : yaExisten.length > 0 && crearSaldos ? "Archivo guardado y ligado a los saldos iniciales que ya existían." : "Archivo guardado.");
+      setOk(creados > 0
+        ? `Archivo guardado y ${creados} saldos iniciales creados al ${fechaCorta(corte)}: la cartera arranca desde ahí${sustituye.length > 0 ? ` (se cerraron los ${sustituye.length} del corte anterior)` : ""}.`
+        : yaExisten.length > 0 && crearSaldos ? "Archivo guardado y ligado a los saldos iniciales que ya existían." : "Archivo guardado, sin saldos iniciales.");
       setErr(null);
       setArchivo(null); setHojas(null); setRenglones([]); setNota("");
       qc.invalidateQueries({ queryKey: ["cxc-archivos"] });
@@ -258,11 +320,17 @@ export function CxcEstadosCuenta({
               {empresas.map((e) => <option key={e.id} value={e.id}>{e.codigo} · {e.nombre}</option>)}
             </select>
           </label>
-          <label className={etiqueta}>Fecha de corte<input type="date" value={corte} onChange={(e) => setCorte(e.target.value)} className={campo} /></label>
+          <label className={etiqueta}>
+            Fecha de corte (a qué día están los saldos)
+            <input type="date" value={corte} onChange={(e) => setCorte(e.target.value)} className={campo} />
+            {corteSugerido && corteSugerido === corte && <span className="text-emerald-700">tomada de la "Fecha de Consulta" del archivo</span>}
+          </label>
           <label className={`${etiqueta} lg:col-span-2`}>Nota<input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej. Estado de cuenta de Laura, hoja CxC" className={campo} /></label>
           <label className={`${etiqueta} sm:col-span-2`}>
             Archivo (Excel, CSV, PDF o imagen)
             <input type="file" accept=".xlsx,.xlsm,.xls,.csv,.pdf,image/*" onChange={(e) => leer(e.target.files?.[0])} className="block text-xs" />
+            {leyendo && <span className="text-sky-700">Leyendo el Excel…</span>}
+            {!leyendo && hojas && renglones.length === 0 && <span className="text-amber-700">No se encontró el resumen Cliente · Total; elige otra hoja o revisa el archivo.</span>}
           </label>
           {hojas && (
             <label className={`${etiqueta} sm:col-span-2`}>
@@ -280,6 +348,11 @@ export function CxcEstadosCuenta({
                   ? `Ligar el archivo a los ${yaExisten.length} saldos iniciales que ya existen al ${fechaCorta(corte)} (${dinero(yaExisten.reduce((s, d) => s + d.total, 0))})`
                   : `Crear los saldos iniciales al ${fechaCorta(corte)} con estos renglones (${dinero(sumaIncluidos)}) y arrancar la cartera desde ahí`}
               </label>
+              {yaExisten.length === 0 && crearSaldos && sustituye.length > 0 && (
+                <p className="mt-1 text-xs text-amber-800">
+                  Se cierran los {sustituye.length} saldos iniciales del corte anterior ({dinero(sustituyeTotal)}): el estado de cuenta nuevo ya trae el saldo completo de cada cliente, así no se suman dos veces.
+                </p>
+              )}
               {yaExisten.length === 0 && (
                 <div className="mt-2 overflow-x-auto rounded border border-slate-200 bg-white">
                   <table className="w-full text-xs">
@@ -310,7 +383,7 @@ export function CxcEstadosCuenta({
           )}
           {archivo && !hojas && !/\.xlsx$/i.test(archivo.name) && <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-4">Este archivo se guarda para consulta; los saldos iniciales se capturan a mano (Registrar cobro › Documentos, tipo "Saldo inicial").</p>}
           <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-4">
-            <button type="submit" disabled={subir.isPending || !archivo} className={btnPrimario}>{subir.isPending ? "Subiendo…" : "Guardar archivo"}</button>
+            <button type="submit" disabled={subir.isPending || leyendo || !archivo} className={btnPrimario}>{subir.isPending ? "Subiendo…" : leyendo ? "Leyendo el Excel…" : "Guardar archivo"}</button>
             {err && <span className="text-sm text-red-700">{err}</span>}
             {ok && <span className="text-sm text-emerald-700">{ok}</span>}
           </div>

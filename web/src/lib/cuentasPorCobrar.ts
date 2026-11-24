@@ -595,6 +595,51 @@ export function emparejarCliente(nombre: string, candidatos: CandidatoCliente[])
   return parcial[0] ?? null;
 }
 
+/** "Fecha de Consulta" de la hoja resumen (Laura la escribe junto al título:
+ * "Fecha de Consulta | 11/20/26", también 20/11/2026 o una fecha de Excel ya en
+ * ISO). Es la fecha a la que están los saldos: se propone como corte. En el
+ * formato con diagonales el Excel de Laura va mes/día/año (23-nov-2026: la
+ * pantalla tomó el día de hoy como corte y el archivo era al 20/11). */
+export function fechaConsultaDeHoja(filas: (string | number | null | undefined)[][]): string | null {
+  for (const f of filas.slice(0, 40)) {
+    const fila = f ?? [];
+    const i = fila.findIndex((c) => typeof c === "string" && /fecha de consulta/i.test(c));
+    if (i < 0) continue;
+    for (let j = i + 1; j < fila.length; j++) {
+      const v = fila[j];
+      if (v == null || v === "") continue;
+      const t = String(v).trim();
+      let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+      if (m) {
+        let a = Number(m[1]), b = Number(m[2]);
+        const anio = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+        // mes/día/año salvo que el primero no pueda ser mes.
+        let mes = a, dia = b;
+        if (a > 12) { mes = b; dia = a; }
+        if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+        return `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+      }
+      if (typeof v === "number" && v > 30000 && v < 80000) {
+        // Serial de Excel (días desde 1899-12-30).
+        const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+        return d.toISOString().slice(0, 10);
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Saldos iniciales que un corte nuevo deja atrás: los de la misma empresa con
+ * fecha anterior al corte. El estado de cuenta nuevo trae el saldo COMPLETO de
+ * cada cliente, así que los anteriores se cierran (si no, la cartera sumaría
+ * los dos cortes). Devuelve ids para cancelarlos con motivo. */
+export function saldosQueSustituye(docs: Pick<DocumentoCxc, "id" | "origen" | "tipo" | "empresa_id" | "fecha">[], empresaId: string, corte: string): string[] {
+  return docs.filter((d) => d.origen === "manual" && d.tipo === "saldo_inicial" && d.empresa_id === empresaId && d.fecha < corte).map((d) => d.id);
+}
+
 /** Folio único por empresa y tipo: "Saldo inicial 29-oct-2026 · Ventosa". */
 export function folioSaldoInicial(corte: string, nombre: string): string {
   const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];

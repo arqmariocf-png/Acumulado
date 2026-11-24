@@ -8,6 +8,8 @@ import {
   cobranzaEsperada,
   corteDe,
   emparejarCliente,
+  fechaConsultaDeHoja,
+  saldosQueSustituye,
   filtrarCartera,
   folioSaldoInicial,
   opcionesClientes,
@@ -233,4 +235,26 @@ test("emparejar el nombre de la hoja con un cliente conocido", () => {
   assert.equal(corteDe([{ empresa_id: "aep", cliente_clave: "X", corte: "2026-09-30" }, { empresa_id: "aep", cliente_clave: "X", corte: "2026-10-29" }], "aep", "X"), "2026-10-29");
   assert.equal(corteDe([], "aep", "X"), null);
   assert.equal(folioSaldoInicial("2026-10-29", "Ventosa"), "Saldo inicial 29-oct-2026 · Ventosa");
+});
+
+test("fecha de consulta de la hoja resumen (mes/día/año de Laura, ISO o serial)", () => {
+  assert.equal(fechaConsultaDeHoja([[null, "Cuentas Por Cobrar"], [null, "Fecha de Consulta", "11/20/26"]]), "2026-11-20");
+  assert.equal(fechaConsultaDeHoja([[null, "Fecha de Consulta", null, "29/10/2026"]]), "2026-10-29");
+  assert.equal(fechaConsultaDeHoja([[null, "Fecha de consulta:", "2026-11-20"]]), "2026-11-20");
+  assert.equal(fechaConsultaDeHoja([[null, "Fecha de Consulta", 46346]]), "2026-11-20");
+  assert.equal(fechaConsultaDeHoja([[null, "Cliente", "Total"]]), null);
+  assert.equal(fechaConsultaDeHoja([[null, "Fecha de Consulta", "ayer"]]), null);
+});
+
+test("un corte nuevo cierra los saldos iniciales anteriores de la misma empresa", () => {
+  const docs = [
+    { id: "a", origen: "manual" as const, tipo: "saldo_inicial", empresa_id: "aep", fecha: "2026-10-29" },
+    { id: "b", origen: "manual" as const, tipo: "saldo_inicial", empresa_id: "aep", fecha: "2026-11-20" },
+    { id: "c", origen: "manual" as const, tipo: "estimacion", empresa_id: "aep", fecha: "2026-10-01" },
+    { id: "d", origen: "manual" as const, tipo: "saldo_inicial", empresa_id: "csc", fecha: "2026-10-29" },
+    { id: "e", origen: "cfdi" as const, tipo: "factura", empresa_id: "aep", fecha: "2026-10-01" },
+  ];
+  assert.deepEqual(saldosQueSustituye(docs, "aep", "2026-11-20"), ["a"]);
+  assert.deepEqual(saldosQueSustituye(docs, "aep", "2026-10-29"), []);
+  assert.deepEqual(saldosQueSustituye(docs, "csc", "2026-11-23"), ["d"]);
 });
