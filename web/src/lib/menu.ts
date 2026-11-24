@@ -77,7 +77,9 @@ const veClientes = (p: Profile) =>
 const veHerramienta = (p: Profile) =>
   esAdmin(p) || ["almacen", "corporativo", "empresa", "direccion", "responsable", "supervisor", "administrativo", "directivo"].includes(p.rol) || (p.modulos ?? []).includes("herramienta");
 const veSalidas = (p: Profile) => ["admin", "corporativo", "direccion", "almacen", "produccion"].includes(p.rol) || (p.modulos ?? []).some((m) => m === "seguridad" || m === "monitoreo");
-const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || modulo("produccion")(p);
+// Permiso por persona sin importar el rol (Fernanda, responsable, con el taller
+// de carpintería: 24-nov-2026).
+const veProduccion = (p: Profile) => p.rol === "produccion" || esAdmin(p) || conPermiso("produccion")(p);
 // Logística (9-nov-2026): la ve toda la organización (choferes y supervisores reportan averías).
 const veLogistica = (p: Profile) => p.rol !== "pendiente";
 
