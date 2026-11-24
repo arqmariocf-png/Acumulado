@@ -409,7 +409,7 @@ function Enrutador() {
             <Route path="/produccion/remisiones" element={<RemisionesEmpresas />} />
           </Route>
 
-          <Route element={<ProtectedRoute roles={["produccion"]} modulo="produccion" />}>
+          <Route element={<ProtectedRoute roles={["produccion"]} modulo="produccion" oPermiso={(p) => (p.modulos ?? []).includes("produccion")} />}>
             {/* Una sola pantalla para las plantas del grupo, parametrizada
                 por la planta en la URL (clavicon | balken | carpinteria). */}
             <Route path="/produccion" element={<Navigate to="/produccion/clavicon" replace />} />

@@ -4585,6 +4585,47 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   `indiceLigas` en `lib/interempresa.ts` (con pruebas); `csvOrdenes` y
   `csvOrdenesConDetalle` aceptan `interempresa` y `COLUMNAS_EXCEL_ORDENES`
   termina en "Inter empresa". Al 23-nov Laura ve 107 OC origen con su OV y OC.
+- **Andrés Montes de Oca con su equipo (23-nov-2026, por WhatsApp a Mario:
+  "me podrás hacer el favor de habilitarme lo de mi equipo de personal para ver
+  sus horas de entrada y salida"; Mario: "Andrés está en nave 40")**: Andrés es
+  `supervisor` (entró el 17-nov, jefe Jorge) y "Asistencia del equipo" le
+  salía vacía porque nadie lo tenía como jefe directo. Por SQL: **Rafael Ortiz
+  Tello** (Oficial) y **Fabricio Morales Parra** (Ayudante) pasaron de Mauro a
+  Andrés (`personal.supervisor_profile_id`) y Andrés quedó encargado de la
+  obra "4590221969 SSVW Reestructuración de nave 40" (ERG,
+  `proyecto_encargados`). Los 4 técnicos de seguridad que checan en VW-3
+  siguen con Brenda. Probado con su cuenta: ve a los dos en `v_checador_marcas`.
+  **Ojo**: una prueba de RLS que haga `join profiles` solo devuelve el renglón
+  propio; usar `v_checador_marcas` (trae `nombre`).
+- **Carpintería para Fernanda, permiso producción por persona (24-nov-2026,
+  Mario: "el módulo de carpintería dáselo a Fernanda, ella será encargada de
+  ese equipo de trabajo")** (`20261124090000`, aplicada como
+  `permiso_produccion_por_persona`): el taller de carpintería vive en **CSC**
+  (proyecto "TALLER CARPINTERIA", `Produccion.tsx` PLANTAS.carpinteria) y
+  Producción estaba amarrada al rol `produccion` en 12 tablas; Fernanda es
+  `responsable` (MCF) y cambiarle el rol le quitaría sus obras. Mismo molde
+  que RH (`permiso_rh_por_persona`): `permisos_modulo` **'produccion'** vale
+  para cualquier rol (`auth_tiene_permiso_produccion()`; `auth_rol_produccion()`
+  / `auth_rol_produccion_definer()` = el rol de siempre, salvo con el permiso:
+  'produccion'); las policies que nombran `'produccion'::app_rol` (productos,
+  órdenes, materia prima, producto terminado, recetas, rutas, equipos,
+  operaciones, indirectos, mano de obra, remisiones de planta, OC/OV/proyectos/
+  clientes del rol produccion) leen el rol por esa función (`alter policy` por
+  reemplazo sobre `pg_policies`); `auth_opera_planta`/`auth_ve_planta` ya
+  aceptaban el permiso + alcance. Fernanda: permiso 'produccion', **CSC en
+  "Maneja también" con `alcance_propio`** (responsable no es multiempresa:
+  ahora ve también las 47 obras de CSC en Proyectos, además de las de MCF),
+  responsable del proyecto TALLER CARPINTERIA y su tablero "TALLER
+  CARPINTERIA" (CSC) desarchivado; su equipo (Salvador Zamora carpintero,
+  Brian Vázquez ayudante, José Luis Periañez plomero) ya la tenía de jefe
+  directo. App: `veProduccion` (menú) y la ruta `/produccion/*` aceptan el
+  permiso en cualquier rol (`conPermiso("produccion")` / `oPermiso`). Probado
+  en rollback como Fernanda: `auth_rol_produccion()` = produccion, da de alta
+  un producto de carpintería en CSC, bloqueada en MCC; Ariday (operativo)
+  sigue sin ver nada. **Policy nueva de producción → comparar con
+  `auth_rol_produccion_definer()`, no con `auth_rol_definer()`.** El catálogo
+  de carpintería está vacío (0 productos de CSC): Fernanda lo da de alta en
+  Producción › Carpintería › Catálogo.
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,
