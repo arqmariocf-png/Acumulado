@@ -4661,6 +4661,26 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   Laura tampoco trae el pago del 13-nov. Un pago de Clavicón a Aceros que no
   pasó por el banco cargado se registra en Cuentas por cobrar › Registrar
   cobro (sin depósito ligado) o esperando el estado de cuenta correcto.
+  **Corrección (24-nov, tarde): sí era el lector.** El pago a Aceros sí
+  venía en los PDF de Conecta de MCC (13-nov 17:40, cargo $50,000 "SPEI
+  ENVIADO BBVA … ACEROS Y ENVASADOS … PRESTAMO") pero el mismo día entró un
+  abono de $50,000 (traspaso de BBVA 6381), y el dedupe de
+  `filtrarMovimientosNuevos` comparaba solo fecha + monto + referencia (null
+  en PDF): el cargo se dio por duplicado del abono en TODAS las cargas del
+  17 al 21-nov y la cuenta quedó en $54,687.26 en vez de $4,687.26. Ahora la
+  llave lleva también la dirección (`ClaveMovimientoExistente.esCargo`; el
+  handler manda `cargo_total != null`), con prueba en
+  `estado-cuenta.test.ts`. Edge `ingesta-estado-cuenta` **v27** (los mismos
+  13 archivos de la v26 con `source/index.ts` y
+  `_shared/ingesta/estado-cuenta.ts` nuevos, sin comentarios con el printer
+  de TypeScript; en `normalizar.ts` y `corte-estado-cuenta.ts` el rango de
+  acentos va como `\u0300-\u036f`, el bundler no acepta los caracteres
+  sueltos). El movimiento faltante se insertó por SQL (`movimientos`
+  8b43a0aa, BanBajío 9403, 13-nov, saldo 4,687.26): el saldo de Clavicón ya
+  es el del banco. **Lo que sigue sin estar**: los Conecta de Delia del 17 al
+  21-nov terminan el 13-nov (rango del export); que exporte hasta hoy. En AEP
+  el abono ya estaba (BBVA 5859, 13-nov "SPEI RECIBIDO BAJIO … PRESTAMO",
+  préstamo intercompañía).
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,

@@ -234,8 +234,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: errExistentes.message, archivoId }, 500);
     }
     const existentes = (existentesDb ?? [])
-      .map((e) => ({ fechaPago: e.fecha_pago as string, monto: (e.cargo_total ?? e.abono_total) as number | null, referenciaNumero: e.referencia_numero as string | null }))
-      .filter((e): e is { fechaPago: string; monto: number; referenciaNumero: string | null } => e.monto != null);
+      .map((e) => ({ fechaPago: e.fecha_pago as string, monto: (e.cargo_total ?? e.abono_total) as number | null, referenciaNumero: e.referencia_numero as string | null, esCargo: e.cargo_total != null }))
+      .filter((e): e is { fechaPago: string; monto: number; referenciaNumero: string | null; esCargo: boolean } => e.monto != null);
 
     const { nuevos, omitidosPorExistentes } = filtrarMovimientosNuevos(movimientosMapeados, existentes);
     // Posición de cada movimiento dentro del archivo (orden real de la cadena
