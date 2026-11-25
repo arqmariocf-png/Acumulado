@@ -38,6 +38,13 @@ export interface ClaveMovimientoExistente {
   fechaPago: string;
   monto: number;
   referenciaNumero: string | null;
+  /** true si el movimiento existente es un cargo (salida); false si es abono.
+   * Sin esto, una salida y una entrada del mismo monto el mismo día se
+   * confundían (13-nov-2026, Clavicón BanBajío: el traspaso recibido de
+   * $50,000 escondió el préstamo de $50,000 enviado a Aceros esa tarde; las
+   * cargas "al 17/19/20" lo dieron por repetido y el saldo quedó en
+   * $54,687.26 en vez de $4,687.26). */
+  esCargo?: boolean;
 }
 
 export interface ResultadoFiltrado {
@@ -64,10 +71,17 @@ export function filtrarMovimientosNuevos(filas: FilaEstadoCuentaMapeada[], exist
 
   for (const fila of filas) {
     const monto = fila.cargoTotal ?? fila.abonoTotal;
+    const esCargo = fila.cargoTotal != null;
     const yaExiste =
       monto != null &&
       existentes.some(
-        (e) => e.fechaPago === fila.fechaPago && Math.abs(e.monto - monto) <= TOLERANCIA_CENTAVOS && e.referenciaNumero === fila.referenciaNumero,
+        (e) =>
+          e.fechaPago === fila.fechaPago &&
+          Math.abs(e.monto - monto) <= TOLERANCIA_CENTAVOS &&
+          e.referenciaNumero === fila.referenciaNumero &&
+          // Cargo solo repite a cargo y abono a abono (existentes sin la marca,
+          // de antes de este cambio, se comparan como siempre).
+          (e.esCargo == null || e.esCargo === esCargo),
       );
     if (yaExiste) {
       omitidosPorExistentes++;

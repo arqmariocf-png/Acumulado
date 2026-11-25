@@ -124,6 +124,18 @@ test("filtrarMovimientosNuevos conserva las filas que sí son nuevas dentro de l
   assert.equal(omitidosPorExistentes, 1);
 });
 
+test("filtrarMovimientosNuevos no confunde una salida con una entrada del mismo monto el mismo día (13-nov-2026, Clavicón BanBajío: préstamo de $50,000 a Aceros vs traspaso recibido de $50,000)", () => {
+  const prestamoEnviado = mov({ fechaPago: "2026-11-13", cargoTotal: 50000, abonoTotal: null, referenciaNumero: null, nombreRazonSocial: "SPEI Enviado: ACEROS Y ENVASADOS" });
+  const traspasoRecibido = { fechaPago: "2026-11-13", monto: 50000, referenciaNumero: null, esCargo: false };
+  const { nuevos, omitidosPorExistentes } = filtrarMovimientosNuevos([prestamoEnviado], [traspasoRecibido]);
+  assert.equal(nuevos.length, 1, "el cargo es nuevo aunque exista un abono igual");
+  assert.equal(omitidosPorExistentes, 0);
+  // El mismo cargo ya cargado sí se omite.
+  assert.equal(filtrarMovimientosNuevos([prestamoEnviado], [{ ...traspasoRecibido, esCargo: true }]).nuevos.length, 0);
+  // Existente sin la marca (renglones de antes): se compara solo por fecha/monto/referencia.
+  assert.equal(filtrarMovimientosNuevos([prestamoEnviado], [{ fechaPago: "2026-11-13", monto: 50000, referenciaNumero: null }]).nuevos.length, 0);
+});
+
 test("filtrarMovimientosNuevos compara por Abono cuando la fila no trae Cargo", () => {
   const filas = [mov({ cargoTotal: null, abonoTotal: 32000, referenciaNumero: "8739782" })];
   const existentes = [{ fechaPago: "2026-07-01", monto: 32000, referenciaNumero: "8739782" }];
