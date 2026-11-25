@@ -14,6 +14,7 @@ import { TraspasosNomina } from "./TraspasosNomina";
 import { estaDevuelto, textoDevolucion } from "../../lib/regresarPago";
 import { CuentasDeCargo } from "../../components/CuentasDeCargo";
 import { necesitaCuenta } from "../../lib/cuentaCargo";
+import { CambiarMetodoPago } from "../../components/CambiarMetodoPago";
 
 interface PagoProgramado {
   id: string;
@@ -75,6 +76,7 @@ export function ProgramacionPagos() {
   const [filtroEmpresa, setFiltroEmpresa] = useState("");
   const [verCerrados, setVerCerrados] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   // Comentario de un pago, editable en el renglón (10-nov-2026, Mario:
   // "Laura necesita un apartado de comentarios para los pagos que se
   // seleccionan"); lo ve tesorería y sale en la hoja de pagos del día.
@@ -312,6 +314,7 @@ export function ProgramacionPagos() {
       )}
 
       {error && <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {aviso && <p className="mb-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{aviso}</p>}
 
       {/* Orden que pidió Laura (8-oct-2026): 1) hoja de pagos del día,
           2) órdenes de compra, 3) préstamos y traspasos, 4) nómina fiscal y
@@ -365,9 +368,23 @@ export function ProgramacionPagos() {
                   <td className="px-3 py-2 text-right font-medium tabular-nums">{moneda(Number(p.monto))}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
                     {p.metodo === "efectivo" ? (
-                      <Link to="/finanzas/efectivo" className="text-emerald-700 underline">
-                        Efectivo por confirmar
-                      </Link>
+                      <>
+                        <Link to="/finanzas/efectivo" className="mr-2 text-emerald-700 underline">
+                          Efectivo por confirmar
+                        </Link>
+                        <CambiarMetodoPago
+                          pagoId={p.id}
+                          empresaId={p.empresa_id}
+                          metodoActual={p.metodo}
+                          beneficiario={p.beneficiario}
+                          monto={moneda(Number(p.monto))}
+                          fechaProgramada={p.fecha_programada}
+                          onHecho={(m) => {
+                            setAviso(m);
+                            invalidar();
+                          }}
+                        />
+                      </>
                     ) : (
                       <button onClick={() => resolverDevolucion.mutate(p)} disabled={resolverDevolucion.isPending} className="rounded bg-emerald-700 px-2.5 py-1 font-medium text-white disabled:opacity-50">
                         Ya quedó corregido
@@ -459,6 +476,20 @@ export function ProgramacionPagos() {
                           <button onClick={() => actualizar.mutate({ id: p.id, cambios: { fecha_programada: sumarDias(p.fecha_programada < hoy ? hoy : p.fecha_programada, 7) } })} className="mr-2 text-slate-600 underline">
                             +7 días
                           </button>
+                          <CambiarMetodoPago
+                            pagoId={p.id}
+                            empresaId={p.empresa_id}
+                            metodoActual={p.metodo}
+                            beneficiario={p.beneficiario}
+                            monto={moneda(Number(p.monto))}
+                            fechaProgramada={p.fecha_programada}
+                            etiqueta={p.metodo === "efectivo" ? "A transferencia" : "Método"}
+                            className="mr-2 text-sky-700 underline"
+                            onHecho={(m) => {
+                              setAviso(m);
+                              invalidar();
+                            }}
+                          />
                           <button onClick={() => window.confirm("¿Cancelar este pago programado?") && actualizar.mutate({ id: p.id, cambios: { estatus: "cancelado" } })} className="text-slate-500 underline">
                             Cancelar
                           </button>
