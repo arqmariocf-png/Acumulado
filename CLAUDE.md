@@ -4681,6 +4681,28 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   21-nov terminan el 13-nov (rango del export); que exporte hasta hoy. En AEP
   el abono ya estaba (BBVA 5859, 13-nov "SPEI RECIBIDO BAJIO … PRESTAMO",
   préstamo intercompañía).
+- **Cambiar el método de un pago sin SQL (25-nov-2026, Laura por WhatsApp:
+  IA-OC-0518/0519 de Chubb Fianzas (ERG) "las regresó tu mamá un día que me
+  equivoqué en programarlas pero como efectivo"; Mario: "crea el botón para
+  hacerlo manual")**: Delia las había regresado el 13-nov con "debe ser en
+  efectivo" (la OC decía transferencia), eso las pasó a efectivo y a Efectivo
+  por confirmar, y no había camino de regreso. Primero se corrigieron por SQL
+  (transferencia, ERG Banorte 7022, al 25/11). Luego `20261125090000`
+  (aplicada como `pagos_cambiar_metodo`): `fn_pago_cambiar_metodo(pago,
+  metodo, cuenta, fecha, nota)` (definer; admin/dirección/corporativo en su
+  alcance; solo pendientes): transferencia/cheque con cuenta de la misma
+  empresa (quita la condición efectivo de la OC y, si la forma de pago
+  capturada aquí decía Efectivo, la pasa a transferencia para que salga de
+  Efectivo por confirmar); efectivo quita la cuenta y pone la OC en efectivo;
+  siempre limpia la devolución, reprograma si se pide y deja nota. 
+  `fn_oc_pagos_cambiar_metodo(oc, …)` = lo mismo para todos los pagos
+  pendientes de la OC (sin pagos, solo la OC). Botón
+  `components/CambiarMetodoPago.tsx` (reglas en `lib/cambiarMetodoPago.ts`,
+  con pruebas): en Programación de pagos, bloque "Regresados por tesorería"
+  ("Cambiar a transferencia" junto a la liga de efectivo) y en cada pago
+  pendiente de la lista ("A transferencia" / "Método"); en Efectivo por
+  confirmar, por OC "No es efectivo: pasar a transferencia". Probado en
+  rollback: Laura va y viene (cuenta, fecha y nota quedan); almacén bloqueado.
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,

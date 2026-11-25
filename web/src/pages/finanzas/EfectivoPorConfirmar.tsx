@@ -7,6 +7,7 @@ import { useAuth } from "../../lib/auth";
 import { errorDeFuncion } from "../../lib/funciones";
 import { moneda } from "../../lib/saldosEmpresas";
 import { BotonVerOc } from "../requisiciones/VerOrdenCompra";
+import { CambiarMetodoPago } from "../../components/CambiarMetodoPago";
 
 // Laura (8-oct-2026, "CORRECCIONES SISTEMA GRUPO LOMA"): "OC – proveedor –
 // monto – ver orden – confirmar pago – subir comprobante, y que se puedan
@@ -206,6 +207,24 @@ export function EfectivoPorConfirmar() {
                       Confirmar y subir comprobante
                     </button>
                     )}
+                    {/* 25-nov-2026 (Mario): si quedó en efectivo por error, regresarla a transferencia sin SQL. */}
+                    <div className="mt-1">
+                      <CambiarMetodoPago
+                        ocId={o.id}
+                        empresaId={o.empresa_id}
+                        metodoActual="efectivo"
+                        beneficiario={`${o.id_orden} · ${o.proveedor ?? ""}`}
+                        monto={moneda(o.saldo)}
+                        etiqueta="No es efectivo: pasar a transferencia"
+                        className="text-[11px] text-sky-700 underline"
+                        onHecho={(m) => {
+                          setAviso(m);
+                          qc.invalidateQueries({ queryKey: ["oc-pagos"] });
+                          qc.invalidateQueries({ queryKey: ["pagos-programados"] });
+                          qc.invalidateQueries({ queryKey: ["tesoreria"] });
+                        }}
+                      />
+                    </div>
                   </td>
                   )}
                 </tr>
