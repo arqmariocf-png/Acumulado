@@ -182,7 +182,7 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Compras",
     proposito: "Requisiciones y órdenes de compra y servicio.",
     entradas: [
-      { ruta: "/requisiciones", etiqueta: "Requisiciones", descripcion: "solicitudes de material por obra", uso: "El responsable pide; compras resuelve renglón por renglón.", visible: (p) => veOperacion(p) || modulo("requisiciones")(p) || modulo("proyectos")(p) || conPermiso("requisiciones")(p) },
+      { ruta: "/requisiciones", etiqueta: "Requisiciones", descripcion: "solicitudes de material por obra", uso: "El responsable pide; compras resuelve renglón por renglón.", visible: (p) => veOperacion(p) || modulo("requisiciones")(p) || modulo("proyectos")(p) || conPermiso("requisiciones")(p) || conPermiso("proyectos")(p) },
       { ruta: "/ordenes", etiqueta: "Órdenes de compra y servicio", descripcion: "una sola lista y un solo consecutivo", uso: "Material (OC) y servicios o subcontratos (OS) juntos, con filtro por tipo y un solo Excel; dirección las autoriza y se programa el pago. La OS no entra a inventario.", visible: veOrdenes, modulo: "inventario" },
     ],
   },
@@ -268,7 +268,7 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Obras",
     proposito: "Proyectos, planos, avance y precios unitarios.",
     entradas: [
-      { ruta: "/proyectos", etiqueta: "Proyectos", descripcion: "obras y proyectos con sus planos y avance", uso: "Para ver o registrar una obra, su responsable y sus archivos.", visible: (p) => veOperacion(p) || modulo("proyectos")(p) , modulo: "proyectos" },
+      { ruta: "/proyectos", etiqueta: "Proyectos", descripcion: "obras y proyectos con sus planos y avance", uso: "Para ver o registrar una obra, su responsable y sus archivos.", visible: (p) => veOperacion(p) || modulo("proyectos")(p) || conPermiso("proyectos")(p), modulo: "proyectos" },
       { ruta: "/precios", etiqueta: "Precios unitarios", descripcion: "análisis de precio unitario y catálogo de insumos", uso: "Para cotizar: arma el análisis, almacén pone precios, dirección autoriza y se publica.", visible: (p) => veOperacion(p) || modulo("precios")(p) },
     ],
   },

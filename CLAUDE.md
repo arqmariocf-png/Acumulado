@@ -4725,6 +4725,17 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   ve la obra, sus 5 requisiciones y su tablero, y manda requisiciones en ella
   (rollback; consecutivo de folio regresado a 189). Sale como "Encargados
   adicionales" en el encabezado de la obra; se quita desde ahí.
+  **"Fernando de BBVA debe ver también el proyecto de Olinia" (mismo día)**:
+  la base se lo daba, pero el menú esconde Obras y Requisiciones al
+  responsable con BBVA (`esBbvaAcotado`, igual que a Christian) y
+  `modulo("proyectos")` solo cuenta para roles básicos. Mismo molde que
+  Christian con requisiciones: la entrada Proyectos (y Requisiciones) también
+  se ve con el permiso por persona **'proyectos'** en cualquier rol
+  (`conPermiso("proyectos")` en `lib/menu.ts`; el mosaico "Proyectos" del
+  inicio sale a un responsable BBVA con ese permiso). Permisos dados por SQL:
+  Fernando 'proyectos' + 'requisiciones'; Christian 'proyectos' (ya tenía
+  requisiciones). La ruta `/proyectos` nunca los bloqueaba (el guard de módulo
+  solo aplica a roles básicos).
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,

@@ -339,7 +339,9 @@ export function Inicio() {
       descripcion: "tableros de actividades",
       icono: ICONOS.pendientes,
     },
-    rolBasico && modulos.includes("proyectos") && {
+    // Rol básico con el módulo, o cualquier rol al que el menú se lo esconde
+    // (responsable de BBVA: Fernando, Christian) con el permiso por persona.
+    (rolBasico || esBbvaAcotado) && modulos.includes("proyectos") && {
       a: "/proyectos",
       etiqueta: "Proyectos",
       descripcion: "obras y proyectos",
