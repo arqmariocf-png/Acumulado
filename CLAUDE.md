@@ -4703,6 +4703,14 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   pendiente de la lista ("A transferencia" / "Método"); en Efectivo por
   confirmar, por OC "No es efectivo: pasar a transferencia". Probado en
   rollback: Laura va y viene (cuenta, fecha y nota quedan); almacén bloqueado.
+- **Fernando de BBVA en Olinia (26-nov-2026, Mario: "agrega a fernando de
+  BBVA en la parte de Olinia también va a estar en este proyecto")**: es
+  **Luis Fernando Gutiérrez Lamadrid** (responsable, CSC, equipo BBVA; no
+  Fernando Gómez de RH). Por SQL quedó en `proyecto_encargados` de Olinia
+  (CSC; responsable Maria Fernanda, comprador Timoteo). Probado con su cuenta:
+  ve la obra, sus 5 requisiciones y su tablero, y manda requisiciones en ella
+  (rollback; consecutivo de folio regresado a 189). Sale como "Encargados
+  adicionales" en el encabezado de la obra; se quita desde ahí.
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,
