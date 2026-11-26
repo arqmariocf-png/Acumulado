@@ -4703,6 +4703,20 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   pendiente de la lista ("A transferencia" / "Método"); en Efectivo por
   confirmar, por OC "No es efectivo: pasar a transferencia". Probado en
   rollback: Laura va y viene (cuenta, fecha y nota quedan); almacén bloqueado.
+- **"No deja confirmar" (26-nov-2026, Mario)**: confirmar la entrega de una
+  remisión de salida de almacén (Alma, REM-AEP-000020, 3 intentos a las 12:28
+  MX desde PC y celular) respondía 400 `record "new" has no field "tipo"`. El
+  trigger `remisiones_aviso_facturar` (aviso a contabilidad, 4-nov) corre en
+  `remisiones_salida` y `remisiones_produccion` y preguntaba `new.tipo`,
+  `new.paga_nombre`, `new.contraparte` (solo de planta): plpgsql resuelve
+  `new.<campo>` al preparar la expresión, el `and` no lo salva y la
+  confirmación entera se deshacía. Desde el 4-nov NINGUNA remisión de almacén
+  se había podido confirmar. `20261126090000` (aplicada como
+  `remisiones_aviso_facturar_sin_tipo`): los campos que no comparten las dos
+  tablas se leen con `to_jsonb(new)->>'…'`. Probado en rollback como Alma:
+  REM-AEP-000020 y RM-MCC-000001 quedan entregadas. **Regla: un trigger
+  compartido por varias tablas nunca escribe `new.<columna>` de una columna
+  que no existe en todas; se lee por `to_jsonb(new)`.**
 - **Fernando de BBVA en Olinia (26-nov-2026, Mario: "agrega a fernando de
   BBVA en la parte de Olinia también va a estar en este proyecto")**: es
   **Luis Fernando Gutiérrez Lamadrid** (responsable, CSC, equipo BBVA; no
