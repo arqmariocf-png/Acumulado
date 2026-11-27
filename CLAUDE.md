@@ -4736,6 +4736,30 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   Fernando 'proyectos' + 'requisiciones'; Christian 'proyectos' (ya tenía
   requisiciones). La ruta `/proyectos` nunca los bloqueaba (el guard de módulo
   solo aplica a roles básicos).
+- **Extraordinarios de la nave 40 en precios unitarios (27-nov-2026, Mario:
+  "ayúdame a generar precios unitarios y agregarlos a la obra de nave 40";
+  luego "revisa el formato de nuestro sistema para que se ingresen ahí mismo,
+  con los folios consecutivos")**: de su Excel "LISTA DE EXTRAORDINARIOS IHUB
+  N-40" (13 conceptos) se armaron 13 tarjetas en la obra "4590221969 SSVW
+  Reestructuración de nave 40" (ERG), estado **borrador**, claves
+  **EXT-026 a EXT-038** (siguen la serie EXT- de ERG; la última era EXT-025
+  del drenaje Av. B; `pu_analisis` es único por empresa y código). Factor nuevo
+  "Nave 40 IHUB / Planta VW" (indirectos 10 % + utilidad 10 %, como las demás
+  de VW). Mano de obra con los jornales del catálogo (MOCA-052/002/051) y
+  herramienta menor 3 %. 37 insumos nuevos en el catálogo compartido
+  (MAT-COCINETA-IKEA, MAT-ADOQ-HEX8, MAT-POLIC-CEL6, MAT-DURETAN, MAT-PTR-1X1,
+  MAT-CONC-200, MAT-SIKA-ANCH, EQP-SOLD250, EQP-ANDAMIO…) con su precio
+  (`pu_insumo_precios`, global, vigente 27-nov) **ligado a la orden de compra
+  de donde sale** (`orden_compra_id`; la mayoría compras de esta obra) o con
+  fuente "ESTIMACIÓN: por cotizar" (multicontacto TROND, jabonera Kirkland,
+  brazo de proyector, lámina galvanizada cal. 18, perfiles de aluminio y H/U,
+  andamio, soldadora, vibrador, placa). La lámina con bastidor (EXT-031) lleva
+  permiso de trabajo en caliente por la observación "BOMBERO" (SEG-TSI y
+  SEG-BOM con costo congelado $583.33, como N21-OXIC-01). Verificado como Mario
+  en `v_pu_analisis_costeo`: mismos precios que el PDF de revisión (cocineta
+  $35,581.86 … solera $75.25), 0 insumos sin precio. Cargado por SQL (sin
+  migración: son datos). Mario revisa y comenta; los cambios se hacen sobre
+  esas mismas tarjetas.
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,
