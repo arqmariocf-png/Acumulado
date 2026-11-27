@@ -4760,6 +4760,33 @@ Cambios chicos partiendo de `main`, mezclando pronto.
   $35,581.86 … solera $75.25), 0 insumos sin precio. Cargado por SQL (sin
   migración: son datos). Mario revisa y comenta; los cambios se hacen sobre
   esas mismas tarjetas.
+- **Jonathan Cáceres en todas las obras de VWM y Audi (27-nov-2026, Mario:
+  "a Jonathan da la opción de hacer requisiciones de todos los proyectos de
+  VWM y Audi")**: Jonathan Cáceres (supervisor ERG, permiso proyectos) solo
+  veía 3 obras. Por SQL quedó en `proyecto_encargados` de las 28 obras
+  activas de VW/Audi: nombre con VW/VWM/SSVW/Audi o cliente Volkswagen/Audi
+  (19 ERG, 1 CSC "VWM LH … Sanitarios y vestidores", 1 MCF "Refuerzo
+  estructural AUDI") más las que lo son por clave: pedidos 4590…
+  (4590213789 Aperiódicos cubiertas, 4590218457 Saneamiento prensas N01,
+  4590224213 Señalética, el duplicado de 4590220882 Pisos Falla N21), Audi
+  MG2M1 (BAU_WCA60_MS_EV_MG2M1, MG2M1_RG_A24_STORM_WATER_DRAINAGE), Domo
+  N73 y Cubiertas DT etapa II. **Obras nuevas de VW/Audi no se le agregan
+  solas**: se asignan en "Asignar obras a una persona" (`/proyectos`) o en el
+  encabezado de la obra. Seis de VWM eran **privadas** de Mario y la
+  restrictiva `proyecto_privado` solo dejaba verlas al dueño:
+  `20261127090000` (aplicada como `proyecto_privado_ve_encargado` y
+  `_2_accesible`) deja ver una obra privada también a sus encargados
+  (`auth_proyectos_encargado()` en la policy de `proyectos` y
+  `auth_proyecto_accesible(proyecto_id)` en las 20 tablas de la obra:
+  requisiciones, tableros, planos, PU, presupuesto, herramienta, EPP…); para
+  los demás siguen ocultas. **La base de obras privadas (`privado`,
+  `propietario_id`, la función y las 21 restrictivas) solo existía en
+  producción**: esa migración también la crea si no existe, y
+  `validar-sql.sh` vuelve a pasar desde cero. Probado en rollback como
+  Jonathan: ve 28 obras (no International Escobedo) y manda requisición en
+  una privada de ERG, en la de CSC, en la de MCF y en una pública de ERG;
+  otro usuario de ERG sigue con 0 obras privadas. Consecutivo de folio
+  regresado a 191.
 - **Camiones de volteo (Mario: "vamos a hacer el módulo para los camiones de
   volteo")** (`20261123120000`, aplicada como `logistica_volteo`): dentro de
   Logística (`/logistica?tab=viajes|gastos|resumen`, `pages/logistica/Volteo.tsx`,
