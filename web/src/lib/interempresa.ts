@@ -227,3 +227,10 @@ export function indiceLigas(ligas: LigaInterempresa[]): Map<string, LigaInteremp
   }
   return m;
 }
+
+/** Dos columnas (Laura, 27-nov-2026: "en la relación de OC debe salir en una
+ * columna en qué OV está y en otra en qué OC está de la otra empresa"): las
+ * ligas a órdenes de venta y las ligas a OC/OS (siempre de la otra empresa). */
+export function separarLigas(ligas: LigaTexto[]): { ov: LigaTexto[]; oc: LigaTexto[] } {
+  return { ov: ligas.filter((l) => l.liga_tipo === "OV"), oc: ligas.filter((l) => l.liga_tipo !== "OV") };
+}

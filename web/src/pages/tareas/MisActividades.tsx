@@ -6,6 +6,8 @@ import { useAuth } from "../../lib/auth";
 import { clasificar, type EstadoCumplimiento } from "../../lib/cumplimiento";
 import { AREAS_TAREAS, esAreaTareas } from "../../lib/tareasArea";
 import { cierresPendientes, resolverCierre, textoCierre } from "../../lib/cierreTarjeta";
+import { esColumnaHecha } from "../../lib/cierreTarjetaReglas";
+import { diasRetraso } from "../../lib/retrasosActividades";
 import type { Tarjeta } from "../../types/database";
 
 // Panel personal de tareas (Mario, 26-sep-2026): lo que tengo asignado como
@@ -25,6 +27,8 @@ interface Fila {
   columna: string;
   papel: Papel;
   estado: EstadoCumplimiento;
+  /** Días de retraso (vencida: hasta hoy; hecha tarde: hasta que se terminó). */
+  dias: number;
 }
 
 function useMisTarjetas(profileId: string | undefined) {
@@ -72,13 +76,17 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
     const nombreTablero = new Map(q.data.tableros.map((t) => [t.id, t.nombre]));
     const areaTablero = new Map(q.data.tableros.map((t) => [t.id, t.area ?? null]));
     const columnaNombre = new Map(q.data.columnas.map((c) => [c.id, c.nombre]));
-    const ultimaColumna = new Map<string, string>();
-    for (const c of q.data.columnas) ultimaColumna.set(c.tablero_id, c.id); // vienen ordenadas: la última gana
+    // Hecha = columna de cierre (Hecho/Terminado/… o la última), la misma
+    // regla que el candado y los KPIs: en "RH · Actividades" Hecho no es la
+    // última (luego va Archivados) y salían como vencidas (Laura, 27-nov-2026).
+    const columnasPorTablero = new Map<string, { id: string; orden: number; nombre: string }[]>();
+    for (const c of q.data.columnas) columnasPorTablero.set(c.tablero_id, [...(columnasPorTablero.get(c.tablero_id) ?? []), c]);
     return q.data.tarjetas.map((t) => {
-      const hecha = ultimaColumna.get(t.tablero_id) === t.columna_id;
+      const hecha = esColumnaHecha(columnasPorTablero.get(t.tablero_id) ?? [], t.columna_id);
       const papel: Papel = t.asignado_a === perfil.id ? "responsable" : t.supervisor_id === perfil.id ? "supervisor" : "corresponsable";
       const estado = clasificar({ id: t.id, titulo: t.titulo, asignado_a: t.asignado_a, fecha_limite: t.fecha_limite, hecha, hecha_en: hecha ? t.updated_at : null, created_at: t.created_at }, hoy);
-      return { tarjeta: t, tablero: nombreTablero.get(t.tablero_id) ?? "Tablero", area: areaTablero.get(t.tablero_id) ?? null, columna: columnaNombre.get(t.columna_id) ?? "", papel, estado };
+      const base = { id: t.id, titulo: t.titulo, asignado_a: t.asignado_a, fecha_limite: t.fecha_limite, hecha, hecha_en: hecha ? t.updated_at : null, created_at: t.created_at };
+      return { tarjeta: t, tablero: nombreTablero.get(t.tablero_id) ?? "Tablero", area: areaTablero.get(t.tablero_id) ?? null, columna: columnaNombre.get(t.columna_id) ?? "", papel, estado, dias: diasRetraso(base, hoy) };
     });
   }, [q.data, perfil, hoy]);
 
@@ -90,6 +98,7 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
     hechas: propias.filter((f) => f.estado === "a_tiempo" || f.estado === "tarde").length,
     aTiempo: propias.filter((f) => f.estado === "a_tiempo").length,
     vencidas: propias.filter((f) => f.estado === "vencida").length,
+    diasRetraso: propias.reduce((n, f) => n + f.dias, 0),
     pendientes: propias.filter((f) => f.estado === "pendiente" || f.estado === "sin_fecha").length,
   };
   const pct = resumen.total === 0 ? null : Math.round((100 * resumen.hechas) / resumen.total);
@@ -151,6 +160,7 @@ export function MisActividades({ compacto = false }: { compacto?: boolean }) {
             <Indicador etiqueta="Cumplimiento" valor={pct === null ? "—" : `${pct}%`} tono={pct === null ? "" : pct >= 90 ? "text-emerald-700" : pct >= 75 ? "text-amber-700" : "text-red-700"} />
             <Indicador etiqueta="Pendientes" valor={String(resumen.pendientes)} />
             <Indicador etiqueta="Vencidas" valor={String(resumen.vencidas)} tono={resumen.vencidas > 0 ? "text-red-700" : "text-emerald-700"} />
+            <Indicador etiqueta="Días de retraso" valor={String(resumen.diasRetraso)} tono={resumen.diasRetraso > 0 ? "text-red-700" : "text-emerald-700"} />
             <Indicador etiqueta="Hechas" valor={String(resumen.hechas)} />
             <Indicador etiqueta="A tiempo" valor={resumen.hechas === 0 ? "—" : `${Math.round((100 * resumen.aTiempo) / resumen.hechas)}%`} />
             <Indicador etiqueta="Fechas movidas" valor={String(propias.reduce((s, f) => s + (f.tarjeta.fecha_cambios ?? 0), 0))} tono={propias.some((f) => (f.tarjeta.fecha_cambios ?? 0) > 0) ? "text-amber-700" : ""} />
@@ -282,6 +292,7 @@ function FilaActividad({ fila: f }: { fila: Fila }) {
           {t.fecha_limite && (
             <span className={`rounded-full px-2 py-0.5 text-[11px] ${f.estado === "vencida" ? "bg-red-50 text-red-700" : f.estado === "tarde" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
               {fechaCorta(t.fecha_limite)}
+              {f.dias > 0 && <b> · {f.dias} {f.dias === 1 ? "día" : "días"} de retraso</b>}
             </span>
           )}
         </div>

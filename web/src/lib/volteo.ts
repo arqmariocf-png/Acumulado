@@ -12,7 +12,7 @@ import { esc } from "./membreteRemision.ts";
 export type TipoViaje = "flete" | "material" | "residuos" | "renta" | "traslado" | "otro";
 export type UnidadMedida = "m3" | "ton" | "viaje" | "hr" | "pza" | "lote" | "km";
 export type EstadoViaje = "programado" | "en_curso" | "terminado" | "cancelado";
-export type TipoGasto = "diesel" | "gasolina" | "mantenimiento" | "llantas" | "refacciones" | "casetas" | "multas" | "seguro" | "verificacion" | "tenencia" | "chofer" | "lavado" | "otro";
+export type TipoGasto = "diesel" | "gasolina" | "mantenimiento" | "llantas" | "refacciones" | "casetas" | "multas" | "seguro" | "verificacion" | "tenencia" | "chofer" | "lavado" | "material" | "tiro" | "otro";
 
 export const TIPOS_VIAJE: { clave: TipoViaje; etiqueta: string }[] = [
   { clave: "flete", etiqueta: "Flete (acarreo)" },
@@ -44,6 +44,8 @@ export const TIPOS_GASTO: { clave: TipoGasto; etiqueta: string; combustible?: bo
   { clave: "tenencia", etiqueta: "Tenencia / placas" },
   { clave: "chofer", etiqueta: "Chofer (viáticos, pago por viaje)" },
   { clave: "lavado", etiqueta: "Lavado" },
+  { clave: "material", etiqueta: "Material para venta (arena, grava…)" },
+  { clave: "tiro", etiqueta: "Tiro de escombro" },
   { clave: "otro", etiqueta: "Otro" },
 ];
 export const ETIQUETA_ESTADO_VIAJE: Record<EstadoViaje, string> = { programado: "programado", en_curso: "en curso", terminado: "terminado", cancelado: "cancelado" };

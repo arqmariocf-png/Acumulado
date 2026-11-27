@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { claveEmpresa, costoSinIva, empresaCompradoraSugerida, indiceLigas, interempresaCompleta, ligasDeOrden, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarCompraDesdeOv, revisarInterempresa, textoLigas, type LigaInterempresa } from "./interempresa.ts";
+import { claveEmpresa, costoSinIva, empresaCompradoraSugerida, indiceLigas, interempresaCompleta, ligasDeOrden, partidasDesdeOrigen, partidasOrigen, partidasVenta, precioConComision, resumenInterempresa, revisarCompraDesdeOv, separarLigas, revisarInterempresa, textoLigas, type LigaInterempresa } from "./interempresa.ts";
 
 test("costo sin IVA: backoffice trae IVA en la partida, las propias no", () => {
   assert.equal(costoSinIva({ costo: 116, iva: true }, "api"), 100);
@@ -117,5 +117,8 @@ test("ligasDeOrden: primero de dónde viene, luego lo que generó, sin repetidos
   );
   assert.equal(textoLigas(r), "← IA-OV-0002 (AEP) · → IA-OC-0005 (CSC) · → IA-OV-0009 (AEP)");
   assert.deepEqual(ligasDeOrden(ligas, "nada", codigo), []);
+  const { ov, oc } = separarLigas(r);
+  assert.equal(textoLigas(ov), "← IA-OV-0002 (AEP) · → IA-OV-0009 (AEP)");
+  assert.equal(textoLigas(oc), "→ IA-OC-0005 (CSC)");
   assert.equal(indiceLigas(ligas).get("oc1")?.length, 4);
 });

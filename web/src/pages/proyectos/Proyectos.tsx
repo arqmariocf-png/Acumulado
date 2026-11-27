@@ -47,7 +47,7 @@ function useSemaforoProyectos(ids: string[]) {
 }
 
 export function Proyectos() {
-  const { perfil, veTodasLasEmpresas, eligeEmpresa, esAdminGlobal, empresaActiva } = useAuth();
+  const { perfil, veTodasLasEmpresas, eligeEmpresa, esAdminGlobal, empresaActiva, empresasAlcance } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [empresaId, setEmpresaId] = useEmpresaFiltro();
@@ -102,10 +102,10 @@ export function Proyectos() {
   // Desactivar deja el proyecto fuera de las listas y de los selectores
   // (requisiciones, PU, tableros) sin borrar nada; se puede reactivar.
   // admin y corporativo en todas; el rol empresa en su empresa.
-  const puedeDesactivar = (empresa: string) => !!perfil && (perfil.rol === "admin" || perfil.rol === "corporativo" || (perfil.rol === "empresa" && perfil.empresa_id === empresa));
+  const puedeDesactivar = (empresa: string) => !!perfil && (perfil.rol === "admin" || perfil.rol === "corporativo" || ((perfil.rol === "empresa" || perfil.rol === "direccion") && (empresasAlcance ?? []).includes(empresa)));
   const cambiarActivo = useMutation({
     mutationFn: async ({ id, activo }: { id: string; activo: boolean }) => {
-      const { error: err } = await supabase.from("proyectos").update({ activo }).eq("id", id);
+      const { error: err } = await supabase.rpc("fn_proyecto_cambiar_activo", { p_proyecto: id, p_activo: activo });
       if (err) throw err;
     },
     onSuccess: () => {

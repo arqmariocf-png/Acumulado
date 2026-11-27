@@ -5,6 +5,9 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { notificarTarjeta } from "../../lib/tareasNotificar";
 import { moverOSolicitarCierre } from "../../lib/cierreTarjeta";
+import { esColumnaHecha } from "../../lib/cierreTarjetaReglas";
+import { diasRetraso, htmlFormatoRetrasos, retrasosPorPersona, textoRetraso } from "../../lib/retrasosActividades";
+import { abrirParaImprimir, abrirVentanaImpresion } from "../../lib/imprimir";
 import { cambiarFechaOSolicitar } from "../../lib/fechaCompromiso";
 import { ETIQUETA_CUMPLIMIENTO, clasificar, porPersona, porSemana, type ActividadBase, type EstadoCumplimiento } from "../../lib/cumplimiento";
 import type { Tablero, TableroColumna, Tarjeta } from "../../types/database";
@@ -149,8 +152,10 @@ export function Actividades() {
     return datos.tarjetas.map((t) => {
       const columna = nombreColumna.get(t.columna_id) ?? "";
       const hechoCol = ultimaColumna(t.tablero_id);
-      const hecha = !!hechoCol && t.columna_id === hechoCol.id;
-      const ultimoAHecho = [...datos.movimientos].reverse().find((m) => m.tarjeta_id === t.id && m.detalle?.a === hechoCol?.nombre);
+      const columnasT = columnasPorTablero.get(t.tablero_id) ?? [];
+      const hecha = esColumnaHecha(columnasT, t.columna_id);
+      const nombreActual = columnasT.find((c) => c.id === t.columna_id)?.nombre;
+      const ultimoAHecho = [...datos.movimientos].reverse().find((m) => m.tarjeta_id === t.id && (m.detalle?.a === nombreActual || m.detalle?.a === hechoCol?.nombre));
       return {
         id: t.id,
         titulo: t.titulo,
@@ -379,6 +384,22 @@ export function Actividades() {
           <label className="flex items-center gap-1 text-xs text-slate-600">
             <input type="checkbox" checked={verHechas} onChange={(e) => setVerHechas(e.target.checked)} /> ver hechas
           </label>
+          <button
+            type="button"
+            onClick={() => {
+              const ventana = abrirVentanaImpresion();
+              const lista = retrasosPorPersona(
+                enTablero.filter((x) => !filtroPersona || x.asignado_a === filtroPersona).map((x) => ({ ...x, tablero: x.tablero })),
+                hoy,
+                (id) => (id ? (nombrePorId.get(id) ?? "Sin nombre") : "Sin asignar"),
+              );
+              abrirParaImprimir(htmlFormatoRetrasos(lista, { organizacion: "Grupo Loma", hoy, periodo: filtroTablero ? tablerosLista.find(([id]) => id === filtroTablero)?.[1] : "Todos los tableros" }), ventana);
+            }}
+            className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+            title="Una hoja por persona con sus actividades atrasadas, los días de retraso y firmas"
+          >
+            Formato de retrasos (imprimir)
+          </button>
           <Link to={`/tareas/${tab.tablero.id}`} className="text-xs text-slate-500 underline">
             abrir tablero de RH
           </Link>
@@ -459,6 +480,7 @@ export function Actividades() {
                   <td className="px-3 py-2">
                     <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${CHIP_ESTADO[estado]}`}>{ETIQUETA_CUMPLIMIENTO[estado]}</span>
                     {a.hecha && a.hecha_en && <div className="text-[10px] text-slate-400">hecha {new Date(a.hecha_en).toLocaleDateString("es-MX")}</div>}
+                    {diasRetraso(a, hoy) > 0 && <div className={`text-[10px] font-medium ${estado === "vencida" ? "text-red-700" : "text-amber-700"}`}>{textoRetraso(diasRetraso(a, hoy), estado)}</div>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right text-xs">
                     {!a.hecha && hechoCol && (

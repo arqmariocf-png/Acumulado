@@ -53,7 +53,7 @@ interface Resultado {
   mensaje?: string;
 }
 
-export function FacturarOrden({ ovId, onCerrar, onFacturada }: { ovId: string; onCerrar: () => void; onFacturada?: () => void }) {
+export function FacturarOrden({ ovId, onCerrar, onFacturada }: { ovId: string; onCerrar: () => void; onFacturada?: (r: { factura_id: string; uuid: string; serie: string | null; folio: string | null }) => void }) {
   const qc = useQueryClient();
   const datos = useQuery({
     queryKey: ["ov-para-facturar", ovId],
@@ -133,7 +133,7 @@ export function FacturarOrden({ ovId, onCerrar, onFacturada }: { ovId: string; o
       qc.invalidateQueries({ queryKey: ["ov-para-facturar", ovId] });
       qc.invalidateQueries({ queryKey: ["facturas-emitidas"] });
       qc.invalidateQueries({ queryKey: ["ordenes-ia"] });
-      onFacturada?.();
+      onFacturada?.(json as Resultado);
     } catch (e) {
       setErrores([(e as Error).message]);
     } finally {

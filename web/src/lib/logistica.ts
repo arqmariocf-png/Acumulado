@@ -45,6 +45,11 @@ export interface Unidad {
   estado: EstadoUnidad;
   externo_id: string | null;
   notas: string | null;
+  /** Lo que costó la unidad y desde cuándo opera (tablero de volteo, ROI). */
+  inversion?: number | null;
+  inversion_desde?: string | null;
+  /** Obra del backoffice donde se cargan sus gastos ("Volteo International"). */
+  proyecto_backoffice?: string | null;
 }
 
 export interface Reserva {
