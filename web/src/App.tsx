@@ -110,6 +110,7 @@ const TableroDetalle = lazy(() => import("./pages/tareas/TableroDetalle").then((
 const TareasArea = lazy(() => import("./pages/tareas/TareasArea").then((m) => ({ default: m.TareasArea })));
 const BbvaMantenimiento = lazy(() => import("./pages/bbva/BbvaMantenimiento").then((m) => ({ default: m.BbvaMantenimiento })));
 const ManoDeObra = lazy(() => import("./pages/rh/ManoDeObra").then((m) => ({ default: m.ManoDeObra })));
+const ListasRaya = lazy(() => import("./pages/rh/ListasRaya").then((m) => ({ default: m.ListasRaya })));
 const VerArchivo = lazy(() => import("./pages/VerArchivo").then((m) => ({ default: m.VerArchivo })));
 const AgendaPagos = lazy(() => import("./pages/rh/AgendaPagos").then((m) => ({ default: m.AgendaPagos })));
 const Produccion = lazy(() => import("./pages/Produccion").then((m) => ({ default: m.Produccion })));
@@ -382,6 +383,10 @@ function Enrutador() {
           {/* Tiempos y checador (29-oct-2026): RH, dirección y admin. */}
           <Route element={<ProtectedRoute roles={["rh", "direccion"]} modulo="rh" />}>
             <Route path="/rh/tiempos" element={<ReporteTiemposRh />} />
+          </Route>
+          {/* Listas de raya de mano de obra (27-nov-2026): RH captura, dirección autoriza; corporativo y empresa consultan. */}
+          <Route element={<ProtectedRoute roles={["rh", "direccion", "corporativo", "empresa"]} oPermiso={(p) => (p.modulos ?? []).includes("rh")} />}>
+            <Route path="/mano-obra" element={<ListasRaya />} />
           </Route>
           <Route element={<ProtectedRoute roles={["rh"]} oPermiso={(p) => (p.modulos ?? []).includes("rh")} />}>
             <Route path="/rh/mano-de-obra" element={<ManoDeObra />} />
