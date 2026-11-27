@@ -40,14 +40,14 @@ test("etapa de la OC/OS y si se puede editar", () => {
 
 test("Excel de compras y servicios en un solo archivo", () => {
   const csv = csvOrdenes([
-    { tipo: "OS", folio: "IA-OS-0004", fecha: "2026-10-19", empresa: "CSC", contraparte: "Fletes \"El Rayo\"", forma_pago: "Transferencia", proyecto: "Parque Real 63", total: 1160, estado: "por autorizar", interempresa: "→ IA-OV-0012 (AEP)" },
+    { tipo: "OS", folio: "IA-OS-0004", fecha: "2026-10-19", empresa: "CSC", contraparte: "Fletes \"El Rayo\"", forma_pago: "Transferencia", proyecto: "Parque Real 63", total: 1160, estado: "por autorizar", interempresa_ov: "→ IA-OV-0012 (AEP)", interempresa_oc: "→ IA-OC-0013 (AEP)" },
     { tipo: "OC", folio: "41422", fecha: "2026-10-13", empresa: "MCF", contraparte: "Cemex", proyecto: null, total: null, estado: "pagada" },
   ]);
   const lineas = csv.split("\n");
   // Orden de Laura: Empresa · Folio · Tipo · Proveedor · Tipo de pago · Proyecto · Monto · Fecha · Estatus · Inter empresa (23-nov-2026); renglones por folio ascendente.
-  assert.equal(lineas[0], '"Empresa","Folio","Tipo","Proveedor / cliente","Tipo de pago","Proyecto","Monto c/IVA","Fecha","Estatus","Inter empresa"');
-  assert.equal(lineas[1], '"MCF","41422","Compra","Cemex","","","","2026-10-13","pagada",""');
-  assert.equal(lineas[2], '"CSC","IA-OS-0004","Servicio","Fletes ""El Rayo""","Transferencia","Parque Real 63","1160.00","2026-10-19","por autorizar","→ IA-OV-0012 (AEP)"');
+  assert.equal(lineas[0], '"Empresa","Folio","Tipo","Proveedor / cliente","Tipo de pago","Proyecto","Monto c/IVA","Fecha","Estatus","OV inter empresa","OC/OS de la otra empresa"');
+  assert.equal(lineas[1], '"MCF","41422","Compra","Cemex","","","","2026-10-13","pagada","",""');
+  assert.equal(lineas[2], '"CSC","IA-OS-0004","Servicio","Fletes ""El Rayo""","Transferencia","Parque Real 63","1160.00","2026-10-19","por autorizar","→ IA-OV-0012 (AEP)","→ IA-OC-0013 (AEP)"');
 });
 
 test("Excel de órdenes con el detalle de cada partida", () => {

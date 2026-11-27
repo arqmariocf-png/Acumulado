@@ -113,7 +113,8 @@ export function ordenEditable(o: { fuente: string; autorizacion?: string | null;
 /** Columnas en el orden que pidió Laura (20-oct-2026): Empresa · Folio · Tipo ·
  * Proveedor · Tipo de pago · Proyecto · Monto · Fecha · Estatus. */
 // "Inter empresa" (23-nov-2026, Mario): en qué OC/OS/OV quedó registrada la orden, para no duplicar.
-export const COLUMNAS_EXCEL_ORDENES = ["Empresa", "Folio", "Tipo", "Proveedor / cliente", "Tipo de pago", "Proyecto", "Monto c/IVA", "Fecha", "Estatus", "Inter empresa"];
+// Dos columnas (Laura, 27-nov-2026): en qué OV está y en qué OC/OS de la otra empresa.
+export const COLUMNAS_EXCEL_ORDENES = ["Empresa", "Folio", "Tipo", "Proveedor / cliente", "Tipo de pago", "Proyecto", "Monto c/IVA", "Fecha", "Estatus", "OV inter empresa", "OC/OS de la otra empresa"];
 
 /** El Excel va ordenado por folio (id) de menor a mayor, como lo revisa Laura
  * (23-oct-2026). OC y OS comparten una sola serie (IA-OC-0003, IA-OS-0004,
@@ -140,12 +141,12 @@ export function ordenarPorFolio<T extends { folio: string }>(filas: T[]): T[] {
   });
 }
 
-export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string; interempresa?: string }[]): string {
+export function csvOrdenes(filas: { tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string; interempresa_ov?: string; interempresa_oc?: string }[]): string {
   const celda = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const tipoTexto: Record<TipoOrden, string> = { OC: "Compra", OS: "Servicio", OV: "Venta" };
   const renglones = [COLUMNAS_EXCEL_ORDENES];
   for (const o of ordenarPorFolio(filas)) {
-    renglones.push([o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado, o.interempresa ?? ""]);
+    renglones.push([o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado, o.interempresa_ov ?? "", o.interempresa_oc ?? ""]);
   }
   return renglones.map((r) => r.map(celda).join(",")).join("\n");
 }
@@ -167,7 +168,7 @@ export const COLUMNAS_DETALLE_ORDENES = ["Partida", "Concepto", "Unidad", "Canti
  * un renglón con el detalle vacío. Las del backoffice traen el precio con IVA
  * (el total es la suma de cantidad × precio); las de aquí, sin IVA. */
 export function csvOrdenesConDetalle(
-  filas: { id: string; tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string; fuente: string; interempresa?: string }[],
+  filas: { id: string; tipo: TipoOrden; folio: string; fecha: string | null; empresa: string; contraparte: string | null; forma_pago?: string | null; proyecto: string | null; total: number | null; estado: string; fuente: string; interempresa_ov?: string; interempresa_oc?: string }[],
   lineas: Map<string, LineaExcelOrden[]>,
 ): string {
   const celda = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -175,7 +176,7 @@ export function csvOrdenesConDetalle(
   const r2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
   const renglones = [[...COLUMNAS_EXCEL_ORDENES, ...COLUMNAS_DETALLE_ORDENES]];
   for (const o of ordenarPorFolio(filas)) {
-    const base = [o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado, o.interempresa ?? ""];
+    const base = [o.empresa, o.folio, tipoTexto[o.tipo], o.contraparte ?? "", o.forma_pago ?? "", o.proyecto ?? "", o.total == null ? "" : Number(o.total).toFixed(2), o.fecha ?? "", o.estado, o.interempresa_ov ?? "", o.interempresa_oc ?? ""];
     const ls = [...(lineas.get(o.id) ?? [])].sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0));
     if (!ls.length) {
       renglones.push([...base, "", "", "", "", "", ""]);

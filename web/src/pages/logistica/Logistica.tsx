@@ -30,6 +30,7 @@ import {
   type Unidad,
 } from "../../lib/logistica";
 import { Gastos, ResumenUnidades, Viajes } from "./Volteo";
+import { TableroVolteo } from "./TableroVolteo";
 import type { Gasto, Viaje } from "../../lib/volteo";
 
 // Logística (9-nov-2026, Mario: "el módulo de logística donde cargaremos las
@@ -40,7 +41,7 @@ import type { Gasto, Viaje } from "../../lib/volteo";
 // Las reservas se capturan a mano hasta que llegue el API del sistema de
 // reservas: la sincronización insertará con origen 'api' y externo_id.
 
-type Pestana = "calendario" | "unidades" | "averias" | "viajes" | "gastos" | "resumen";
+type Pestana = "calendario" | "unidades" | "averias" | "tablero" | "viajes" | "gastos" | "resumen";
 const campo = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
 const etiqueta = "mb-1 block text-xs font-medium text-slate-700";
 const CLASE_SEMAFORO: Record<string, string> = { rojo: "bg-red-500", ambar: "bg-amber-400", verde: "bg-emerald-500", gris: "bg-slate-300" };
@@ -169,6 +170,7 @@ export function Logistica() {
             ["calendario", "Calendario de reservas"],
             ["unidades", `Unidades (${unidadesEmpresa.length})`],
             ["averias", `Averías${resumen.abiertas + resumen.enTaller ? ` · ${resumen.abiertas + resumen.enTaller} abiertas` : ""}`],
+            ["tablero", "Tablero de volteo"],
             ["viajes", `Viajes de volteo${viajesEmpresa.length ? ` (${viajesEmpresa.length})` : ""}`],
             ["gastos", "Gastos por unidad"],
             ["resumen", "Resumen por unidad"],
@@ -184,6 +186,8 @@ export function Logistica() {
         <p className="text-sm text-slate-500">Cargando…</p>
       ) : pestana === "calendario" ? (
         <Calendario unidades={activas} reservas={reservas} obras={obras} averias={averias} opera={opera} empresaId={empresaId} nombreEmpresa={nombreEmpresa} onOk={ok} onError={falla} />
+      ) : pestana === "tablero" ? (
+        <TableroVolteo unidades={unidadesEmpresa} viajes={viajesEmpresa} gastos={gastosEmpresa} />
       ) : pestana === "viajes" ? (
         <Viajes unidades={unidadesEmpresa} unidadPorId={unidadPorId} viajes={viajesEmpresa} obras={obras} opera={opera} miId={perfil?.id ?? null} nombreEmpresa={nombreEmpresa} onOk={ok} onError={falla} />
       ) : pestana === "gastos" ? (
@@ -469,20 +473,20 @@ function Unidades({ unidades, averias, opera, empresaId, empresas, nombreEmpresa
   const [verBajas, setVerBajas] = useState(false);
   const [editando, setEditando] = useState<Unidad | null>(null);
   const [mostrar, setMostrar] = useState(false);
-  const vacio = { nombre: "", empresa_id: empresaId || (empresas.length === 1 ? empresas[0].id : ""), tipo: "camioneta", marca: "", modelo: "", anio: "", placas: "", numero_serie: "", capacidad: "", chofer_nombre: "", externo_id: "", notas: "" };
+  const vacio = { nombre: "", empresa_id: empresaId || (empresas.length === 1 ? empresas[0].id : ""), tipo: "camioneta", marca: "", modelo: "", anio: "", placas: "", numero_serie: "", capacidad: "", chofer_nombre: "", externo_id: "", notas: "", inversion: "", inversion_desde: "", proyecto_backoffice: "" };
   const [form, setForm] = useState(vacio);
   const lista = filtrarUnidades(unidades, texto).filter((u) => verBajas || u.estado !== "baja");
 
   const abrir = (u?: Unidad) => {
     setEditando(u ?? null);
-    setForm(u ? { nombre: u.nombre, empresa_id: u.empresa_id, tipo: u.tipo, marca: u.marca ?? "", modelo: u.modelo ?? "", anio: u.anio ? String(u.anio) : "", placas: u.placas ?? "", numero_serie: u.numero_serie ?? "", capacidad: u.capacidad ?? "", chofer_nombre: u.chofer_nombre ?? "", externo_id: u.externo_id ?? "", notas: u.notas ?? "" } : vacio);
+    setForm(u ? { nombre: u.nombre, empresa_id: u.empresa_id, tipo: u.tipo, marca: u.marca ?? "", modelo: u.modelo ?? "", anio: u.anio ? String(u.anio) : "", placas: u.placas ?? "", numero_serie: u.numero_serie ?? "", capacidad: u.capacidad ?? "", chofer_nombre: u.chofer_nombre ?? "", externo_id: u.externo_id ?? "", notas: u.notas ?? "", inversion: u.inversion != null ? String(u.inversion) : "", inversion_desde: u.inversion_desde ?? "", proyecto_backoffice: u.proyecto_backoffice ?? "" } : vacio);
     setMostrar(true);
   };
   const guardar = useMutation({
     mutationFn: async () => {
       const falta = revisarUnidad({ nombre: form.nombre, empresa_id: form.empresa_id, anio: form.anio, placas: form.placas }, unidades, editando?.id);
       if (falta) throw new Error(falta);
-      const fila = { nombre: form.nombre.trim(), empresa_id: form.empresa_id, tipo: form.tipo, marca: form.marca.trim() || null, modelo: form.modelo.trim() || null, anio: form.anio ? Number(form.anio) : null, placas: form.placas.trim() || null, numero_serie: form.numero_serie.trim() || null, capacidad: form.capacidad.trim() || null, chofer_nombre: form.chofer_nombre.trim() || null, externo_id: form.externo_id.trim() || null, notas: form.notas.trim() || null };
+      const fila = { nombre: form.nombre.trim(), empresa_id: form.empresa_id, tipo: form.tipo, marca: form.marca.trim() || null, modelo: form.modelo.trim() || null, anio: form.anio ? Number(form.anio) : null, placas: form.placas.trim() || null, numero_serie: form.numero_serie.trim() || null, capacidad: form.capacidad.trim() || null, chofer_nombre: form.chofer_nombre.trim() || null, externo_id: form.externo_id.trim() || null, notas: form.notas.trim() || null, inversion: form.inversion ? Number(form.inversion) : null, inversion_desde: form.inversion_desde || null, proyecto_backoffice: form.proyecto_backoffice.trim() || null };
       const { error } = editando ? await supabase.from("logistica_unidades").update(fila).eq("id", editando.id) : await supabase.from("logistica_unidades").insert(fila);
       if (error) throw error;
     },
@@ -582,6 +586,18 @@ function Unidades({ unidades, averias, opera, empresaId, empresas, nombreEmpresa
             <div>
               <label className={etiqueta}>Id en el sistema de reservas</label>
               <input value={form.externo_id} onChange={(e) => setForm({ ...form, externo_id: e.target.value })} className={campo} placeholder="Para ligarla al API" />
+            </div>
+            <div>
+              <label className={etiqueta}>Inversión (lo que costó)</label>
+              <input type="number" min="0" step="0.01" value={form.inversion} onChange={(e) => setForm({ ...form, inversion: e.target.value })} className={campo} placeholder="Para el tablero (recuperación)" />
+            </div>
+            <div>
+              <label className={etiqueta}>Opera desde</label>
+              <input type="date" value={form.inversion_desde} onChange={(e) => setForm({ ...form, inversion_desde: e.target.value })} className={campo} />
+            </div>
+            <div>
+              <label className={etiqueta}>Obra de sus gastos en el backoffice</label>
+              <input value={form.proyecto_backoffice} onChange={(e) => setForm({ ...form, proyecto_backoffice: e.target.value })} className={campo} placeholder="Ej. Volteo International" />
             </div>
             <div className="sm:col-span-3">
               <label className={etiqueta}>Notas</label>

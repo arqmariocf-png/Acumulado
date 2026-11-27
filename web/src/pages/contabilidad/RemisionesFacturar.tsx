@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useEmpresaFiltro } from "../../lib/auth";
 import { SelectorEmpresa } from "../../components/SelectorEmpresa";
+import { FacturarOrden } from "../../components/FacturarOrden";
 import {
   ETIQUETA_ESTADO,
   ETIQUETA_ORIGEN,
@@ -51,6 +52,32 @@ export function RemisionesFacturar() {
   const [pestana, setPestana] = useState<Pestana>("por_facturar");
   const [texto, setTexto] = useState("");
   const [abierta, setAbierta] = useState<RemisionFacturacion | null>(null);
+  // Timbrar con factura.com la OV de la remisión (27-nov-2026, Laura:
+  // "terminar módulo de facturación con API"): al timbrar, la remisión queda
+  // facturada con ese CFDI (fn_remision_facturar).
+  const [timbrando, setTimbrando] = useState<RemisionFacturacion | null>(null);
+  const [errorTimbre, setErrorTimbre] = useState<string | null>(null);
+  const queryClientRem = useQueryClient();
+  const ovs = useQuery({
+    queryKey: ["remisiones-ov"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("fn_remisiones_ov");
+      if (error) throw error;
+      return new Map(((data ?? []) as { origen: string; id: string; orden_venta_id: string; id_ov: string }[]).map((x) => [`${x.origen}:${x.id}`, x]));
+    },
+  });
+  async function ligarFactura(r: RemisionFacturacion, res: { factura_id: string; uuid: string; serie: string | null; folio: string | null }) {
+    const { data: fe } = await supabase.from("facturas_emitidas").select("cfdi_id").eq("id", res.factura_id).maybeSingle();
+    const { error: e } = await supabase.rpc("fn_remision_facturar", {
+      p_origen: r.origen,
+      p_id: r.id,
+      p_cfdi_id: fe?.cfdi_id ?? null,
+      p_folio: fe?.cfdi_id ? null : [res.serie, res.folio].filter(Boolean).join("-") || res.uuid,
+      p_nota: `Timbrada con factura.com (UUID ${res.uuid})`,
+    });
+    setErrorTimbre(e ? `La factura se timbró pero la remisión no se marcó: ${e.message}` : null);
+    queryClientRem.invalidateQueries({ queryKey: ["remisiones-facturacion"] });
+  }
   const { data, isLoading, error } = useRemisionesFacturacion();
 
   const filas = useMemo(() => filtrarRemisiones(data ?? [], { estado: pestana, empresaId: empresaId || null, texto }), [data, pestana, empresaId, texto]);
@@ -165,9 +192,16 @@ export function RemisionesFacturar() {
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {r.factura_estado === "por_facturar" ? (
-                      <button onClick={() => setAbierta(r)} className="rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800">
-                        Facturar
-                      </button>
+                      <div className="flex flex-wrap gap-1">
+                        {ovs.data?.get(`${r.origen}:${r.id}`) && (
+                          <button onClick={() => setTimbrando(r)} title={`Timbrar la OV ${ovs.data.get(`${r.origen}:${r.id}`)?.id_ov} con factura.com`} className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-800">
+                            Timbrar
+                          </button>
+                        )}
+                        <button onClick={() => setAbierta(r)} className="rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800">
+                          {ovs.data?.get(`${r.origen}:${r.id}`) ? "Marcar a mano" : "Facturar"}
+                        </button>
+                      </div>
                     ) : (
                       <button onClick={() => setAbierta(r)} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100">
                         Cambiar
@@ -182,6 +216,14 @@ export function RemisionesFacturar() {
       )}
 
       {abierta && <PanelFacturar remision={abierta} onCerrar={() => setAbierta(null)} />}
+      {errorTimbre && <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{errorTimbre}</p>}
+      {timbrando && ovs.data?.get(`${timbrando.origen}:${timbrando.id}`) && (
+        <FacturarOrden
+          ovId={ovs.data.get(`${timbrando.origen}:${timbrando.id}`)!.orden_venta_id}
+          onCerrar={() => setTimbrando(null)}
+          onFacturada={(res) => void ligarFactura(timbrando, res)}
+        />
+      )}
     </div>
   );
 }

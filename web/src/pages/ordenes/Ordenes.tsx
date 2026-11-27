@@ -12,7 +12,7 @@ import { CompraInterempresaDesdeOv } from "./CompraInterempresaDesdeOv";
 import { FacturarOrden } from "../../components/FacturarOrden";
 import { puedeFacturar } from "../../lib/facturacion";
 import { rutaVerArchivo } from "../../lib/verArchivo";
-import { indiceLigas, ligasDeOrden, textoLigas, type LigaInterempresa } from "../../lib/interempresa";
+import { indiceLigas, ligasDeOrden, separarLigas, textoLigas, type LigaInterempresa, type LigaTexto } from "../../lib/interempresa";
 import { csvOrdenes, csvOrdenesConDetalle, etapaOrdenCompra, type LineaExcelOrden, infoTipo, ordenEditable, type TipoOrden } from "../../lib/ordenesIa";
 import { descargarCsv } from "../../lib/descargarArchivo";
 
@@ -240,7 +240,7 @@ export function Ordenes() {
 
   const [descargando, setDescargando] = useState(false);
   async function descargar() {
-    const conEstado = filas.map((o) => ({ ...o, empresa: codigo(o.empresa_id), estado: o.etapa.etiqueta, interempresa: textoLigas(ligasDe(o)) }));
+    const conEstado = filas.map((o) => ({ ...o, empresa: codigo(o.empresa_id), estado: o.etapa.etiqueta, interempresa_ov: textoLigas(separarLigas(ligasDe(o)).ov), interempresa_oc: textoLigas(separarLigas(ligasDe(o)).oc) }));
     let csv: string;
     if (vista === "OV") {
       // Con el detalle de cada orden (Laura, 22-oct-2026).
@@ -413,8 +413,11 @@ export function Ordenes() {
                 <th className="px-3 py-2">Proyecto</th>
                 <th className="px-3 py-2 text-right">Total c/IVA</th>
                 <th className="px-3 py-2">Estado</th>
-                <th className="px-3 py-2" title="En qué OC/OS/OV quedó registrada esta orden (inter empresa): ← de dónde nació, → qué se generó a partir de ella">
-                  Inter empresa
+                <th className="px-3 py-2" title="Orden de venta inter empresa ligada: ← de dónde nació, → qué se generó a partir de ella">
+                  OV inter empresa
+                </th>
+                <th className="px-3 py-2" title="OC/OS de la otra empresa ligada: ← de dónde nació, → qué se generó a partir de ella">
+                  OC/OS otra empresa
                 </th>
                 <th className="px-3 py-2" />
               </tr>
@@ -422,7 +425,7 @@ export function Ordenes() {
             <tbody>
               {filas.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
+                  <td colSpan={11} className="px-3 py-6 text-center text-slate-500">
                     Todavía no hay órdenes con folio IA. Usa "+ Nueva {vista === "OV" ? "OV" : "OC u OS"}".
                   </td>
                 </tr>
@@ -447,22 +450,10 @@ export function Ordenes() {
                     <span className={`rounded-full px-2 py-0.5 text-[11px] ${TONOS[o.etapa.tono]}`}>{o.etapa.etiqueta}</span>
                   </td>
                   <td className="px-3 py-2 font-mono text-[11px]">
-                    {ligasDe(o).length === 0 ? (
-                      <span className="text-slate-300">—</span>
-                    ) : (
-                      <div className="flex flex-col gap-0.5">
-                        {ligasDe(o).map((l) => (
-                          <Link
-                            key={`${l.relacion}-${l.liga_id}`}
-                            to={`/ordenes?tipo=${l.liga_tipo === "OV" ? "OV" : "OC"}&buscar=${encodeURIComponent(l.folio)}`}
-                            title={l.relacion === "origen" ? "Esta orden nació de esa" : "Se generó a partir de esta orden"}
-                            className={`whitespace-nowrap hover:underline ${l.relacion === "origen" ? "text-slate-600" : "text-indigo-700"}`}
-                          >
-                            {l.texto}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
+                    <CeldaLigas ligas={separarLigas(ligasDe(o)).ov} />
+                  </td>
+                  <td className="px-3 py-2 font-mono text-[11px]">
+                    <CeldaLigas ligas={separarLigas(ligasDe(o)).oc} />
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
@@ -533,6 +524,25 @@ export function Ordenes() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Una celda de ligas inter empresa (OV, u OC/OS de la otra empresa). */
+function CeldaLigas({ ligas }: { ligas: LigaTexto[] }) {
+  if (ligas.length === 0) return <span className="text-slate-300">—</span>;
+  return (
+    <div className="flex flex-col gap-0.5">
+      {ligas.map((l) => (
+        <Link
+          key={`${l.relacion}-${l.liga_id}`}
+          to={`/ordenes?tipo=${l.liga_tipo === "OV" ? "OV" : "OC"}&buscar=${encodeURIComponent(l.folio)}`}
+          title={l.relacion === "origen" ? "Esta orden nació de esa" : "Se generó a partir de esta orden"}
+          className={`whitespace-nowrap hover:underline ${l.relacion === "origen" ? "text-slate-600" : "text-indigo-700"}`}
+        >
+          {l.texto}
+        </Link>
+      ))}
     </div>
   );
 }

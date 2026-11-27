@@ -104,7 +104,7 @@ function EncargadosObra({ proyecto }: { proyecto: Proyecto }) {
 
 export function ProyectoDetalle() {
   const { id } = useParams<{ id: string }>();
-  const { perfil } = useAuth();
+  const { perfil, empresasAlcance } = useAuth();
   const { data: proyecto } = useProyecto(id!);
   // Resumen físico-financiero: pestaña principal del rol empresa hacia
   // arriba (Mario, 26-sep-2026); los supervisores y responsables no la ven.
@@ -113,7 +113,7 @@ export function ProyectoDetalle() {
   const [errorActivo, setErrorActivo] = useState<string | null>(null);
   const cambiarActivo = useMutation({
     mutationFn: async (activo: boolean) => {
-      const { error } = await supabase.from("proyectos").update({ activo }).eq("id", id!);
+      const { error } = await supabase.rpc("fn_proyecto_cambiar_activo", { p_proyecto: id!, p_activo: activo });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -141,7 +141,7 @@ export function ProyectoDetalle() {
   const [prellenado, setPrellenado] = useState<{ concepto: string; unidad: string } | null>(null);
 
   if (!proyecto) return <p className="text-sm text-slate-500">Cargando…</p>;
-  const puedeDesactivar = !!perfil && (perfil.rol === "admin" || perfil.rol === "corporativo" || (perfil.rol === "empresa" && perfil.empresa_id === proyecto.empresa_id));
+  const puedeDesactivar = !!perfil && (perfil.rol === "admin" || perfil.rol === "corporativo" || ((perfil.rol === "empresa" || perfil.rol === "direccion") && (empresasAlcance ?? []).includes(proyecto.empresa_id)));
 
   const TABS: { clave: Tab; etiqueta: string }[] = [
     // Primera: con ella abre la obra (21-oct-2026).
