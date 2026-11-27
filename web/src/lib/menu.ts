@@ -421,6 +421,7 @@ export const SECCIONES: SeccionMenu[] = [
     titulo: "Mano de obra",
     proposito: "Contratistas y destajos de obra.",
     entradas: [
+      { ruta: "/mano-obra", etiqueta: "Listas de raya", descripcion: "captura de RH por obra y semana; autoriza dirección", uso: "RH captura la mano de obra de cada obra y semana (trabajador, partida, días, monto, forma de pago) y la envía; dirección la autoriza y queda programada a pago. Presupuesto por partida contra lo pagado. Lo autorizado aquí sustituye lo del backoffice para esa obra y semana.", visible: (p) => esRh(p) || ["direccion", "corporativo", "empresa"].includes(p.rol) || esAdmin(p), modulo: "rh" },
       { ruta: "/rh/mano-de-obra", etiqueta: "Pagos de mano de obra", descripcion: "nómina externa de las APIs de Grupo Loma", uso: "Costo de mano de obra por periodo y por obra.", visible: (p) => esRh(p) || esAdmin(p) , modulo: "rh" },
     ],
   },
